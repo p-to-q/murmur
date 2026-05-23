@@ -1,0 +1,216 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* MURMUR Design Tokens — Warm Minimal, mymind-leaning */
+@theme inline {
+  /* Core surface palette */
+  --color-murmur-bg:        #F7F3EA;
+  --color-murmur-bg-warm:   #F2EBDD;
+  --color-murmur-card:      #FFFDF8;
+  --color-murmur-ink:       #22303A;
+  --color-murmur-ink-soft:  #4a5568;
+  --color-murmur-mute:      #8B8680;
+  --color-murmur-mute-light:#B8B0A2;
+  --color-murmur-accent:        #E9A06D;
+  --color-murmur-accent-light:  #F7C98B;
+  --color-murmur-accent-deep:   #C97A4F;
+  --color-murmur-dust-blue: #A7B8C8;
+  --color-murmur-lavender:  #C9B6E4;
+  --color-murmur-warm-gold: #EBCB8B;
+  --color-murmur-border:    #E8E2D9;
+  --color-murmur-border-strong: #D9D1BF;
+
+  /* System color aliases (shadcn) */
+  --color-background:                  var(--background);
+  --color-foreground:                  var(--foreground);
+  --font-sans:                         var(--font-sans);
+  --font-serif:                        var(--font-serif), Georgia, serif;
+  --font-mono:                         "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --font-heading:                      var(--font-serif), Georgia, serif;
+  --color-sidebar-ring:                var(--sidebar-ring);
+  --color-sidebar-border:              var(--sidebar-border);
+  --color-sidebar-accent-foreground:   var(--sidebar-accent-foreground);
+  --color-sidebar-accent:              var(--sidebar-accent);
+  --color-sidebar-primary-foreground:  var(--sidebar-primary-foreground);
+  --color-sidebar-primary:             var(--sidebar-primary);
+  --color-sidebar-foreground:          var(--sidebar-foreground);
+  --color-sidebar:                     var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring:                var(--ring);
+  --color-input:               var(--input);
+  --color-border:              var(--border);
+  --color-destructive:         var(--destructive);
+  --color-accent-foreground:   var(--accent-foreground);
+  --color-accent:              var(--accent);
+  --color-muted-foreground:    var(--muted-foreground);
+  --color-muted:               var(--muted);
+  --color-secondary-foreground:var(--secondary-foreground);
+  --color-secondary:           var(--secondary);
+  --color-primary-foreground:  var(--primary-foreground);
+  --color-primary:             var(--primary);
+  --color-popover-foreground:  var(--popover-foreground);
+  --color-popover:             var(--popover);
+  --color-card-foreground:     var(--card-foreground);
+  --color-card:                var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.875rem;
+  --background: #F7F3EA;
+  --foreground: #22303A;
+  --card: #FFFDF8;
+  --card-foreground: #22303A;
+  --popover: #FFFDF8;
+  --popover-foreground: #22303A;
+  --primary: #E9A06D;
+  --primary-foreground: #FFFDF8;
+  --secondary: #F0EAE0;
+  --secondary-foreground: #22303A;
+  --muted: #EDE7DB;
+  --muted-foreground: #8B8680;
+  --accent: #F7C98B;
+  --accent-foreground: #22303A;
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: #E8E2D9;
+  --input: #E8E2D9;
+  --ring: #E9A06D;
+  --chart-1: #E9A06D;
+  --chart-2: #A7B8C8;
+  --chart-3: #C9B6E4;
+  --chart-4: #EBCB8B;
+  --chart-5: #8B8680;
+  --sidebar: #FFFDF8;
+  --sidebar-foreground: #22303A;
+  --sidebar-primary: #E9A06D;
+  --sidebar-primary-foreground: #FFFDF8;
+  --sidebar-accent: #F0EAE0;
+  --sidebar-accent-foreground: #22303A;
+  --sidebar-border: #E8E2D9;
+  --sidebar-ring: #E9A06D;
+}
+
+/* No dark mode — MURMUR is intentionally always warm light */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-background text-foreground;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+  }
+  html {
+    @apply font-sans;
+    min-height: -webkit-fill-available;
+  }
+
+  /* Default headline treatment: serif everywhere a class .font-serif is applied. */
+  .font-serif {
+    font-family: var(--font-serif);
+    font-feature-settings: "ss01", "kern";
+    letter-spacing: -0.005em;
+  }
+  .font-serif-italic {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-feature-settings: "ss01", "kern";
+    letter-spacing: -0.005em;
+  }
+}
+
+@layer utilities {
+  /* ──────────────────────────────────────────────────────────────────
+     Paper grain — applied on top of any surface for the mymind feel.
+  ────────────────────────────────────────────────────────────────── */
+  .murmur-grain {
+    position: relative;
+  }
+  .murmur-grain::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    background-size: 200px;
+    opacity: 0.35;
+    z-index: 0;
+    border-radius: inherit;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────
+     Sticker card — the chrome behind every "object" (gallery item,
+     vibe card, version card). Generous white matte border + soft
+     two-layer shadow. Tilts subtly on hover.
+  ────────────────────────────────────────────────────────────────── */
+  .sticker-card {
+    background: #FFFDF8;
+    border: 5px solid rgba(255, 255, 255, 0.95);
+    box-shadow:
+      0 1px 2px rgba(34, 48, 58, 0.04),
+      0 6px 24px rgba(34, 48, 58, 0.10);
+    transition:
+      box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+      transform   0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .sticker-card:hover {
+    box-shadow:
+      0 2px 4px rgba(34, 48, 58, 0.05),
+      0 14px 36px rgba(34, 48, 58, 0.16);
+    transform: translateY(-3px);
+  }
+
+  /* Hero serif — large editorial headline */
+  .hero-serif {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    line-height: 1.02;
+    letter-spacing: -0.018em;
+  }
+
+  /* Eyebrow — small tracked caps over headlines */
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    font-weight: 500;
+    font-size: 0.6875rem;
+    color: var(--color-murmur-mute);
+  }
+
+  /* Breathing animation for hum button */
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.06); opacity: 0.9; }
+  }
+  @keyframes breathe-ring {
+    0%   { transform: scale(1); opacity: 0.5; }
+    100% { transform: scale(1.8); opacity: 0; }
+  }
+  .breathing      { animation: breathe 2.5s ease-in-out infinite; }
+  .breathing-ring { animation: breathe-ring 2s ease-out infinite; }
+
+  /* Soft entrance for hero text */
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .rise-in { animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+}
+
+/* Bottom nav safe area */
+.bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom);
+}
