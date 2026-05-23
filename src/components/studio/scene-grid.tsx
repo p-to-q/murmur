@@ -2,6 +2,7 @@
 import { motion } from "framer-motion";
 import { useTranslator } from "@/lib/i18n";
 import { SCENES, type Scene } from "./scene-presets";
+import { SceneParticles } from "./scene-particles";
 
 export interface SceneGridProps {
   onPick: (scene: Scene) => void;
@@ -23,17 +24,20 @@ export function SceneGrid({ onPick }: SceneGridProps) {
         {t("studio.mood.sub")}
       </p>
       <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
-        {SCENES.map((scene) => (
+        {SCENES.map((scene, i) => (
           <motion.button
             key={scene.id}
             whileTap={{ scale: 0.94 }}
             onClick={() => onPick(scene)}
-            className="flex min-h-[120px] flex-col items-start justify-between rounded-[22px] border border-[#E7DECF] bg-[radial-gradient(circle_at_78%_18%,rgba(255,178,124,0.16),transparent_0_28%),#FFFCF7] px-4 py-4 text-left transition-colors hover:border-[#FF8A5C]"
+            className="group relative isolate flex min-h-[128px] flex-col items-start justify-between overflow-hidden rounded-[22px] border border-[#E7DECF] bg-[#FFFCF7] px-4 py-4 text-left transition-colors hover:border-[#FF8A5C]"
           >
-            <span className="text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1]">
+            {/* Diffusing particles in the bottom half of the card */}
+            <SceneParticles color={scene.accent} seed={i * 17 + 3} />
+
+            <span className="relative z-10 text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1]">
               Mood
             </span>
-            <div>
+            <div className="relative z-10">
               <p className="text-[15px] font-medium text-[#1A1A1A]">
                 {t(scene.labelKey)}
               </p>

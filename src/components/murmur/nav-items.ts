@@ -23,11 +23,10 @@ export type NavItem = {
 };
 
 export const NAV_ITEMS: NavItem[] = [
+  { href: "/vibe", icon: VibeNavIcon, labelKey: "nav.vibe" },
+  { href: "/studio", icon: StudioNavIcon, labelKey: "nav.studio" },
+  // Create sits in the visual centre on mobile, second from top on desktop
   { href: "/", icon: CreateNavIcon, labelKey: "nav.create" },
-  // /vibe redirects to / — orphaned, hidden from all navs
-  { href: "/vibe", icon: VibeNavIcon, labelKey: "nav.vibe", mobileNav: false, desktopNav: false },
-  // Studio is reached via the hum→pick flow on mobile; desktop users can navigate directly
-  { href: "/studio", icon: StudioNavIcon, labelKey: "nav.studio", mobileNav: false },
   { href: "/gallery", icon: GalleryNavIcon, labelKey: "nav.gallery" },
   { href: "/me", icon: MeNavIcon, labelKey: "nav.me" },
 ];

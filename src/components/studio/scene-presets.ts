@@ -14,12 +14,14 @@ export type Scene = {
   labelKey: TKey;
   descKey: TKey;
   tokens: EditToken[];
+  /** Particle accent color — used by the diffusing dots at the bottom of the card */
+  accent: string;
 };
 
 export const SCENES: Scene[] = [
-  { id: "warm",       labelKey: "scene.warm.label",       descKey: "scene.warm.desc",       tokens: ["warmer"] },
-  { id: "cinematic",  labelKey: "scene.cinematic.label",  descKey: "scene.cinematic.desc",  tokens: ["cinematic"] },
-  { id: "minimal",    labelKey: "scene.minimal.label",    descKey: "scene.minimal.desc",    tokens: ["restore_all", "no_drums", "less_strings"] },
-  { id: "lush",       labelKey: "scene.lush.label",       descKey: "scene.lush.desc",       tokens: ["more_strings", "more_bass", "more_texture"] },
-  { id: "brighter",   labelKey: "scene.brighter.label",   descKey: "scene.brighter.desc",   tokens: ["brighter"] },
+  { id: "warm",       labelKey: "scene.warm.label",       descKey: "scene.warm.desc",       tokens: ["warmer"],                                      accent: "#FF8A5C" },
+  { id: "cinematic",  labelKey: "scene.cinematic.label",  descKey: "scene.cinematic.desc",  tokens: ["cinematic"],                                   accent: "#C9B6E4" },
+  { id: "minimal",    labelKey: "scene.minimal.label",    descKey: "scene.minimal.desc",    tokens: ["restore_all", "no_drums", "less_strings"],    accent: "#A7B8C8" },
+  { id: "lush",       labelKey: "scene.lush.label",       descKey: "scene.lush.desc",       tokens: ["more_strings", "more_bass", "more_texture"], accent: "#F4C87A" },
+  { id: "brighter",   labelKey: "scene.brighter.label",   descKey: "scene.brighter.desc",   tokens: ["brighter"],                                    accent: "#FFB66E" },
 ];

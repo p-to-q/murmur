@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, RotateCcw, Play, Pause } from "lucide-react";
 import { toast } from "sonner";
-import { memory } from "@eazo/sdk";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator } from "@/lib/i18n";
@@ -18,7 +17,7 @@ import {
   type EditToken,
 } from "@/modules/strummer/apply-edit";
 import { classifyPromptWithLLM } from "@/lib/api/strummer";
-import { renderAudio } from "@/modules/export/render-mp3";
+import { memory } from "@eazo/sdk";
 import type {
   ArrangementState,
   TrackState,
@@ -59,8 +58,6 @@ function StudioContent({ version }: { version: VibeVersion }) {
   const t = useTranslator();
   const setCurrentVersion = useMurmurStore((state) => state.setCurrentVersion);
 
-  const [isSaving, setIsSaving] = useState(false);
-  const [savingHint, setSavingHint] = useState("");
   const [isPlaying, setIsPlaying] = useState(false);
   const [promptBusy, setPromptBusy] = useState(false);
 
@@ -173,68 +170,18 @@ function StudioContent({ version }: { version: VibeVersion }) {
     setIsPlaying(true);
   };
 
-  const handleSave = async () => {
-    if (isSaving) return;
-
-    setIsSaving(true);
-    setSavingHint(t("studio.rendering"));
+  const handleSave = () => {
     synth.stop();
     setIsPlaying(false);
-
-    const id = crypto.randomUUID();
-    let mp3DataUrl: string | undefined;
-
-    try {
-      const rendered = await renderAudio(currentVersion);
-      if (rendered) mp3DataUrl = rendered.dataUrl;
-    } catch (error) {
-      console.warn("[Studio] render failed, saving without audio:", error);
-    }
-
-    try {
-      const response = await fetch("/api/songs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          userId: "guest",
-          title: currentVersion.title,
-          vibe: currentVersion.vibe,
-          vibeEn: currentVersion.title,
-          bpm: currentVersion.melody.bpm,
-          keySignature: currentVersion.melody.key.split(" ")[0] ?? "C",
-          scaleType: currentVersion.melody.scale,
-          duration: Math.round(currentVersion.melody.duration),
-          mp3DataUrl,
-          visualConfig: currentVersion.visualConfig,
-          arrangementState: arrangement,
-          tags: currentVersion.tags,
-        }),
-      });
-      if (!response.ok) throw new Error(`Save HTTP ${response.status}`);
-
-      memory
-        .reportAction({
-          content: `Saved "${currentVersion.title}" (audio: ${mp3DataUrl ? "yes" : "no"})`,
-          event_type: "create",
-          page: "studio",
-          metadata: {
-            type: "save_song",
-            song_id: id,
-            has_audio: !!mp3DataUrl,
-          },
-        })
-        .catch(() => {});
-
-      toast.success(t("studio.save_ok"));
-      router.push(`/song/${id}`);
-    } catch (error) {
-      console.error("[Studio] save failed:", error);
-      toast.error(t("studio.save_err"));
-    } finally {
-      setIsSaving(false);
-      setSavingHint("");
-    }
+    memory
+      .reportAction({
+        content: `Studio → Name flow for "${currentVersion.title}"`,
+        event_type: "navigate",
+        page: "studio",
+        metadata: { type: "open_name", vibe: currentVersion.vibe },
+      })
+      .catch(() => {});
+    router.push("/studio/name");
   };
 
   return (
@@ -347,17 +294,14 @@ function StudioContent({ version }: { version: VibeVersion }) {
               </div>
 
               <div className="rounded-[34px] border border-[#E7DDCF] bg-[linear-gradient(180deg,rgba(255,254,251,0.98),rgba(248,243,234,0.98))] p-6 shadow-[0_22px_60px_rgba(26,26,26,0.07)]">
-                <p className="eyebrow mb-2 text-[#FF8A5C]">
+                <p className="eyebrow mb-1.5 text-[#FF8A5C]">
                   {t("studio.overview.eyebrow")}
                 </p>
-                <h2 className="font-serif text-[28px] leading-[1.02] text-[#1A1A1A] md:text-[34px]">
+                <h2 className="font-serif text-[24px] leading-[1.05] text-[#1A1A1A] md:text-[28px]">
                   {t("studio.overview.title")}
                 </h2>
-                <p className="mt-3 text-[14px] leading-[1.65] text-[#6F6A63]">
-                  {t("studio.overview.sub")}
-                </p>
 
-                <div className="mt-6 grid grid-cols-2 gap-3">
+                <div className="mt-5 grid grid-cols-2 gap-2.5">
                   <MetaPill
                     label={t("song.meta.vibe")}
                     value={currentVersion.vibe}
@@ -387,24 +331,18 @@ function StudioContent({ version }: { version: VibeVersion }) {
         </div>
 
         <div
-          className="fixed left-0 right-0 bg-gradient-to-t from-[#EEEDF2] via-[#EEEDF2] to-transparent px-5 pt-4 md:left-[240px] md:px-8"
+          className="fixed left-0 right-0 bg-gradient-to-t from-[#EEEDF2] via-[#EEEDF2] to-transparent px-5 pt-6 pb-5 md:left-[232px] md:px-8"
           style={{
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 72px)",
+            bottom: "env(safe-area-inset-bottom, 0px)",
           }}
         >
           <div className="mx-auto max-w-6xl">
-            {savingHint ? (
-              <p className="mb-2 text-center text-xs text-[#8C8780]">
-                {savingHint}
-              </p>
-            ) : null}
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleSave}
-              disabled={isSaving}
-              className="h-14 w-full rounded-[22px] bg-[#1A1A1A] text-base font-medium text-white disabled:opacity-50"
+              className="h-14 w-full rounded-[22px] bg-[#1A1A1A] text-base font-medium text-white transition-opacity"
             >
-              {isSaving ? t("studio.saving") : t("studio.save")}
+              {t("studio.save")}
             </motion.button>
           </div>
         </div>

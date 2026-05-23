@@ -344,11 +344,36 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Scene card particles — rise and diffuse from the bottom edge.
+   Defined as a flat .scene-particle class so each <span> shares one keyframe
+   and the browser can compose them on the GPU. */
+.scene-particle {
+  position: absolute;
+  bottom: -8px;
+  border-radius: 9999px;
+  filter: blur(0.3px);
+  will-change: transform, opacity;
+  animation-name: scene-particle-rise;
+  animation-iteration-count: infinite;
+  animation-timing-function: cubic-bezier(0.25, 0.9, 0.4, 1);
+  --drift: 0px;
+}
+@keyframes scene-particle-rise {
+  0%   { transform: translate3d(0, 6px, 0)            scale(0.55); opacity: 0;   }
+  18%  { transform: translate3d(calc(var(--drift) * 0.2), -10px, 0) scale(0.9);  opacity: 1;   }
+  62%  { transform: translate3d(calc(var(--drift) * 0.7), -54px, 0) scale(1);    opacity: 0.78; }
+  100% { transform: translate3d(var(--drift),            -94px, 0) scale(0.4);  opacity: 0;   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-particle { animation: none; opacity: 0.55; }
+}
+
 /* Responsive main content bottom padding:
-   mobile — reserves space for the 64px bottom nav + safe area
+   mobile — reserves space for the 68px bottom nav + raised create button
+            (60px disc rises 24px above the bar) + safe area
    desktop (md+) — no bottom nav, minimal padding */
 :root {
-  --main-pb: calc(env(safe-area-inset-bottom, 0px) + 72px);
+  --main-pb: calc(env(safe-area-inset-bottom, 0px) + 78px);
 }
 @media (min-width: 768px) {
   :root {

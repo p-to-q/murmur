@@ -79,9 +79,9 @@ export default function RootLayout({
           <SideNav />
           {/* Main content area:
               - mobile  → reserves bottom for nav (with safe-area)
-              - desktop → reserves left 240px for sidebar */}
+              - desktop → reserves left 232px for sidebar */}
           <main
-            className="flex-1 md:pl-[252px]"
+            className="flex-1 md:pl-[232px]"
             style={{
               paddingBottom: "var(--main-pb)",
             }}

@@ -20,7 +20,7 @@ const GRADIENT_MAP: Record<string, string> = {
   synth_glow:     "linear-gradient(135deg, #C9B6E4, #1A1A1A, #FF5924)",
 };
 
-function SongSticker({
+function SongCardItem({
   song,
   index,
   onClick,
@@ -43,60 +43,52 @@ function SongSticker({
     .slice(0, 2);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
+    <motion.button
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{ delay: index * 0.04, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -4, transition: { duration: 0.22 } }}
+      whileHover={{ y: -3, transition: { duration: 0.2 } }}
       whileTap={{ scale: 0.97 }}
       onClick={onClick}
-      className="flex flex-col cursor-pointer group"
+      className="group flex flex-col items-start text-left"
+      style={{ width: "100%" }}
     >
-      {/* Poster — straight, tight radius, very soft shadow */}
+      {/* Small square cover — fixed size, sits left-aligned within the cell */}
       <div
-        className="relative rounded-[12px] overflow-hidden"
+        className="relative overflow-hidden rounded-[10px]"
         style={{
-          width: "100%",
-          aspectRatio: "1 / 1",
+          width: "108px",
+          height: "108px",
           background: gradient,
           boxShadow:
-            "0 1px 3px rgba(26,26,26,0.06), 0 12px 28px rgba(26,26,26,0.10)",
+            "0 1px 3px rgba(26,26,26,0.06), 0 8px 22px rgba(26,26,26,0.10)",
         }}
       >
         <div
           className="absolute inset-0 opacity-[0.10] mix-blend-multiply pointer-events-none"
           style={{
             backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-            backgroundSize: "160px",
+            backgroundSize: "140px",
           }}
         />
-        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/35 to-transparent pointer-events-none" />
-        {/* Centre initials — large serif italic */}
+        <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className="font-serif-italic text-white/85 text-[52px] leading-none tracking-tight select-none">
+          <span className="font-serif-italic text-white/85 text-[36px] leading-none tracking-tight select-none">
             {initials}
-          </span>
-        </div>
-        {/* Vibe label */}
-        <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between">
-          <span className="text-white/75 text-[10px] tracking-[0.26em] uppercase">
-            {song.vibe}
           </span>
         </div>
       </div>
 
-      {/* Caption */}
-      <div className="mt-3 px-0.5">
-        <p className="font-serif text-[#1A1A1A] text-[17px] leading-tight truncate group-hover:underline-mm">
-          {song.title}
-        </p>
-        <p className="text-[#8C8780] text-[11px] mt-1 tracking-[0.06em]">
-          {song.bpm ?? "—"} BPM
-          {song.duration ? ` · ${Math.round(song.duration)}s` : ""}
-        </p>
-      </div>
-    </motion.div>
+      {/* Word-card style title — large serif italic, the visual centre of the cell */}
+      <p className="mt-4 font-serif-italic text-[#1A1A1A] text-[26px] leading-[1.04] tracking-[-0.01em] group-hover:text-[#FF5924] transition-colors line-clamp-2 md:text-[30px]">
+        {song.title}
+      </p>
+      <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1]">
+        {song.vibe}
+        {song.bpm ? ` · ${song.bpm} BPM` : ""}
+      </p>
+    </motion.button>
   );
 }
 
@@ -184,11 +176,11 @@ export function GalleryScreen() {
       </div>
 
       {isLoading && (
-        <div className="px-6 md:px-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8 max-w-6xl">
+        <div className="px-6 md:px-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-12 max-w-6xl">
           {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex flex-col gap-2.5">
-              <div className="w-full aspect-square rounded-[12px] bg-[#ECE5D6] animate-pulse" />
-              <div className="h-3 w-3/4 bg-[#ECE5D6] rounded animate-pulse" />
+            <div key={i} className="flex flex-col gap-3">
+              <div className="w-[108px] h-[108px] rounded-[10px] bg-[#ECE5D6] animate-pulse" />
+              <div className="h-6 w-3/4 bg-[#ECE5D6] rounded animate-pulse" />
               <div className="h-2.5 w-1/2 bg-[#ECE5D6] rounded animate-pulse" />
             </div>
           ))}
@@ -201,11 +193,11 @@ export function GalleryScreen() {
         <div className="px-6 md:px-12 pb-28 max-w-6xl">
           <motion.div
             layout
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8"
+            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-12"
           >
             <AnimatePresence mode="popLayout">
               {songs.map((song, i) => (
-                <SongSticker
+                <SongCardItem
                   key={song.id}
                   song={song as SongWithMeta}
                   index={i}
