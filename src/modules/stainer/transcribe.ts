@@ -20,48 +20,33 @@ import { transcribeFixture } from "./providers/fixture";
 import { transcribeRemotePython } from "./providers/remote-python";
 import { transcribeBrowserBasicPitch } from "./providers/browser-basic-pitch";
 import { transcribeBrowserYIN } from "./providers/browser-yin";
+import {
+  getConfiguredTranscriptionProvider,
+  getResolvedProviderOrder,
+  type RuntimeProviderStatus,
+} from "./runtime";
 
 type Provider = (i: TranscriptionInput) => Promise<TranscriptionResult>;
 
-function liveProviders(configured: string): Provider[] {
-  switch (configured) {
-    case "browser-basic-pitch":
-      return [
-        transcribeBrowserBasicPitch,
-        transcribeBrowserYIN,
-        transcribeRemotePython,
-        transcribeFixture,
-      ];
-    case "remote-python":
-      return [
-        transcribeRemotePython,
-        transcribeBrowserYIN,
-        transcribeBrowserBasicPitch,
-        transcribeFixture,
-      ];
-    case "fixture":
-      return [transcribeFixture];
-    default:
-      // "browser-yin" (default) — fastest path that still produces real notes
-      return [
-        transcribeBrowserYIN,
-        transcribeRemotePython,
-        transcribeBrowserBasicPitch,
-        transcribeFixture,
-      ];
-  }
+const PROVIDERS: Record<RuntimeProviderStatus["id"], Provider> = {
+  "remote-python": transcribeRemotePython,
+  "browser-yin": transcribeBrowserYIN,
+  "browser-basic-pitch": transcribeBrowserBasicPitch,
+  fixture: transcribeFixture,
+};
+
+function liveProviders(): Provider[] {
+  const configured = getConfiguredTranscriptionProvider();
+  return getResolvedProviderOrder(configured).map((status) => PROVIDERS[status.id]);
 }
 
 export async function transcribeWithStainer(
-  input: TranscriptionInput
+  input: TranscriptionInput,
 ): Promise<TranscriptionResult> {
-  const configured =
-    process.env.NEXT_PUBLIC_TRANSCRIPTION_PROVIDER || "browser-yin";
-
   // No audio at all → only fixture makes sense.
   const providers = !input.audioBlob
     ? [transcribeFixture]
-    : liveProviders(configured);
+    : liveProviders();
 
   const warnings: string[] = [];
   for (const provider of providers) {

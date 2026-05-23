@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/utils/utils";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
-import { useTranslator } from "@/lib/i18n";
+import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { MurmurMark } from "./murmur-mark";
 import { NAV_ITEMS } from "./nav-items";
 
@@ -16,6 +16,7 @@ export function SideNav() {
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslator();
+  const lang = useI18nStore((s) => s.lang);
   const { resetFlow } = useMurmurStore();
 
   const goHome = (e: React.MouseEvent) => {
@@ -27,25 +28,29 @@ export function SideNav() {
 
   return (
     <aside
-      className="hidden md:flex fixed top-0 left-0 bottom-0 w-[240px] z-40 flex-col bg-[#FFFEFB] border-r border-[#ECE5D6] px-7 py-9"
-      style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 36px)" }}
+      className="hidden md:flex fixed top-0 left-0 bottom-0 w-[252px] z-40 flex-col bg-[#FFFEFB] border-r border-[#ECE5D6] px-7 py-9"
+      style={{
+        paddingTop: "max(env(safe-area-inset-top, 0px), 36px)",
+        background:
+          "radial-gradient(circle at 78% 18%, rgba(255,138,92,0.14), transparent 0 24%), linear-gradient(180deg, rgba(255,254,251,0.98), rgba(255,254,251,0.98))",
+      }}
     >
       <Link
         href="/"
         onClick={goHome}
-        className="mb-14 inline-flex items-center transition-opacity hover:opacity-70"
+        className="mb-14 inline-flex items-center transition-opacity hover:opacity-80"
       >
-        <MurmurMark size={30} />
+        <MurmurMark size={39} />
       </Link>
 
       <nav className="flex flex-col gap-0.5">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter((item) => item.desktopNav !== false).map((item) => {
           const isActive =
             item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const Icon = item.icon;
           const label = t(item.labelKey);
           const baseClass = cn(
-            "group flex items-center gap-3.5 px-3 py-2.5 rounded-md text-[14px] transition-all duration-200",
+            "group flex items-center gap-3.5 px-3 py-2.5 rounded-md transition-all duration-200",
             isActive
               ? "text-[#1A1A1A]"
               : "text-[#8C8780] hover:text-[#1A1A1A]"
@@ -53,16 +58,26 @@ export function SideNav() {
 
           const content = (
             <>
-              <Icon
+              <span
                 className={cn(
-                  "w-[18px] h-[18px] transition-colors",
-                  isActive ? "text-[#FF5924]" : "text-[#B6B0A4] group-hover:text-[#1A1A1A]"
+                  "flex h-[18px] w-[18px] shrink-0 items-center justify-center transition-all",
+                  isActive
+                    ? "text-[#FF5924]"
+                    : "text-[#B6B0A4] group-hover:text-[#1A1A1A]"
                 )}
-                strokeWidth={isActive ? 2 : 1.7}
-              />
-              <span className="tracking-[0.005em]">{label}</span>
+              >
+                <Icon className="h-[18px] w-[18px]" active={isActive} />
+              </span>
+              <span
+                className={cn(
+                  "min-w-0 tracking-[0.01em]",
+                  lang === "zh" ? "text-[16px]" : "text-[14px]"
+                )}
+              >
+                {label}
+              </span>
               {isActive ? (
-                <span className="ml-auto w-1 h-1 rounded-full bg-[#FF5924]" />
+                <span className="ml-auto h-1 w-1 rounded-full bg-[#FF5924]" />
               ) : null}
             </>
           );
@@ -83,15 +98,24 @@ export function SideNav() {
         })}
       </nav>
 
-      {/* Sign-off block — mymind feel: italic serif epigram + tiny meta */}
-      <div className="mt-auto pt-10 border-t border-[#ECE5D6]">
-        <p className="font-serif-italic text-[#1A1A1A] text-[17px] leading-[1.25]">
-          A hum of yours,
-          <br />
-          becomes a song.
-        </p>
-        <p className="mt-3 text-[10px] text-[#B6B0A4] tracking-[0.18em] uppercase">
+      <div className="mt-auto pt-12">
+        <div className="rounded-[28px] border border-[#ECE5D6] bg-[radial-gradient(circle_at_50%_38%,rgba(255,184,120,0.28),transparent_0_26%),linear-gradient(180deg,#FFFEFB,#F8F4ED)] px-6 py-7 shadow-[0_10px_30px_rgba(26,26,26,0.05)]">
+          <p className="font-serif text-[#1A1A1A] text-[36px] leading-[0.9] tracking-[-0.05em]">
+            ○
+          </p>
+          <p className="mt-5 font-serif-italic text-[#1A1A1A] text-[19px] leading-[1.18]">
+            A hum of yours,
+            <br />
+            becomes a song.
+          </p>
+          <p className="mt-4 text-[10px] text-[#B6B0A4] tracking-[0.22em] uppercase">
+            private music oasis
+          </p>
+        </div>
+        <p className="mt-4 text-[10px] text-[#B6B0A4] tracking-[0.18em] uppercase">
           murmur — 2026
+          <br />
+          create · studio · gallery · me
         </p>
       </div>
     </aside>

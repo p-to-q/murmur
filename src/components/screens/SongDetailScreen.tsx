@@ -222,6 +222,14 @@ export function SongDetailScreen({ songId }: { songId: string }) {
           </AnimatePresence>
         </button>
       </div>
+      <div className="px-5 mt-3">
+        <div className="rounded-2xl border border-[#E5DDD0] bg-[#FFFEFB]/88 px-4 py-3">
+          <p className="text-[#1A1A1A] text-sm font-medium">{t("song.preview.live")}</p>
+          <p className="mt-1 text-[#8C8780] text-xs leading-5">
+            {t("song.preview.live_desc")}
+          </p>
+        </div>
+      </div>
 
       {/* Body */}
       <div className="px-5 mt-6 space-y-4 pb-24">

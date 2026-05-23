@@ -23,13 +23,18 @@ export function TrackMixer({ arrangement, onTrack }: TrackMixerProps) {
 
   return (
     <div
-      className="bg-[#FFFEFB] rounded-2xl p-5"
-      style={{ boxShadow: "0 2px 12px rgba(26, 26, 26,0.06)" }}
+      className="rounded-[28px] border border-[#E9E1D4] bg-[linear-gradient(180deg,rgba(255,254,251,0.98),rgba(247,241,232,0.98))] p-5 shadow-[0_16px_42px_rgba(26,26,26,0.05)] md:p-6"
     >
-      <p className="text-[#8C8780] text-xs font-medium tracking-wider uppercase mb-4">
+      <p className="eyebrow mb-2 text-[#FF8A5C]">
         {t("studio.mixer")}
       </p>
-      <div className="space-y-5">
+      <h3 className="font-serif text-[24px] leading-[1.02] text-[#1A1A1A] md:text-[30px]">
+        {t("studio.mix.title")}
+      </h3>
+      <p className="mt-3 max-w-[34rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
+        {t("studio.mix.sub")}
+      </p>
+      <div className="mt-6 space-y-5">
         {TRACKS.map(({ key, labelKey, icon, color }) => {
           const track = arrangement[key];
           return (
@@ -56,7 +61,7 @@ export function TrackMixer({ arrangement, onTrack }: TrackMixerProps) {
           );
         })}
       </div>
-      <p className="text-[#8C8780] text-[11px] mt-4 leading-relaxed">
+      <p className="mt-5 text-[11px] leading-relaxed text-[#8C8780]">
         {t("studio.mixer.help")}
       </p>
     </div>

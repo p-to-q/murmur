@@ -1,21 +1,30 @@
 import type { MelodyNote, TranscriptionInput, TranscriptionResult } from "@/modules/shared/types";
 import { polishMelody } from "@/modules/music/melody-polisher";
+import { getRemotePythonWorkerUrl } from "../runtime";
 
 /** Remote Python Basic Pitch worker provider */
 export async function transcribeRemotePython(
-  input: TranscriptionInput
+  input: TranscriptionInput,
 ): Promise<TranscriptionResult> {
   if (!input.audioBlob) {
     throw new Error("Remote Python provider requires an audio blob");
   }
 
-  const workerBase =
-    process.env.NEXT_PUBLIC_BASIC_PITCH_WORKER_URL ?? "/api/transcribe";
+  const workerBase = getRemotePythonWorkerUrl();
+  if (!workerBase) {
+    throw new Error(
+      "Remote Python provider disabled: NEXT_PUBLIC_BASIC_PITCH_WORKER_URL is not configured",
+    );
+  }
 
   const form = new FormData();
   form.append("audio", input.audioBlob, "hum.wav");
 
-  const res = await fetch(workerBase, {
+  const workerUrl = workerBase.endsWith("/transcribe")
+    ? workerBase
+    : `${workerBase}/transcribe`;
+
+  const res = await fetch(workerUrl, {
     method: "POST",
     body: form,
     signal: AbortSignal.timeout(20_000),

@@ -56,8 +56,9 @@ const FIXTURE_MELODIES = [
 ];
 
 export async function transcribeFixture(
-  _input: TranscriptionInput
+  input: TranscriptionInput
 ): Promise<TranscriptionResult> {
+  void input;
   await new Promise((r) => setTimeout(r, 500));
 
   // 随机选一段旋律，保证演示有变化

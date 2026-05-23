@@ -19,10 +19,7 @@ export type Scene = {
 export const SCENES: Scene[] = [
   { id: "warm",       labelKey: "scene.warm.label",       descKey: "scene.warm.desc",       tokens: ["warmer"] },
   { id: "cinematic",  labelKey: "scene.cinematic.label",  descKey: "scene.cinematic.desc",  tokens: ["cinematic"] },
-  { id: "party",      labelKey: "scene.party.label",      descKey: "scene.party.desc",      tokens: ["party"] },
   { id: "minimal",    labelKey: "scene.minimal.label",    descKey: "scene.minimal.desc",    tokens: ["restore_all", "no_drums", "less_strings"] },
   { id: "lush",       labelKey: "scene.lush.label",       descKey: "scene.lush.desc",       tokens: ["more_strings", "more_bass", "more_texture"] },
-  { id: "less_drums", labelKey: "scene.less_drums.label", descKey: "scene.less_drums.desc", tokens: ["less_drums"] },
-  { id: "more_bass",  labelKey: "scene.more_bass.label",  descKey: "scene.more_bass.desc",  tokens: ["more_bass"] },
   { id: "brighter",   labelKey: "scene.brighter.label",   descKey: "scene.brighter.desc",   tokens: ["brighter"] },
 ];

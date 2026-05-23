@@ -1,19 +1,33 @@
-import { Mic, Grid3x3, User, type LucideIcon } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
 import type { TKey } from "@/lib/i18n/dict";
+import {
+  CreateNavIcon,
+  VibeNavIcon,
+  StudioNavIcon,
+  GalleryNavIcon,
+  MeNavIcon,
+} from "./nav-icons";
+
+export type NavIconComponent = ComponentType<
+  SVGProps<SVGSVGElement> & { active?: boolean }
+>;
 
 export type NavItem = {
   href: string;
-  icon: LucideIcon;
+  icon: NavIconComponent;
   labelKey: TKey;
-  /** Center "primary" slot — gets the round coral accent treatment on mobile */
-  primary?: boolean;
+  /** false = hide from mobile bottom nav (default: true) */
+  mobileNav?: boolean;
+  /** false = hide from desktop sidebar (default: true) */
+  desktopNav?: boolean;
 };
 
-// Three-item nav: every step in the user journey is reachable from here, and
-// no orphans (Studio/Vibe are reached *through* the Hum → Pick → Studio flow,
-// not from the nav directly).
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/",        icon: Mic,     labelKey: "nav.hum" },
-  { href: "/gallery", icon: Grid3x3, labelKey: "nav.gallery", primary: true },
-  { href: "/me",      icon: User,    labelKey: "nav.me" },
+  { href: "/", icon: CreateNavIcon, labelKey: "nav.create" },
+  // /vibe redirects to / — orphaned, hidden from all navs
+  { href: "/vibe", icon: VibeNavIcon, labelKey: "nav.vibe", mobileNav: false, desktopNav: false },
+  // Studio is reached via the hum→pick flow on mobile; desktop users can navigate directly
+  { href: "/studio", icon: StudioNavIcon, labelKey: "nav.studio", mobileNav: false },
+  { href: "/gallery", icon: GalleryNavIcon, labelKey: "nav.gallery" },
+  { href: "/me", icon: MeNavIcon, labelKey: "nav.me" },
 ];

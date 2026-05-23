@@ -8,7 +8,7 @@ RAW BLOB (mic / fixture)
   ↓ stainer/transcribe
 RawNote[]              (pitch + start + duration + velocity + confidence)
   ↓ melody-polisher
-CleanMelody            (notes + key + scale + bpm + duration + contour)
+CleanMelody            (denoised + pitch-corrected notes + key + scale + bpm + duration + contour)
   ↓ generate-versions
 VibeVersion × 3        (preset + ensemble + arrangementState)
   ↓ assemble-song
@@ -19,6 +19,29 @@ AssembledSong          (chords + bass + drums + bpm + totalDuration)
 
 Both players consume the same `AssembledSong`, so the live audition on a
 card and the saved MP3 sound identical.
+
+## 0. melody-polisher — `src/modules/music/melody-polisher.ts`
+
+Before rhythm/chords do anything, Murmur now treats the detected pitches as
+raw material rather than sacred truth:
+
+- **Noise suppression** — drops ultra-short, low-confidence pitch bursts and
+  removes isolated outliers far from the local melodic center.
+- **Pitch drift correction** — merges adjacent near-unison notes, smooths
+  local contour wobble, and corrects pitch toward nearby stable degrees
+  without flattening expressive motion.
+- **Tonal inference** — estimates the best-fit key/mode across major, minor,
+  dorian, phrygian, and pentatonic profiles.
+- **Musical normalization** — if the detected line looks ambiguously minor
+  but strongly supports a brighter tonic/third relation, the line can be
+  promoted toward a major reading.
+- **Cadence stabilization** — end-of-phrase notes are nudged toward tonic /
+  third / fifth targets so the melody resolves like a song phrase, not a
+  detector trace.
+
+This layer is intentionally opinionated: a hummed sketch is allowed to stay a
+little human and imperfect, but it should not produce musically awkward or
+accidentally atonal lead lines downstream.
 
 ## 1. rhythm-engine — `src/lib/music/rhythm-engine.ts`
 

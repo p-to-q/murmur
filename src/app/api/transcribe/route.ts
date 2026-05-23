@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // POST /api/transcribe
-// Accepts audio blob, proxies to Python Basic Pitch worker or returns mock data.
-// In MVP, we return a realistic fixture so the app can demo without Python backend.
+// Accepts audio blob and proxies to the external Python worker.
+// This route must not silently return fixture data for real user recordings.
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,41 +13,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No audio file provided" }, { status: 400 });
     }
 
-    // Check if Python worker is configured
-    const pythonWorkerUrl = process.env.BASIC_PITCH_WORKER_URL;
-    if (pythonWorkerUrl) {
-      try {
-        const workerForm = new FormData();
-        workerForm.append("audio", audio);
-        const response = await fetch(`${pythonWorkerUrl}/transcribe`, {
-          method: "POST",
-          body: workerForm,
-          signal: AbortSignal.timeout(20000),
-        });
-        if (response.ok) {
-          const data = await response.json();
-          return NextResponse.json(data);
-        }
-      } catch (err) {
-        console.warn("[transcribe] Python worker unavailable, using fixture:", err);
-      }
+    const pythonWorkerUrl =
+      process.env.REMOTE_PYIN_WORKER_URL ?? process.env.BASIC_PITCH_WORKER_URL;
+    if (!pythonWorkerUrl) {
+      return NextResponse.json(
+        { error: "Python transcription worker is not configured" },
+        { status: 503 },
+      );
     }
 
-    // Return fixture notes for MVP demo
-    await new Promise((r) => setTimeout(r, 600));
+    const workerForm = new FormData();
+    workerForm.append("audio", audio);
+    const response = await fetch(`${pythonWorkerUrl}/transcribe`, {
+      method: "POST",
+      body: workerForm,
+      signal: AbortSignal.timeout(20_000),
+    });
 
-    const fixtureNotes = [
-      { pitch: 60, start: 0.0, duration: 0.5, velocity: 80, confidence: 0.9 },
-      { pitch: 62, start: 0.5, duration: 0.5, velocity: 80, confidence: 0.9 },
-      { pitch: 64, start: 1.0, duration: 0.5, velocity: 80, confidence: 0.9 },
-      { pitch: 67, start: 1.5, duration: 1.0, velocity: 85, confidence: 0.9 },
-      { pitch: 65, start: 2.5, duration: 0.5, velocity: 75, confidence: 0.85 },
-      { pitch: 64, start: 3.0, duration: 0.5, velocity: 75, confidence: 0.85 },
-      { pitch: 62, start: 3.5, duration: 0.5, velocity: 70, confidence: 0.85 },
-      { pitch: 60, start: 4.0, duration: 1.0, velocity: 80, confidence: 0.9 },
-    ];
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: `Python worker failed with HTTP ${response.status}` },
+        { status: 502 },
+      );
+    }
 
-    return NextResponse.json({ notes: fixtureNotes, source: "fixture" });
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (err) {
     console.error("[transcribe] Error:", err);
     return NextResponse.json({ error: "Transcription failed" }, { status: 500 });

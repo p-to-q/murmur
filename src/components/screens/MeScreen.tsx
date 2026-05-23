@@ -2,12 +2,20 @@
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { UserBadge } from "@/components/user-profile/user-badge";
 import { useTranslator, useI18nStore } from "@/lib/i18n";
+import {
+  getConfiguredTranscriptionProvider,
+  getProviderStatuses,
+  getRuntimeStatusLabel,
+} from "@/modules/stainer/runtime";
 
 export function MeScreen() {
   const { songs } = useMurmurStore();
   const t = useTranslator();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
+  const providerStatuses = getProviderStatuses();
+  const configuredProvider = getConfiguredTranscriptionProvider();
+  const runtimeStatus = getRuntimeStatusLabel();
 
   return (
     <div className="min-h-svh bg-[#F5F1EB]">
@@ -46,10 +54,24 @@ export function MeScreen() {
         <Card>
           <SectionLabel>{t("me.status.title")}</SectionLabel>
           <div className="space-y-2.5">
-            <StatusRow label={t("me.status.transcribe")} value={process.env.NEXT_PUBLIC_TRANSCRIPTION_PROVIDER ?? "browser-yin"} />
+            <StatusRow
+              label={t("me.status.transcribe")}
+              value={runtimeStatus}
+            />
             <StatusRow label={t("me.status.arrange")} value="Strummer v0.2" />
             <StatusRow label={t("me.status.visual")} value="Canvas Particles" />
             <StatusRow label={t("me.status.export")} value="MP3 / HTML / PNG" />
+          </div>
+          <div className="mt-4 space-y-2">
+            {providerStatuses.map((status) => (
+              <ProviderStatusRow
+                key={status.id}
+                id={status.id}
+                active={configuredProvider === "auto" ? status.enabled : configuredProvider === status.id}
+                enabled={status.enabled}
+                reason={status.reason}
+              />
+            ))}
           </div>
         </Card>
       </div>
@@ -86,6 +108,34 @@ export function MeScreen() {
           </p>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function ProviderStatusRow({
+  id,
+  active,
+  enabled,
+  reason,
+}: {
+  id: string;
+  active: boolean;
+  enabled: boolean;
+  reason?: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 text-xs">
+      <div className="flex items-center gap-2">
+        <span
+          className={`mt-[3px] h-1.5 w-1.5 rounded-full ${
+            enabled ? "bg-[#FF5924]" : "bg-[#C8C0B2]"
+          }`}
+        />
+        <span className="font-mono text-[#8C8780]">{id}</span>
+      </div>
+      <span className="text-right text-[#B6B0A4]">
+        {enabled ? (active ? "ready" : "available") : reason ?? "disabled"}
+      </span>
     </div>
   );
 }

@@ -19,8 +19,9 @@
 - [x] SongDetail 3 downloads: audio / share HTML / poster PNG
 - [x] Self-contained share HTML (embedded base64 audio + inline canvas)
 - [x] Poster PNG rendered via html2canvas at 1080×1080
-- [x] BottomNav simplified to 3 items (Hum / Gallery / Me)
-- [x] SideNav (desktop) — 240px column with brand + nav
+- [x] BottomNav simplified to 3 items (Hum / Gallery / Me) — Vibe + Studio hidden via `mobileNav: false`
+- [x] SideNav (desktop) — 252px column with brand + nav; Vibe hidden via `desktopNav: false`
+- [x] Layout padding fixed: `md:pl-[252px]` matches sidebar width; desktop bottom padding via `--main-pb` CSS var (0 on md+)
 - [x] Safe-area insets honored top + bottom
 - [x] i18n zh / en switcher in Me screen, device.locale auto-detected
 - [x] Murmur SVG mark + favicon
@@ -28,7 +29,7 @@
 
 ### Optional upgrades (off by default)
 - [ ] Browser Basic Pitch — opt-in via `NEXT_PUBLIC_ENABLE_BASIC_PITCH_BROWSER=true`
-- [ ] PYIN remote worker — set `NEXT_PUBLIC_BASIC_PITCH_WORKER_URL`
+- [ ] PYIN remote worker — set `NEXT_PUBLIC_REMOTE_PYIN_WORKER_URL` (or legacy `NEXT_PUBLIC_BASIC_PITCH_WORKER_URL`)
 - [ ] Eazo notifications — needs `EAZO_PRIVATE_KEY` configured
 
 ### Known limitations
@@ -36,8 +37,8 @@
   after route navigation — SongDetail falls back to Tone player automatically.
 - MP3 encoding uses `@breezystack/lamejs`; it dynamically imports so render
   pipeline never blocks save on encoder load.
-- The legacy `/api/transcribe` route (server-side proxy) is kept but the
-  facade routes through `transcribeWithStainer` instead.
+- The legacy `/api/transcribe` route is now a strict proxy to the remote
+  worker. It no longer returns fixture notes for real recordings.
 - Songs saved before the music-engine v2 (no `gen:<vibeId>` marker in
   `chords.currentPattern`) fall back to tag-based vibe inference inside
   `assemble-song`. Re-save migrates them.

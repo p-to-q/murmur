@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Geist, Instrument_Serif } from "next/font/google";
+import { Geist, Instrument_Serif, LXGW_WenKai_TC } from "next/font/google";
 import { EazoProvider } from "@eazo/sdk/react";
 import { cn } from "@/utils/utils";
 import { Toaster } from "@/components/ui/sonner";
@@ -19,6 +19,15 @@ const serif = Instrument_Serif({
   variable: "--font-serif",
   weight: ["400"],
   style: ["normal", "italic"],
+  display: "swap",
+});
+// LXGW WenKai TC — 霞鹜文楷，书卷楷书风格，与 Instrument Serif 的手写感匹配。
+// TC covers both simplified and traditional Chinese glyphs.
+// preload:false — CJK fonts are large, let browser fetch on demand via unicode-range.
+const wenkai = LXGW_WenKai_TC({
+  weight: ["300", "400", "700"],
+  variable: "--font-chinese",
+  preload: false,
   display: "swap",
 });
 
@@ -58,7 +67,8 @@ export default function RootLayout({
       className={cn(
         "h-full antialiased font-sans",
         geist.variable,
-        serif.variable
+        serif.variable,
+        wenkai.variable
       )}
     >
       <body className="min-h-svh flex flex-col bg-[#F7F3EA]">
@@ -71,9 +81,9 @@ export default function RootLayout({
               - mobile  → reserves bottom for nav (with safe-area)
               - desktop → reserves left 240px for sidebar */}
           <main
-            className="flex-1 md:pl-[240px]"
+            className="flex-1 md:pl-[252px]"
             style={{
-              paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 72px)",
+              paddingBottom: "var(--main-pb)",
             }}
           >
             {children}

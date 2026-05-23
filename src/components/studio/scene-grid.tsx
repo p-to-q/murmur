@@ -11,22 +11,36 @@ export function SceneGrid({ onPick }: SceneGridProps) {
   const t = useTranslator();
   return (
     <div
-      className="bg-[#FFFEFB] rounded-2xl p-5"
-      style={{ boxShadow: "0 2px 12px rgba(26, 26, 26,0.06)" }}
+      className="rounded-[28px] border border-[#E9E1D4] bg-[linear-gradient(180deg,rgba(255,254,251,0.98),rgba(247,241,232,0.98))] p-5 shadow-[0_16px_42px_rgba(26,26,26,0.05)] md:p-6"
     >
-      <p className="text-[#8C8780] text-xs font-medium tracking-wider uppercase mb-3">
+      <p className="eyebrow mb-2 text-[#FF8A5C]">
         {t("studio.scenes")}
       </p>
-      <div className="grid grid-cols-2 gap-2.5">
+      <h3 className="font-serif text-[24px] leading-[1.02] text-[#1A1A1A] md:text-[30px]">
+        {t("studio.mood.title")}
+      </h3>
+      <p className="mt-3 max-w-[34rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
+        {t("studio.mood.sub")}
+      </p>
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
         {SCENES.map((scene) => (
           <motion.button
             key={scene.id}
             whileTap={{ scale: 0.94 }}
             onClick={() => onPick(scene)}
-            className="flex flex-col items-start px-4 py-3 rounded-2xl bg-[#F5F1EB] border border-[#E5DDD0] hover:border-[#FF5924] transition-colors text-left"
+            className="flex min-h-[120px] flex-col items-start justify-between rounded-[22px] border border-[#E7DECF] bg-[radial-gradient(circle_at_78%_18%,rgba(255,178,124,0.16),transparent_0_28%),#FFFCF7] px-4 py-4 text-left transition-colors hover:border-[#FF8A5C]"
           >
-            <p className="text-[#1A1A1A] text-sm font-medium">{t(scene.labelKey)}</p>
-            <p className="text-[#8C8780] text-[11px] mt-0.5">{t(scene.descKey)}</p>
+            <span className="text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1]">
+              Mood
+            </span>
+            <div>
+              <p className="text-[15px] font-medium text-[#1A1A1A]">
+                {t(scene.labelKey)}
+              </p>
+              <p className="mt-1 text-[11px] leading-[1.5] text-[#8C8780]">
+                {t(scene.descKey)}
+              </p>
+            </div>
           </motion.button>
         ))}
       </div>

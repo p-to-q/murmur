@@ -6,10 +6,12 @@ export const DICT = {
   "app.title":         { zh: "MURMUR",                                en: "MURMUR" },
   "app.tagline":       { zh: "把哼唱变成一张可分享的小歌卡片",         en: "Turn a hum into a sharable little song" },
 
-  // ── Bottom nav ──────────────────────────────────────────────────────
-  "nav.hum":           { zh: "哼唱",       en: "Hum" },
-  "nav.gallery":       { zh: "灵感集",     en: "Gallery" },
-  "nav.me":            { zh: "我的",       en: "Me" },
+  // ── Navigation ──────────────────────────────────────────────────────
+  "nav.create":        { zh: "起调",       en: "Create" },
+  "nav.vibe":          { zh: "风物",       en: "Vibe" },
+  "nav.studio":        { zh: "谱室",       en: "Studio" },
+  "nav.gallery":       { zh: "藏歌",       en: "Gallery" },
+  "nav.me":            { zh: "我",         en: "Me!" },
 
   // ── HumScreen ───────────────────────────────────────────────────────
   "hum.brand.tagline": { zh: "MURMUR",     en: "MURMUR" },
@@ -19,6 +21,17 @@ export const DICT = {
   "hum.idle.headline": { zh: "哼一句。",   en: "Hum a tune." },
   "hum.idle.sub":      { zh: "Murmur 会把它编成一首小歌。", en: "Murmur will weave it into a small song." },
   "hum.idle.hint":     { zh: "最长 15 秒，随时点停",   en: "Up to 15 seconds — tap to stop" },
+
+  // Dynamic idle headlines — rotate after a few seconds of inactivity
+  "hum.idle.h1":       { zh: "脑海里的旋律，\n让它出来。",     en: "That melody\nin your head—\nlet it out." },
+  "hum.idle.h2":       { zh: "按住白色圆圈，\n开始哼唱。",     en: "Hold the circle,\nstart humming." },
+  "hum.idle.h3":       { zh: "还没想好？\n随便哼几个音就行。", en: "Not sure yet?\nJust hum a few notes." },
+  "hum.idle.h4":       { zh: "什么调都可以，\n跑调也很好听。", en: "Any key works—\neven off-key\nsounds great." },
+  "hum.idle.h5":       { zh: "闭上眼睛，\n哼出此刻的心情。",   en: "Close your eyes,\nhum how you feel\nright now." },
+
+  // CTA pill
+  "hum.cta":           { zh: "按住开始哼唱",  en: "HOLD TO HUM" },
+  "hum.cta.release":   { zh: "松开结束",      en: "RELEASE TO STOP" },
   "hum.recording":     { zh: "正在听…",    en: "Listening…" },
   "hum.tap_stop":      { zh: "点击方块停止", en: "Tap the square to stop" },
   "hum.proc.wait":     { zh: "稍等一下…",  en: "Hang tight…" },
@@ -31,13 +44,14 @@ export const DICT = {
   "hum.mic.cta_example": { zh: "用示例旋律体验完整流程", en: "Try with an example melody" },
   "hum.mic.cta_retry":   { zh: "重试麦克风",            en: "Retry microphone" },
 
-  // ── VersionCards ────────────────────────────────────────────────────
-  "cards.eyebrow":    { zh: "你的旋律长出了", en: "Your melody grew into" },
-  "cards.headline":   { zh: "3 个方向",       en: "3 directions" },
-  "cards.preview":    { zh: "试听",           en: "Preview" },
+  // ── VersionCards (Vibe selection) ────────────────────────────────────
+  "cards.headline":   { zh: "选一个感觉。",   en: "Pick a feel." },
+  "cards.sub.short":  { zh: "试听，然后选你最喜欢的方向。", en: "Listen, then pick the one that feels right." },
   "cards.choose":     { zh: "选这个",         en: "Pick" },
   "cards.redo":       { zh: "重新哼唱",       en: "Hum again" },
   "cards.play_error": { zh: "播放失败，请重试", en: "Playback failed — please retry" },
+  "cards.how.title":  { zh: "这是怎么做到的？",   en: "How does this work?" },
+  "cards.how.body":   { zh: "MURMUR 分析了你哼唱的旋律——音高、节奏和调性——然后用不同的氛围模板为它编曲。选定后还可以在谱室里微调。", en: "MURMUR analyzed your melody — pitch, rhythm, and key — then arranged it with different vibe templates. You can fine-tune after picking." },
 
   // ── Studio (Vibe 氛围台) ───────────────────────────────────────────
   "studio.back":           { zh: "返回",       en: "Back" },
@@ -46,6 +60,17 @@ export const DICT = {
   "studio.mixer":          { zh: "混音",        en: "Mixer" },
   "studio.mixer.help":     { zh: "点图标开/关该轨道，拖进度条调音量，拉到 0 = 静音", en: "Tap an icon to toggle a track, drag the slider for volume, 0 = mute" },
   "studio.scenes":         { zh: "场景",        en: "Scenes" },
+  "studio.mix.title":      { zh: "细调声部",    en: "Shape the mix" },
+  "studio.mix.sub":        { zh: "保留这首小歌的性格，只把鼓、贝斯、弦乐和空气感推到更舒服的位置。", en: "Keep the song's character, and just move the drums, bass, strings, and air into a more comfortable place." },
+  "studio.mood.title":     { zh: "落到一种气息里", en: "Settle into a mood" },
+  "studio.mood.sub":       { zh: "这些不是参数，而是几种更完整的走向。选一个，再继续微调。", en: "These are not parameters, but fuller directions. Pick one, then keep refining." },
+  "studio.overview.eyebrow": { zh: "STUDIO",    en: "STUDIO" },
+  "studio.overview.title": { zh: "把旋律立起来", en: "Let the melody stand" },
+  "studio.overview.sub":   { zh: "先听它现在的样子，再决定是让它更明、更暖，还是更克制。整个编辑都留在同一页里。", en: "Listen to what it is now, then decide whether it should feel brighter, warmer, or more restrained. The whole edit stays on one page." },
+  "studio.hero.sub":       { zh: "先试听，再往下修它的气息、层次和力度。", en: "Listen first, then shape its air, layering, and weight below." },
+  "studio.auris.title":    { zh: "让 Auris 帮你动一笔", en: "Let Auris reshape it" },
+  "studio.auris.sub":      { zh: "一句话描述你想要的变化，或者从下面几个方向开始。Auris 会尽量把它翻译成克制而合理的调整。", en: "Describe the change in one sentence, or start from one of the directions below. Auris will translate it into restrained, sensible adjustments." },
+  "studio.auris.badge":    { zh: "AI 编辑",     en: "AI edit" },
   "studio.prompt.title":   { zh: "一句话修改",  en: "Tweak in one sentence" },
   "studio.prompt.placeholder": { zh: "让它更温暖、鼓少一点、加点贝斯…", en: "Make it warmer, fewer drums, add some bass…" },
   "studio.prompt.cta":     { zh: "改",          en: "Apply" },
@@ -105,9 +130,12 @@ export const DICT = {
   "song.share.download_audio":{ zh: "下载音频",   en: "Download audio" },
   "song.share.download_page": { zh: "下载分享页", en: "Download share page" },
   "song.share.download_card": { zh: "下载分享卡", en: "Download share card" },
+  "song.share.download_video": { zh: "导出视频", en: "Export video" },
   "song.share.copy_link":     { zh: "复制链接",   en: "Copy link" },
   "song.share.copied":        { zh: "链接已复制", en: "Link copied" },
   "song.share.no_audio":      { zh: "音频还在渲染或不可用，请稍候", en: "Audio is still rendering or unavailable" },
+  "song.preview.live":        { zh: "在线预览", en: "Live preview" },
+  "song.preview.live_desc":   { zh: "当前视觉会直接联动播放状态，下面可继续导出音频、分享页、分享卡和带声音的视频。", en: "This visual responds to playback in real time. You can export audio, share page, share card, or a video with sound below." },
   "song.export.exporting":    { zh: "导出中…",   en: "Exporting…" },
   "song.export.ok":           { zh: "已下载",     en: "Downloaded" },
   "song.export.err":          { zh: "导出失败，请重试", en: "Export failed — please retry" },

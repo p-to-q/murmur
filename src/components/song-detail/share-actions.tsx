@@ -1,13 +1,14 @@
 "use client";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Download, FileImage, Share2, Music } from "lucide-react";
+import { Download, FileImage, Share2, Music, Film } from "lucide-react";
 import { toast } from "sonner";
 import { memory } from "@eazo/sdk";
 
 import { useTranslator } from "@/lib/i18n";
 import { buildShareHtml, downloadHtml } from "@/modules/export/render-share-html";
 import { renderPoster, downloadBlob } from "@/modules/export/render-poster";
+import { exportSongAsWebM } from "@/modules/export/export-webm";
 import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
@@ -18,7 +19,7 @@ type Song = SongCard & {
 
 export function ShareActions({ song }: { song: Song }) {
   const t = useTranslator();
-  const [busy, setBusy] = useState<"audio" | "html" | "card" | null>(null);
+  const [busy, setBusy] = useState<"audio" | "html" | "card" | "video" | null>(null);
 
   const gradient =
     (song.visualConfig as { posterBg?: string }).posterBg ??
@@ -118,8 +119,34 @@ export function ShareActions({ song }: { song: Song }) {
     }
   };
 
+  const downloadVideo = async () => {
+    if (!audioUrl) {
+      toast(t("song.share.no_audio"));
+      return;
+    }
+
+    setBusy("video");
+    try {
+      await exportSongAsWebM(song);
+      toast.success(t("song.export.ok"));
+      memory
+        .reportAction({
+          content: `Downloaded video for "${song.title}"`,
+          event_type: "update",
+          page: "song-detail",
+          metadata: { type: "download_video", song_id: song.id },
+        })
+        .catch(() => {});
+    } catch (e) {
+      console.error(e);
+      toast.error(t("song.export.err"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
-    <div className="grid grid-cols-3 gap-2.5">
+    <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
       <ActionButton
         icon={<Music className="w-4 h-4" />}
         label={t("song.share.download_audio")}
@@ -137,6 +164,12 @@ export function ShareActions({ song }: { song: Song }) {
         label={t("song.share.download_card")}
         loading={busy === "card"}
         onClick={downloadCard}
+      />
+      <ActionButton
+        icon={<Film className="w-4 h-4" />}
+        label={t("song.share.download_video")}
+        loading={busy === "video"}
+        onClick={downloadVideo}
       />
     </div>
   );

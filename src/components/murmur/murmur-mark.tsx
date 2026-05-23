@@ -1,50 +1,116 @@
 "use client";
-/**
- * MurmurMark — the brand mark. Coral hum-wave dot + serif wordmark.
- *
- * The wordmark is set in Instrument Serif italic at a slightly smaller size
- * relative to the dot than v1 — restraint is the point. mymind never lets the
- * mark dominate.
- */
+
+import { useEffect, useId, useState } from "react";
+import { motion } from "framer-motion";
+
 export function MurmurMark({
-  size = 26,
+  size = 39,
   showWord = true,
 }: {
   size?: number;
   showWord?: boolean;
 }) {
+  const [burst, setBurst] = useState(false);
+  const filterId = useId();
+
+  useEffect(() => {
+    const href = document.getElementById("murmur-vt323-font");
+    if (href) return;
+    const link = document.createElement("link");
+    link.id = "murmur-vt323-font";
+    link.rel = "stylesheet";
+    link.href =
+      "https://fonts.googleapis.com/css2?family=VT323&display=swap";
+    document.head.appendChild(link);
+  }, []);
+
+  const triggerBurst = () => {
+    setBurst(true);
+    window.setTimeout(() => setBurst(false), 520);
+  };
+
   return (
-    <div className="flex items-center gap-2.5 select-none">
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 32 32"
-        fill="none"
-        aria-hidden
-      >
-        <defs>
-          <linearGradient id="murmur-mark-grad" x1="0" y1="0" x2="32" y2="32">
-            <stop offset="0%" stopColor="#FF8A5C" />
-            <stop offset="100%" stopColor="#FF5924" />
-          </linearGradient>
-        </defs>
-        <circle cx="16" cy="16" r="14" fill="url(#murmur-mark-grad)" />
-        <path
-          d="M7 17 C 10 13, 12 13, 14 17 S 18 21, 20 17 S 24 13, 26 17"
-          stroke="#FFFEFB"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          fill="none"
-        />
-      </svg>
+    <button
+      type="button"
+      onMouseEnter={() => setBurst(true)}
+      onMouseLeave={() => setBurst(false)}
+      onFocus={() => setBurst(true)}
+      onBlur={() => setBurst(false)}
+      onClick={triggerBurst}
+      className="inline-flex items-center bg-transparent p-0 text-left select-none"
+      style={{ transformOrigin: "left center" }}
+      aria-label="MURMUR"
+    >
       {showWord ? (
-        <span
-          className="font-serif-italic text-[#1A1A1A]"
-          style={{ fontSize: Math.round(size * 0.62) }}
+        <motion.svg
+          width={Math.round(size * 5.05)}
+          height={Math.round(size * 1.42)}
+          viewBox="0 0 420 96"
+          fill="none"
+          aria-hidden="true"
+          initial={false}
+          animate={
+            burst
+              ? {
+                  y: [0, -0.8, 0],
+                  scale: [1, 1.006, 1],
+                }
+              : {
+                  y: 0,
+                  scale: 1,
+                }
+          }
+          transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+          className="overflow-visible"
         >
-          murmur
-        </span>
+          <defs>
+            <filter
+              id={filterId}
+              x="-8%"
+              y="-24%"
+              width="116%"
+              height="148%"
+              colorInterpolationFilters="sRGB"
+            >
+              <feOffset dx="0" dy="0.45" result="shadowOffset" />
+              <feGaussianBlur in="shadowOffset" stdDeviation="0.4" result="shadowBlur" />
+              <feColorMatrix
+                in="shadowBlur"
+                type="matrix"
+                values="0 0 0 0 0.96 0 0 0 0 0.92 0 0 0 0 0.85 0 0 0 0.8 0"
+                result="shadowColor"
+              />
+              <feMerge>
+                <feMergeNode in="shadowColor" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          <motion.text
+            x="0"
+            y="69"
+            fill="#111111"
+            style={{
+              fontFamily: '"VT323", "Courier New", monospace',
+              fontSize: 78,
+              letterSpacing: "12.76px",
+            }}
+            filter={`url(#${filterId})`}
+            animate={
+              burst
+                ? {
+                    opacity: [1, 0.98, 1],
+                    letterSpacing: ["12.76px", "13.5px", "12.76px"],
+                  }
+                : { opacity: 1, letterSpacing: "12.76px" }
+            }
+            transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+          >
+            MURMUR
+          </motion.text>
+        </motion.svg>
       ) : null}
-    </div>
+    </button>
   );
 }

@@ -26,30 +26,11 @@ export function BottomNav() {
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
       <div className="flex items-end justify-around h-[64px] px-4">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter((item) => item.mobileNav !== false).map((item) => {
           const isActive =
             item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const Icon = item.icon;
           const label = t(item.labelKey);
-
-          if (item.primary) {
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-label={label}
-                className={cn(
-                  "flex flex-col items-center justify-center w-16 h-16 -mt-7 rounded-full text-white transition-all",
-                  isActive
-                    ? "bg-[#D9421A] scale-105"
-                    : "bg-[#FF5924] hover:scale-105"
-                )}
-                style={{ boxShadow: "0 8px 22px rgba(255,89,36,0.36)" }}
-              >
-                <Icon className="w-7 h-7" strokeWidth={2.2} />
-              </Link>
-            );
-          }
 
           const sharedClass = cn(
             "flex flex-col items-center justify-center flex-1 h-full transition-colors",
