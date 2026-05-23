@@ -13,6 +13,10 @@ const MAX_DURATION = 15;
 const IDLE_ROTATE_INTERVAL = 5000;
 
 export function HumScreen() {
+  // This screen is deliberately doing two jobs at once:
+  // 1) technically capture audio robustly enough for transcription
+  // 2) emotionally lower the activation barrier so a user feels safe
+  //    starting with an imperfect hum rather than a "performance"
   const {
     recordingState,
     setRecordingState,

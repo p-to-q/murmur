@@ -30,6 +30,9 @@ import { TrackMixer } from "@/components/studio/track-mixer";
 import { SceneGrid } from "@/components/studio/scene-grid";
 
 export function StudioScreen() {
+  // Studio is intentionally not a DAW. It compresses arrangement control into
+  // three legible surfaces: direct track shaping, mood/scene shifts, and a
+  // natural-language AI edit path. The goal is guided authorship, not maximal knobs.
   const router = useRouter();
   const t = useTranslator();
   const currentVersion = useMurmurStore((state) => state.currentVersion);

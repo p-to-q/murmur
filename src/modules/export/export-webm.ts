@@ -21,21 +21,78 @@ const WIDTH = 1080;
 const HEIGHT = 1080;
 const FPS = 30;
 
+export type WebMExportSupport = {
+  supported: boolean;
+  reason?: "missing_media_recorder" | "missing_audio_context" | "missing_capture_stream";
+};
+
+export class WebMExportError extends Error {
+  code:
+    | "audio_required"
+    | "browser_unsupported"
+    | "canvas_unavailable"
+    | "audio_context_unavailable"
+    | "audio_load_failed"
+    | "recorder_failed";
+
+  constructor(
+    code: WebMExportError["code"],
+    message: string,
+  ) {
+    super(message);
+    this.name = "WebMExportError";
+    this.code = code;
+  }
+}
+
+export function getWebMExportSupport(): WebMExportSupport {
+  if (typeof window === "undefined") {
+    return { supported: false, reason: "missing_media_recorder" };
+  }
+  if (typeof MediaRecorder === "undefined") {
+    return { supported: false, reason: "missing_media_recorder" };
+  }
+  if (typeof HTMLCanvasElement === "undefined" || !HTMLCanvasElement.prototype.captureStream) {
+    return { supported: false, reason: "missing_capture_stream" };
+  }
+  const AudioCtx =
+    window.AudioContext ||
+    (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext;
+  if (!AudioCtx) {
+    return { supported: false, reason: "missing_audio_context" };
+  }
+  if (!pickSupportedMimeType()) {
+    return { supported: false, reason: "missing_media_recorder" };
+  }
+  return { supported: true };
+}
+
 export async function exportSongAsWebM(song: Song): Promise<void> {
+  // Export design intent:
+  // reuse the song's existing audio plus its current visual preset instead of
+  // inventing a separate "video mode". That keeps preview/export coherent and
+  // makes video feel like a true product output, not an afterthought.
   if (!song.mp3DataUrl) {
-    throw new Error("Audio is required for video export");
+    throw new WebMExportError("audio_required", "Audio is required for video export");
   }
 
-  const supportedMimeType = pickSupportedMimeType();
-  if (!supportedMimeType) {
-    throw new Error("This browser does not support WebM export");
+  const support = getWebMExportSupport();
+  const supportedMimeType = support.supported ? pickSupportedMimeType() : null;
+  if (!support.supported || !supportedMimeType) {
+    throw new WebMExportError(
+      "browser_unsupported",
+      "This browser does not support WebM export",
+    );
   }
 
   const canvas = document.createElement("canvas");
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas context unavailable");
+  if (!ctx) {
+    throw new WebMExportError("canvas_unavailable", "Canvas context unavailable");
+  }
 
   const audio = new Audio(song.mp3DataUrl);
   audio.crossOrigin = "anonymous";
@@ -49,7 +106,10 @@ export async function exportSongAsWebM(song: Song): Promise<void> {
     (window as typeof window & { webkitAudioContext?: typeof AudioContext })
       .webkitAudioContext;
   if (!AudioCtx) {
-    throw new Error("AudioContext unavailable");
+    throw new WebMExportError(
+      "audio_context_unavailable",
+      "AudioContext unavailable",
+    );
   }
 
   const audioContext = new AudioCtx();
@@ -113,7 +173,8 @@ export async function exportSongAsWebM(song: Song): Promise<void> {
   };
 
   const stopped = new Promise<Blob>((resolve, reject) => {
-    recorder.onerror = () => reject(new Error("MediaRecorder failed"));
+    recorder.onerror = () =>
+      reject(new WebMExportError("recorder_failed", "MediaRecorder failed"));
     recorder.onstop = () => {
       cancelAnimationFrame(rafId);
       const blob = new Blob(chunks, { type: supportedMimeType });
@@ -178,7 +239,7 @@ function waitForMedia(audio: HTMLAudioElement): Promise<void> {
     };
     const onError = () => {
       cleanup();
-      reject(new Error("Audio failed to load"));
+      reject(new WebMExportError("audio_load_failed", "Audio failed to load"));
     };
     audio.addEventListener("loadeddata", onLoaded, { once: true });
     audio.addEventListener("error", onError, { once: true });

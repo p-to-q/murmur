@@ -19,6 +19,9 @@ type Song = SongCard & {
 };
 
 export function SongDetailScreen({ songId }: { songId: string }) {
+  // Song detail is the "artifact" screen: playback, identity, live visual
+  // preview, and export all meet here so the saved song feels like a finished
+  // object rather than a debug record of generation.
   const router = useRouter();
   const t = useTranslator();
   const [song, setSong] = useState<Song | null>(null);
@@ -224,10 +227,22 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       </div>
       <div className="px-5 mt-3">
         <div className="rounded-2xl border border-[#E5DDD0] bg-[#FFFEFB]/88 px-4 py-3">
-          <p className="text-[#1A1A1A] text-sm font-medium">{t("song.preview.live")}</p>
-          <p className="mt-1 text-[#8C8780] text-xs leading-5">
-            {t("song.preview.live_desc")}
-          </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[#1A1A1A] text-sm font-medium">{t("song.preview.live")}</p>
+              <p className="mt-1 text-[#8C8780] text-xs leading-5">
+                {t("song.preview.live_desc")}
+              </p>
+            </div>
+            <div className="shrink-0 rounded-full bg-[#EFE8DA] px-3 py-1 text-[10px] font-medium tracking-[0.12em] text-[#8C8780] uppercase">
+              {t("song.preview.live_badge")}
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-[#B8B0A2]">
+            <span>{t("song.preview.step_preview")}</span>
+            <span>→</span>
+            <span>{t("song.preview.step_export")}</span>
+          </div>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Download, FileImage, Share2, Music, Film } from "lucide-react";
 import { toast } from "sonner";
@@ -8,7 +8,11 @@ import { memory } from "@eazo/sdk";
 import { useTranslator } from "@/lib/i18n";
 import { buildShareHtml, downloadHtml } from "@/modules/export/render-share-html";
 import { renderPoster, downloadBlob } from "@/modules/export/render-poster";
-import { exportSongAsWebM } from "@/modules/export/export-webm";
+import {
+  exportSongAsWebM,
+  getWebMExportSupport,
+  WebMExportError,
+} from "@/modules/export/export-webm";
 import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
@@ -20,6 +24,7 @@ type Song = SongCard & {
 export function ShareActions({ song }: { song: Song }) {
   const t = useTranslator();
   const [busy, setBusy] = useState<"audio" | "html" | "card" | "video" | null>(null);
+  const videoSupport = useMemo(() => getWebMExportSupport(), []);
 
   const gradient =
     (song.visualConfig as { posterBg?: string }).posterBg ??
@@ -124,11 +129,16 @@ export function ShareActions({ song }: { song: Song }) {
       toast(t("song.share.no_audio"));
       return;
     }
+    if (!videoSupport.supported) {
+      toast(t("song.export.video_unsupported"));
+      return;
+    }
 
     setBusy("video");
     try {
+      toast(t("song.export.video_preparing"));
       await exportSongAsWebM(song);
-      toast.success(t("song.export.ok"));
+      toast.success(t("song.export.video_ready"));
       memory
         .reportAction({
           content: `Downloaded video for "${song.title}"`,
@@ -139,14 +149,29 @@ export function ShareActions({ song }: { song: Song }) {
         .catch(() => {});
     } catch (e) {
       console.error(e);
-      toast.error(t("song.export.err"));
+      if (e instanceof WebMExportError && e.code === "browser_unsupported") {
+        toast(t("song.export.video_unsupported"));
+      } else {
+        toast.error(t("song.export.video_failed"));
+      }
     } finally {
       setBusy(null);
     }
   };
 
   return (
-    <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-[#E5DDD0] bg-[#FFFEFB] px-4 py-3">
+        <p className="text-[#1A1A1A] text-sm font-medium">{t("song.export.title")}</p>
+        <p className="mt-1 text-[#8C8780] text-xs leading-5">
+          {busy === "video"
+            ? t("song.export.video_progress")
+            : videoSupport.supported
+              ? t("song.export.video_hint")
+              : t("song.export.video_unsupported_hint")}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
       <ActionButton
         icon={<Music className="w-4 h-4" />}
         label={t("song.share.download_audio")}
@@ -169,8 +194,10 @@ export function ShareActions({ song }: { song: Song }) {
         icon={<Film className="w-4 h-4" />}
         label={t("song.share.download_video")}
         loading={busy === "video"}
+        disabled={!videoSupport.supported}
         onClick={downloadVideo}
       />
+      </div>
     </div>
   );
 }
@@ -179,18 +206,20 @@ function ActionButton({
   icon,
   label,
   loading,
+  disabled = false,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   loading: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <motion.button
       whileTap={{ scale: 0.96 }}
       onClick={onClick}
-      disabled={loading}
+      disabled={loading || disabled}
       className="flex flex-col items-center justify-center gap-1.5 h-[68px] rounded-2xl bg-[#FFFEFB] border border-[#E5DDD0] text-[#1A1A1A] text-[11px] font-medium disabled:opacity-50 hover:border-[#FF5924] transition-colors"
     >
       {loading ? (
