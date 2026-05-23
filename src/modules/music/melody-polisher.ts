@@ -63,14 +63,25 @@ function mergeAdjacentNotes(notes: MelodyNote[]): MelodyNote[] {
 export function estimateKey(notes: MelodyNote[]): { key: string; scale: "major" | "minor" } {
   if (notes.length === 0) return { key: "C", scale: "major" };
 
+  // Pitch-class weighting — duration × velocity + extra weight on the FIRST
+  // and LAST notes, because melodies tend to begin and end on the tonic.
   const pcWeights: number[] = new Array(12).fill(0);
-  notes.forEach((n) => {
-    pcWeights[n.pitch % 12]! += n.duration * Math.max(0.05, n.velocity);
+  const sorted = [...notes].sort((a, b) => a.start - b.start);
+  const TONIC_BOOST = 2.0;
+  sorted.forEach((n, i) => {
+    const base = n.duration * Math.max(0.05, n.velocity);
+    const isAnchor = i === 0 || i === sorted.length - 1;
+    pcWeights[n.pitch % 12]! += base * (isAnchor ? TONIC_BOOST : 1);
   });
 
   const keyNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  // Krumhansl-Schmuckler templates, kept verbatim.
   const majorTemplate = [1, 0, 0.5, 0, 1, 0.8, 0, 1, 0, 0.5, 0, 0.5];
   const minorTemplate = [1, 0, 0.5, 0.8, 0, 0.8, 0, 1, 0.5, 0, 0.5, 0];
+
+  // Mild bias toward major when scores tie — major is statistically more
+  // common in humming, and minor-snap surprises users more than major-snap.
+  const MAJOR_BIAS = 1.06;
 
   let bestKey = 0;
   let bestScale: "major" | "minor" = "major";
@@ -83,6 +94,8 @@ export function estimateKey(notes: MelodyNote[]): { key: string; scale: "major" 
       majorScore += (pcWeights[(root + i) % 12] ?? 0) * (majorTemplate[i] ?? 0);
       minorScore += (pcWeights[(root + i) % 12] ?? 0) * (minorTemplate[i] ?? 0);
     }
+    majorScore *= MAJOR_BIAS;
+
     if (majorScore > bestScore) { bestScore = majorScore; bestKey = root; bestScale = "major"; }
     if (minorScore > bestScore) { bestScore = minorScore; bestKey = root; bestScale = "minor"; }
   }
@@ -114,7 +127,7 @@ function snapToScale(notes: MelodyNote[], key: string, scale: "major" | "minor")
 }
 
 function estimateContour(notes: MelodyNote[]): "rising" | "falling" | "wave" | "flat" {
-  if (notes.length < 3) return "flat";
+  if (notes.length < 2) return "flat";
   let ups = 0, downs = 0;
   const sorted = [...notes].sort((a, b) => a.start - b.start);
   for (let i = 1; i < sorted.length; i++) {
@@ -122,8 +135,17 @@ function estimateContour(notes: MelodyNote[]): "rising" | "falling" | "wave" | "
     if (diff > 0) ups++;
     if (diff < 0) downs++;
   }
+  const total = ups + downs;
+  if (total === 0) return "flat";
+  // Tiny melodies (2-3 notes): a clear single direction wins immediately.
+  if (total <= 2) {
+    if (ups > 0 && downs === 0) return "rising";
+    if (downs > 0 && ups === 0) return "falling";
+    return "wave";
+  }
+  // Longer melodies: dominance ratio decides.
   if (ups > downs * 1.5) return "rising";
   if (downs > ups * 1.5) return "falling";
-  if (Math.abs(ups - downs) < 3) return "flat";
+  // Multiple alternations → wave.
   return "wave";
 }

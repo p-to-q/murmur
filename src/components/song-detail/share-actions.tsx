@@ -23,7 +23,7 @@ export function ShareActions({ song }: { song: Song }) {
   const gradient =
     (song.visualConfig as { posterBg?: string }).posterBg ??
     song.visualConfig.gradient ??
-    "linear-gradient(135deg, #F4C87A, #E9A06D)";
+    "linear-gradient(135deg, #FF8A5C, #FF5924)";
   const slug = song.title.replace(/\s+/g, "-").toLowerCase() || "murmur";
   const bpm = song.bpm ?? 80;
   const keySig = song.keySignature ?? "C";
@@ -158,15 +158,15 @@ function ActionButton({
       whileTap={{ scale: 0.96 }}
       onClick={onClick}
       disabled={loading}
-      className="flex flex-col items-center justify-center gap-1.5 h-[68px] rounded-2xl bg-[#FFFDF8] border border-[#E8E2D9] text-[#22303A] text-[11px] font-medium disabled:opacity-50 hover:border-[#E9A06D] transition-colors"
+      className="flex flex-col items-center justify-center gap-1.5 h-[68px] rounded-2xl bg-[#FFFEFB] border border-[#E5DDD0] text-[#1A1A1A] text-[11px] font-medium disabled:opacity-50 hover:border-[#FF5924] transition-colors"
     >
       {loading ? (
-        <div className="w-4 h-4 rounded-full border-2 border-[#22303A] border-t-transparent animate-spin" />
+        <div className="w-4 h-4 rounded-full border-2 border-[#1A1A1A] border-t-transparent animate-spin" />
       ) : (
-        <span className="text-[#8B8680]">{icon}</span>
+        <span className="text-[#8C8780]">{icon}</span>
       )}
       <span className="leading-tight text-center px-1">{label}</span>
-      {!loading ? <Download className="w-3 h-3 text-[#8B8680]" /> : null}
+      {!loading ? <Download className="w-3 h-3 text-[#8C8780]" /> : null}
     </motion.button>
   );
 }

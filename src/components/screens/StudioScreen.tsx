@@ -31,11 +31,11 @@ export function StudioScreen() {
 
   if (!currentVersion) {
     return (
-      <div className="min-h-svh flex flex-col items-center justify-center bg-[#F7F3EA] px-6 text-center">
-        <p className="text-[#8B8680] text-base mb-4">{t("studio.empty")}</p>
+      <div className="min-h-svh flex flex-col items-center justify-center bg-[#F5F1EB] px-6 text-center">
+        <p className="text-[#8C8780] text-base mb-4">{t("studio.empty")}</p>
         <button
           onClick={() => router.push("/")}
-          className="text-[#E9A06D] text-sm underline underline-offset-4"
+          className="text-[#FF5924] text-sm underline underline-offset-4"
         >
           {t("studio.empty.cta")}
         </button>
@@ -229,7 +229,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
   };
 
   return (
-    <div className="min-h-svh bg-[#F7F3EA] flex flex-col">
+    <div className="min-h-svh bg-[#F5F1EB] flex flex-col">
       {/* Header — safe-area-aware */}
       <div
         className="flex items-center justify-between px-5 pb-4"
@@ -241,27 +241,27 @@ function StudioContent({ version }: { version: VibeVersion }) {
             router.back();
           }}
           aria-label={t("studio.back")}
-          className="w-9 h-9 rounded-full bg-[#F0EAE0] flex items-center justify-center"
+          className="w-9 h-9 rounded-full bg-[#EFE8DA] flex items-center justify-center"
         >
-          <ArrowLeft className="w-4 h-4 text-[#22303A]" />
+          <ArrowLeft className="w-4 h-4 text-[#1A1A1A]" />
         </button>
         <div className="text-center">
           <p
-            className="font-serif text-[#22303A] text-[17px] leading-tight"
-            style={{ fontWeight: 600, letterSpacing: "-0.005em" }}
+            className="font-serif text-[#1A1A1A] text-[17px] leading-tight"
+            style={{ letterSpacing: "-0.005em" }}
           >
             {currentVersion.title}
           </p>
-          <p className="text-[#8B8680] text-[11px] mt-1 tracking-[0.14em] uppercase">
+          <p className="text-[#8C8780] text-[11px] mt-1 tracking-[0.14em] uppercase">
             {currentVersion.vibe} · {currentVersion.melody.bpm} BPM
           </p>
         </div>
         <button
           onClick={handleRestore}
           aria-label={t("studio.restore")}
-          className="w-9 h-9 rounded-full bg-[#F0EAE0] flex items-center justify-center"
+          className="w-9 h-9 rounded-full bg-[#EFE8DA] flex items-center justify-center"
         >
-          <RotateCcw className="w-4 h-4 text-[#8B8680]" />
+          <RotateCcw className="w-4 h-4 text-[#8C8780]" />
         </button>
       </div>
 
@@ -278,7 +278,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
           </p>
           <p
             className="font-serif text-white text-[22px] leading-tight"
-            style={{ fontWeight: 600, letterSpacing: "-0.01em" }}
+            style={{ letterSpacing: "-0.01em" }}
           >
             {currentVersion.title}
           </p>
@@ -307,19 +307,19 @@ function StudioContent({ version }: { version: VibeVersion }) {
 
       {/* Sticky save button — clear of bottom nav + safe area */}
       <div
-        className="fixed left-0 right-0 px-5 pt-4 bg-gradient-to-t from-[#F7F3EA] via-[#F7F3EA] to-transparent md:left-[240px]"
+        className="fixed left-0 right-0 px-5 pt-4 bg-gradient-to-t from-[#F5F1EB] via-[#F5F1EB] to-transparent md:left-[240px]"
         style={{
           bottom: "calc(env(safe-area-inset-bottom, 0px) + 72px)",
         }}
       >
         {savingHint ? (
-          <p className="text-center text-[#8B8680] text-xs mb-2">{savingHint}</p>
+          <p className="text-center text-[#8C8780] text-xs mb-2">{savingHint}</p>
         ) : null}
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={handleSave}
           disabled={isSaving}
-          className="w-full h-14 rounded-2xl bg-[#22303A] text-white text-base font-medium disabled:opacity-50"
+          className="w-full h-14 rounded-2xl bg-[#1A1A1A] text-white text-base font-medium disabled:opacity-50"
         >
           {isSaving ? t("studio.saving") : t("studio.save")}
         </motion.button>

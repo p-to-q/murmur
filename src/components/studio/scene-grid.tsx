@@ -11,10 +11,10 @@ export function SceneGrid({ onPick }: SceneGridProps) {
   const t = useTranslator();
   return (
     <div
-      className="bg-[#FFFDF8] rounded-2xl p-5"
-      style={{ boxShadow: "0 2px 12px rgba(34,48,58,0.06)" }}
+      className="bg-[#FFFEFB] rounded-2xl p-5"
+      style={{ boxShadow: "0 2px 12px rgba(26, 26, 26,0.06)" }}
     >
-      <p className="text-[#8B8680] text-xs font-medium tracking-wider uppercase mb-3">
+      <p className="text-[#8C8780] text-xs font-medium tracking-wider uppercase mb-3">
         {t("studio.scenes")}
       </p>
       <div className="grid grid-cols-2 gap-2.5">
@@ -23,10 +23,10 @@ export function SceneGrid({ onPick }: SceneGridProps) {
             key={scene.id}
             whileTap={{ scale: 0.94 }}
             onClick={() => onPick(scene)}
-            className="flex flex-col items-start px-4 py-3 rounded-2xl bg-[#F7F3EA] border border-[#E8E2D9] hover:border-[#E9A06D] transition-colors text-left"
+            className="flex flex-col items-start px-4 py-3 rounded-2xl bg-[#F5F1EB] border border-[#E5DDD0] hover:border-[#FF5924] transition-colors text-left"
           >
-            <p className="text-[#22303A] text-sm font-medium">{t(scene.labelKey)}</p>
-            <p className="text-[#8B8680] text-[11px] mt-0.5">{t(scene.descKey)}</p>
+            <p className="text-[#1A1A1A] text-sm font-medium">{t(scene.labelKey)}</p>
+            <p className="text-[#8C8780] text-[11px] mt-0.5">{t(scene.descKey)}</p>
           </motion.button>
         ))}
       </div>

@@ -4,32 +4,34 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* MURMUR Design Tokens — Warm Minimal, mymind-leaning */
+/* MURMUR Design Tokens — mymind-leaning, editorial */
 @theme inline {
-  /* Core surface palette */
-  --color-murmur-bg:        #F7F3EA;
-  --color-murmur-bg-warm:   #F2EBDD;
-  --color-murmur-card:      #FFFDF8;
-  --color-murmur-ink:       #22303A;
-  --color-murmur-ink-soft:  #4a5568;
-  --color-murmur-mute:      #8B8680;
-  --color-murmur-mute-light:#B8B0A2;
-  --color-murmur-accent:        #E9A06D;
-  --color-murmur-accent-light:  #F7C98B;
-  --color-murmur-accent-deep:   #C97A4F;
+  /* Surface palette — true cream + sharp coral + near-black ink */
+  --color-murmur-bg:        #F5F1EB;
+  --color-murmur-bg-warm:   #EFE8DA;
+  --color-murmur-card:      #FFFEFB;
+  --color-murmur-ink:       #1A1A1A;
+  --color-murmur-ink-soft:  #3A3A3A;
+  --color-murmur-mute:      #8C8780;
+  --color-murmur-mute-light:#B6B0A4;
+  --color-murmur-accent:        #FF5924;
+  --color-murmur-accent-light:  #FF8A5C;
+  --color-murmur-accent-deep:   #D9421A;
+  --color-murmur-accent-tint:   #FFE6DA;
   --color-murmur-dust-blue: #A7B8C8;
   --color-murmur-lavender:  #C9B6E4;
   --color-murmur-warm-gold: #EBCB8B;
-  --color-murmur-border:    #E8E2D9;
-  --color-murmur-border-strong: #D9D1BF;
+  --color-murmur-border:    #E5DDD0;
+  --color-murmur-border-strong: #D2C9B6;
+  --color-murmur-ink-block:  #1A1A1A;
 
   /* System color aliases (shadcn) */
   --color-background:                  var(--background);
   --color-foreground:                  var(--foreground);
   --font-sans:                         var(--font-sans);
-  --font-serif:                        var(--font-serif), Georgia, serif;
+  --font-serif:                        var(--font-serif), "Times New Roman", Times, serif;
   --font-mono:                         "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-  --font-heading:                      var(--font-serif), Georgia, serif;
+  --font-heading:                      var(--font-serif), "Times New Roman", Times, serif;
   --color-sidebar-ring:                var(--sidebar-ring);
   --color-sidebar-border:              var(--sidebar-border);
   --color-sidebar-accent-foreground:   var(--sidebar-accent-foreground);
@@ -66,41 +68,39 @@
 }
 
 :root {
-  --radius: 0.875rem;
-  --background: #F7F3EA;
-  --foreground: #22303A;
-  --card: #FFFDF8;
-  --card-foreground: #22303A;
-  --popover: #FFFDF8;
-  --popover-foreground: #22303A;
-  --primary: #E9A06D;
-  --primary-foreground: #FFFDF8;
-  --secondary: #F0EAE0;
-  --secondary-foreground: #22303A;
-  --muted: #EDE7DB;
-  --muted-foreground: #8B8680;
-  --accent: #F7C98B;
-  --accent-foreground: #22303A;
+  --radius: 0.625rem; /* mymind cards are tight — 10px feels right */
+  --background: #F5F1EB;
+  --foreground: #1A1A1A;
+  --card: #FFFEFB;
+  --card-foreground: #1A1A1A;
+  --popover: #FFFEFB;
+  --popover-foreground: #1A1A1A;
+  --primary: #FF5924;
+  --primary-foreground: #FFFEFB;
+  --secondary: #EFE8DA;
+  --secondary-foreground: #1A1A1A;
+  --muted: #EFE8DA;
+  --muted-foreground: #8C8780;
+  --accent: #FFE6DA;
+  --accent-foreground: #1A1A1A;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: #E8E2D9;
-  --input: #E8E2D9;
-  --ring: #E9A06D;
-  --chart-1: #E9A06D;
+  --border: #E5DDD0;
+  --input: #E5DDD0;
+  --ring: #FF5924;
+  --chart-1: #FF5924;
   --chart-2: #A7B8C8;
   --chart-3: #C9B6E4;
   --chart-4: #EBCB8B;
-  --chart-5: #8B8680;
-  --sidebar: #FFFDF8;
-  --sidebar-foreground: #22303A;
-  --sidebar-primary: #E9A06D;
-  --sidebar-primary-foreground: #FFFDF8;
-  --sidebar-accent: #F0EAE0;
-  --sidebar-accent-foreground: #22303A;
-  --sidebar-border: #E8E2D9;
-  --sidebar-ring: #E9A06D;
+  --chart-5: #8C8780;
+  --sidebar: #FFFEFB;
+  --sidebar-foreground: #1A1A1A;
+  --sidebar-primary: #FF5924;
+  --sidebar-primary-foreground: #FFFEFB;
+  --sidebar-accent: #EFE8DA;
+  --sidebar-accent-foreground: #1A1A1A;
+  --sidebar-border: #E5DDD0;
+  --sidebar-ring: #FF5924;
 }
-
-/* No dark mode — MURMUR is intentionally always warm light */
 
 @layer base {
   * {
@@ -112,30 +112,35 @@
     @apply bg-background text-foreground;
     touch-action: manipulation;
     overscroll-behavior: none;
+    font-feature-settings: "kern", "ss01";
   }
   html {
     @apply font-sans;
     min-height: -webkit-fill-available;
   }
-
-  /* Default headline treatment: serif everywhere a class .font-serif is applied. */
+  ::selection {
+    background: var(--color-murmur-accent);
+    color: var(--color-murmur-card);
+  }
   .font-serif {
     font-family: var(--font-serif);
-    font-feature-settings: "ss01", "kern";
-    letter-spacing: -0.005em;
+    letter-spacing: -0.01em;
   }
   .font-serif-italic {
     font-family: var(--font-serif);
     font-style: italic;
-    font-feature-settings: "ss01", "kern";
     letter-spacing: -0.005em;
+  }
+  .underline-mm {
+    text-decoration: underline;
+    text-decoration-color: var(--color-murmur-accent);
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 0.18em;
   }
 }
 
 @layer utilities {
-  /* ──────────────────────────────────────────────────────────────────
-     Paper grain — applied on top of any surface for the mymind feel.
-  ────────────────────────────────────────────────────────────────── */
+  /* ── Paper grain — subtle, used on hero backgrounds ─────────── */
   .murmur-grain {
     position: relative;
   }
@@ -144,56 +149,103 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
     background-size: 200px;
-    opacity: 0.35;
+    opacity: 0.45;
     z-index: 0;
     border-radius: inherit;
   }
 
-  /* ──────────────────────────────────────────────────────────────────
-     Sticker card — the chrome behind every "object" (gallery item,
-     vibe card, version card). Generous white matte border + soft
-     two-layer shadow. Tilts subtly on hover.
-  ────────────────────────────────────────────────────────────────── */
-  .sticker-card {
-    background: #FFFDF8;
-    border: 5px solid rgba(255, 255, 255, 0.95);
+  /* ── Card (mymind-style) — tight radius + barely-there shadow ── */
+  .mm-card {
+    background: #FFFEFB;
+    border: 1px solid #ECE5D6;
+    border-radius: 10px;
     box-shadow:
-      0 1px 2px rgba(34, 48, 58, 0.04),
-      0 6px 24px rgba(34, 48, 58, 0.10);
+      0 1px 2px rgba(26, 26, 26, 0.04),
+      0 6px 18px rgba(26, 26, 26, 0.06);
     transition:
       box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1),
       transform   0.32s cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .sticker-card:hover {
+  .mm-card:hover {
     box-shadow:
-      0 2px 4px rgba(34, 48, 58, 0.05),
-      0 14px 36px rgba(34, 48, 58, 0.16);
-    transform: translateY(-3px);
+      0 2px 4px rgba(26, 26, 26, 0.05),
+      0 12px 28px rgba(26, 26, 26, 0.10);
+    transform: translateY(-2px);
   }
 
-  /* Hero serif — large editorial headline */
+  /* ── Hero serif — magazine cover scale ─────────────────────── */
   .hero-serif {
     font-family: var(--font-serif);
-    font-weight: 600;
-    line-height: 1.02;
+    font-weight: 400;
+    line-height: 0.95;
+    letter-spacing: -0.022em;
+  }
+  .hero-serif-italic {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-style: italic;
+    line-height: 0.95;
     letter-spacing: -0.018em;
   }
 
-  /* Eyebrow — small tracked caps over headlines */
+  /* ── Eyebrow — small tracked caps over headlines ───────────── */
   .eyebrow {
     text-transform: uppercase;
-    letter-spacing: 0.28em;
+    letter-spacing: 0.32em;
     font-weight: 500;
     font-size: 0.6875rem;
     color: var(--color-murmur-mute);
   }
 
-  /* Breathing animation for hum button */
+  /* ── Inline pill (small tag) ───────────────────────────────── */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    background: var(--color-murmur-bg-warm);
+    color: var(--color-murmur-ink);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Accent button — vivid coral, no shadow, hover scale ───── */
+  .mm-btn-primary {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.875rem 1.5rem; border-radius: 999px;
+    background: var(--color-murmur-accent);
+    color: #FFFEFB; font-weight: 500; font-size: 0.875rem;
+    letter-spacing: 0.01em;
+    transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.24s ease;
+  }
+  .mm-btn-primary:hover {
+    background: var(--color-murmur-accent-deep);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 22px rgba(255, 89, 36, 0.32);
+  }
+
+  /* ── Manifesto block (dark section with strikethrough) ─────── */
+  .mm-manifesto {
+    background: var(--color-murmur-ink-block);
+    color: #F5F1EB;
+    border-radius: 14px;
+    padding: 3rem 2rem;
+  }
+  .mm-strike {
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+    color: rgba(245, 241, 235, 0.45);
+    text-decoration-color: rgba(245, 241, 235, 0.6);
+  }
+
+  /* ── Breathing animation for hum button ────────────────────── */
   @keyframes breathe {
     0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.06); opacity: 0.9; }
+    50% { transform: scale(1.04); opacity: 0.92; }
   }
   @keyframes breathe-ring {
     0%   { transform: scale(1); opacity: 0.5; }
@@ -202,7 +254,7 @@
   .breathing      { animation: breathe 2.5s ease-in-out infinite; }
   .breathing-ring { animation: breathe-ring 2s ease-out infinite; }
 
-  /* Soft entrance for hero text */
+  /* ── Soft entrance for hero text ───────────────────────────── */
   @keyframes rise-in {
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }

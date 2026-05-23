@@ -28,41 +28,77 @@ import type { MelodyNote } from "@/modules/shared/types";
 
 const BPM_MIN = 60;
 const BPM_MAX = 140;
-const BPM_STEP = 2;
 
 /**
- * Try every candidate BPM in [60..140] step 2. For each, compute the cost of
- * snapping every onset to the nearest 16th-note position on that grid. Lowest
- * cost wins. Falls back to 80 BPM when input is too sparse to be meaningful.
+ * Inter-onset-interval (IOI) approach.
+ *
+ * The earlier autocorrelation cost was broken: 60 BPM's 16th grid is so coarse
+ * that *any* fast tempo's onsets land near a 16th boundary on it, making 60
+ * the trivial winner. We now derive tempo directly from the *spacing* the
+ * user hummed.
+ *
+ *   1. Compute IOIs between consecutive onsets.
+ *   2. Reject implausibly tiny gaps (< 60ms — micro-onsets / pitch artifacts).
+ *   3. Take the *mode* (most common bin) of the remaining IOIs — that's the
+ *      user's effective beat subdivision.
+ *   4. Decide which subdivision the mode represents (quarter / eighth / 16th
+ *      / half) by mapping into the musical IOI ranges, then derive BPM.
+ *   5. Clamp to [60, 140] and snap to nearest 2-BPM.
  */
 export function detectBpm(notes: MelodyNote[]): number {
-  if (notes.length < 3) return 80;
+  if (notes.length < 2) return 80;
 
   const sorted = [...notes].sort((a, b) => a.start - b.start);
-  const onsets = sorted.map((n) => n.start);
-
-  let bestBpm = 80;
-  let bestCost = Infinity;
-
-  for (let bpm = BPM_MIN; bpm <= BPM_MAX; bpm += BPM_STEP) {
-    const sixteenth = 60 / bpm / 4;
-    let cost = 0;
-    for (const t of onsets) {
-      // distance to nearest 16th
-      const snapped = Math.round(t / sixteenth) * sixteenth;
-      const err = Math.abs(t - snapped) / sixteenth; // normalized 0..0.5
-      cost += err * err;
-    }
-    // light penalty for very fast tempos — humming above 130 is rare
-    if (bpm > 120) cost *= 1 + (bpm - 120) * 0.005;
-
-    if (cost < bestCost) {
-      bestCost = cost;
-      bestBpm = bpm;
-    }
+  const iois: number[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    const dt = sorted[i]!.start - sorted[i - 1]!.start;
+    if (dt > 0.06) iois.push(dt); // toss <60ms (likely sub-notes)
   }
+  if (iois.length === 0) return 80;
 
-  return bestBpm;
+  // Histogram bin width = 20 ms; merge nearby IOIs.
+  const BIN = 0.02;
+  const buckets = new Map<number, number>();
+  for (const ioi of iois) {
+    const k = Math.round(ioi / BIN);
+    buckets.set(k, (buckets.get(k) ?? 0) + 1);
+  }
+  // Find the bucket with max count
+  let bestBucket = -1; let bestCount = 0;
+  for (const [k, c] of buckets) {
+    if (c > bestCount) { bestCount = c; bestBucket = k; }
+  }
+  const dominantIoi = bestBucket * BIN;
+
+  // Decide subdivision. The dominant IOI represents the user's beat felt as a
+  // 16th / 8th / quarter / half. Try each factor and score the resulting BPM.
+  //
+  // Scoring is *not* "distance to 90". That's wrong: 60-vs-120 are equidistant
+  // from 90, so the prior version always picked 60 (first in the list). What we
+  // actually want is:
+  //   1. Prefer factor=1 (the IOI *is* the beat — the most direct read).
+  //   2. Prefer higher tempo within [60, 140] — humming at 60 BPM is rare; if
+  //      a doubling lands inside the range, it's almost always the right call.
+  //
+  // Together these break the 60-vs-120 tie correctly: factor=1 wins (lower
+  // penalty), giving 120.
+  const directBpm = 60 / dominantIoi;
+  const candidates: Array<{ bpm: number; factor: number }> = [];
+  for (const factor of [0.25, 0.5, 1, 2, 4]) {
+    const bpm = directBpm * factor;
+    if (bpm >= BPM_MIN && bpm <= BPM_MAX) candidates.push({ bpm, factor });
+  }
+  if (candidates.length === 0) return 80;
+
+  candidates.sort((a, b) => {
+    // Penalty 1: distance from factor=1 (the most natural reading)
+    const factorCost = Math.abs(Math.log2(a.factor)) - Math.abs(Math.log2(b.factor));
+    if (Math.abs(factorCost) > 0.01) return factorCost;
+    // Tiebreaker: prefer higher BPM (rare to hum < 75)
+    return b.bpm - a.bpm;
+  });
+
+  return Math.max(BPM_MIN, Math.min(BPM_MAX, Math.round(candidates[0]!.bpm / 2) * 2));
 }
 
 // ── Quantization with feel preservation ──────────────────────────────────

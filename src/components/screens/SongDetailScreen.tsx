@@ -127,18 +127,18 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   // ── Render guards ─────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="min-h-svh bg-[#F7F3EA] flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-[#E9A06D] border-t-transparent animate-spin" />
+      <div className="min-h-svh bg-[#F5F1EB] flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-[#FF5924] border-t-transparent animate-spin" />
       </div>
     );
   }
   if (!song) {
     return (
-      <div className="min-h-svh bg-[#F7F3EA] flex flex-col items-center justify-center gap-4 px-6">
-        <p className="text-[#8B8680]">{t("song.not_found")}</p>
+      <div className="min-h-svh bg-[#F5F1EB] flex flex-col items-center justify-center gap-4 px-6">
+        <p className="text-[#8C8780]">{t("song.not_found")}</p>
         <button
           onClick={() => router.push("/gallery")}
-          className="text-[#E9A06D] text-sm underline"
+          className="text-[#FF5924] text-sm underline"
         >
           {t("song.back_to_gallery")}
         </button>
@@ -149,12 +149,12 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const gradient =
     (song.visualConfig as { posterBg?: string }).posterBg ??
     song.visualConfig.gradient ??
-    "linear-gradient(135deg, #F4C87A, #E9A06D)";
+    "linear-gradient(135deg, #FF8A5C, #FF5924)";
   const bpm = song.bpm ?? 80;
   const keySig = song.keySignature ?? "C";
 
   return (
-    <div className="min-h-svh bg-[#F7F3EA] flex flex-col">
+    <div className="min-h-svh bg-[#F5F1EB] flex flex-col">
       {/* Header — safe-area-aware */}
       <div
         className="flex items-center justify-between px-5 pb-4"
@@ -163,17 +163,17 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         <button
           onClick={() => router.back()}
           aria-label="Back"
-          className="w-9 h-9 rounded-full bg-[#F0EAE0] flex items-center justify-center"
+          className="w-9 h-9 rounded-full bg-[#EFE8DA] flex items-center justify-center"
         >
-          <ArrowLeft className="w-4 h-4 text-[#22303A]" />
+          <ArrowLeft className="w-4 h-4 text-[#1A1A1A]" />
         </button>
         <div />
         <button
           onClick={() => router.push("/studio")}
           aria-label="Studio"
-          className="w-9 h-9 rounded-full bg-[#F0EAE0] flex items-center justify-center"
+          className="w-9 h-9 rounded-full bg-[#EFE8DA] flex items-center justify-center"
         >
-          <Sliders className="w-4 h-4 text-[#8B8680]" />
+          <Sliders className="w-4 h-4 text-[#8C8780]" />
         </button>
       </div>
 
@@ -191,7 +191,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
           </p>
           <h2
             className="font-serif text-white text-[30px] leading-[1.05]"
-            style={{ fontWeight: 600, letterSpacing: "-0.018em" }}
+            style={{ letterSpacing: "-0.018em" }}
           >
             {song.title}
           </h2>
@@ -236,10 +236,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         />
 
         <div
-          className="bg-[#FFFDF8] rounded-2xl p-5"
-          style={{ boxShadow: "0 2px 12px rgba(34,48,58,0.06)" }}
+          className="bg-[#FFFEFB] rounded-2xl p-5"
+          style={{ boxShadow: "0 2px 12px rgba(26, 26, 26,0.06)" }}
         >
-          <p className="text-[#8B8680] text-xs font-medium tracking-wider uppercase mb-3">
+          <p className="text-[#8C8780] text-xs font-medium tracking-wider uppercase mb-3">
             {t("song.arrangement")}
           </p>
           <div className="space-y-2.5">
@@ -251,18 +251,18 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                     <div className="flex items-center gap-2.5">
                       <div
                         className="w-1.5 h-5 rounded-full"
-                        style={{ background: tr.enabled ? "#E9A06D" : "#E8E2D9" }}
+                        style={{ background: tr.enabled ? "#FF5924" : "#E5DDD0" }}
                       />
                       <div>
-                        <p className="text-[#22303A] text-xs font-medium">
+                        <p className="text-[#1A1A1A] text-xs font-medium">
                           {t(`track.${track}`)}
                         </p>
-                        <p className="text-[#8B8680] text-[11px]">{tr.instrument}</p>
+                        <p className="text-[#8C8780] text-[11px]">{tr.instrument}</p>
                       </div>
                     </div>
-                    <div className="w-20 h-1 bg-[#E8E2D9] rounded-full overflow-hidden">
+                    <div className="w-20 h-1 bg-[#E5DDD0] rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-[#E9A06D] rounded-full"
+                        className="h-full bg-[#FF5924] rounded-full"
                         style={{ width: `${(tr.intensity ?? 0) * 100}%` }}
                       />
                     </div>
@@ -292,12 +292,12 @@ function MetaCard({
 }) {
   return (
     <div
-      className="bg-[#FFFDF8] rounded-2xl p-6"
-      style={{ boxShadow: "0 2px 12px rgba(34,48,58,0.06)" }}
+      className="bg-[#FFFEFB] rounded-2xl p-6"
+      style={{ boxShadow: "0 2px 12px rgba(26, 26, 26,0.06)" }}
     >
       <h1
-        className="font-serif text-[#22303A] text-[24px] leading-tight mb-4"
-        style={{ fontWeight: 600, letterSpacing: "-0.012em" }}
+        className="font-serif text-[#1A1A1A] text-[24px] leading-tight mb-4"
+        style={{ letterSpacing: "-0.012em" }}
       >
         {title}
       </h1>
@@ -320,9 +320,9 @@ function MetaCard({
 
 function MetaBadge({ label, value }: { label: string; value: string }) {
   return (
-    <div className="px-3 py-1.5 rounded-xl bg-[#F0EAE0] text-center">
-      <p className="text-[#8B8680] text-[10px] font-medium uppercase">{label}</p>
-      <p className="text-[#22303A] text-sm font-semibold">{value}</p>
+    <div className="px-3 py-1.5 rounded-xl bg-[#EFE8DA] text-center">
+      <p className="text-[#8C8780] text-[10px] font-medium uppercase">{label}</p>
+      <p className="text-[#1A1A1A] text-sm font-semibold">{value}</p>
     </div>
   );
 }

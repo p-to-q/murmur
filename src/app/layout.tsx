@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Geist, Lora } from "next/font/google";
+import { Geist, Instrument_Serif } from "next/font/google";
 import { EazoProvider } from "@eazo/sdk/react";
 import { cn } from "@/utils/utils";
 import { Toaster } from "@/components/ui/sonner";
@@ -11,13 +11,13 @@ import { AudioUnlock } from "@/components/murmur/audio-unlock";
 import { I18nHydrator } from "@/lib/i18n";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
-// Lora — a humanist serif paired with Geist's sans for an mymind-leaning
-// "private calm" feel. Used for hero headlines, brand wordmark, and any
-// large display surface. Includes italic for editorial emphasis.
-const lora = Lora({
+// Instrument Serif — the closest free font to MyMind's editorial high-
+// contrast serif (Editorial New). Single weight (400) + italic; we use
+// size + tracking rather than weight to express hierarchy.
+const serif = Instrument_Serif({
   subsets: ["latin"],
   variable: "--font-serif",
-  weight: ["400", "500", "600", "700"],
+  weight: ["400"],
   style: ["normal", "italic"],
   display: "swap",
 });
@@ -58,7 +58,7 @@ export default function RootLayout({
       className={cn(
         "h-full antialiased font-sans",
         geist.variable,
-        lora.variable
+        serif.variable
       )}
     >
       <body className="min-h-svh flex flex-col bg-[#F7F3EA]">

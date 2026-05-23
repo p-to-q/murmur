@@ -5,11 +5,11 @@ import { useTranslator } from "@/lib/i18n";
 import type { TKey } from "@/lib/i18n/dict";
 
 const TRACKS: Array<{ key: keyof ArrangementState; labelKey: TKey; icon: string; color: string }> = [
-  { key: "melody",  labelKey: "track.melody",  icon: "♩", color: "#E9A06D" },
+  { key: "melody",  labelKey: "track.melody",  icon: "♩", color: "#FF5924" },
   { key: "chords",  labelKey: "track.chords",  icon: "♫", color: "#A7B8C8" },
   { key: "strings", labelKey: "track.strings", icon: "≋", color: "#C9B6E4" },
-  { key: "bass",    labelKey: "track.bass",    icon: "◎", color: "#8B8680" },
-  { key: "drums",   labelKey: "track.drums",   icon: "▣", color: "#E9A06D" },
+  { key: "bass",    labelKey: "track.bass",    icon: "◎", color: "#8C8780" },
+  { key: "drums",   labelKey: "track.drums",   icon: "▣", color: "#FF5924" },
   { key: "texture", labelKey: "track.texture", icon: "∿", color: "#A7B8C8" },
 ];
 
@@ -23,10 +23,10 @@ export function TrackMixer({ arrangement, onTrack }: TrackMixerProps) {
 
   return (
     <div
-      className="bg-[#FFFDF8] rounded-2xl p-5"
-      style={{ boxShadow: "0 2px 12px rgba(34,48,58,0.06)" }}
+      className="bg-[#FFFEFB] rounded-2xl p-5"
+      style={{ boxShadow: "0 2px 12px rgba(26, 26, 26,0.06)" }}
     >
-      <p className="text-[#8B8680] text-xs font-medium tracking-wider uppercase mb-4">
+      <p className="text-[#8C8780] text-xs font-medium tracking-wider uppercase mb-4">
         {t("studio.mixer")}
       </p>
       <div className="space-y-5">
@@ -56,7 +56,7 @@ export function TrackMixer({ arrangement, onTrack }: TrackMixerProps) {
           );
         })}
       </div>
-      <p className="text-[#8B8680] text-[11px] mt-4 leading-relaxed">
+      <p className="text-[#8C8780] text-[11px] mt-4 leading-relaxed">
         {t("studio.mixer.help")}
       </p>
     </div>
@@ -81,7 +81,7 @@ function SliderRow({
       <button
         onClick={onToggle}
         className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors flex-shrink-0 ${
-          track.enabled ? "bg-[#F0EAE0] text-[#22303A]" : "bg-[#E8E2D9] text-[#8B8680]"
+          track.enabled ? "bg-[#EFE8DA] text-[#1A1A1A]" : "bg-[#E5DDD0] text-[#8C8780]"
         }`}
         aria-label={`Toggle ${label}`}
       >
@@ -89,16 +89,16 @@ function SliderRow({
       </button>
 
       <div className="w-12 flex-shrink-0">
-        <p className="text-[#22303A] text-xs font-medium leading-tight">{label}</p>
-        <p className="text-[#8B8680] text-[10px]">{isOff ? "—" : `${pct}%`}</p>
+        <p className="text-[#1A1A1A] text-xs font-medium leading-tight">{label}</p>
+        <p className="text-[#8C8780] text-[10px]">{isOff ? "—" : `${pct}%`}</p>
       </div>
 
       <div className="flex-1 relative">
         <div className="h-6 flex items-center">
-          <div className="relative w-full h-1.5 bg-[#E8E2D9] rounded-full">
+          <div className="relative w-full h-1.5 bg-[#E5DDD0] rounded-full">
             <motion.div
               className="absolute left-0 top-0 h-full rounded-full"
-              style={{ background: track.enabled ? color : "#E8E2D9" }}
+              style={{ background: track.enabled ? color : "#E5DDD0" }}
               animate={{ width: `${pct}%` }}
               transition={{ duration: 0.15 }}
             />
@@ -117,7 +117,7 @@ function SliderRow({
               className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-md"
               style={{
                 left: `calc(${pct}% - 8px)`,
-                background: track.enabled ? color : "#E8E2D9",
+                background: track.enabled ? color : "#E5DDD0",
               }}
               animate={{ left: `calc(${pct}% - 8px)` }}
               transition={{ duration: 0.1 }}

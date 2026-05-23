@@ -22,7 +22,7 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-[#FFFDF8]/95 backdrop-blur-md border-t border-[#E8E2D9]"
+      className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-[#FFFEFB]/95 backdrop-blur-md border-t border-[#ECE5D6]"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
       <div className="flex items-end justify-around h-[64px] px-4">
@@ -39,19 +39,21 @@ export function BottomNav() {
                 href={item.href}
                 aria-label={label}
                 className={cn(
-                  "flex flex-col items-center justify-center w-16 h-16 -mt-7 rounded-full text-white shadow-lg transition-all",
-                  isActive ? "bg-[#d4855a] scale-105" : "bg-[#E9A06D] hover:scale-105"
+                  "flex flex-col items-center justify-center w-16 h-16 -mt-7 rounded-full text-white transition-all",
+                  isActive
+                    ? "bg-[#D9421A] scale-105"
+                    : "bg-[#FF5924] hover:scale-105"
                 )}
-                style={{ boxShadow: "0 6px 20px rgba(233,160,109,0.4)" }}
+                style={{ boxShadow: "0 8px 22px rgba(255,89,36,0.36)" }}
               >
-                <Icon className="w-7 h-7" strokeWidth={2.4} />
+                <Icon className="w-7 h-7" strokeWidth={2.2} />
               </Link>
             );
           }
 
           const sharedClass = cn(
             "flex flex-col items-center justify-center flex-1 h-full transition-colors",
-            isActive ? "text-[#E9A06D]" : "text-[#8B8680] hover:text-[#22303A]"
+            isActive ? "text-[#1A1A1A]" : "text-[#8C8780] hover:text-[#1A1A1A]"
           );
 
           if (item.href === "/") {
@@ -63,10 +65,13 @@ export function BottomNav() {
                 className={sharedClass}
               >
                 <Icon
-                  className={cn("w-6 h-6 mb-1 transition-transform", isActive && "scale-110")}
-                  strokeWidth={isActive ? 2.5 : 2}
+                  className={cn(
+                    "w-6 h-6 mb-1 transition-colors",
+                    isActive ? "text-[#FF5924]" : ""
+                  )}
+                  strokeWidth={isActive ? 2.2 : 1.8}
                 />
-                <span className="text-[11px] font-medium">{label}</span>
+                <span className="text-[11px] tracking-[0.04em]">{label}</span>
               </button>
             );
           }
@@ -79,10 +84,13 @@ export function BottomNav() {
               className={sharedClass}
             >
               <Icon
-                className={cn("w-6 h-6 mb-1 transition-transform", isActive && "scale-110")}
-                strokeWidth={isActive ? 2.5 : 2}
+                className={cn(
+                  "w-6 h-6 mb-1 transition-colors",
+                  isActive ? "text-[#FF5924]" : ""
+                )}
+                strokeWidth={isActive ? 2.2 : 1.8}
               />
-              <span className="text-[11px] font-medium">{label}</span>
+              <span className="text-[11px] tracking-[0.04em]">{label}</span>
             </Link>
           );
         })}

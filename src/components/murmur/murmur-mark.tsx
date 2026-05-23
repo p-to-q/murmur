@@ -1,7 +1,10 @@
 "use client";
 /**
- * MurmurMark — brand mark. A soft hum wave inside a coral dot, paired with
- * the wordmark in Lora serif for an mymind-leaning private-calm feel.
+ * MurmurMark — the brand mark. Coral hum-wave dot + serif wordmark.
+ *
+ * The wordmark is set in Instrument Serif italic at a slightly smaller size
+ * relative to the dot than v1 — restraint is the point. mymind never lets the
+ * mark dominate.
  */
 export function MurmurMark({
   size = 26,
@@ -21,24 +24,23 @@ export function MurmurMark({
       >
         <defs>
           <linearGradient id="murmur-mark-grad" x1="0" y1="0" x2="32" y2="32">
-            <stop offset="0%" stopColor="#F4C87A" />
-            <stop offset="100%" stopColor="#E9A06D" />
+            <stop offset="0%" stopColor="#FF8A5C" />
+            <stop offset="100%" stopColor="#FF5924" />
           </linearGradient>
         </defs>
         <circle cx="16" cy="16" r="14" fill="url(#murmur-mark-grad)" />
         <path
           d="M7 17 C 10 13, 12 13, 14 17 S 18 21, 20 17 S 24 13, 26 17"
-          stroke="white"
+          stroke="#FFFEFB"
           strokeWidth="2.2"
           strokeLinecap="round"
           fill="none"
-          opacity="0.95"
         />
       </svg>
       {showWord ? (
         <span
-          className="font-serif text-[#22303A] tracking-[0.22em] font-semibold"
-          style={{ fontSize: 14, fontStyle: "italic" }}
+          className="font-serif-italic text-[#1A1A1A]"
+          style={{ fontSize: Math.round(size * 0.62) }}
         >
           murmur
         </span>

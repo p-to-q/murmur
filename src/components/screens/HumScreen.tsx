@@ -137,30 +137,28 @@ export function HumScreen() {
   const isProcessing = recordingState === "processing";
 
   return (
-    <div className="murmur-grain min-h-svh flex flex-col items-center justify-center bg-[#F7F3EA] relative overflow-hidden px-6">
-      {/* Top-right tagline (mobile only — sidebar holds the brand on desktop) */}
+    <div className="murmur-grain min-h-svh flex flex-col items-center justify-center bg-[#F5F1EB] relative overflow-hidden px-6">
+      {/* Mobile-only top brand row */}
       <div
-        className="absolute left-5 right-5 flex items-center justify-between md:hidden"
-        style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
+        className="absolute left-6 right-6 flex items-center justify-between md:hidden"
+        style={{ top: "calc(env(safe-area-inset-top, 0px) + 18px)" }}
       >
         <MurmurMark />
         <span className="eyebrow opacity-60">{t("hum.eyebrow")}</span>
       </div>
 
-      {/* Centered hero stack */}
-      <div className="relative z-10 flex flex-col items-center w-full max-w-md">
+      <div className="relative z-10 flex flex-col items-center w-full max-w-[640px]">
         {/* Eyebrow (desktop) */}
         <motion.p
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="eyebrow hidden md:block mb-5"
+          className="eyebrow hidden md:block mb-6"
         >
           {t("hum.eyebrow")}
         </motion.p>
 
-        {/* Headline — giant serif italic, only when idle so it doesn't fight
-            with recording timer / processing copy */}
+        {/* Hero headline — roman serif, magazine scale */}
         <AnimatePresence mode="wait">
           {isIdle && !micFailed && (
             <motion.h1
@@ -169,15 +167,14 @@ export function HumScreen() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              className="font-serif-italic text-[#22303A] text-center text-[44px] md:text-[64px] leading-[1.02] tracking-[-0.018em] mb-3"
-              style={{ fontWeight: 500 }}
+              className="hero-serif text-[#1A1A1A] text-center text-[64px] md:text-[112px] mb-5 md:mb-6 px-2"
             >
-              {t("hum.idle.headline")}
+              Hum a tune.
             </motion.h1>
           )}
         </AnimatePresence>
 
-        {/* Subtitle (idle) */}
+        {/* Subtitle — short, low-noise; mymind style */}
         <AnimatePresence>
           {isIdle && !micFailed && (
             <motion.p
@@ -186,24 +183,23 @@ export function HumScreen() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.5, delay: 0.18 }}
-              className="text-[#8B8680] text-[15px] md:text-base text-center max-w-[320px] mb-10"
+              className="text-[#3A3A3A] text-[15px] md:text-[17px] text-center max-w-[380px] mb-12 md:mb-14 leading-[1.45]"
             >
               {t("hum.idle.sub")}
             </motion.p>
           )}
         </AnimatePresence>
 
-        {/* Mic button — sticker-feel coral disc */}
-        <div className="relative flex items-center justify-center w-32 h-32">
-          {isIdle &&
-            !micFailed &&
+        {/* Mic — tighter sticker shell, vivid coral */}
+        <div className="relative flex items-center justify-center w-32 h-32 md:w-36 md:h-36">
+          {isIdle && !micFailed &&
             [0, 1, 2].map((i) => (
               <motion.div
                 key={i}
-                className="absolute rounded-full bg-[#E9A06D]"
-                style={{ width: 128, height: 128 }}
-                initial={{ scale: 1, opacity: 0.18 }}
-                animate={{ scale: 1.5 + i * 0.25, opacity: 0 }}
+                className="absolute rounded-full bg-[#FF5924]"
+                style={{ width: "100%", height: "100%" }}
+                initial={{ scale: 1, opacity: 0.16 }}
+                animate={{ scale: 1.55 + i * 0.22, opacity: 0 }}
                 transition={{
                   duration: 2.4,
                   repeat: Infinity,
@@ -216,8 +212,8 @@ export function HumScreen() {
             [0, 1].map((i) => (
               <motion.div
                 key={i}
-                className="absolute rounded-full border-2 border-[#E9A06D]"
-                style={{ width: 128, height: 128 }}
+                className="absolute rounded-full border-2 border-[#FF5924]"
+                style={{ width: "100%", height: "100%" }}
                 initial={{ scale: 1, opacity: 0.7 }}
                 animate={{ scale: 1.6 + i * 0.3, opacity: 0 }}
                 transition={{
@@ -231,6 +227,7 @@ export function HumScreen() {
 
           <motion.button
             whileTap={{ scale: 0.93 }}
+            whileHover={{ scale: 1.04 }}
             onClick={() => {
               startAudioContext();
               if (isIdle) startRecording();
@@ -238,15 +235,14 @@ export function HumScreen() {
             }}
             disabled={isProcessing}
             className={[
-              "relative z-10 w-32 h-32 rounded-full flex items-center justify-center transition-colors duration-300",
-              isRecording ? "bg-[#d4855a]" : "bg-[#E9A06D]",
+              "relative z-10 w-full h-full rounded-full flex items-center justify-center transition-colors duration-300",
+              isRecording ? "bg-[#D9421A]" : "bg-[#FF5924]",
               isProcessing ? "opacity-60 cursor-not-allowed" : "",
             ].join(" ")}
             style={{
-              border: "5px solid rgba(255,255,255,0.95)",
               boxShadow: isRecording
-                ? "0 0 0 1px rgba(34,48,58,0.04), 0 10px 36px rgba(212,133,90,0.45)"
-                : "0 0 0 1px rgba(34,48,58,0.04), 0 10px 30px rgba(233,160,109,0.35)",
+                ? "0 12px 32px rgba(217,66,26,0.36), inset 0 0 0 4px rgba(255,254,251,0.96)"
+                : "0 12px 32px rgba(255,89,36,0.30), inset 0 0 0 4px rgba(255,254,251,0.96)",
             }}
             aria-label={isIdle ? t("hum.start") : t("hum.stop")}
           >
@@ -260,40 +256,10 @@ export function HumScreen() {
                   transition={{ duration: 0.18 }}
                 >
                   <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
-                    <rect
-                      x="9"
-                      y="2"
-                      width="6"
-                      height="12"
-                      rx="3"
-                      fill="white"
-                      fillOpacity="0.95"
-                    />
-                    <path
-                      d="M5 11A7 7 0 0 0 19 11"
-                      stroke="white"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      fill="none"
-                    />
-                    <line
-                      x1="12"
-                      y1="18"
-                      x2="12"
-                      y2="22"
-                      stroke="white"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
-                    <line
-                      x1="8"
-                      y1="22"
-                      x2="16"
-                      y2="22"
-                      stroke="white"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
+                    <rect x="9" y="2" width="6" height="12" rx="3" fill="#FFFEFB" fillOpacity="0.95" />
+                    <path d="M5 11A7 7 0 0 0 19 11" stroke="#FFFEFB" strokeWidth="2" strokeLinecap="round" fill="none" />
+                    <line x1="12" y1="18" x2="12" y2="22" stroke="#FFFEFB" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="8" y1="22" x2="16" y2="22" stroke="#FFFEFB" strokeWidth="2" strokeLinecap="round" />
                   </svg>
                 </motion.div>
               )}
@@ -303,7 +269,7 @@ export function HumScreen() {
                   initial={{ scale: 0.5, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0.5, opacity: 0 }}
-                  className="w-12 h-12 rounded-2xl bg-white opacity-95"
+                  className="w-12 h-12 rounded-md bg-[#FFFEFB] opacity-95"
                 />
               )}
               {isProcessing && (
@@ -311,15 +277,15 @@ export function HumScreen() {
                   key="spin"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="w-8 h-8 rounded-full border-[3px] border-white border-t-transparent animate-spin"
+                  className="w-8 h-8 rounded-full border-[3px] border-[#FFFEFB] border-t-transparent animate-spin"
                 />
               )}
             </AnimatePresence>
           </motion.button>
         </div>
 
-        {/* Bottom hint area */}
-        <div className="mt-8 min-h-[64px] flex flex-col items-center justify-start">
+        {/* Bottom hint */}
+        <div className="mt-10 min-h-[64px] flex flex-col items-center justify-start">
           <AnimatePresence mode="wait">
             {isIdle && !micFailed && (
               <motion.p
@@ -328,7 +294,7 @@ export function HumScreen() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ delay: 0.3 }}
-                className="text-[#B8B0A2] text-[13px] tracking-[0.04em]"
+                className="text-[#B6B0A4] text-[12px] tracking-[0.18em] uppercase"
               >
                 {t("hum.idle.hint")}
               </motion.p>
@@ -341,18 +307,18 @@ export function HumScreen() {
                 exit={{ opacity: 0, y: -6 }}
                 className="text-center"
               >
-                <p className="font-serif-italic text-[#22303A] text-[22px] mb-2">
+                <p className="font-serif-italic text-[#1A1A1A] text-[24px] mb-3">
                   {t("hum.recording")}
                 </p>
                 <div className="flex items-center justify-center gap-2 mb-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#E9A06D] animate-pulse" />
-                  <span className="text-[#8B8680] text-xs tabular-nums tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#FF5924] animate-pulse" />
+                  <span className="text-[#8C8780] text-[11px] tabular-nums tracking-[0.18em] uppercase">
                     {String(recordingTime).padStart(2, "0")} / {MAX_DURATION}s
                   </span>
                 </div>
-                <div className="mx-auto w-44 h-[2px] bg-[#E8E2D9] rounded-full overflow-hidden">
+                <div className="mx-auto w-44 h-[2px] bg-[#E5DDD0] rounded-full overflow-hidden">
                   <motion.div
-                    className="h-full bg-[#E9A06D] rounded-full"
+                    className="h-full bg-[#FF5924] rounded-full"
                     animate={{ width: `${(recordingTime / MAX_DURATION) * 100}%` }}
                     transition={{ duration: 0.8 }}
                   />
@@ -374,12 +340,12 @@ export function HumScreen() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.25 }}
-                    className="font-serif-italic text-[#22303A] text-[20px]"
+                    className="font-serif-italic text-[#1A1A1A] text-[22px]"
                   >
                     {processingMessage}
                   </motion.p>
                 </AnimatePresence>
-                <p className="text-[#B8B0A2] text-xs tracking-[0.04em] mt-1.5">
+                <p className="text-[#B6B0A4] text-[11px] tracking-[0.18em] uppercase mt-2">
                   {t("hum.proc.wait")}
                 </p>
               </motion.div>
@@ -387,7 +353,6 @@ export function HumScreen() {
           </AnimatePresence>
         </div>
 
-        {/* Mic-failed alternative */}
         <AnimatePresence>
           {isIdle && micFailed && (
             <motion.div
@@ -395,35 +360,33 @@ export function HumScreen() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center gap-4 w-full text-center mt-6"
+              className="flex flex-col items-center gap-4 w-full text-center mt-8 max-w-sm"
             >
-              <div className="sticker-card rounded-2xl px-5 py-4 max-w-sm">
-                <p className="text-[#22303A] text-sm font-medium mb-1">
+              <div className="mm-card px-5 py-4">
+                <p className="text-[#1A1A1A] text-sm font-medium mb-1">
                   {t("hum.mic.title")}
                 </p>
-                <p className="text-[#8B8680] text-xs leading-relaxed">
+                <p className="text-[#8C8780] text-xs leading-relaxed">
                   {t("hum.mic.detail")}
                 </p>
               </div>
 
-              <motion.button
-                whileTap={{ scale: 0.95 }}
+              <button
                 onClick={() => {
                   startAudioContext();
                   transcribeAndGenerate(undefined);
                 }}
-                className="w-full max-w-sm h-12 rounded-2xl bg-[#E9A06D] text-white text-sm font-semibold"
-                style={{ boxShadow: "0 6px 20px rgba(233,160,109,0.4)" }}
+                className="mm-btn-primary w-full justify-center"
               >
                 {t("hum.mic.cta_example")}
-              </motion.button>
+              </button>
 
               <button
                 onClick={() => {
                   startAudioContext();
                   startRecording();
                 }}
-                className="text-[#8B8680] text-xs underline underline-offset-4"
+                className="text-[#8C8780] text-xs underline-mm"
               >
                 {t("hum.mic.cta_retry")}
               </button>

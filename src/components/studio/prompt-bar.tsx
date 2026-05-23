@@ -20,10 +20,10 @@ export function PromptBar({ busy, onApply }: PromptBarProps) {
 
   return (
     <div
-      className="bg-[#FFFDF8] rounded-2xl p-5"
-      style={{ boxShadow: "0 2px 12px rgba(34,48,58,0.06)" }}
+      className="bg-[#FFFEFB] rounded-2xl p-5"
+      style={{ boxShadow: "0 2px 12px rgba(26, 26, 26,0.06)" }}
     >
-      <p className="text-[#8B8680] text-xs font-medium tracking-wider uppercase mb-3">
+      <p className="text-[#8C8780] text-xs font-medium tracking-wider uppercase mb-3">
         {t("studio.prompt.title")}
       </p>
       <div className="flex gap-2">
@@ -35,12 +35,12 @@ export function PromptBar({ busy, onApply }: PromptBarProps) {
             if (e.key === "Enter") submit();
           }}
           placeholder={t("studio.prompt.placeholder")}
-          className="flex-1 bg-[#F7F3EA] border border-[#E8E2D9] rounded-2xl px-4 py-3 text-sm text-[#22303A] placeholder-[#8B8680] outline-none focus:border-[#E9A06D] transition-colors"
+          className="flex-1 bg-[#F5F1EB] border border-[#E5DDD0] rounded-2xl px-4 py-3 text-sm text-[#1A1A1A] placeholder-[#8C8780] outline-none focus:border-[#FF5924] transition-colors"
         />
         <button
           onClick={() => void submit()}
           disabled={!prompt.trim() || busy}
-          className="px-4 py-3 rounded-2xl bg-[#E9A06D] text-white text-sm font-medium disabled:opacity-40 min-w-[64px]"
+          className="px-4 py-3 rounded-2xl bg-[#FF5924] text-white text-sm font-medium disabled:opacity-40 min-w-[64px]"
         >
           {busy ? "…" : t("studio.prompt.cta")}
         </button>
@@ -55,7 +55,7 @@ export function PromptBar({ busy, onApply }: PromptBarProps) {
           <button
             key={s}
             onClick={() => setPrompt(s)}
-            className="text-[#8B8680] text-xs bg-[#F0EAE0] rounded-full px-3 py-1 hover:bg-[#E8DDC8] transition-colors"
+            className="text-[#8C8780] text-xs bg-[#EFE8DA] rounded-full px-3 py-1 hover:bg-[#E8DDC8] transition-colors"
           >
             {s}
           </button>
