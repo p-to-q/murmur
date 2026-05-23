@@ -27,6 +27,7 @@ import type {
 import { AurisPanel } from "@/components/studio/auris-panel";
 import { TrackMixer } from "@/components/studio/track-mixer";
 import { SceneGrid } from "@/components/studio/scene-grid";
+import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
 export function StudioScreen() {
   // Studio is intentionally not a DAW. It compresses arrangement control into
@@ -185,33 +186,8 @@ function StudioContent({ version }: { version: VibeVersion }) {
   };
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#EEEDF2]">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-        <div
-          className="aurora-blob-2 absolute rounded-full"
-          style={{
-            width: "min(52vw, 520px)",
-            height: "min(42vw, 420px)",
-            right: "-10%",
-            top: "3%",
-            background:
-              "radial-gradient(ellipse at center, rgba(201,182,228,0.24) 0%, rgba(200,180,240,0.06) 55%, transparent 75%)",
-            filter: "blur(55px)",
-          }}
-        />
-        <div
-          className="aurora-blob-3 absolute rounded-full"
-          style={{
-            width: "min(44vw, 430px)",
-            height: "min(38vw, 360px)",
-            left: "-6%",
-            top: "26%",
-            background:
-              "radial-gradient(ellipse at center, rgba(255,200,140,0.18) 0%, rgba(255,180,100,0.05) 55%, transparent 75%)",
-            filter: "blur(50px)",
-          }}
-        />
-      </div>
+    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+      <PageBackdrop variant="soft" />
 
       <div className="relative z-10 min-h-svh flex flex-col">
         <div
@@ -331,7 +307,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
         </div>
 
         <div
-          className="fixed left-0 right-0 bg-gradient-to-t from-[#EEEDF2] via-[#EEEDF2] to-transparent px-5 pt-6 pb-5 md:left-[232px] md:px-8"
+          className="fixed left-0 right-0 bg-gradient-to-t from-[#F5F1EB] via-[#F5F1EB] to-transparent px-5 pt-6 pb-5 md:left-[232px] md:px-8"
           style={{
             bottom: "env(safe-area-inset-bottom, 0px)",
           }}

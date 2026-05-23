@@ -9,6 +9,7 @@ import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator } from "@/lib/i18n";
 import { synth } from "@/lib/music/simple-synth";
 import type { VibeVersion } from "@/modules/shared/types";
+import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
 /* ── Transition ────────────────────────────────────────────────────── */
 type TransitionPhase = "idle" | "closing" | "opening" | "cards";
@@ -199,36 +200,8 @@ export function VersionCardsOverlay() {
 
       {/* ── Phase 2: Iris-open with aurora ────────────────────────── */}
       {(phase === "opening" || phase === "cards") && (
-        <div className={`absolute inset-0 z-[51] bg-[#EEEDF2] ${phase === "opening" ? "iris-open" : ""}`}>
-          <div className="absolute inset-0 overflow-hidden" aria-hidden>
-            <div
-              className="aurora-blob-2 absolute rounded-full"
-              style={{
-                width: "min(60vw, 550px)", height: "min(50vw, 480px)",
-                right: "-10%", top: "5%",
-                background: "radial-gradient(ellipse at center, rgba(200,182,228,0.28) 0%, rgba(200,180,240,0.06) 55%, transparent 75%)",
-                filter: "blur(55px)",
-              }}
-            />
-            <div
-              className="aurora-blob-3 absolute rounded-full"
-              style={{
-                width: "min(50vw, 450px)", height: "min(45vw, 400px)",
-                left: "-5%", bottom: "8%",
-                background: "radial-gradient(ellipse at center, rgba(255,200,140,0.20) 0%, rgba(255,180,100,0.05) 55%, transparent 75%)",
-                filter: "blur(50px)",
-              }}
-            />
-            <div
-              className="aurora-blob-1 absolute rounded-full"
-              style={{
-                width: "min(35vw, 320px)", height: "min(30vw, 280px)",
-                left: "40%", top: "-3%",
-                background: "radial-gradient(ellipse at center, rgba(167,184,200,0.18) 0%, transparent 65%)",
-                filter: "blur(45px)",
-              }}
-            />
-          </div>
+        <div className={`absolute inset-0 z-[51] bg-[#F5F1EB] ${phase === "opening" ? "iris-open" : ""}`}>
+          <PageBackdrop />
         </div>
       )}
 

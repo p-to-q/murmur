@@ -55,7 +55,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#F7F3EA",
+  themeColor: "#F5F1EB",
 };
 
 export default function RootLayout({
@@ -71,7 +71,7 @@ export default function RootLayout({
         wenkai.variable
       )}
     >
-      <body className="min-h-svh flex flex-col bg-[#F7F3EA]">
+      <body className="min-h-svh flex flex-col bg-[#F5F1EB]">
         <EazoProvider>
           <I18nHydrator />
           <UserSyncEffect />

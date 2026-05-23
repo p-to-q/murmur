@@ -8,6 +8,7 @@ import { memory } from "@eazo/sdk";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator } from "@/lib/i18n";
 import type { SongCard } from "@/modules/shared/types";
+import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
 type SongWithMeta = SongCard & { bpm?: number; keySignature?: string };
 
@@ -100,7 +101,7 @@ function EmptyState() {
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 }}
-      className="flex flex-col items-center justify-center py-24 px-8 text-center"
+      className="relative z-10 flex flex-col items-center justify-center py-24 px-8 text-center"
     >
       <div
         className="w-20 h-20 rounded-full flex items-center justify-center mb-7"
@@ -161,9 +162,10 @@ export function GalleryScreen() {
   };
 
   return (
-    <div className="min-h-svh bg-[#F5F1EB]">
+    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+      <PageBackdrop variant="soft" />
       <div
-        className="px-6 md:px-12 pb-10 md:pb-14 max-w-6xl"
+        className="relative z-10 px-6 md:px-12 pb-10 md:pb-14 max-w-6xl"
         style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 56px)" }}
       >
         <p className="eyebrow mb-4">{t("gallery.eyebrow")}</p>
@@ -176,7 +178,7 @@ export function GalleryScreen() {
       </div>
 
       {isLoading && (
-        <div className="px-6 md:px-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-12 max-w-6xl">
+        <div className="relative z-10 px-6 md:px-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-12 max-w-6xl">
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="flex flex-col gap-3">
               <div className="w-[108px] h-[108px] rounded-[10px] bg-[#ECE5D6] animate-pulse" />
@@ -190,7 +192,7 @@ export function GalleryScreen() {
       {!isLoading && songs.length === 0 && <EmptyState />}
 
       {!isLoading && songs.length > 0 && (
-        <div className="px-6 md:px-12 pb-28 max-w-6xl">
+        <div className="relative z-10 px-6 md:px-12 pb-28 max-w-6xl">
           <motion.div
             layout
             className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-12"

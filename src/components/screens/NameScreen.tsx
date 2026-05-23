@@ -12,6 +12,7 @@ import { useTranslator } from "@/lib/i18n";
 import { synth } from "@/lib/music/simple-synth";
 import { renderAudio } from "@/modules/export/render-mp3";
 import type { SongCard } from "@/modules/shared/types";
+import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
 export function NameScreen() {
   const router = useRouter();
@@ -131,32 +132,7 @@ export function NameScreen() {
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
-      <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <div
-          className="absolute rounded-full"
-          style={{
-            width: "min(56vw, 560px)",
-            height: "min(56vw, 560px)",
-            right: "-12%",
-            top: "-8%",
-            background:
-              "radial-gradient(circle at center, rgba(255,153,100,0.18) 0%, transparent 70%)",
-            filter: "blur(50px)",
-          }}
-        />
-        <div
-          className="absolute rounded-full"
-          style={{
-            width: "min(40vw, 420px)",
-            height: "min(40vw, 420px)",
-            left: "-8%",
-            bottom: "10%",
-            background:
-              "radial-gradient(circle at center, rgba(201,182,228,0.18) 0%, transparent 70%)",
-            filter: "blur(50px)",
-          }}
-        />
-      </div>
+      <PageBackdrop />
 
       <div className="relative z-10 flex min-h-svh flex-col">
         <div

@@ -2,6 +2,7 @@
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { UserBadge } from "@/components/user-profile/user-badge";
 import { useTranslator, useI18nStore } from "@/lib/i18n";
+import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import {
   getConfiguredTranscriptionProvider,
   getProviderStatuses,
@@ -18,9 +19,10 @@ export function MeScreen() {
   const runtimeStatus = getRuntimeStatusLabel();
 
   return (
-    <div className="min-h-svh bg-[#F5F1EB]">
+    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+      <PageBackdrop variant="soft" />
       <div
-        className="px-6 md:px-12 pb-10 max-w-2xl"
+        className="relative z-10 px-6 md:px-12 pb-10 max-w-2xl"
         style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 56px)" }}
       >
         <p className="eyebrow mb-4">PROFILE</p>
@@ -29,7 +31,7 @@ export function MeScreen() {
         </h1>
       </div>
 
-      <div className="px-6 md:px-12 max-w-2xl space-y-5 pb-6">
+      <div className="relative z-10 px-6 md:px-12 max-w-2xl space-y-5 pb-6">
         <Card>
           <UserBadge />
         </Card>
@@ -77,7 +79,7 @@ export function MeScreen() {
       </div>
 
       {/* Manifesto block — mymind signature */}
-      <div className="px-6 md:px-12 max-w-2xl pb-10">
+      <div className="relative z-10 px-6 md:px-12 max-w-2xl pb-10">
         <div className="mm-manifesto">
           <p className="eyebrow text-[#FF8A5C] mb-5">A QUIET PLACE</p>
           <p className="font-serif text-[28px] md:text-[34px] leading-[1.15] text-[#F5F1EB]">
@@ -94,7 +96,7 @@ export function MeScreen() {
       </div>
 
       {/* About */}
-      <div className="px-6 md:px-12 max-w-2xl pb-28">
+      <div className="relative z-10 px-6 md:px-12 max-w-2xl pb-28">
         <Card>
           <SectionLabel>{t("me.about.title")}</SectionLabel>
           <p className="font-serif text-[#1A1A1A] text-[22px] leading-tight mb-2">

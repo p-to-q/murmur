@@ -231,7 +231,7 @@ export function HumScreen() {
     ringCircumference - (recordingTime / MAX_DURATION) * ringCircumference;
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#EEEDF2]">
+    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       {/* ─── Aurora background blobs — audio-reactive ───────────── */}
       {/* scale and opacity are driven by amplitudeSpring (0→1 RMS).
           CSS drift animations still run; framer-motion adds a reactivity

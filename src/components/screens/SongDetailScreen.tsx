@@ -11,6 +11,7 @@ import { useTranslator } from "@/lib/i18n";
 import { getPlayer, startAudioContext } from "@/lib/music/tone-player";
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
 import { ShareActions } from "@/components/song-detail/share-actions";
+import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
 type Song = SongCard & {
   mp3DataUrl?: string | null;
@@ -157,10 +158,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const keySig = song.keySignature ?? "C";
 
   return (
-    <div className="min-h-svh bg-[#F5F1EB] flex flex-col">
+    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB] flex flex-col">
+      <PageBackdrop variant="soft" />
       {/* Header — safe-area-aware */}
       <div
-        className="flex items-center justify-between px-5 pb-4"
+        className="relative z-10 flex items-center justify-between px-5 pb-4"
         style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 28px)" }}
       >
         <button
@@ -183,7 +185,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       {/* Hero visual */}
       <div
         id="song-visual"
-        className="mx-5 rounded-3xl overflow-hidden relative"
+        className="relative z-10 mx-5 rounded-3xl overflow-hidden"
         style={{ height: 280 }}
       >
         <SongVisualCanvas gradient={gradient} isPlaying={isPlaying} />
@@ -225,7 +227,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
           </AnimatePresence>
         </button>
       </div>
-      <div className="px-5 mt-3">
+      <div className="relative z-10 px-5 mt-3">
         <div className="rounded-2xl border border-[#E5DDD0] bg-[#FFFEFB]/88 px-4 py-3">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -247,7 +249,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       </div>
 
       {/* Body */}
-      <div className="px-5 mt-6 space-y-4 pb-24">
+      <div className="relative z-10 px-5 mt-6 space-y-4 pb-24">
         <MetaCard
           title={song.title}
           vibe={song.vibe}
