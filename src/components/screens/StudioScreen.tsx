@@ -17,7 +17,7 @@ import {
   type EditToken,
 } from "@/modules/strummer/apply-edit";
 import { classifyPromptWithLLM } from "@/lib/api/strummer";
-import { memory } from "@eazo/sdk";
+import { memory } from "@/lib/platform/memory";
 import type {
   ArrangementState,
   TrackState,

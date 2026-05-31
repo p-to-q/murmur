@@ -3,13 +3,12 @@
 import { useRef, useState, useEffect } from "react";
 import Image from "next/image";
 import { LogOut, UserRound, X } from "lucide-react";
-import { auth } from "@eazo/sdk";
-import { useEazo } from "@eazo/sdk/react";
-import type { User } from "@eazo/sdk";
+import { authClient, usePlatformState } from "@/lib/platform/auth-client";
+import type { AppUser } from "@/lib/platform/types";
 
 export function UserBadge() {
-  const user = useEazo((s) => s.auth.user);
-  const loading = useEazo((s) => s.auth.loading);
+  const user = usePlatformState((s) => s.auth.user);
+  const loading = usePlatformState((s) => s.auth.loading);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -33,7 +32,7 @@ export function UserBadge() {
     return (
       <button
         onClick={() => {
-          auth.login().catch(() => undefined);
+          authClient.login().catch(() => undefined);
         }}
         className="flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium shadow-sm transition-shadow hover:shadow-md"
       >
@@ -50,7 +49,7 @@ export function UserBadge() {
         <DropdownPanel user={user} onClose={() => setOpen(false)}>
           <button
             onClick={() => {
-              auth.logout();
+              authClient.logout();
               setOpen(false);
             }}
             className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -64,7 +63,7 @@ export function UserBadge() {
   );
 }
 
-function BadgeTrigger({ user, onClick }: { user: User; onClick: () => void }) {
+function BadgeTrigger({ user, onClick }: { user: AppUser; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -83,7 +82,7 @@ function DropdownPanel({
   onClose,
   children,
 }: {
-  user: User;
+  user: AppUser;
   onClose: () => void;
   children?: React.ReactNode;
 }) {
@@ -116,7 +115,7 @@ function DropdownPanel({
   );
 }
 
-function Avatar({ user, size }: { user: User; size: number }) {
+function Avatar({ user, size }: { user: AppUser; size: number }) {
   if (user.avatarUrl) {
     const avatarSrc = user.avatarUrl.startsWith("//")
       ? `https:${user.avatarUrl}`

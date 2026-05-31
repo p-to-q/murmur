@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 
 interface SceneParticlesProps {
   /** Hex color used for the dots */
@@ -18,11 +18,6 @@ interface SceneParticlesProps {
  * pulse in unison.
  */
 export function SceneParticles({ color, seed = 0, paused = false }: SceneParticlesProps) {
-  // Mount only on client so SSR markup stays empty (no hydration mismatch
-  // from Math.random()).
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   const dots = useMemo(() => {
     const rand = mulberry32(0x9e3779b1 ^ (seed + 1));
     return Array.from({ length: 11 }, (_, i) => ({
@@ -35,8 +30,6 @@ export function SceneParticles({ color, seed = 0, paused = false }: SceneParticl
       opacity: 0.45 + rand() * 0.4,
     }));
   }, [seed]);
-
-  if (!mounted) return null;
 
   return (
     <div

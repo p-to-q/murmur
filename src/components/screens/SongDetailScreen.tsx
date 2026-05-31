@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Pause, Play, Sliders } from "lucide-react";
 import { toast } from "sonner";
-import { memory } from "@eazo/sdk";
+import { memory } from "@/lib/platform/memory";
 
 import type { SongCard } from "@/modules/shared/types";
 import { useTranslator } from "@/lib/i18n";

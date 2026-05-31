@@ -1,2 +1,2 @@
-export { requireAuth } from "@eazo/sdk/server";
-export type { User, AuthResult } from "@eazo/sdk/server";
+export { getRequestUser, requireAuth, resolveUserId } from "@/lib/platform/server-auth";
+export type { AuthResult, User } from "@/lib/platform/server-auth";

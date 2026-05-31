@@ -6,7 +6,7 @@ import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import { startAudioContext } from "@/lib/music/tone-player";
 import { transcribeWithStainer } from "@/modules/stainer/transcribe";
 import { useTranslator } from "@/lib/i18n";
-import { memory } from "@eazo/sdk";
+import { memory } from "@/lib/platform/memory";
 
 const MAX_DURATION = 15;
 // Idle headline rotation interval (ms)

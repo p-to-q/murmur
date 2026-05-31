@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Download, FileImage, Share2, Music, Film } from "lucide-react";
 import { toast } from "sonner";
-import { memory } from "@eazo/sdk";
+import { memory } from "@/lib/platform/memory";
 
 import { useTranslator } from "@/lib/i18n";
 import { buildShareHtml, downloadHtml } from "@/modules/export/render-share-html";

@@ -1,11 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { notifications, EazoNotificationPublishError } from "@eazo/sdk/server";
 import { requireAuth } from "@/lib/auth";
+import {
+  NotificationPublishError,
+  notifications,
+} from "@/lib/platform/notifications-server";
 
 /**
- * Sends a test push to every subscriber of this app. The template ships a
- * static message so the route works immediately after `bun run cleanup:demo`.
- * Customize `title` / `body` / `data` for your product.
+ * Sends a test notification through the local platform adapter.
+ * The standalone app currently returns a stubbed publish result unless
+ * a real push gateway is wired in behind the adapter.
  */
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request);
@@ -17,7 +20,7 @@ export async function POST(request: NextRequest) {
   try {
     const result = await notifications.publish({
       title: `Hello, ${callerLabel} 👋`,
-      body: "This is a test notification from your Eazo app.",
+      body: "This is a local notification preflight from Murmur.",
       data: {
         source: "test-button",
         triggeredByUserId: auth.user.id,
@@ -25,7 +28,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json(result);
   } catch (err) {
-    if (err instanceof EazoNotificationPublishError) {
+    if (err instanceof NotificationPublishError) {
       return NextResponse.json(
         { error: err.message, code: err.code },
         { status: err.code >= 400 && err.code < 600 ? err.code : 500 },

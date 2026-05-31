@@ -1,5 +1,5 @@
 {
-  "name": "nextjs-template",
+  "name": "murmur",
   "version": "0.1.0",
   "private": true,
   "packageManager": "bun@1.3.9",
@@ -8,10 +8,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "cleanup:demo": "bun scripts/cleanup-demo.ts",
-    "sdk:sync": "rm -rf node_modules/@eazo/sdk && mkdir -p node_modules/@eazo/sdk && cp ../eazo-sdk/sdk/package.json node_modules/@eazo/sdk/ && cp -r ../eazo-sdk/sdk/dist node_modules/@eazo/sdk/dist && cp -R ../eazo-sdk/sdk/node_modules node_modules/@eazo/sdk/node_modules",
-    "sdk:dev": "(cd ../eazo-sdk/sdk && npm run build) && bun run sdk:sync",
-    "sdk:watch": "bun run scripts/sdk-watch.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun src/lib/db/migrate.ts",
     "db:push": "drizzle-kit push",
@@ -20,7 +16,6 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
-    "@eazo/sdk": "0.19.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

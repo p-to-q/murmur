@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ai } from "@eazo/sdk";
+import { ai } from "@/lib/platform/ai-server";
 import { ALL_EDIT_TOKENS, type EditToken } from "@/modules/strummer/apply-edit";
 
 // Strummer prompt → EditToken classifier.
@@ -10,10 +10,6 @@ import { ALL_EDIT_TOKENS, type EditToken } from "@/modules/strummer/apply-edit";
 // client falls back to the rule-based parser when this endpoint is unavailable.
 
 const TIMEOUT_MS = 8_000;
-
-if (process.env.EAZO_PRIVATE_KEY) {
-  ai.configure({ privateKey: process.env.EAZO_PRIVATE_KEY });
-}
 
 type RequestBody = { prompt?: string };
 
@@ -29,7 +25,7 @@ export async function POST(req: NextRequest) {
   if (!prompt) {
     return NextResponse.json({ error: "Empty prompt" }, { status: 400 });
   }
-  if (!process.env.EAZO_PRIVATE_KEY) {
+  if (!process.env.OPENAI_API_KEY && !process.env.AI_GATEWAY_API_KEY) {
     // Without a key configured we deterministically refuse, so the client
     // knows to fall back to the rule parser.
     return NextResponse.json({ tokens: [], reason: "LLM disabled" }, { status: 503 });

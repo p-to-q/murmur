@@ -1,6 +1,6 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import "../../node_modules/tailwindcss/index.css";
+@import "../../node_modules/tw-animate-css/dist/tw-animate.css";
+@import "../../node_modules/shadcn/dist/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -28,14 +28,11 @@
   /* System color aliases (shadcn) */
   --color-background:                  var(--background);
   --color-foreground:                  var(--foreground);
-  --font-sans:                         var(--font-sans);
-  /* Serif: Instrument Serif for Latin, LXGW WenKai TC for CJK — browser
-     automatically selects by unicode-range, so Chinese text gets 霞鹜文楷
-     while English display text uses the Instrument Serif editorial feel. */
-  --font-serif:                        var(--font-serif), var(--font-chinese), "Times New Roman", Times, serif;
-  --font-chinese:                      var(--font-chinese), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-sans:                         var(--murmur-font-sans);
+  --font-serif:                        var(--murmur-font-serif);
+  --font-chinese:                      var(--murmur-font-chinese);
   --font-mono:                         "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-  --font-heading:                      var(--font-serif), var(--font-chinese), "Times New Roman", Times, serif;
+  --font-heading:                      var(--murmur-font-serif);
   --color-sidebar-ring:                var(--sidebar-ring);
   --color-sidebar-border:              var(--sidebar-border);
   --color-sidebar-accent-foreground:   var(--sidebar-accent-foreground);
@@ -72,6 +69,9 @@
 }
 
 :root {
+  --murmur-font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --murmur-font-serif: Charter, "Iowan Old Style", "Songti SC", "STSong", "Noto Serif CJK SC", "Times New Roman", Times, serif;
+  --murmur-font-chinese: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --radius: 0.625rem; /* mymind cards are tight — 10px feels right */
   --background: #F5F1EB;
   --foreground: #1A1A1A;
@@ -180,17 +180,14 @@
   }
 
   /* ── Hero serif — magazine cover scale ─────────────────────── */
-  /* font-family explicitly layers: Instrument Serif (Latin) → LXGW WenKai TC
-     (CJK) → system serif. letter-spacing is tighter for CJK so we use a
-     modest value that works for both scripts. */
   .hero-serif {
-    font-family: var(--font-serif), var(--font-chinese), serif;
+    font-family: var(--murmur-font-serif);
     font-weight: 400;
     line-height: 1.05;
     letter-spacing: -0.015em;
   }
   .hero-serif-italic {
-    font-family: var(--font-serif), var(--font-chinese), serif;
+    font-family: var(--murmur-font-serif);
     font-weight: 400;
     font-style: italic;
     line-height: 1.05;

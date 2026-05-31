@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@eazo/sdk/server";
+import { resolveUserId } from "@/lib/auth";
 import { getSongById, updateSong, deleteSong } from "@/lib/db/queries/songs";
-
-/** Guest Mode: allow access even without a session (for hackathon demo). */
-function resolveUserId(req: NextRequest): string {
-  const auth = requireAuth(req);
-  return auth.ok ? auth.user.id : "guest";
-}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = resolveUserId(req);
