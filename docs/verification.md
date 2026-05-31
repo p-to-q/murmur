@@ -30,7 +30,7 @@
 ### Optional upgrades (off by default)
 - [ ] Browser Basic Pitch — opt-in via `NEXT_PUBLIC_ENABLE_BASIC_PITCH_BROWSER=true`
 - [ ] PYIN remote worker — set `NEXT_PUBLIC_REMOTE_PYIN_WORKER_URL` (or legacy `NEXT_PUBLIC_BASIC_PITCH_WORKER_URL`)
-- [ ] Eazo notifications — needs `EAZO_PRIVATE_KEY` configured
+- [ ] Native push notifications — local adapter is stubbed until a real gateway is configured
 
 ### Known limitations
 - Mobile Safari may reject `audio.play()` if invoked outside the gesture frame

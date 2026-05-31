@@ -1,9 +1,9 @@
 # Murmur
 
-Murmur is a humming-to-song studio built on Eazo: a user hums a sketch, the
-system transcribes and polishes it into a melody, generates several vibe-led
+Murmur is a humming-to-song studio. A user hums a sketch, the system
+transcribes and polishes it into a melody, generates several vibe-led
 arrangements, then lets the user refine, preview, save, and export the result
-as audio, visuals, share HTML, and a real audio+video WebM.
+as audio, visuals, share HTML, and an audio-backed WebM.
 
 ## For Judges
 
@@ -77,7 +77,23 @@ cp .env.example .env
 
 | Variable | Description |
 |---|---|
-| `EAZO_PRIVATE_KEY` | Eazo private key used server-side for session decryption and protected platform capabilities. |
+| `OPENAI_API_KEY` | API key for the default OpenAI-compatible chat endpoint used by `/api/strummer/edit`. |
+| `OPENAI_BASE_URL` | Optional override for an OpenAI-compatible base URL. |
+| `AI_GATEWAY_API_KEY` | Optional alternative to `OPENAI_API_KEY` when routing through a custom gateway. |
+| `AI_GATEWAY_BASE_URL` | Optional base URL for a custom AI gateway. |
+| `DATABASE_URL` | Postgres connection string for Drizzle. |
+| `CRON_SECRET` | Shared secret for the daily digest cron route. |
+| `NEXT_PUBLIC_TRANSCRIPTION_PROVIDER` | Client transcription provider selector. Defaults to `browser-yin`. |
+| `NEXT_PUBLIC_ENABLE_BASIC_PITCH_BROWSER` | Enables the browser Basic Pitch model download flow when `true`. |
+| `NEXT_PUBLIC_BASIC_PITCH_WORKER_URL` | Optional remote worker URL for higher-accuracy transcription. |
+
+### Notes
+
+- Authentication, notifications, and AI now go through Murmur's local
+  platform adapter under [src/lib/platform](/Users/dujiayi/murmur/src/lib/platform).
+- The notification publisher is currently a stub so local development and demo
+  flows stay usable without external push infrastructure.
+- The Strummer edit route expects an OpenAI-compatible chat API.
 
 ## Stack
 
@@ -86,10 +102,9 @@ cp .env.example .env
 - TypeScript
 - Tailwind CSS
 - Bun
-- Eazo SDK
+- OpenAI-compatible AI gateway
 - Web Audio / Tone-based render pipeline
 
 ## Learn More
 
-- [Eazo Documentation](https://docs.eazo.ai)
 - [Next.js Documentation](https://nextjs.org/docs)

@@ -1,5 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { notifications, EazoNotificationPublishError } from "@eazo/sdk/server";
+import {
+  NotificationPublishError,
+  notifications,
+} from "@/lib/platform/notifications-server";
 
 /** Scheduled by `vercel.json#crons`. Authenticated via `CRON_SECRET`. */
 export async function GET(request: NextRequest) {
@@ -23,7 +26,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json(result);
   } catch (err) {
-    if (err instanceof EazoNotificationPublishError) {
+    if (err instanceof NotificationPublishError) {
       return NextResponse.json(
         { error: err.message, code: err.code },
         { status: err.code >= 400 && err.code < 600 ? err.code : 500 },

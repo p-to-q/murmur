@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@eazo/sdk/server";
+import { resolveUserId } from "@/lib/auth";
 import { getSongsByUser, createSong } from "@/lib/db/queries/songs";
-
-/** Resolve userId — returns real userId when authenticated, "guest" otherwise.
- *  Guest Mode is intentional for hackathon demo: allows the full loop without login. */
-function resolveUserId(req: NextRequest): string {
-  const auth = requireAuth(req);
-  return auth.ok ? auth.user.id : "guest";
-}
 
 export async function GET(req: NextRequest) {
   const userId = resolveUserId(req);

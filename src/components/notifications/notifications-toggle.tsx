@@ -3,16 +3,16 @@
 import { useEffect, useState } from "react";
 import { Bell, BellOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { auth, notifications } from "@eazo/sdk";
-import { useEazo } from "@eazo/sdk/react";
 
 import { request } from "@/lib/api/request";
+import { notificationsClient } from "@/lib/platform/notifications-client";
+import { usePlatformState } from "@/lib/platform/auth-client";
 
 /** Subscribe toggle + "Send test" button shown above the todo list. */
 export function NotificationsToggle() {
-  const user = useEazo((s) => s.auth.user);
-  const platform = useEazo((s) => s.device.platform);
-  const isMobileHost = platform === "mobile";
+  const user = usePlatformState((s) => s.auth.user);
+  const platform = usePlatformState((s) => s.device.platform);
+  const isNativeHost = platform === "ios" || platform === "android";
 
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
   const [toggling, setToggling] = useState(false);
@@ -25,7 +25,7 @@ export function NotificationsToggle() {
       return;
     }
     let cancelled = false;
-    notifications
+    notificationsClient
       .isSubscribed()
       .then((r) => {
         if (!cancelled) setSubscribed(r.subscribed);
@@ -47,11 +47,11 @@ export function NotificationsToggle() {
     setSubscribed(wantOn); // optimistic
     try {
       const result = wantOn
-        ? await notifications.subscribe()
-        : await notifications.unsubscribe();
+        ? await notificationsClient.subscribe()
+        : await notificationsClient.unsubscribe();
       setSubscribed(result.subscribed);
-      if (!isMobileHost) {
-        toast.info("Notifications only deliver inside the Eazo mobile app.");
+      if (!isNativeHost) {
+        toast.info("Notifications are stored locally until a native push adapter is configured.");
       } else if (result.subscribed) {
         toast.success("Subscribed — you'll receive system notifications.");
       } else {
@@ -70,17 +70,6 @@ export function NotificationsToggle() {
     if (sending) return;
     setSending(true);
     try {
-      const sessionHeader = await auth.getSessionHeader();
-      if (!sessionHeader) {
-        toast.error(
-          "Session not ready yet — please sign in again and retry.",
-        );
-        console.warn(
-          "[notifications] test publish skipped: auth.getSessionHeader() returned null",
-        );
-        return;
-      }
-
       const res = await request("/api/notifications/test", { method: "POST" });
       const text = await res.text();
       let body: unknown = null;
@@ -124,7 +113,7 @@ export function NotificationsToggle() {
     }
   }
 
-  const showHint = subscribed !== null && !isMobileHost;
+  const showHint = subscribed !== null && !isNativeHost;
 
   return (
     <div className="mb-4 flex flex-col gap-2 rounded-[14px] border border-white/70 bg-white/60 p-3 shadow-[0_8px_20px_rgba(15,23,42,0.06)]">
@@ -142,7 +131,7 @@ export function NotificationsToggle() {
           </p>
           <p className="text-[12px] text-slate-950/45">
             {showHint
-              ? "Open this app inside Eazo Mobile to receive system pushes."
+              ? "Native delivery can be wired through the platform adapter."
               : subscribed === null
                 ? "Loading…"
                 : subscribed
