@@ -1,5 +1,9 @@
 import { createLocalFsStore } from "./adapters/local-fs";
 import { createMemoryStore } from "./adapters/memory";
+import {
+  createS3CompatibleStore,
+  type S3CompatibleStoreOptions,
+} from "./adapters/s3-compatible";
 import { StorageError, type ObjectStore, type StorageDriver } from "./types";
 
 export { objectKey, assertValidKey, type ObjectKind } from "./key";
@@ -12,6 +16,7 @@ export {
   type StorageScope,
   StorageError,
 } from "./types";
+export { presignGet } from "./adapters/s3-compatible";
 
 let cached: ObjectStore | null = null;
 
@@ -65,11 +70,39 @@ function buildObjectStore(driver: StorageDriver): ObjectStore {
     case "local-fs":
       return createLocalFsStore();
     case "s3-compatible":
-      throw new StorageError(
-        "driver_unconfigured",
-        "s3-compatible adapter is not yet implemented; see follow-up PR",
-      );
+      return createS3CompatibleStore(s3OptionsFromEnv());
   }
+}
+
+function s3OptionsFromEnv(): S3CompatibleStoreOptions {
+  const bucket = process.env.MURMUR_STORAGE_S3_BUCKET;
+  const region = process.env.MURMUR_STORAGE_S3_REGION;
+  const accessKeyId = process.env.MURMUR_STORAGE_S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.MURMUR_STORAGE_S3_SECRET_ACCESS_KEY;
+
+  const missing: string[] = [];
+  if (!bucket) missing.push("MURMUR_STORAGE_S3_BUCKET");
+  if (!region) missing.push("MURMUR_STORAGE_S3_REGION");
+  if (!accessKeyId) missing.push("MURMUR_STORAGE_S3_ACCESS_KEY_ID");
+  if (!secretAccessKey) missing.push("MURMUR_STORAGE_S3_SECRET_ACCESS_KEY");
+  if (missing.length > 0) {
+    throw new StorageError(
+      "driver_unconfigured",
+      `s3-compatible driver missing env: ${missing.join(", ")}`,
+    );
+  }
+
+  const endpoint = process.env.MURMUR_STORAGE_S3_ENDPOINT?.trim() || undefined;
+  const publicUrlBase = process.env.MURMUR_STORAGE_S3_PUBLIC_URL_BASE?.trim() || undefined;
+
+  return {
+    bucket: bucket!,
+    region: region!,
+    accessKeyId: accessKeyId!,
+    secretAccessKey: secretAccessKey!,
+    endpoint,
+    publicUrlBase,
+  };
 }
 
 /**
