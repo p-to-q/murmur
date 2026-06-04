@@ -17,6 +17,10 @@ interface MurmurStore {
   // Selected version for studio editing
   currentVersion: VibeVersion | null;
   setCurrentVersion: (v: VibeVersion | null) => void;
+  currentDraftId: string | null;
+  setCurrentDraftId: (id: string | null) => void;
+  currentFlowId: string | null;
+  setCurrentFlowId: (id: string | null) => void;
 
   // Playback state — which version/song is currently playing audio
   isPlaying: boolean;
@@ -44,6 +48,10 @@ export const useMurmurStore = create<MurmurStore>((set) => ({
 
   currentVersion: null,
   setCurrentVersion: (v) => set({ currentVersion: v }),
+  currentDraftId: null,
+  setCurrentDraftId: (id) => set({ currentDraftId: id }),
+  currentFlowId: null,
+  setCurrentFlowId: (id) => set({ currentFlowId: id }),
 
   isPlaying: false,
   playingSongId: null,
@@ -60,6 +68,8 @@ export const useMurmurStore = create<MurmurStore>((set) => ({
       recordingState: "idle",
       vibeVersions: [],
       currentVersion: null,
+      currentDraftId: null,
+      currentFlowId: null,
       processingMessage: "",
       auditioningVersionId: null,
       isPlaying: false,

@@ -19,9 +19,10 @@
  *   - Title in serif italic — a vibe is a poem, not a setting.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { Play, Pause } from "lucide-react";
 import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 
@@ -32,8 +33,6 @@ import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import type { VibeVersion } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { MurmurWave } from "@/components/murmur/murmur-wave";
-
-const LONG_PRESS_MS = 320;
 
 /** Visual phases of the route arrival. */
 type Phase = "closing" | "opening" | "cards";
@@ -72,6 +71,8 @@ export function VibeScreen() {
     vibeVersions,
     setVibeVersions,
     setCurrentVersion,
+    currentDraftId,
+    currentFlowId,
     auditioningVersionId,
     setAuditioning,
     resetFlow,
@@ -154,9 +155,13 @@ export function VibeScreen() {
     const melody = vibeVersions[0]!.melody;
     synth.stop();
     setAuditioning(null);
-    const fresh = generateVibeVersions(melody);
+    const fresh = generateVibeVersions(melody, {
+      draftId: currentDraftId ?? vibeVersions[0]!.draftId,
+      originFlowId: currentFlowId ?? vibeVersions[0]!.originFlowId,
+      sourceType: vibeVersions[0]!.sourceType,
+    });
     setVibeVersions(fresh);
-  }, [setAuditioning, setVibeVersions, vibeVersions]);
+  }, [currentDraftId, currentFlowId, setAuditioning, setVibeVersions, vibeVersions]);
 
   const handleBack = useCallback(() => {
     synth.stop();
@@ -249,7 +254,7 @@ export function VibeScreen() {
                   transition={{ delay: 0.15, duration: 0.5 }}
                   className="font-serif-italic mt-3 text-[13px] text-[#8C8780] md:text-[14px]"
                 >
-                  {t("vibe.caption") || "Hold to preview · tap to pick"}
+                  {t("cards.sub.short") || "Listen, then pick the one that feels right."}
                 </motion.p>
               </div>
 
@@ -284,7 +289,8 @@ export function VibeScreen() {
                         isAuditioning={isAuditioning}
                         isPicking={isPicking}
                         onPick={handlePick}
-                        onAuditionToggle={handleAudition}
+                        onPlayToggle={handleAudition}
+                        pickLabel={t("cards.choose") || "Pick"}
                       />
                     </motion.div>
                   );
@@ -330,44 +336,17 @@ function VibeCard({
   isAuditioning,
   isPicking,
   onPick,
-  onAuditionToggle,
+  onPlayToggle,
+  pickLabel,
 }: {
   version: VibeVersion;
   isLarge: boolean;
   isAuditioning: boolean;
   isPicking: boolean;
   onPick: (v: VibeVersion) => void;
-  onAuditionToggle: (v: VibeVersion) => void;
+  onPlayToggle: (v: VibeVersion) => void;
+  pickLabel: string;
 }) {
-  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const heldRef = useRef(false);
-
-  const startPress = () => {
-    heldRef.current = false;
-    if (pressTimer.current) clearTimeout(pressTimer.current);
-    pressTimer.current = setTimeout(() => {
-      heldRef.current = true;
-      onAuditionToggle(version);
-    }, LONG_PRESS_MS);
-  };
-
-  const endPress = () => {
-    if (pressTimer.current) {
-      clearTimeout(pressTimer.current);
-      pressTimer.current = null;
-    }
-    if (!heldRef.current) {
-      onPick(version);
-    }
-  };
-
-  const cancelPress = () => {
-    if (pressTimer.current) {
-      clearTimeout(pressTimer.current);
-      pressTimer.current = null;
-    }
-  };
-
   // Accent color for the wave layer — derived from the vibe's first hex stop
   // in its CSS gradient. Falls back to coral if parsing fails.
   const accent = extractFirstHex(version.visualConfig.gradient) ?? "#FF8A5C";
@@ -376,10 +355,7 @@ function VibeCard({
     <motion.div
       className="relative overflow-hidden rounded-[32px] cursor-pointer select-none border border-white/40 h-full min-h-[220px]"
       style={{ background: version.visualConfig.gradient }}
-      onPointerDown={startPress}
-      onPointerUp={endPress}
-      onPointerLeave={cancelPress}
-      onPointerCancel={cancelPress}
+      onClick={() => onPick(version)}
       whileHover={!isPicking ? { y: -3 } : undefined}
       animate={
         isPicking
@@ -419,19 +395,44 @@ function VibeCard({
         >
           {version.vibe}
         </h3>
+        <p className="mt-2 text-[12px] text-white/76 md:text-[13px]">
+          {version.tags.slice(0, 2).join(" · ")}
+        </p>
       </div>
 
-      {/* State badge — top-right */}
-      <div className="absolute top-5 right-5 z-10">
-        <div
-          className={`px-3 py-1 rounded-full backdrop-blur-md text-[10px] uppercase tracking-[0.22em] transition-colors ${
+      {/* Bottom-right actions — old explicit preview + pick pattern */}
+      <div className="absolute bottom-5 right-5 z-10 flex items-center gap-3">
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPlayToggle(version);
+          }}
+          aria-label={isAuditioning ? "Pause preview" : "Play preview"}
+          className={[
+            "flex h-12 w-12 items-center justify-center rounded-full border backdrop-blur-md transition-all duration-200",
             isAuditioning
-              ? "bg-white text-[#1A1A1A]"
-              : "bg-white/22 text-white/86 border border-white/30"
-          }`}
+              ? "border-white/50 bg-white/88 text-[#1A1A1A] shadow-[0_6px_18px_rgba(0,0,0,0.12)]"
+              : "border-white/38 bg-white/18 text-white hover:bg-white/26",
+          ].join(" ")}
         >
-          {isAuditioning ? "listening" : "hold to preview"}
-        </div>
+          {isAuditioning ? (
+            <Pause className="h-4 w-4" fill="currentColor" />
+          ) : (
+            <Play className="ml-0.5 h-4 w-4" fill="currentColor" />
+          )}
+        </motion.button>
+
+        <motion.button
+          whileTap={{ scale: 0.94 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPick(version);
+          }}
+          className="inline-flex h-12 items-center rounded-full bg-white/92 px-6 text-[14px] font-medium text-[#1A1A1A] shadow-[0_6px_18px_rgba(0,0,0,0.1)] transition-colors hover:bg-white"
+        >
+          {pickLabel} →
+        </motion.button>
       </div>
 
       {/* Active border glow */}

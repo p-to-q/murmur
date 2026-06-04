@@ -8,6 +8,7 @@
         "@aws-sdk/s3-request-presigner": "^3.1060.0",
         "@base-ui/react": "^1.4.0",
         "@breezystack/lamejs": "^1.2.7",
+        "@fontsource/lxgw-wenkai-tc": "5.2.9",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -269,6 +270,8 @@
     "@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.8", "", { "dependencies": { "@floating-ui/dom": "^1.7.6" }, "peerDependencies": { "react": ">=16.8.0", "react-dom": ">=16.8.0" } }, "sha512-cC52bHwM/n/CxS87FH0yWdngEZrjdtLW/qVruo68qg+prK7ZQ4YGdut2GyDVpoGeAYe/h899rVeOVm6Oi40k2A=="],
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.11", "", {}, "sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg=="],
+
+    "@fontsource/lxgw-wenkai-tc": ["@fontsource/lxgw-wenkai-tc@5.2.9", "", {}, "sha512-0nwS6UdOqAfVivzGoPi0biPY9o2RvTnsca2ZBnd5wpIxu6ZVcca0ZF42n2QHkKIGc8+j+xbyhrT7qBQS6Ss3pg=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.14", "", { "peerDependencies": { "hono": "^4" } }, "sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw=="],
 

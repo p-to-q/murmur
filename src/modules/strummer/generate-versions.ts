@@ -191,10 +191,20 @@ function track(
 
 // ── Main ──────────────────────────────────────────────────────────────
 
-export function generateVibeVersions(melody: CleanMelody): VibeVersion[] {
+export function generateVibeVersions(
+  melody: CleanMelody,
+  options: {
+    draftId?: string;
+    originFlowId?: string;
+    sourceType?: VibeVersion["sourceType"];
+  } = {},
+): VibeVersion[] {
   const startedAt = performance.now();
   const picks = pickThreeDistinctVibes(melody);
   let rangeClampCount = 0;
+  const draftId = options.draftId ?? crypto.randomUUID();
+  const originFlowId = options.originFlowId ?? crypto.randomUUID();
+  const sourceType = options.sourceType ?? "hum";
 
   const versions = picks.map((preset) => {
     const id = crypto.randomUUID();
@@ -263,6 +273,10 @@ export function generateVibeVersions(melody: CleanMelody): VibeVersion[] {
 
     return {
       id,
+      draftId,
+      originFlowId,
+      sourceType,
+      versionSeed: id,
       title: preset.titleGenerator(),
       vibe: preset.label,
       tags: [...preset.tags],

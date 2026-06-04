@@ -1,4 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import "@fontsource/lxgw-wenkai-tc/300.css";
+import "@fontsource/lxgw-wenkai-tc/400.css";
+import "@fontsource/lxgw-wenkai-tc/700.css";
 import "./globals.css";
 import { Geist, Instrument_Serif } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
@@ -8,10 +11,13 @@ import { AudioUnlock } from "@/components/murmur/audio-unlock";
 import { I18nHydrator } from "@/lib/i18n";
 import { cn } from "@/utils/utils";
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--murmur-font-sans-loaded",
+});
 const serif = Instrument_Serif({
   subsets: ["latin"],
-  variable: "--font-serif",
+  variable: "--murmur-font-serif-loaded",
   weight: ["400"],
   style: ["normal", "italic"],
   display: "swap",

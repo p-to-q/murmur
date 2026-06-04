@@ -123,7 +123,7 @@ export function NameScreen() {
     setIsSaving(true);
     setProcessingIdx(0);
 
-    const id = crypto.randomUUID();
+    const id = currentVersion.draftId;
     let mp3DataUrl: string | undefined;
 
     const versionWithName = { ...currentVersion, title: trimmed };

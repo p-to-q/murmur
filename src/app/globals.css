@@ -69,9 +69,9 @@
 }
 
 :root {
-  --murmur-font-sans: var(--font-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --murmur-font-serif: var(--font-serif), var(--font-chinese), "Times New Roman", Times, serif;
-  --murmur-font-chinese: var(--font-chinese), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --murmur-font-sans: var(--murmur-font-sans-loaded, system-ui), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --murmur-font-serif: var(--murmur-font-serif-loaded, Georgia), var(--murmur-font-chinese), "Times New Roman", Times, serif;
+  --murmur-font-chinese: "LXGW WenKai TC", "PingFang TC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --radius: 0.625rem; /* mymind cards are tight — 10px feels right */
   --background: #F5F1EB;
   --foreground: #1A1A1A;
@@ -219,7 +219,7 @@
 
   .font-chinese-title-italic {
     font-family: var(--font-chinese);
-    font-style: italic;
+    font-style: normal;
     letter-spacing: 0;
   }
 
@@ -407,7 +407,7 @@
 @media (min-width: 768px) {
   :root {
     --main-pb: 2rem;
-    --side-nav-w: 208px;
+    --side-nav-w: 276px;
   }
   html.nav-collapsed {
     --side-nav-w: 68px;

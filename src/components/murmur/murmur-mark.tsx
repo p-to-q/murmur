@@ -5,11 +5,19 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 
 export function MurmurMark({
+  as = "span",
   size = 39,
   showWord = true,
+  yOffset = 0,
+  className = "",
+  imageClassName = "",
 }: {
+  as?: "button" | "span";
   size?: number;
   showWord?: boolean;
+  yOffset?: number;
+  className?: string;
+  imageClassName?: string;
 }) {
   const [burst, setBurst] = useState(false);
 
@@ -18,20 +26,27 @@ export function MurmurMark({
     window.setTimeout(() => setBurst(false), 520);
   };
 
-  const width = Math.round(size * 4.28);
-  const height = Math.round(size * 1.62);
+  const width = Math.round(size * 4.4);
+  const height = size;
+  const MarkRoot = as;
+  const rootProps =
+    as === "button"
+      ? {
+          type: "button" as const,
+          onFocus: () => setBurst(true),
+          onBlur: () => setBurst(false),
+          onClick: triggerBurst,
+          "aria-label": "MURMUR",
+        }
+      : { "aria-hidden": true };
 
   return (
-    <button
-      type="button"
+    <MarkRoot
+      {...rootProps}
       onMouseEnter={() => setBurst(true)}
       onMouseLeave={() => setBurst(false)}
-      onFocus={() => setBurst(true)}
-      onBlur={() => setBurst(false)}
-      onClick={triggerBurst}
-      className="inline-flex items-center bg-transparent p-0 text-left select-none"
+      className={`inline-flex items-center bg-transparent p-0 text-left select-none ${className}`.trim()}
       style={{ transformOrigin: "left center" }}
-      aria-label="MURMUR"
     >
       {showWord ? (
         <motion.span
@@ -47,15 +62,16 @@ export function MurmurMark({
           aria-hidden="true"
         >
           <Image
-            src="/brand/murmur-wordmark-source.png"
+            src="/brand/murmur-wordmark-source-cropped.png"
             alt=""
             fill
             sizes={`${width}px`}
-            className="object-contain drop-shadow-[0_6px_16px_rgba(26,26,26,0.12)]"
+            className={`object-contain drop-shadow-[0_8px_18px_rgba(26,26,26,0.1)] ${imageClassName}`.trim()}
+            style={{ transform: `translateY(${yOffset}px)` }}
             priority
           />
         </motion.span>
       ) : null}
-    </button>
+    </MarkRoot>
   );
 }

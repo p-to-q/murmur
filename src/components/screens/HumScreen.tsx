@@ -69,6 +69,8 @@ export function HumScreen() {
     recordingState,
     setRecordingState,
     setVibeVersions,
+    setCurrentDraftId,
+    setCurrentFlowId,
     setProcessingMessage,
     processingMessage,
     resetFlow,
@@ -185,8 +187,16 @@ export function HumScreen() {
     try {
       const preparedBlob = blob ? await prepareAudioBlob(blob) : undefined;
       const result = await transcribeWithStainer({ audioBlob: preparedBlob });
-      const versions = generateVibeVersions(result.cleanMelody);
+      const draftId = crypto.randomUUID();
+      const flowId = crypto.randomUUID();
+      const versions = generateVibeVersions(result.cleanMelody, {
+        draftId,
+        originFlowId: flowId,
+        sourceType: blob ? "hum" : "demo",
+      });
       setVibeVersions(versions);
+      setCurrentDraftId(draftId);
+      setCurrentFlowId(flowId);
       memory
         .reportAction({
           content: `Stainer ${result.provider} → ${result.cleanMelody.notes.length} notes → ${versions.length} versions`,
@@ -237,6 +247,8 @@ export function HumScreen() {
       // balance keeps the idle pill from telling the user a lie.
       if (blob) void refreshBalance();
       setRecordingState("idle");
+      setCurrentDraftId(null);
+      setCurrentFlowId(null);
       setHumError(errorState);
     } finally {
       stopMessages();
@@ -739,8 +751,13 @@ export function HumScreen() {
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
         >
           {/* Brand mark — bottom left */}
-          <span className="select-none opacity-90">
-            <MurmurMark size={20} />
+          <span className="inline-flex h-[48px] items-end pl-0.5 select-none">
+            <MurmurMark
+              size={48}
+              yOffset={2}
+              className="h-[48px] items-end"
+              imageClassName="drop-shadow-[0_10px_20px_rgba(26,26,26,0.07)]"
+            />
           </span>
 
           {/* CTA pill — bottom right */}
@@ -752,11 +769,11 @@ export function HumScreen() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
                 transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                className="flex items-center gap-3"
+                className="flex items-end gap-4"
               >
                 {balance && (
                   <span
-                    className="text-[#8C8780] text-[11px] tracking-[0.12em] uppercase select-none tabular-nums"
+                    className="pb-1 text-[#8C8780] text-[11px] tracking-[0.12em] uppercase select-none tabular-nums"
                     title={
                       balance.notes <= 0
                         ? t("hum.balance.zero")
@@ -778,7 +795,7 @@ export function HumScreen() {
                     startAudioContext();
                     transcribeAndGenerate(undefined);
                   }}
-                  className="text-[#8C8780] text-[12px] tracking-[0.12em] uppercase hover:text-[#1A1A1A] transition-colors"
+                  className="pb-1 text-[#8C8780] text-[12px] tracking-[0.12em] uppercase hover:text-[#1A1A1A] transition-colors"
                 >
                   {t("hum.demo.cta")}
                 </button>
@@ -787,7 +804,7 @@ export function HumScreen() {
                     startAudioContext();
                     startRecording();
                   }}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#FF5924] text-white text-[13px] font-medium tracking-[0.04em] hover:bg-[#D9421A] transition-colors duration-200"
+                  className="inline-flex h-11 items-center gap-2 px-5 rounded-full bg-[#FF5924] text-white text-[13px] font-medium tracking-[0.04em] hover:bg-[#D9421A] transition-colors duration-200"
                   style={{
                     boxShadow: "0 4px 16px rgba(255,89,36,0.25)",
                   }}

@@ -53,6 +53,10 @@ export type VisualConfig = {
 
 export type VibeVersion = {
   id: string;
+  draftId: string;
+  originFlowId: string;
+  sourceType: "hum" | "demo" | "library";
+  versionSeed: string;
   title: string;
   vibe: string;
   tags: string[];

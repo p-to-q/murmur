@@ -24,7 +24,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ChevronsLeft, ChevronsRight } from "lucide-react";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
@@ -81,31 +81,45 @@ export function SideNav() {
     >
       {/* ── Brand row ────────────────────────────────────────────── */}
       <div
-        className={collapsed ? "flex justify-center px-0 mb-2" : "flex items-center justify-between px-7 mb-2"}
+        className={collapsed ? "flex justify-center px-0 mb-2" : "flex items-center justify-between px-7 pr-5 mb-2"}
       >
         <button
           onClick={goHome}
           aria-label="Murmur — home"
-          className="group inline-flex items-center"
+          className={collapsed ? "group inline-flex items-center justify-center" : "group inline-flex items-center justify-start"}
         >
-          <BrandGlyph audioActive={audioActive} />
-          {!collapsed && (
-            <motion.span
-              initial={{ opacity: 0, x: -4 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.28, delay: 0.06 }}
-              className="ml-2.5 transition-opacity group-hover:opacity-90"
-            >
-              <MurmurMark size={27} />
-            </motion.span>
-          )}
+          <AnimatePresence initial={false} mode="wait">
+            {collapsed ? (
+              <motion.span
+                key="collapsed-glyph"
+                initial={{ opacity: 0, scale: 0.78, rotate: -8 }}
+                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                exit={{ opacity: 0, scale: 0.84, rotate: 8 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-flex"
+              >
+                <BrandGlyph audioActive={audioActive} />
+              </motion.span>
+            ) : (
+              <motion.span
+                key="expanded-mark"
+                initial={{ opacity: 0, x: -10, scale: 0.96 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: -6, scale: 0.98 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                className="transition-opacity group-hover:opacity-90"
+              >
+                <MurmurMark size={34} yOffset={0} className="h-[34px]" />
+              </motion.span>
+            )}
+          </AnimatePresence>
         </button>
 
         {!collapsed && (
           <button
             onClick={() => setCollapsed(true)}
             aria-label="Collapse navigation"
-            className="text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
+            className="ml-7 shrink-0 text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
           >
             <ChevronsLeft className="h-3.5 w-3.5" />
           </button>
@@ -277,11 +291,11 @@ function ManuscriptRow({
           className={`transition-all duration-200 group-hover:translate-x-[3px] ${
             isActive
               ? lang === "zh"
-                ? "font-chinese-title-italic text-[20px] text-[#1A1A1A]"
-                : "font-serif-italic text-[22px] text-[#1A1A1A]"
+                ? "font-chinese-title-italic text-[24px] text-[#1A1A1A]"
+                : "font-serif-italic text-[25px] text-[#1A1A1A]"
               : lang === "zh"
-                ? "font-chinese-title text-[15px] text-[#8C8780] group-hover:text-[#1A1A1A]"
-                : "text-[14px] font-medium tracking-[0.01em] text-[#8C8780] group-hover:text-[#1A1A1A]"
+                ? "font-chinese-title text-[18px] text-[#8C8780] group-hover:text-[#1A1A1A]"
+                : "text-[17px] font-medium tracking-[0.01em] text-[#8C8780] group-hover:text-[#1A1A1A]"
           }`}
         >
           {label}

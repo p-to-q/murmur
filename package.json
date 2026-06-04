@@ -22,6 +22,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1060.0",
     "@base-ui/react": "^1.4.0",
     "@breezystack/lamejs": "^1.2.7",
+    "@fontsource/lxgw-wenkai-tc": "5.2.9",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

@@ -56,6 +56,11 @@ export function MeScreen() {
 
   const statsCopy = useStatsCopy(songCount);
   const refillCopy = useRefillCopy(balance?.nextRefillAt);
+  const shelfCtaHref = songCount > 0 ? "/gallery" : "/";
+  const shelfCtaLabel =
+    songCount > 0
+      ? t("me.glance.cta_songs") || "Open gallery"
+      : t("me.glance.cta_empty") || "Start a hum";
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
@@ -80,7 +85,14 @@ export function MeScreen() {
       {/* ── Body cards ─────────────────────────────────────────────── */}
       <div className="relative z-10 px-6 md:px-12 max-w-3xl space-y-5 pb-6">
         <Card>
-          <UserBadge />
+          <SectionLabel>{t("me.profile.title") || "Profile"}</SectionLabel>
+          <div className="space-y-4">
+            <UserBadge />
+            <p className="text-[13px] leading-[1.55] text-[#8C8780] md:text-[14px]">
+              {t("me.profile.helper") ||
+                "This is the name your songs live under in Murmur."}
+            </p>
+          </div>
         </Card>
 
         {/* Notes balance + Top up */}
@@ -88,10 +100,10 @@ export function MeScreen() {
           <SectionLabel>{t("me.notes.title") || "MURMUR NOTES"}</SectionLabel>
           <div className="flex items-end justify-between gap-6">
             <div>
-              <p className="font-serif text-[#1A1A1A] text-[56px] leading-none tabular-nums">
+              <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px]">
                 {isLoading ? "—" : balance?.notes ?? 0}
               </p>
-              <p className="font-serif-italic mt-2 text-[13px] text-[#6F6A63] md:text-[14px]">
+              <p className="mt-3 max-w-[18rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
                 {refillCopy}
               </p>
             </div>
@@ -103,10 +115,23 @@ export function MeScreen() {
 
         {/* At a glance — single editorial sentence */}
         <Card>
-          <SectionLabel>{t("me.glance.title") || "AT A GLANCE"}</SectionLabel>
-          <p className="font-serif-italic text-[#1A1A1A] text-[20px] leading-[1.35] md:text-[22px]">
-            {statsCopy}
-          </p>
+          <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+            <div className="max-w-[28rem]">
+              <SectionLabel>{t("me.glance.title") || "AT A GLANCE"}</SectionLabel>
+              <p className="mb-3 text-[13px] leading-[1.55] text-[#8C8780] md:text-[14px]">
+                {t("me.glance.helper") || "A quick read before your next move."}
+              </p>
+              <p className="font-serif-italic text-[#1A1A1A] text-[20px] leading-[1.4] md:text-[22px]">
+                {statsCopy}
+              </p>
+            </div>
+            <Link
+              href={shelfCtaHref}
+              className="inline-flex h-10 items-center rounded-full border border-[#E7DCCB] px-4 text-[12px] tracking-[0.08em] text-[#6F6A63] transition-colors hover:border-[#D6C7B0] hover:text-[#1A1A1A]"
+            >
+              {shelfCtaLabel}
+            </Link>
+          </div>
         </Card>
 
         {/* Language */}
@@ -236,7 +261,7 @@ function Card({ children }: { children: React.ReactNode }) {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="eyebrow mb-5 text-[#FF8A5C]">{children}</p>;
+  return <p className="eyebrow mb-4 text-[#8C8780]">{children}</p>;
 }
 
 function LangPill({
