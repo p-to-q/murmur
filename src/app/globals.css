@@ -1,6 +1,6 @@
-@import "../../node_modules/tailwindcss/index.css";
-@import "../../node_modules/tw-animate-css/dist/tw-animate.css";
-@import "../../node_modules/shadcn/dist/tailwind.css";
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -69,9 +69,9 @@
 }
 
 :root {
-  --murmur-font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --murmur-font-serif: Charter, "Iowan Old Style", "Songti SC", "STSong", "Noto Serif CJK SC", "Times New Roman", Times, serif;
-  --murmur-font-chinese: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --murmur-font-sans: var(--font-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --murmur-font-serif: var(--font-serif), var(--font-chinese), "Times New Roman", Times, serif;
+  --murmur-font-chinese: var(--font-chinese), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --radius: 0.625rem; /* mymind cards are tight — 10px feels right */
   --background: #F5F1EB;
   --foreground: #1A1A1A;
@@ -130,10 +130,19 @@
     font-family: var(--font-serif);
     letter-spacing: -0.01em;
   }
+  html[data-lang="zh"] .font-serif {
+    font-family: var(--font-chinese);
+    letter-spacing: 0;
+  }
   .font-serif-italic {
     font-family: var(--font-serif);
     font-style: italic;
     letter-spacing: -0.005em;
+  }
+  html[data-lang="zh"] .font-serif-italic {
+    font-family: var(--font-chinese);
+    font-style: normal;
+    letter-spacing: 0;
   }
   .underline-mm {
     text-decoration: underline;
@@ -181,17 +190,37 @@
 
   /* ── Hero serif — magazine cover scale ─────────────────────── */
   .hero-serif {
-    font-family: var(--murmur-font-serif);
+    font-family: var(--font-serif);
     font-weight: 400;
     line-height: 1.05;
     letter-spacing: -0.015em;
   }
+  html[data-lang="zh"] .hero-serif {
+    font-family: var(--font-chinese);
+    letter-spacing: 0;
+  }
   .hero-serif-italic {
-    font-family: var(--murmur-font-serif);
+    font-family: var(--font-serif);
     font-weight: 400;
     font-style: italic;
     line-height: 1.05;
     letter-spacing: -0.01em;
+  }
+  html[data-lang="zh"] .hero-serif-italic {
+    font-family: var(--font-chinese);
+    font-style: normal;
+    letter-spacing: 0;
+  }
+
+  .font-chinese-title {
+    font-family: var(--font-chinese);
+    letter-spacing: 0;
+  }
+
+  .font-chinese-title-italic {
+    font-family: var(--font-chinese);
+    font-style: italic;
+    letter-spacing: 0;
   }
 
   /* ── Eyebrow — small tracked caps over headlines ───────────── */
@@ -366,14 +395,40 @@
 }
 
 /* Responsive main content bottom padding:
-   mobile — reserves space for the 68px bottom nav + raised create button
-            (60px disc rises 24px above the bar) + safe area
+   mobile — reserves space for the floating bottom-nav pill (56px) + 12px lift
+            + safe area
    desktop (md+) — no bottom nav, minimal padding */
 :root {
-  --main-pb: calc(env(safe-area-inset-bottom, 0px) + 78px);
+  --main-pb: calc(env(safe-area-inset-bottom, 0px) + 84px);
+  /* Side nav width — driven by .nav-collapsed on <html> for the collapsed state.
+     Mobile keeps 0 (no side nav). Desktop default 208px (expanded). */
+  --side-nav-w: 0px;
 }
 @media (min-width: 768px) {
   :root {
     --main-pb: 2rem;
+    --side-nav-w: 208px;
   }
+  html.nav-collapsed {
+    --side-nav-w: 68px;
+  }
+}
+
+/* Subtle breath — used by the side-nav brand mark when audio is idle.
+   Stays visible but doesn't compete with the foreground action. */
+@keyframes mark-breathe {
+  0%, 100% { transform: scale(1);    opacity: 1;   }
+  50%      { transform: scale(1.035); opacity: 0.92; }
+}
+.mark-breathe { animation: mark-breathe 5s ease-in-out infinite; }
+
+/* Floating pill bottom-nav drop-in (mobile) */
+.nav-pill {
+  background: rgba(255, 254, 251, 0.86);
+  border: 1px solid #E5DDD0;
+  box-shadow:
+    0 1px 2px rgba(26, 26, 26, 0.04),
+    0 12px 30px rgba(26, 26, 26, 0.10);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }

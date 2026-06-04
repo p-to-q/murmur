@@ -5,6 +5,12 @@ import { VIBE_PRESETS } from "@/presets/vibes";
 import { mulberry32, hashString, pick } from "@/lib/music/seeded-random";
 import type { BassPattern } from "@/lib/music/bass-engine";
 import type { DrumPattern } from "@/lib/music/drum-engine";
+import { log } from "@/lib/observability/log";
+import {
+  INSTRUMENT_RANGES,
+  clampPitchToInstrument,
+  type InstrumentId,
+} from "@murmur/core/music/instrument-ranges";
 import { generateStrummerCode } from "./generate-code";
 
 /**
@@ -163,36 +169,89 @@ function pickThreeDistinctVibes(melody: CleanMelody) {
 
 // ── Track helper ───────────────────────────────────────────────────────
 
-function track(instrument: string, currentPattern: string, intensity: number, enabled = true): TrackState {
-  return { enabled, intensity, originalPattern: currentPattern, currentPattern, instrument, versionHistory: [] };
+function track(
+  instrument: string,
+  currentPattern: string,
+  intensity: number,
+  enabled = true,
+  typedFields: Partial<
+    Pick<TrackState, "melodyPitchSequence" | "chordsTag" | "bassPattern" | "drumsPattern" | "texturePreset">
+  > = {},
+): TrackState {
+  return {
+    enabled,
+    intensity,
+    originalPattern: currentPattern,
+    currentPattern,
+    instrument,
+    versionHistory: [],
+    ...typedFields,
+  };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────
 
 export function generateVibeVersions(melody: CleanMelody): VibeVersion[] {
+  const startedAt = performance.now();
   const picks = pickThreeDistinctVibes(melody);
+  let rangeClampCount = 0;
 
-  return picks.map((preset) => {
+  const versions = picks.map((preset) => {
     const id = crypto.randomUUID();
     const rng = mulberry32(hashString(id));
     const candidates = ENSEMBLES[preset.id] ?? ENSEMBLES.sunset!;
     const ensemble = pick(rng, candidates);
+    const melodyFit = clampMelodyToCarrier(melody, ensemble.melody.instrument);
+    if (melodyFit.applied) rangeClampCount += 1;
 
-    // currentPattern semantics (post-rewrite):
-    //   melody.currentPattern   — for display/edit only; runtime uses melody.notes
-    //   chords.currentPattern   — kept for legacy; chord-engine reads version.id
-    //   bass.currentPattern     — BassPattern name ("walking" etc), read by assembleSong
-    //   drums.currentPattern    — DrumPattern name, read by assembleSong
-    const melPat   = melody.notes.map((n) => n.pitch).join(" ");
+    // currentPattern remains for legacy rows and Strummer code display. New
+    // runtime reads should prefer the typed fields below.
+    const melPat   = melodyFit.melody.notes.map((n) => n.pitch).join(" ");
     const chordPat = `gen:${preset.id}`; // marker — real chords come from chord-engine
 
     const arr: ArrangementState = {
-      melody:  track(ensemble.melody.instrument,  melPat,                  ensemble.melody.intensity),
-      chords:  track(ensemble.chords.instrument,  chordPat,                ensemble.chords.intensity),
-      strings: track(ensemble.strings.instrument, chordPat,                ensemble.strings.intensity, ensemble.strings.enabled),
-      drums:   track(ensemble.drums.instrument,   ensemble.drums.pattern,  ensemble.drums.intensity),
-      bass:    track(ensemble.bass.instrument,    ensemble.bass.pattern,   ensemble.bass.intensity),
-      texture: track(ensemble.texture.instrument, `tex:${preset.id}`,      ensemble.texture.intensity, ensemble.texture.enabled),
+      melody: track(
+        ensemble.melody.instrument,
+        melPat,
+        ensemble.melody.intensity,
+        true,
+        { melodyPitchSequence: melodyFit.melody.notes.map((n) => n.pitch) },
+      ),
+      chords: track(
+        ensemble.chords.instrument,
+        chordPat,
+        ensemble.chords.intensity,
+        true,
+        { chordsTag: preset.id },
+      ),
+      strings: track(
+        ensemble.strings.instrument,
+        chordPat,
+        ensemble.strings.intensity,
+        ensemble.strings.enabled,
+        { chordsTag: preset.id },
+      ),
+      drums: track(
+        ensemble.drums.instrument,
+        ensemble.drums.pattern,
+        ensemble.drums.intensity,
+        true,
+        { drumsPattern: ensemble.drums.pattern },
+      ),
+      bass: track(
+        ensemble.bass.instrument,
+        ensemble.bass.pattern,
+        ensemble.bass.intensity,
+        true,
+        { bassPattern: ensemble.bass.pattern },
+      ),
+      texture: track(
+        ensemble.texture.instrument,
+        `tex:${preset.id}`,
+        ensemble.texture.intensity,
+        ensemble.texture.enabled,
+        { texturePreset: preset.id },
+      ),
     };
 
     const visualConfig: VisualConfig = {
@@ -207,10 +266,57 @@ export function generateVibeVersions(melody: CleanMelody): VibeVersion[] {
       title: preset.titleGenerator(),
       vibe: preset.label,
       tags: [...preset.tags],
-      melody,
+      melody: melodyFit.melody,
       arrangementState: arr,
       visualConfig,
       strummerCode: generateStrummerCode(arr),
     };
   });
+
+  log("arrangement.generated", {
+    bpm: melody.bpm,
+    key: melody.key,
+    scale: melody.scale,
+    noteCount: melody.notes.length,
+    melodyCarriers: versions.map((version) => version.arrangementState.melody.instrument),
+    rangeClampCount,
+    versionIds: versions.map((version) => version.id),
+    vibes: versions.map((version) => version.vibe),
+  }, {
+    durationMs: Math.round(performance.now() - startedAt),
+  });
+
+  return versions;
+}
+
+function clampMelodyToCarrier(
+  melody: CleanMelody,
+  instrument: string,
+): { melody: CleanMelody; applied: boolean } {
+  if (!isInstrumentId(instrument)) {
+    return { melody, applied: false };
+  }
+
+  const range = INSTRUMENT_RANGES[instrument];
+  if (!range.canCarryMelody) {
+    return { melody, applied: false };
+  }
+
+  const clampedNotes = clampPitchToInstrument(melody.notes, instrument);
+  const applied = clampedNotes.some((note, index) => note.pitch !== melody.notes[index]?.pitch);
+  if (!applied) {
+    return { melody, applied: false };
+  }
+
+  return {
+    melody: {
+      ...melody,
+      notes: clampedNotes,
+    },
+    applied: true,
+  };
+}
+
+function isInstrumentId(value: string): value is InstrumentId {
+  return value in INSTRUMENT_RANGES;
 }

@@ -12,6 +12,20 @@ start here:
 
 - Product + design + engineering overview:
   [docs/judges-guide.md](/Users/dujiayi/murmur/docs/judges-guide.md)
+- Runtime architecture:
+  [docs/architecture.md](/Users/dujiayi/murmur/docs/architecture.md)
+- Runtime surfaces:
+  [docs/runtime-surfaces.md](/Users/dujiayi/murmur/docs/runtime-surfaces.md)
+- Delivery cadence:
+  [docs/delivery-cadence.md](/Users/dujiayi/murmur/docs/delivery-cadence.md)
+- Engineering principles:
+  [docs/engineering-principles.md](/Users/dujiayi/murmur/docs/engineering-principles.md)
+- Review gates:
+  [docs/review-gates.md](/Users/dujiayi/murmur/docs/review-gates.md)
+- Workflow contract:
+  [WORKFLOW.md](/Users/dujiayi/murmur/WORKFLOW.md)
+- Packaging and release:
+  [docs/packaging-and-release.md](/Users/dujiayi/murmur/docs/packaging-and-release.md)
 - Melody, arrangement, and render pipeline:
   [docs/music-engine.md](/Users/dujiayi/murmur/docs/music-engine.md)
 - Provider and transcription fallback strategy:
@@ -67,6 +81,29 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+For real audio transcription, run the audio worker separately and point the
+web app at it:
+
+```bash
+cd workers/audio-engine
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8001
+```
+
+The base worker keeps local demos light. To enable server denoise, install the
+optional PyTorch stack and choose the denoise provider explicitly:
+
+```bash
+pip install -r requirements-denoise.txt
+AUDIO_ENGINE_DENOISE_PROVIDER=deepfilternet uvicorn main:app --reload --port 8001
+```
+
+Then set `AUDIO_WORKER_URL=http://localhost:8001` in `.env`. Without the
+worker, live recordings return a visible retry/demo error instead of silently
+using a fixture melody.
+
 ## Environment Variables
 
 Copy `.env.example` to `.env`:
@@ -81,16 +118,19 @@ cp .env.example .env
 | `OPENAI_BASE_URL` | Optional override for an OpenAI-compatible base URL. |
 | `AI_GATEWAY_API_KEY` | Optional alternative to `OPENAI_API_KEY` when routing through a custom gateway. |
 | `AI_GATEWAY_BASE_URL` | Optional base URL for a custom AI gateway. |
+| `AUDIO_WORKER_URL` | Server-only audio worker base URL used by `/api/transcribe`. |
+| `AUDIO_WORKER_TOKEN` | Optional bearer token for Next.js → audio worker calls. |
+| `AUDIO_ENGINE_PITCH_PROVIDER` | Worker pitch detector provider. `auto` uses SwiftF0 first, then pYIN fallback. |
+| `AUDIO_ENGINE_DENOISE_PROVIDER` | Worker denoise provider. `auto` uses DeepFilterNet when optional deps are installed; `deepfilternet` fails loudly if they are missing. |
 | `DATABASE_URL` | Postgres connection string for Drizzle. |
 | `CRON_SECRET` | Shared secret for the daily digest cron route. |
-| `NEXT_PUBLIC_TRANSCRIPTION_PROVIDER` | Client transcription provider selector. Defaults to `browser-yin`. |
-| `NEXT_PUBLIC_ENABLE_BASIC_PITCH_BROWSER` | Enables the browser Basic Pitch model download flow when `true`. |
-| `NEXT_PUBLIC_BASIC_PITCH_WORKER_URL` | Optional remote worker URL for higher-accuracy transcription. |
 
 ### Notes
 
 - Authentication, notifications, and AI now go through Murmur's local
   platform adapter under [src/lib/platform](/Users/dujiayi/murmur/src/lib/platform).
+- Real recordings go through server `/api/transcribe`; the fixture melody is
+  only used when the user explicitly chooses the demo action.
 - The notification publisher is currently a stub so local development and demo
   flows stay usable without external push infrastructure.
 - The Strummer edit route expects an OpenAI-compatible chat API.

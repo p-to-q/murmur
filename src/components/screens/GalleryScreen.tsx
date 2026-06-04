@@ -1,158 +1,71 @@
 "use client";
-import { useEffect, useState } from "react";
+
+/**
+ * GalleryScreen — Compose v2 *remember* moment.
+ *
+ * Specced in docs/page-redesign.md §7.
+ *
+ * Keeps the word-card MyMind grid, replaces same-y-looking initials covers
+ * with deterministic SongCoverArt (per-song fingerprint), adds a quiet
+ * newest/A-Z sort affordance, polishes empty state copy.
+ */
+
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Mic } from "lucide-react";
 import { memory } from "@/lib/platform/memory";
 
-import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator } from "@/lib/i18n";
 import type { SongCard } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { SongCoverArt } from "@/components/song-detail/song-cover-art";
 
 type SongWithMeta = SongCard & { bpm?: number; keySignature?: string };
-
-const GRADIENT_MAP: Record<string, string> = {
-  warm_particles: "linear-gradient(135deg, #F4C87A, #FF8A5C 45%, #C9B6E4)",
-  dust_room:      "linear-gradient(135deg, #FFF0D6, #A7B8C8 60%, #8C8780)",
-  end_credits:    "linear-gradient(135deg, #1A1A1A, #A7B8C8, #F5F1EB)",
-  confetti_pulse: "linear-gradient(135deg, #FF5924, #F7C5CC, #C9B6E4)",
-  rain_glass:     "linear-gradient(135deg, #A7B8C8, #D8DDD8, #FFFEFB)",
-  synth_glow:     "linear-gradient(135deg, #C9B6E4, #1A1A1A, #FF5924)",
-};
-
-function SongCardItem({
-  song,
-  index,
-  onClick,
-}: {
-  song: SongWithMeta;
-  index: number;
-  onClick: () => void;
-}) {
-  const gradient =
-    (song.visualConfig as { posterBg?: string }).posterBg ??
-    GRADIENT_MAP[song.visualConfig.preset] ??
-    song.visualConfig.gradient ??
-    "linear-gradient(135deg, #F4C87A, #FF5924)";
-
-  const initials = song.title
-    .split(" ")
-    .map((w) => w[0] ?? "")
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-
-  return (
-    <motion.button
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.96 }}
-      transition={{ delay: index * 0.04, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -3, transition: { duration: 0.2 } }}
-      whileTap={{ scale: 0.97 }}
-      onClick={onClick}
-      className="group flex flex-col items-start text-left"
-      style={{ width: "100%" }}
-    >
-      {/* Small square cover — fixed size, sits left-aligned within the cell */}
-      <div
-        className="relative overflow-hidden rounded-[10px]"
-        style={{
-          width: "108px",
-          height: "108px",
-          background: gradient,
-          boxShadow:
-            "0 1px 3px rgba(26,26,26,0.06), 0 8px 22px rgba(26,26,26,0.10)",
-        }}
-      >
-        <div
-          className="absolute inset-0 opacity-[0.10] mix-blend-multiply pointer-events-none"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-            backgroundSize: "140px",
-          }}
-        />
-        <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="font-serif-italic text-white/85 text-[36px] leading-none tracking-tight select-none">
-            {initials}
-          </span>
-        </div>
-      </div>
-
-      {/* Word-card style title — large serif italic, the visual centre of the cell */}
-      <p className="mt-4 font-serif-italic text-[#1A1A1A] text-[26px] leading-[1.04] tracking-[-0.01em] group-hover:text-[#FF5924] transition-colors line-clamp-2 md:text-[30px]">
-        {song.title}
-      </p>
-      <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1]">
-        {song.vibe}
-        {song.bpm ? ` · ${song.bpm} BPM` : ""}
-      </p>
-    </motion.button>
-  );
-}
-
-function EmptyState() {
-  const router = useRouter();
-  const t = useTranslator();
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.15 }}
-      className="relative z-10 flex flex-col items-center justify-center py-24 px-8 text-center"
-    >
-      <div
-        className="w-20 h-20 rounded-full flex items-center justify-center mb-7"
-        style={{
-          background: "linear-gradient(135deg, #FF8A5C, #FF5924)",
-          boxShadow: "0 8px 24px rgba(255,89,36,0.35)",
-        }}
-      >
-        <Mic className="w-8 h-8 text-white" />
-      </div>
-      <p className="font-serif-italic text-[#1A1A1A] text-[32px] mb-3 leading-[1.05]">
-        {t("gallery.empty.title")}
-      </p>
-      <p className="text-[#8C8780] text-[15px] leading-relaxed mb-8 max-w-[300px]">
-        {t("gallery.empty.detail")}
-      </p>
-      <button onClick={() => router.push("/")} className="mm-btn-primary">
-        <Mic className="w-4 h-4" />
-        {t("gallery.empty.cta")}
-      </button>
-    </motion.div>
-  );
-}
+type SortMode = "newest" | "alpha";
 
 export function GalleryScreen() {
   const router = useRouter();
   const t = useTranslator();
-  const { songs, setSongs } = useMurmurStore();
+  const [songs, setSongs] = useState<SongWithMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [sort, setSort] = useState<SortMode>("newest");
 
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       try {
         const res = await fetch("/api/songs");
         if (res.ok) {
           const data = (await res.json()) as SongWithMeta[];
-          setSongs(data);
+          if (!cancelled) setSongs(data);
         }
       } catch {
-        /* fall back to local store */
+        /* offline — keep whatever we have */
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     }
-    load();
-  }, [setSongs]);
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const sorted = useMemo(() => {
+    const list = [...songs];
+    if (sort === "alpha") {
+      return list.sort((a, b) => a.title.localeCompare(b.title));
+    }
+    return list.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }, [songs, sort]);
 
   const handleSongClick = (song: SongCard) => {
     memory
       .reportAction({
-        content: `User opened song "${song.title}" from Gallery`,
+        content: `Opened "${song.title}" from gallery`,
         event_type: "navigate",
         page: "gallery",
         metadata: { type: "open_song", song_id: song.id },
@@ -164,24 +77,39 @@ export function GalleryScreen() {
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
+
+      {/* ── Header ───────────────────────────────────────────────── */}
       <div
         className="relative z-10 px-6 md:px-12 pb-10 md:pb-14 max-w-6xl"
         style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 56px)" }}
       >
-        <p className="eyebrow mb-4">{t("gallery.eyebrow")}</p>
-        <h1 className="hero-serif text-[#1A1A1A] text-[48px] md:text-[76px]">
-          {t("gallery.title")}
-        </h1>
-        <p className="mt-4 text-[#3A3A3A] text-[15px] md:text-[17px] max-w-[480px] leading-[1.5]">
-          {t("gallery.subtitle")}
-        </p>
+        <div className="flex items-baseline justify-between gap-4">
+          <div className="min-w-0">
+            <p className="eyebrow text-[#FF8A5C]">
+              {songs.length === 0
+                ? (t("gallery.eyebrow.empty") || "YOUR SHELF")
+                : (t("gallery.eyebrow") || `${songs.length} ${songs.length === 1 ? "SONG" : "SONGS"}`)}
+            </p>
+            <h1 className="hero-serif-italic mt-3 text-[#1A1A1A] text-[48px] leading-[1.02] md:text-[76px]">
+              {t("gallery.title") || "Things you hummed"}
+            </h1>
+            <p className="font-serif-italic mt-3 max-w-[28rem] text-[14px] leading-[1.55] text-[#6F6A63] md:text-[15px]">
+              {t("gallery.subtitle") || "A quiet shelf of melodies."}
+            </p>
+          </div>
+
+          {songs.length > 1 && (
+            <SortToggle sort={sort} onChange={setSort} t={t} />
+          )}
+        </div>
       </div>
 
+      {/* ── Loading ──────────────────────────────────────────────── */}
       {isLoading && (
         <div className="relative z-10 px-6 md:px-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-12 max-w-6xl">
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="flex flex-col gap-3">
-              <div className="w-[108px] h-[108px] rounded-[10px] bg-[#ECE5D6] animate-pulse" />
+              <div className="w-[120px] h-[120px] rounded-[14px] bg-[#ECE5D6] animate-pulse" />
               <div className="h-6 w-3/4 bg-[#ECE5D6] rounded animate-pulse" />
               <div className="h-2.5 w-1/2 bg-[#ECE5D6] rounded animate-pulse" />
             </div>
@@ -189,19 +117,21 @@ export function GalleryScreen() {
         </div>
       )}
 
-      {!isLoading && songs.length === 0 && <EmptyState />}
+      {/* ── Empty state ──────────────────────────────────────────── */}
+      {!isLoading && songs.length === 0 && <EmptyState t={t} router={router} />}
 
+      {/* ── Grid ─────────────────────────────────────────────────── */}
       {!isLoading && songs.length > 0 && (
-        <div className="relative z-10 px-6 md:px-12 pb-28 max-w-6xl">
+        <div className="relative z-10 px-6 md:px-12 pb-32 max-w-6xl">
           <motion.div
             layout
             className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-12"
           >
             <AnimatePresence mode="popLayout">
-              {songs.map((song, i) => (
-                <SongCardItem
+              {sorted.map((song, i) => (
+                <SongTile
                   key={song.id}
-                  song={song as SongWithMeta}
+                  song={song}
                   index={i}
                   onClick={() => handleSongClick(song)}
                 />
@@ -209,17 +139,140 @@ export function GalleryScreen() {
             </AnimatePresence>
           </motion.div>
 
-          <div className="mt-12 flex justify-center">
+          <div className="mt-14 flex justify-center">
             <button
               onClick={() => router.push("/")}
-              className="inline-flex items-center gap-2 px-6 py-2.5 text-[#8C8780] text-[13px] tracking-[0.04em] border border-dashed border-[#D2C9B6] rounded-full hover:border-[#FF5924] hover:text-[#FF5924] transition-colors"
+              className="font-serif-italic text-[15px] text-[#FF5924] hover:text-[#D9421A] underline-mm transition-colors"
             >
-              <Plus className="w-4 h-4" />
-              {t("gallery.new_hum")}
+              ↻ {t("gallery.new_hum") || "Hum another one"}
             </button>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────── */
+
+function SongTile({
+  song,
+  index,
+  onClick,
+}: {
+  song: SongWithMeta;
+  index: number;
+  onClick: () => void;
+}) {
+  const gradient =
+    (song.visualConfig as { posterBg?: string }).posterBg ??
+    song.visualConfig.gradient ??
+    "linear-gradient(135deg, #F4C87A, #FF5924)";
+  const initials = song.title
+    .split(/\s+/)
+    .map((w) => w[0] ?? "")
+    .join("")
+    .slice(0, 2);
+
+  return (
+    <motion.button
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{
+        delay: index * 0.03,
+        duration: 0.45,
+        ease: [0.22, 1, 0.36, 1],
+      }}
+      whileHover={{ y: -3 }}
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      className="group flex w-full flex-col items-start text-left"
+    >
+      <div
+        className="relative overflow-hidden rounded-[14px]"
+        style={{
+          width: "120px",
+          height: "120px",
+          boxShadow:
+            "0 1px 3px rgba(26,26,26,0.06), 0 10px 28px rgba(26,26,26,0.10)",
+        }}
+      >
+        <SongCoverArt
+          gradient={gradient}
+          seed={song.id}
+          bpm={song.bpm}
+          keySig={song.keySignature}
+          initials={initials}
+          className="absolute inset-0"
+        />
+      </div>
+
+      <p className="mt-4 font-serif-italic text-[#1A1A1A] text-[26px] leading-[1.04] tracking-[-0.01em] group-hover:text-[#FF5924] transition-colors line-clamp-2 md:text-[30px]">
+        {song.title}
+      </p>
+      <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1] tabular-nums">
+        {song.vibe}
+        {song.bpm ? ` · ${song.bpm} BPM` : ""}
+      </p>
+    </motion.button>
+  );
+}
+
+function SortToggle({
+  sort,
+  onChange,
+  t,
+}: {
+  sort: SortMode;
+  onChange: (s: SortMode) => void;
+  t: (k: string) => string;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-2 text-[11px] tracking-[0.04em]">
+      <button
+        onClick={() => onChange("newest")}
+        className={`transition-colors ${sort === "newest" ? "text-[#1A1A1A]" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
+      >
+        ↑ {t("gallery.sort.newest") || "newest"}
+      </button>
+      <span className="text-[#D2C9B6]">·</span>
+      <button
+        onClick={() => onChange("alpha")}
+        className={`transition-colors ${sort === "alpha" ? "text-[#1A1A1A]" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
+      >
+        a–z
+      </button>
+    </div>
+  );
+}
+
+function EmptyState({
+  t,
+  router,
+}: {
+  t: (k: string) => string;
+  router: ReturnType<typeof useRouter>;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+      className="relative z-10 flex flex-col items-start px-6 md:px-12 pb-32 max-w-3xl"
+    >
+      <p className="font-serif-italic text-[#1A1A1A] text-[28px] leading-[1.2] md:text-[36px]">
+        {t("gallery.empty.title") || "Nothing here yet."}
+      </p>
+      <p className="font-serif-italic text-[#6F6A63] text-[20px] mt-1 md:text-[26px]">
+        {t("gallery.empty.title2") || "Hum your first one."}
+      </p>
+      <button
+        onClick={() => router.push("/")}
+        className="mm-btn-primary mt-8"
+      >
+        {t("gallery.empty.cta") || "Start humming"} →
+      </button>
+    </motion.div>
   );
 }

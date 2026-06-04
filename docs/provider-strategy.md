@@ -1,93 +1,95 @@
-# Provider Strategy
+# Transcription Strategy
 
-## Stainer = single transcription facade
+## Stainer Facade
 
-All UI calls `transcribeWithStainer(input)` from `src/modules/stainer/transcribe.ts`.
-No screen reaches into a provider module directly. The facade decides which
-provider to try, and **always** falls through to `fixture` as a last resort so
-the user never sees a dead-end.
+All UI calls `transcribeWithStainer(input)` from
+`src/modules/stainer/transcribe.ts`. Screens do not import providers directly.
 
+The facade now has exactly two paths:
+
+- `input.audioBlob` present: upload to server `/api/transcribe`.
+- `input.audioBlob` absent: use `fixture` for the explicit demo melody.
+
+This is the Phase 1 boundary cut. Real recordings never fall through to fixture
+inside the browser.
+
+Before live recordings are uploaded, HumScreen runs a client-side preparation
+step:
+
+- decode the recorded blob in Web Audio;
+- mix to mono;
+- trim sustained low-RMS head/tail silence with 250 ms padding;
+- upload mono WAV when trimming succeeds;
+- fall back to the original blob when browser decode fails.
+
+This is a capture optimization only. The server worker still trims
+defensively and remains authoritative for transcription.
+
+## Server Route
+
+`POST /api/transcribe` accepts multipart audio and returns a
+`TranscriptionResult`:
+
+```ts
+{
+  provider: "swiftf0" | "pyin";
+  rawNotes: MelodyNote[];
+  cleanMelody: CleanMelody;
+  warnings: string[];
+  diagnostics: {
+    duration: number;
+    snr: number | null;
+    voicedRatio: number | null;
+    denoiseMs?: number;
+    denoiseProvider?: "off" | "deepfilternet";
+    denoiseModel?: string | null;
+    pitchMs?: number;
+    polishMs?: number;
+    workerMs?: number;
+    targetInstrument?: string;
+    rangeClampApplied?: boolean;
+  };
+}
 ```
-src/modules/stainer/
-  transcribe.ts                  ← public API, the only thing UI imports
-  providers/
-    browser-yin.ts               ← browser fallback — zero-deps, offline, instant
-    remote-python.ts             ← strongest path — calls PYIN worker
-    browser-basic-pitch.ts       ← opt-in — Spotify Basic Pitch, ~7MB CDN model
-    fixture.ts                   ← always available, demo-safe fallback
-```
 
-## Provider order
+The route validates size and target instrument, calls the server-only audio
+worker adapter, polishes pYIN-style raw-note responses when needed, and clamps
+the final melody to the target instrument range.
 
-Controlled by `NEXT_PUBLIC_TRANSCRIPTION_PROVIDER`:
-
-| Value (client-exposed)   | Order                                                            |
-|--------------------------|------------------------------------------------------------------|
-| `auto` *(default)*       | remote-python → browser-yin → browser-basic-pitch → fixture      |
-| `browser-yin`            | browser-yin → remote-python → browser-basic-pitch → fixture      |
-| `remote-python`          | remote-python → browser-yin → browser-basic-pitch → fixture      |
-| `browser-basic-pitch`    | browser-basic-pitch → browser-yin → remote-python → fixture      |
-| `fixture`                | fixture (demo-only mode)                                         |
-
-When `input.audioBlob` is undefined (e.g. the "Try the example melody" button
-on HumScreen) the facade short-circuits to `[fixture]` regardless of config.
-
-`auto` only includes providers that are actually enabled at runtime. If the
-remote worker URL is missing, the chain resolves to `browser-yin →
-browser-basic-pitch → fixture` or `browser-yin → fixture`, depending on whether
-Basic Pitch is enabled. This avoids "paper fallbacks" that look configured but
-instantly collapse to fixture.
-
-## Why `auto` first, and why YIN remains the browser default?
-
-For short humming, monophonic F0 tracking is still the right core assumption.
-The strongest overall path is therefore:
-
-- **Remote pYIN** first when we actually have the worker, because it is the
-  highest-accuracy monophonic tracker in our current architecture.
-- **Browser YIN** second because it is offline, instant, and matches the hum
-  use case better than a heavier note-transcription model.
-- **Browser Basic Pitch** third as an optional recovery path, especially if we
-  later broaden input beyond plain humming.
-
-Compared to Basic Pitch:
-
-- **YIN**: zero install, runs offline, ≤200ms latency for a 10s hum, ~46ms per
-  frame on commodity hardware.
-- **Basic Pitch**: more accurate on polyphonic / instrumental input, but
-  downloads a 7MB TensorFlow model and takes 3–8s on first use.
-
-For our case (hum → melody) the YIN result is usually enough for the polish
-pipeline (`src/modules/music/melody-polisher.ts`) to snap-to-scale and
-quantize. Basic Pitch becomes more compelling if we accept guitar, piano, or
-denser audio.
-
-## Audio format
-
-Browser records `audio/webm;codecs=opus`. The Python PYIN worker accepts that
-directly (decodes via pydub). The browser-yin engine decodes via
-`AudioContext.decodeAudioData` and resamples in JS.
-
-## Environment variables (current)
+## Environment
 
 ```env
-# Client-safe
-NEXT_PUBLIC_TRANSCRIPTION_PROVIDER=auto
-NEXT_PUBLIC_ENABLE_BASIC_PITCH_BROWSER=false
-NEXT_PUBLIC_REMOTE_PYIN_WORKER_URL=                # preferred
-NEXT_PUBLIC_BASIC_PITCH_WORKER_URL=                # legacy alias, still supported
+AUDIO_WORKER_URL=http://localhost:8001
+AUDIO_WORKER_TOKEN=
+AUDIO_ENGINE_PITCH_PROVIDER=auto
+AUDIO_ENGINE_DENOISE_PROVIDER=auto
 
-# Server-only
-REMOTE_PYIN_WORKER_URL=                              # preferred
-BASIC_PITCH_WORKER_URL=                              # legacy alias, still supported
+# Optional legacy alias for older local PYIN worker setups.
+BASIC_PITCH_WORKER_URL=
 ```
 
-## Fixture fallback
+No transcription URL is exposed as `NEXT_PUBLIC_*`. The browser does not pick
+providers and does not call the worker directly.
 
-`transcribeFixture` is guaranteed to be the last item in every provider list.
-It returns one of five hand-picked monophonic melodies (C minor, G major, A
-minor, F major, D minor) so a demo never lands on the same vibe twice.
+## Worker Roadmap
 
-Important: fixture is now reserved for explicit demo mode or true end-of-chain
-failure. Real audio routed through `/api/transcribe` no longer receives silent
-fixture substitution.
+The current worker defaults to `auto`: SwiftF0 primary with pYIN fallback.
+It also has an independent denoise provider seam selected by
+`AUDIO_ENGINE_DENOISE_PROVIDER`:
+
+- `off`: skip denoise and keep the lightweight worker path.
+- `auto`: use DeepFilterNet when the optional PyTorch stack is installed,
+  otherwise return raw audio with a `deepfilternet_unavailable:*` warning.
+- `deepfilternet`: require DeepFilterNet and fail loudly when dependencies or
+  model files are missing.
+
+The next Phase 1 stops deepen the implementation behind the same route:
+
+1. worker rename/containerization under `workers/audio-engine/`;
+2. silence trim and optional DeepFilterNet-family denoise;
+3. SwiftF0 primary detection with pYIN fallback through the
+   `audio_engine.detectors` provider seam;
+4. worker-native diagnostics for `snr`, `voicedRatio`, `denoiseProvider`,
+   `denoiseModel`, `denoiseMs`, `pitchMs`, and `polishMs`.
+
+The contract above stays stable while the algorithm improves.

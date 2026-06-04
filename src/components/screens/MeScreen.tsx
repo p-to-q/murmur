@@ -1,87 +1,136 @@
 "use client";
-import { useMurmurStore } from "@/lib/store/murmur-store";
+
+/**
+ * MeScreen — Compose v2 *reflect* moment.
+ *
+ * Specced in docs/page-redesign.md §8 + docs/page-contracts.md §7.
+ *
+ * Identity + notes + small editorial moments. Settings / Privacy / Delete
+ * live as tertiary footer links; runtime debug strings move to /me/debug.
+ *
+ * Removed from v1:
+ *   - Runtime provider chain debug strings and the StatusRow /
+ *     ProviderStatusRow sections.
+ *   - The three-column number stats block (replaced by a single
+ *     editorial sentence).
+ *
+ * Added:
+ *   - Notes card (balance + refill caption + Top up CTA), driven by
+ *     `useUserBalance()` (docs/page-contracts.md §11).
+ *   - Settings / Privacy / Delete account as tertiary footer.
+ */
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { UserBadge } from "@/components/user-profile/user-badge";
 import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
-import {
-  getConfiguredTranscriptionProvider,
-  getProviderStatuses,
-  getRuntimeStatusLabel,
-} from "@/modules/stainer/runtime";
+import { useUserBalance } from "@/lib/hooks/use-user-balance";
 
 export function MeScreen() {
-  const { songs } = useMurmurStore();
+  const [songCount, setSongCount] = useState(0);
   const t = useTranslator();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
-  const providerStatuses = getProviderStatuses();
-  const configuredProvider = getConfiguredTranscriptionProvider();
-  const runtimeStatus = getRuntimeStatusLabel();
+  const { balance, isLoading } = useUserBalance();
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSongCount() {
+      try {
+        const response = await fetch("/api/songs");
+        if (!response.ok) return;
+        const data = (await response.json()) as unknown;
+        if (!cancelled && Array.isArray(data)) {
+          setSongCount(data.length);
+        }
+      } catch {
+        // Profile stats are decorative — keep the page usable offline.
+      }
+    }
+    void loadSongCount();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const statsCopy = useStatsCopy(songCount);
+  const refillCopy = useRefillCopy(balance?.nextRefillAt);
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
+
+      {/* ── Hero ───────────────────────────────────────────────────── */}
       <div
-        className="relative z-10 px-6 md:px-12 pb-10 max-w-2xl"
+        className="relative z-10 px-6 md:px-12 pb-6 max-w-3xl"
         style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 56px)" }}
       >
-        <p className="eyebrow mb-4">PROFILE</p>
-        <h1 className="hero-serif-italic text-[#1A1A1A] text-[48px] md:text-[76px]">
+        <p className="eyebrow text-[#FF8A5C]">
+          {t("me.eyebrow") || "YOURS"}
+        </p>
+        <h1 className="hero-serif-italic mt-3 text-[#1A1A1A] text-[44px] leading-[1.02] md:text-[72px]">
           {t("me.title")}
         </h1>
+        <p className="font-serif-italic mt-3 max-w-[28rem] text-[15px] leading-[1.55] text-[#6F6A63] md:text-[16px]">
+          {t("me.sub") || "A small shelf of your own."}
+        </p>
       </div>
 
-      <div className="relative z-10 px-6 md:px-12 max-w-2xl space-y-5 pb-6">
+      {/* ── Body cards ─────────────────────────────────────────────── */}
+      <div className="relative z-10 px-6 md:px-12 max-w-3xl space-y-5 pb-6">
         <Card>
           <UserBadge />
         </Card>
 
+        {/* Notes balance + Top up */}
         <Card>
-          <SectionLabel>{t("me.stats.title")}</SectionLabel>
-          <div className="grid grid-cols-3 gap-6 text-left">
-            <Stat value={songs.length} label={t("me.stats.songs")} />
-            <Stat value={6} label={t("me.stats.vibes")} />
-            <Stat value={"∞"} label={t("me.stats.melodies")} />
+          <SectionLabel>{t("me.notes.title") || "MURMUR NOTES"}</SectionLabel>
+          <div className="flex items-end justify-between gap-6">
+            <div>
+              <p className="font-serif text-[#1A1A1A] text-[56px] leading-none tabular-nums">
+                {isLoading ? "—" : balance?.notes ?? 0}
+              </p>
+              <p className="font-serif-italic mt-2 text-[13px] text-[#6F6A63] md:text-[14px]">
+                {refillCopy}
+              </p>
+            </div>
+            <Link href="/topup" className="mm-btn-primary">
+              {t("me.notes.cta") || "Top up"}
+            </Link>
           </div>
         </Card>
 
+        {/* At a glance — single editorial sentence */}
+        <Card>
+          <SectionLabel>{t("me.glance.title") || "AT A GLANCE"}</SectionLabel>
+          <p className="font-serif-italic text-[#1A1A1A] text-[20px] leading-[1.35] md:text-[22px]">
+            {statsCopy}
+          </p>
+        </Card>
+
+        {/* Language */}
         <Card>
           <SectionLabel>{t("me.language.title")}</SectionLabel>
           <div className="flex gap-2">
-            <LangPill active={lang === "zh"} onClick={() => setLang("zh")} label={t("me.language.zh")} />
-            <LangPill active={lang === "en"} onClick={() => setLang("en")} label={t("me.language.en")} />
-          </div>
-        </Card>
-
-        <Card>
-          <SectionLabel>{t("me.status.title")}</SectionLabel>
-          <div className="space-y-2.5">
-            <StatusRow
-              label={t("me.status.transcribe")}
-              value={runtimeStatus}
+            <LangPill
+              active={lang === "zh"}
+              onClick={() => setLang("zh")}
+              label={t("me.language.zh")}
             />
-            <StatusRow label={t("me.status.arrange")} value="Strummer v0.2" />
-            <StatusRow label={t("me.status.visual")} value="Canvas Particles" />
-            <StatusRow label={t("me.status.export")} value="MP3 / HTML / PNG" />
-          </div>
-          <div className="mt-4 space-y-2">
-            {providerStatuses.map((status) => (
-              <ProviderStatusRow
-                key={status.id}
-                id={status.id}
-                active={configuredProvider === "auto" ? status.enabled : configuredProvider === status.id}
-                enabled={status.enabled}
-                reason={status.reason}
-              />
-            ))}
+            <LangPill
+              active={lang === "en"}
+              onClick={() => setLang("en")}
+              label={t("me.language.en")}
+            />
           </div>
         </Card>
       </div>
 
-      {/* Manifesto block — mymind signature */}
-      <div className="relative z-10 px-6 md:px-12 max-w-2xl pb-10">
+      {/* ── Manifesto (keep — best copy in the product) ────────────── */}
+      <div className="relative z-10 px-6 md:px-12 max-w-3xl pb-10">
         <div className="mm-manifesto">
-          <p className="eyebrow text-[#FF8A5C] mb-5">A QUIET PLACE</p>
+          <p className="eyebrow text-[#FF8A5C] mb-5">{t("me.manifesto.eyebrow") || "A QUIET PLACE"}</p>
           <p className="font-serif text-[28px] md:text-[34px] leading-[1.15] text-[#F5F1EB]">
             No <span className="mm-strike">ads</span>, no{" "}
             <span className="mm-strike">feeds</span>, no{" "}
@@ -89,14 +138,14 @@ export function MeScreen() {
             <span className="mm-strike">likes</span>.
           </p>
           <p className="mt-6 text-[#F5F1EB]/70 text-[15px] leading-[1.55] max-w-md">
-            Just a tiny private workshop for the songs you hum and forget. Every
-            recording is yours — kept here, shared only when you choose to.
+            {t("me.manifesto.body") ||
+              "Just a tiny private workshop for the songs you hum and forget. Every recording is yours — kept here, shared only when you choose to."}
           </p>
         </div>
       </div>
 
-      {/* About */}
-      <div className="relative z-10 px-6 md:px-12 max-w-2xl pb-28">
+      {/* ── About ──────────────────────────────────────────────────── */}
+      <div className="relative z-10 px-6 md:px-12 max-w-3xl pb-10">
         <Card>
           <SectionLabel>{t("me.about.title")}</SectionLabel>
           <p className="font-serif text-[#1A1A1A] text-[22px] leading-tight mb-2">
@@ -110,36 +159,76 @@ export function MeScreen() {
           </p>
         </Card>
       </div>
+
+      {/* ── Tertiary footer ─────────────────────────────────────────── */}
+      <div className="relative z-10 px-6 md:px-12 max-w-3xl pb-28">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px] tracking-[0.04em] text-[#8C8780]">
+          <Link href="/me/settings" className="hover:text-[#1A1A1A] transition-colors">
+            {t("me.settings") || "Settings"}
+          </Link>
+          <span className="text-[#D2C9B6]">·</span>
+          <Link href="/privacy" className="hover:text-[#1A1A1A] transition-colors">
+            {t("me.privacy") || "Privacy"}
+          </Link>
+          <span className="text-[#D2C9B6]">·</span>
+          <Link
+            href="/me/delete"
+            className="hover:text-[#D9421A] transition-colors"
+          >
+            {t("me.delete_account") || "Delete account"}
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }
 
-function ProviderStatusRow({
-  id,
-  active,
-  enabled,
-  reason,
-}: {
-  id: string;
-  active: boolean;
-  enabled: boolean;
-  reason?: string;
-}) {
+/* ── Helpers ────────────────────────────────────────────────────────── */
+
+function useStatsCopy(songCount: number): string {
+  const t = useTranslator();
+  if (songCount === 0) {
+    return (
+      t("me.stats.none") || "Nothing on your shelf yet — start with one hum."
+    );
+  }
+  if (songCount === 1) {
+    return t("me.stats.one") || "One little song so far. A whole shelf to fill.";
+  }
+  const template =
+    t("me.stats.many") ||
+    "{count} little songs so far — and infinite melodies still to hum.";
+  return template.replace("{count}", String(songCount));
+}
+
+function useRefillCopy(nextRefillAtIso?: string): string {
+  const t = useTranslator();
+  if (!nextRefillAtIso) {
+    return (
+      t("me.notes.refill_default") || "5 notes refill every day at midnight."
+    );
+  }
+  const next = new Date(nextRefillAtIso);
+  const now = new Date();
+  const diffMs = next.getTime() - now.getTime();
+  if (diffMs <= 0) {
+    return (
+      t("me.notes.refill_due") || "Free notes are ready — refresh to claim."
+    );
+  }
+  const hours = Math.floor(diffMs / 3_600_000);
+  const minutes = Math.floor((diffMs % 3_600_000) / 60_000);
+  if (hours > 1) {
+    return (
+      t("me.notes.refill_in_hours") || "5 more notes in about {hours}h."
+    ).replace("{hours}", String(hours));
+  }
+  if (hours === 1) {
+    return t("me.notes.refill_in_1h") || "5 more notes in about an hour.";
+  }
   return (
-    <div className="flex items-start justify-between gap-4 text-xs">
-      <div className="flex items-center gap-2">
-        <span
-          className={`mt-[3px] h-1.5 w-1.5 rounded-full ${
-            enabled ? "bg-[#FF5924]" : "bg-[#C8C0B2]"
-          }`}
-        />
-        <span className="font-mono text-[#8C8780]">{id}</span>
-      </div>
-      <span className="text-right text-[#B6B0A4]">
-        {enabled ? (active ? "ready" : "available") : reason ?? "disabled"}
-      </span>
-    </div>
-  );
+    t("me.notes.refill_in_minutes") || "5 more notes in about {minutes} min."
+  ).replace("{minutes}", String(Math.max(minutes, 1)));
 }
 
 function Card({ children }: { children: React.ReactNode }) {
@@ -147,25 +236,22 @@ function Card({ children }: { children: React.ReactNode }) {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="eyebrow mb-5">{children}</p>;
+  return <p className="eyebrow mb-5 text-[#FF8A5C]">{children}</p>;
 }
 
-function Stat({ value, label }: { value: number | string; label: string }) {
-  return (
-    <div>
-      <p className="font-serif text-[#1A1A1A] text-[44px] leading-none">{value}</p>
-      <p className="text-[#8C8780] text-[10px] mt-3 tracking-[0.2em] uppercase">
-        {label}
-      </p>
-    </div>
-  );
-}
-
-function LangPill({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+function LangPill({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
   return (
     <button
       onClick={onClick}
-      className={`flex-1 h-10 rounded-md text-sm transition-all ${
+      className={`flex-1 h-10 rounded-md text-sm transition-colors ${
         active
           ? "bg-[#1A1A1A] text-[#F5F1EB]"
           : "bg-[#EFE8DA] text-[#8C8780] hover:text-[#1A1A1A]"
@@ -173,17 +259,5 @@ function LangPill({ active, onClick, label }: { active: boolean; onClick: () => 
     >
       {label}
     </button>
-  );
-}
-
-function StatusRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-[#1A1A1A] text-sm">{label}</span>
-      <div className="flex items-center gap-1.5">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#FF5924]" />
-        <span className="text-[#8C8780] text-xs font-mono">{value}</span>
-      </div>
-    </div>
   );
 }

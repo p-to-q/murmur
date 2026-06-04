@@ -19,9 +19,20 @@ export type TrackState = {
   enabled: boolean;
   intensity: number;
   originalPattern: string;  // NEVER deleted
+  /**
+   * @deprecated since v2; use the typed fields below. Removed v3.
+   *
+   * Legacy compatibility string. Historically this represented melody
+   * pitches, generated chord tags, bass/drum pattern names, and texture tags.
+   */
   currentPattern: string;   // may differ after edits
   instrument: string;
   versionHistory: string[]; // previous currentPattern values
+  melodyPitchSequence?: number[];
+  chordsTag?: string;
+  bassPattern?: string;
+  drumsPattern?: string;
+  texturePreset?: string;
 };
 
 export type ArrangementState = {
@@ -69,11 +80,30 @@ export type TranscriptionInput = {
   audioBlob?: Blob;
   audioUrl?: string;
   providerHint?: string;
+  targetInstrument?: string;
+};
+
+export type TranscriptionProvider = "swiftf0" | "pyin" | "fixture";
+
+export type TranscriptionDiagnostics = {
+  duration: number;
+  snr: number | null;
+  voicedRatio: number | null;
+  frameCount?: number;
+  denoiseMs?: number;
+  denoiseProvider?: "off" | "deepfilternet";
+  denoiseModel?: string | null;
+  pitchMs?: number;
+  polishMs?: number;
+  workerMs?: number;
+  targetInstrument?: string;
+  rangeClampApplied?: boolean;
 };
 
 export type TranscriptionResult = {
-  provider: string;
+  provider: TranscriptionProvider;
   rawNotes: MelodyNote[];
   cleanMelody: CleanMelody;
   warnings: string[];
+  diagnostics?: TranscriptionDiagnostics;
 };

@@ -1,8 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+/**
+ * NameScreen — Compose v2 *christen* moment.
+ *
+ * Specced in docs/page-redesign.md §5.
+ *
+ * Small fixes over v1:
+ *   - eyebrow added (parity with every other v2 screen)
+ *   - three serif-italic suggestion names below the input, click = populate
+ *   - processing copy rotates editorially while saving (Hum-style)
+ *   - bottom Save bar reads `var(--side-nav-w)` so collapsed nav follows
+ *
+ * Save flow unchanged: render MP3 → POST /api/songs → navigate to /song/[id].
+ */
+
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
@@ -11,37 +25,88 @@ import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator } from "@/lib/i18n";
 import { synth } from "@/lib/music/simple-synth";
 import { renderAudio } from "@/modules/export/render-mp3";
-import type { SongCard } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+
+const PROCESSING_INTERVAL_MS = 900;
+
+// Suggestion seeds keyed by vibe id. Three editorial options per vibe so the
+// suggestion row never feels random; a small wordlist beats generative text
+// at v2 scale and ships zero LLM cost. Codex can swap for a server-side
+// generator later (see docs/page-redesign.md §5 open question 1).
+const VIBE_NAME_SUGGESTIONS: Record<string, string[]> = {
+  sunset:    ["Soft Evening", "Lemon Light", "Gold Hour"],
+  bedroom:   ["Room Light", "Dust", "Late Hours"],
+  cinematic: ["End Credits", "Tiny Movie", "Quiet Drift"],
+  party:     ["Confetti", "Small Party", "Pulse"],
+  rain:      ["Window Song", "Drizzle", "Glass"],
+  synth:     ["Little Signal", "Neon", "Modular"],
+};
+const FALLBACK_SUGGESTIONS = ["Soft Evening", "Window Song", "Tiny Movie"];
 
 export function NameScreen() {
   const router = useRouter();
   const t = useTranslator();
   const currentVersion = useMurmurStore((s) => s.currentVersion);
-  const addSong = useMurmurStore((s) => s.addSong);
 
   const [title, setTitle] = useState(currentVersion?.title ?? "");
   const [isSaving, setIsSaving] = useState(false);
-  const [savingHint, setSavingHint] = useState("");
+  const [processingIdx, setProcessingIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  /* ── Suggestions ──────────────────────────────────────────────── */
+  const suggestions = useMemo(() => {
+    if (!currentVersion) return FALLBACK_SUGGESTIONS;
+    const vibeKey = currentVersion.vibe.toLowerCase();
+    // Match by english or chinese label — generate-versions stamps vibe as
+    // the label ("黄昏" / "Sunset" depending on locale). We match either by
+    // the english-leaning key (the vibe.id) when available, else fall back.
+    for (const [key, list] of Object.entries(VIBE_NAME_SUGGESTIONS)) {
+      if (vibeKey.includes(key)) return list;
+    }
+    return FALLBACK_SUGGESTIONS;
+  }, [currentVersion]);
+
+  /* ── Rotating processing copy ─────────────────────────────────── */
+  const PROCESSING_COPY = useMemo(
+    () => [
+      t("name.proc.rendering") || "rendering",
+      t("name.proc.polishing") || "polishing",
+      t("name.proc.encoding")  || "encoding",
+      t("name.proc.almost")    || "almost there",
+    ],
+    [t],
+  );
+
   useEffect(() => {
-    // Stop any playback the studio left running before the user lands here.
     synth.stop();
     inputRef.current?.focus();
     inputRef.current?.select();
   }, []);
 
+  useEffect(() => {
+    if (!isSaving) return;
+    const id = window.setInterval(() => {
+      setProcessingIdx((i) => (i + 1) % PROCESSING_COPY.length);
+    }, PROCESSING_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [isSaving, PROCESSING_COPY.length]);
+
   if (!currentVersion) {
     return (
-      <div className="min-h-svh flex flex-col items-center justify-center bg-[#F5F1EB] px-6 text-center">
-        <p className="mb-4 text-base text-[#8C8780]">{t("studio.empty")}</p>
-        <button
-          onClick={() => router.push("/")}
-          className="text-sm text-[#FF5924] underline underline-offset-4"
-        >
-          {t("studio.empty.cta")}
-        </button>
+      <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+        <PageBackdrop />
+        <div className="relative z-10 flex min-h-svh flex-col items-center justify-center px-6 text-center">
+          <p className="eyebrow mb-3 text-[#FF8A5C]">{t("studio.empty.eyebrow") || "EMPTY"}</p>
+          <h1 className="hero-serif text-[28px] text-[#1A1A1A] md:text-[40px]">
+            {t("studio.empty")}
+          </h1>
+          <button
+            onClick={() => router.push("/")}
+            className="mm-btn-primary mt-8"
+          >
+            {t("studio.empty.cta")}
+          </button>
+        </div>
       </div>
     );
   }
@@ -56,7 +121,7 @@ export function NameScreen() {
     if (isSaving) return;
 
     setIsSaving(true);
-    setSavingHint(t("studio.rendering"));
+    setProcessingIdx(0);
 
     const id = crypto.randomUUID();
     let mp3DataUrl: string | undefined;
@@ -92,20 +157,6 @@ export function NameScreen() {
       });
       if (!response.ok) throw new Error(`Save HTTP ${response.status}`);
 
-      // Optimistically push into the local gallery list so the new song shows up
-      // immediately if the user navigates straight to /gallery.
-      const optimisticCard: SongCard = {
-        id,
-        title: trimmed,
-        mp3Url: mp3DataUrl,
-        visualConfig: versionWithName.visualConfig,
-        vibe: versionWithName.vibe,
-        duration: Math.round(versionWithName.melody.duration),
-        arrangementState: versionWithName.arrangementState,
-        createdAt: new Date().toISOString(),
-      };
-      addSong(optimisticCard);
-
       memory
         .reportAction({
           content: `Saved "${trimmed}" (audio: ${mp3DataUrl ? "yes" : "no"})`,
@@ -124,9 +175,7 @@ export function NameScreen() {
     } catch (error) {
       console.error("[Name] save failed:", error);
       toast.error(t("studio.save_err"));
-    } finally {
       setIsSaving(false);
-      setSavingHint("");
     }
   };
 
@@ -135,14 +184,15 @@ export function NameScreen() {
       <PageBackdrop />
 
       <div className="relative z-10 flex min-h-svh flex-col">
+        {/* Header */}
         <div
-          className="flex items-center justify-between px-5 pb-4 md:px-8"
+          className="flex items-center justify-between px-5 pb-5 md:px-8"
           style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 28px)" }}
         >
           <button
             onClick={() => router.back()}
             aria-label={t("name.cancel")}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/55 bg-white/70"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/55 bg-white/70 hover:bg-white transition-colors"
           >
             <ArrowLeft className="h-4 w-4 text-[#1A1A1A]" />
           </button>
@@ -152,51 +202,117 @@ export function NameScreen() {
           <div className="h-9 w-9" />
         </div>
 
-        <div className="flex flex-1 flex-col justify-center px-6 pb-32 md:px-8">
-          <div className="mx-auto w-full max-w-[520px]">
-            <p className="eyebrow mb-4 text-[#FF8A5C]">{t("name.eyebrow")}</p>
-            <h1 className="font-serif text-[#1A1A1A] text-[42px] leading-[1.02] tracking-[-0.01em] md:text-[56px]">
-              {t("name.title")}
-            </h1>
-            <p className="mt-4 text-[14px] leading-[1.55] text-[#6F6A63]">
-              {t("name.sub")}
-            </p>
+        {/* Body — bottom-third weighted so the input feels intentional */}
+        <div className="flex flex-1 flex-col justify-end px-6 pb-44 md:px-8">
+          <div className="mx-auto w-full max-w-[560px]">
+            <motion.p
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55 }}
+              className="eyebrow text-[#FF8A5C]"
+            >
+              {t("name.eyebrow") || "NAME IT"}
+            </motion.p>
+            <motion.h1
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.04, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+              className="hero-serif mt-3 text-[#1A1A1A] text-[40px] leading-[1.02] md:text-[60px]"
+            >
+              {t("name.title") || "What do you call this little song?"}
+            </motion.h1>
 
-            <input
+            <motion.input
               ref={inputRef}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.18, duration: 0.5 }}
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void handleSave();
               }}
-              placeholder={t("name.placeholder")}
+              placeholder={t("name.placeholder") || "Say it the way you'd remember it…"}
               maxLength={80}
-              className="mt-8 w-full border-0 border-b-2 border-[#D2C9B6] bg-transparent pb-3 font-serif-italic text-[34px] leading-[1.1] text-[#1A1A1A] outline-none transition-colors placeholder:text-[#BFB6A8] focus:border-[#FF5924] md:text-[44px]"
+              disabled={isSaving}
+              className="mt-9 w-full border-0 border-b-[1.5px] border-[#D2C9B6] bg-transparent pb-3 font-serif-italic text-[34px] leading-[1.1] text-[#1A1A1A] outline-none transition-colors placeholder:text-[#BFB6A8] focus:border-[#FF5924] md:text-[44px] disabled:opacity-60"
             />
-            <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1]">
-              {title.length}/80
-            </p>
+
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1] tabular-nums">
+                {title.length}/80
+              </p>
+            </div>
+
+            {/* Suggestions row */}
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.28, duration: 0.5 }}
+              className="mt-7"
+            >
+              <p className="text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1] mb-2">
+                {t("name.suggestions") || "Try"}
+              </p>
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                {suggestions.map((s, i) => (
+                  <span key={s} className="inline-flex items-baseline gap-3">
+                    <button
+                      onClick={() => {
+                        setTitle(s);
+                        inputRef.current?.focus();
+                      }}
+                      disabled={isSaving}
+                      className="font-serif-italic text-[16px] text-[#8C8780] hover:text-[#FF5924] underline-mm transition-colors disabled:opacity-50"
+                    >
+                      {s}
+                    </button>
+                    {i < suggestions.length - 1 && (
+                      <span className="text-[#D2C9B6]">·</span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </motion.div>
           </div>
         </div>
 
+        {/* Bottom Save bar */}
         <div
-          className="fixed left-0 right-0 px-5 pt-3 pb-5 md:left-[232px] md:px-8"
-          style={{ bottom: "env(safe-area-inset-bottom, 0px)" }}
+          className="fixed left-0 right-0 bg-gradient-to-t from-[#F5F1EB] via-[#F5F1EB] to-transparent px-5 pt-7 pb-5 md:px-8"
+          style={{
+            left: "var(--side-nav-w)",
+            bottom: "env(safe-area-inset-bottom, 0px)",
+          }}
         >
-          <div className="mx-auto max-w-[520px]">
-            {savingHint ? (
-              <p className="mb-2 text-center text-xs text-[#8C8780]">
-                {savingHint}
-              </p>
-            ) : null}
+          <div className="mx-auto max-w-[560px]">
+            {/* Rotating processing copy slot */}
+            <div className="mb-2 h-4 text-center">
+              <AnimatePresence mode="wait">
+                {isSaving && (
+                  <motion.p
+                    key={`proc-${processingIdx}`}
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.28 }}
+                    className="font-serif-italic text-[12px] text-[#8C8780]"
+                  >
+                    {PROCESSING_COPY[processingIdx]}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </div>
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={() => void handleSave()}
               disabled={isSaving || !title.trim()}
               className="h-14 w-full rounded-[22px] bg-[#1A1A1A] text-base font-medium text-white transition-opacity disabled:opacity-45"
             >
-              {isSaving ? t("studio.saving") : t("name.save")}
+              {isSaving
+                ? (t("studio.saving") || "Saving…")
+                : (t("name.save") || "Save")}
             </motion.button>
           </div>
         </div>

@@ -1,17 +1,47 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+
+/**
+ * SongDetailScreen — Compose v2 *possess* moment.
+ *
+ * Specced in docs/page-redesign.md §6 + docs/page-contracts.md §6.
+ *
+ * Treats the saved song as a record sleeve: cover (reactive canvas) +
+ * editorial meta + an export menu rendered as named affordances, NOT
+ * a colored button grid.
+ *
+ * Removed from v1:
+ *   - The "Live preview" status card (engineering exposure).
+ *   - The arrangement track-list block (debug shape).
+ *   - The Sliders icon as the primary entry to Studio.
+ *
+ * Playback contract (also see docs/audio-pipeline-redesign.md §6.7):
+ *   - Prefer the rendered MP3 if present.
+ *   - Otherwise fall back to a synth replay. v1's fallback split the
+ *     melody.currentPattern string and lost rhythm; v2 should read the
+ *     persisted CleanMelody from `song.melody` once that column lands
+ *     (data-model.md §3.6 v2-0006). Until then, the Tone replay degrades
+ *     gracefully — but the dominant UX is mp3 playback.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Pause, Play, Sliders } from "lucide-react";
+import { ArrowLeft, MoreHorizontal, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
-import { memory } from "@/lib/platform/memory";
 
-import type { SongCard } from "@/modules/shared/types";
+import { memory } from "@/lib/platform/memory";
 import { useTranslator } from "@/lib/i18n";
 import { getPlayer, startAudioContext } from "@/lib/music/tone-player";
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
-import { ShareActions } from "@/components/song-detail/share-actions";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { buildShareHtml, downloadHtml } from "@/modules/export/render-share-html";
+import { downloadBlob, renderPoster } from "@/modules/export/render-poster";
+import {
+  exportSongAsWebM,
+  getWebMExportSupport,
+  WebMExportError,
+} from "@/modules/export/export-webm";
+import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
   mp3DataUrl?: string | null;
@@ -19,44 +49,55 @@ type Song = SongCard & {
   keySignature?: string;
 };
 
+type ExportKey = "audio" | "html" | "poster" | "video";
+
 export function SongDetailScreen({ songId }: { songId: string }) {
-  // Song detail is the "artifact" screen: playback, identity, live visual
-  // preview, and export all meet here so the saved song feels like a finished
-  // object rather than a debug record of generation.
   const router = useRouter();
   const t = useTranslator();
+
   const [song, setSong] = useState<Song | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [busy, setBusy] = useState<ExportKey | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // ── Load song ──────────────────────────────────────────────────────
+  const videoSupport = useMemo(() => getWebMExportSupport(), []);
+
+  /* ── Load ──────────────────────────────────────────────────────────── */
   useEffect(() => {
-    async function load() {
+    let active = true;
+    (async () => {
       try {
         const res = await fetch(`/api/songs/${songId}`);
-        if (res.ok) {
-          const data = (await res.json()) as Song;
-          setSong(data);
-          memory
-            .reportAction({
-              content: `User viewed song detail: "${data.title}"`,
-              event_type: "navigate",
-              page: "song-detail",
-              metadata: { type: "view_song", song_id: data.id },
-            })
-            .catch(() => {});
+        if (!res.ok) {
+          if (active) setSong(null);
+          return;
         }
+        const data = (await res.json()) as Song;
+        if (!active) return;
+        setSong(data);
+        memory
+          .reportAction({
+            content: `Song detail open: "${data.title}"`,
+            event_type: "navigate",
+            page: "song-detail",
+            metadata: { type: "song_open", song_id: data.id },
+          })
+          .catch(() => {});
       } catch (err) {
         console.warn("[SongDetail] load error:", err);
       } finally {
-        setIsLoading(false);
+        if (active) setIsLoading(false);
       }
-    }
-    load();
+    })();
+    return () => {
+      active = false;
+    };
   }, [songId]);
 
-  // ── Cleanup on unmount ────────────────────────────────────────────
+  /* ── Cleanup ───────────────────────────────────────────────────────── */
   useEffect(() => {
     return () => {
       audioRef.current?.pause();
@@ -64,7 +105,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     };
   }, []);
 
-  // ── Playback ──────────────────────────────────────────────────────
+  /* ── Playback (mp3 first; tone fallback) ──────────────────────────── */
   const playWithTone = useCallback(async () => {
     if (!song) return;
     const player = getPlayer();
@@ -78,7 +119,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       const pitches = song.arrangementState.melody.currentPattern
         .split(" ")
         .map(Number)
-        .filter((p) => !isNaN(p) && p > 20 && p < 120);
+        .filter((p) => !Number.isNaN(p) && p > 20 && p < 120);
       const melodyNotes = pitches.map((pitch, i) => ({
         pitch,
         start: i * 0.5,
@@ -100,8 +141,6 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
   const handlePlay = useCallback(async () => {
     if (!song) return;
-
-    // Prefer the rendered MP3/WAV if we have one (faster, deterministic).
     if (song.mp3DataUrl) {
       let el = audioRef.current;
       if (!el) {
@@ -124,230 +163,566 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       }
       return;
     }
-
     await playWithTone();
   }, [song, playWithTone]);
 
-  // ── Render guards ─────────────────────────────────────────────────
+  /* ── Exports — same modules as v1; presented differently ──────────── */
+
+  const gradient = useMemo(() => {
+    if (!song) return "linear-gradient(135deg, #FF8A5C, #FF5924)";
+    return (
+      (song.visualConfig as { posterBg?: string }).posterBg ??
+      song.visualConfig.gradient ??
+      "linear-gradient(135deg, #FF8A5C, #FF5924)"
+    );
+  }, [song]);
+
+  const slug = useMemo(
+    () => (song?.title ?? "murmur").replace(/\s+/g, "-").toLowerCase(),
+    [song],
+  );
+
+  const exportAudio = async () => {
+    if (!song?.mp3DataUrl) {
+      toast(t("song.share.no_audio"));
+      return;
+    }
+    setBusy("audio");
+    try {
+      const ext = song.mp3DataUrl.startsWith("data:audio/wav") ? "wav" : "mp3";
+      const a = document.createElement("a");
+      a.href = song.mp3DataUrl;
+      a.download = `${slug}.${ext}`;
+      a.click();
+      toast.success(t("song.export.ok"));
+      memory
+        .reportAction({
+          content: `Exported audio for "${song.title}"`,
+          event_type: "update",
+          page: "song-detail",
+          metadata: { type: "download_audio", song_id: song.id, format: ext },
+        })
+        .catch(() => {});
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const exportHtml = async () => {
+    if (!song) return;
+    setBusy("html");
+    try {
+      const html = buildShareHtml({
+        title: song.title,
+        vibe: song.vibe,
+        bpm: song.bpm ?? 80,
+        keySig: song.keySignature ?? "C",
+        duration: song.duration,
+        gradient,
+        preset: song.visualConfig.preset,
+        audioDataUrl: song.mp3DataUrl ?? undefined,
+      });
+      downloadHtml(`${slug}.html`, html);
+      toast.success(t("song.export.ok"));
+      memory
+        .reportAction({
+          content: `Exported share card for "${song.title}"`,
+          event_type: "update",
+          page: "song-detail",
+          metadata: { type: "download_html", song_id: song.id },
+        })
+        .catch(() => {});
+    } catch (e) {
+      console.error(e);
+      toast.error(t("song.export.err"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const exportPoster = async () => {
+    if (!song) return;
+    setBusy("poster");
+    try {
+      const blob = await renderPoster({
+        title: song.title,
+        vibe: song.vibe,
+        bpm: song.bpm ?? 80,
+        keySig: song.keySignature ?? "C",
+        gradient,
+        durationSec: song.duration,
+      });
+      if (!blob) throw new Error("poster blob null");
+      downloadBlob(`${slug}.png`, blob);
+      toast.success(t("song.export.ok"));
+      memory
+        .reportAction({
+          content: `Exported poster for "${song.title}"`,
+          event_type: "update",
+          page: "song-detail",
+          metadata: { type: "download_poster", song_id: song.id },
+        })
+        .catch(() => {});
+    } catch (e) {
+      console.error(e);
+      toast.error(t("song.export.err"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const exportVideo = async () => {
+    if (!song) return;
+    if (!song.mp3DataUrl) {
+      toast(t("song.share.no_audio"));
+      return;
+    }
+    if (!videoSupport.supported) {
+      toast(t("song.export.video_unsupported"));
+      return;
+    }
+    setBusy("video");
+    try {
+      toast(t("song.export.video_preparing"));
+      await exportSongAsWebM(song);
+      toast.success(t("song.export.video_ready"));
+      memory
+        .reportAction({
+          content: `Exported video for "${song.title}"`,
+          event_type: "update",
+          page: "song-detail",
+          metadata: { type: "download_video", song_id: song.id },
+        })
+        .catch(() => {});
+    } catch (e) {
+      console.error(e);
+      if (e instanceof WebMExportError && e.code === "browser_unsupported") {
+        toast(t("song.export.video_unsupported"));
+      } else {
+        toast.error(t("song.export.video_failed"));
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /* ── Delete ────────────────────────────────────────────────────────── */
+
+  const handleDelete = async () => {
+    if (!song) return;
+    try {
+      const res = await fetch(`/api/songs/${song.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`delete HTTP ${res.status}`);
+      memory
+        .reportAction({
+          content: `Deleted "${song.title}"`,
+          event_type: "delete",
+          page: "song-detail",
+          metadata: { type: "song_delete", song_id: song.id },
+        })
+        .catch(() => {});
+      router.push("/gallery");
+    } catch (e) {
+      console.error(e);
+      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?");
+    }
+  };
+
+  /* ── Render guards ────────────────────────────────────────────────── */
+
   if (isLoading) {
     return (
-      <div className="min-h-svh bg-[#F5F1EB] flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-[#FF5924] border-t-transparent animate-spin" />
+      <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+        <PageBackdrop variant="soft" />
+        <div className="relative z-10 flex min-h-svh items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#FF5924] border-t-transparent" />
+        </div>
       </div>
     );
   }
+
   if (!song) {
     return (
-      <div className="min-h-svh bg-[#F5F1EB] flex flex-col items-center justify-center gap-4 px-6">
-        <p className="text-[#8C8780]">{t("song.not_found")}</p>
-        <button
-          onClick={() => router.push("/gallery")}
-          className="text-[#FF5924] text-sm underline"
-        >
-          {t("song.back_to_gallery")}
-        </button>
+      <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+        <PageBackdrop />
+        <div className="relative z-10 flex min-h-svh flex-col items-center justify-center px-6 text-center">
+          <p className="eyebrow mb-3 text-[#FF8A5C]">{t("song.not_found.eyebrow") || "EMPTY"}</p>
+          <h1 className="hero-serif text-[#1A1A1A] text-[28px] md:text-[40px]">
+            {t("song.not_found")}
+          </h1>
+          <button
+            onClick={() => router.push("/gallery")}
+            className="mm-btn-primary mt-8"
+          >
+            {t("song.back_to_gallery")}
+          </button>
+        </div>
       </div>
     );
   }
 
-  const gradient =
-    (song.visualConfig as { posterBg?: string }).posterBg ??
-    song.visualConfig.gradient ??
-    "linear-gradient(135deg, #FF8A5C, #FF5924)";
-  const bpm = song.bpm ?? 80;
-  const keySig = song.keySignature ?? "C";
+  const createdAt = new Date(song.createdAt);
+  const dateLabel = createdAt.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  const longDateLabel = createdAt.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const durSec = Math.round(song.duration);
+  const durLabel = `${Math.floor(durSec / 60)}:${String(durSec % 60).padStart(2, "0")}`;
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB] flex flex-col">
+    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
-      {/* Header — safe-area-aware */}
-      <div
-        className="relative z-10 flex items-center justify-between px-5 pb-4"
-        style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 28px)" }}
-      >
-        <button
-          onClick={() => router.back()}
-          aria-label="Back"
-          className="w-9 h-9 rounded-full bg-[#EFE8DA] flex items-center justify-center"
-        >
-          <ArrowLeft className="w-4 h-4 text-[#1A1A1A]" />
-        </button>
-        <div />
-        <button
-          onClick={() => router.push("/studio")}
-          aria-label="Studio"
-          className="w-9 h-9 rounded-full bg-[#EFE8DA] flex items-center justify-center"
-        >
-          <Sliders className="w-4 h-4 text-[#8C8780]" />
-        </button>
-      </div>
 
-      {/* Hero visual */}
-      <div
-        id="song-visual"
-        className="relative z-10 mx-5 rounded-3xl overflow-hidden"
-        style={{ height: 280 }}
-      >
-        <SongVisualCanvas gradient={gradient} isPlaying={isPlaying} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent pointer-events-none" />
-        <div className="absolute bottom-6 left-6 right-6 pointer-events-none">
-          <p className="text-white/65 text-[10px] tracking-[0.28em] uppercase mb-2">
-            {song.vibe}
-          </p>
-          <h2
-            className="font-serif text-white text-[30px] leading-[1.05]"
-            style={{ letterSpacing: "-0.018em" }}
-          >
-            {song.title}
-          </h2>
-        </div>
-        <button
-          onClick={() => {
-            startAudioContext();
-            handlePlay();
-          }}
-          aria-label={isPlaying ? "Pause" : "Play"}
-          className="absolute inset-0 flex items-center justify-center"
-        >
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={isPlaying ? "pause" : "play"}
-              initial={{ scale: 0.75, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.75, opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="w-16 h-16 rounded-full bg-white/25 backdrop-blur-sm flex items-center justify-center border border-white/30"
-            >
-              {isPlaying ? (
-                <Pause className="w-7 h-7 text-white" fill="white" />
-              ) : (
-                <Play className="w-7 h-7 text-white ml-0.5" fill="white" />
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </button>
-      </div>
-      <div className="relative z-10 px-5 mt-3">
-        <div className="rounded-2xl border border-[#E5DDD0] bg-[#FFFEFB]/88 px-4 py-3">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[#1A1A1A] text-sm font-medium">{t("song.preview.live")}</p>
-              <p className="mt-1 text-[#8C8780] text-xs leading-5">
-                {t("song.preview.live_desc")}
-              </p>
-            </div>
-            <div className="shrink-0 rounded-full bg-[#EFE8DA] px-3 py-1 text-[10px] font-medium tracking-[0.12em] text-[#8C8780] uppercase">
-              {t("song.preview.live_badge")}
-            </div>
-          </div>
-          <div className="mt-3 flex items-center gap-2 text-[11px] text-[#B8B0A2]">
-            <span>{t("song.preview.step_preview")}</span>
-            <span>→</span>
-            <span>{t("song.preview.step_export")}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div className="relative z-10 px-5 mt-6 space-y-4 pb-24">
-        <MetaCard
-          title={song.title}
-          vibe={song.vibe}
-          bpm={bpm}
-          keySig={keySig}
-          duration={song.duration ?? 0}
-          createdAt={song.createdAt}
-          translator={t}
-        />
-
+      <div className="relative z-10 flex min-h-svh flex-col">
+        {/* ── Header ───────────────────────────────────────────────── */}
         <div
-          className="bg-[#FFFEFB] rounded-2xl p-5"
-          style={{ boxShadow: "0 2px 12px rgba(26, 26, 26,0.06)" }}
+          className="flex items-center justify-between px-5 pb-5 md:px-8"
+          style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 28px)" }}
         >
-          <p className="text-[#8C8780] text-xs font-medium tracking-wider uppercase mb-3">
-            {t("song.arrangement")}
-          </p>
-          <div className="space-y-2.5">
-            {(["melody", "chords", "strings", "drums", "bass"] as const).map(
-              (track) => {
-                const tr = song.arrangementState[track];
-                return (
-                  <div key={track} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className="w-1.5 h-5 rounded-full"
-                        style={{ background: tr.enabled ? "#FF5924" : "#E5DDD0" }}
-                      />
-                      <div>
-                        <p className="text-[#1A1A1A] text-xs font-medium">
-                          {t(`track.${track}`)}
-                        </p>
-                        <p className="text-[#8C8780] text-[11px]">{tr.instrument}</p>
-                      </div>
-                    </div>
-                    <div className="w-20 h-1 bg-[#E5DDD0] rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-[#FF5924] rounded-full"
-                        style={{ width: `${(tr.intensity ?? 0) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              }
-            )}
+          <button
+            onClick={() => router.back()}
+            aria-label={t("common.back") || "Back"}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/55 bg-white/70 hover:bg-white transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4 text-[#1A1A1A]" />
+          </button>
+          <div />
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label={t("song.menu") || "More"}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/55 bg-white/70 hover:bg-white transition-colors"
+            >
+              <MoreHorizontal className="h-4 w-4 text-[#8C8780]" />
+            </button>
+            <AnimatePresence>
+              {menuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                  transition={{ duration: 0.18 }}
+                  className="absolute right-0 top-12 z-20 w-48 rounded-2xl border border-[#E5DDD0] bg-[#FFFEFB] py-2 shadow-[0_18px_44px_rgba(26,26,26,0.10)]"
+                >
+                  <MenuItem
+                    onClick={() => {
+                      setMenuOpen(false);
+                      router.push("/studio");
+                    }}
+                  >
+                    {t("song.edit_again") || "Edit again"}
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setDeleteOpen(true);
+                    }}
+                    danger
+                  >
+                    {t("song.delete") || "Delete"}
+                  </MenuItem>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
-        <ShareActions song={song} />
+        {/* ── Body ─────────────────────────────────────────────────── */}
+        <div className="flex-1 px-5 md:px-10 lg:px-16 pb-16">
+          <div className="mx-auto max-w-2xl">
+            {/* Cover */}
+            <motion.div
+              initial={{ opacity: 0, y: 14, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+              className="relative overflow-hidden rounded-[26px] md:rounded-[32px] cursor-pointer select-none border border-white/40 shadow-[0_28px_70px_rgba(26,26,26,0.12)]"
+              style={{ aspectRatio: "4/3" }}
+              onClick={() => {
+                startAudioContext();
+                handlePlay();
+              }}
+            >
+              <SongVisualCanvas gradient={gradient} isPlaying={isPlaying} />
+              <div
+                className="absolute inset-x-0 top-0 h-2/5 pointer-events-none"
+                style={{
+                  background:
+                    "linear-gradient(to bottom, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0) 100%)",
+                }}
+              />
+              <div
+                className="absolute inset-x-0 bottom-0 h-1/2 pointer-events-none"
+                style={{
+                  background:
+                    "linear-gradient(to top, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0) 100%)",
+                }}
+              />
+
+              <div className="absolute left-6 top-6 right-6">
+                <p className="text-[10px] uppercase tracking-[0.32em] text-white/72">
+                  {song.vibe}
+                </p>
+                <h1
+                  className="hero-serif-italic mt-3 text-[34px] leading-[0.98] text-white md:text-[52px]"
+                  style={{ letterSpacing: "-0.018em" }}
+                >
+                  {song.title}
+                </h1>
+              </div>
+
+              <div className="absolute bottom-6 right-6">
+                <motion.div
+                  whileTap={{ scale: 0.92 }}
+                  className={`flex h-14 w-14 md:h-16 md:w-16 items-center justify-center rounded-full border border-white/60 backdrop-blur-md transition-colors ${
+                    isPlaying ? "bg-white/40" : "bg-white/22"
+                  }`}
+                >
+                  {isPlaying ? (
+                    <Pause className="h-5 w-5 md:h-6 md:w-6 text-white" fill="white" />
+                  ) : (
+                    <Play
+                      className="ml-0.5 h-5 w-5 md:h-6 md:w-6 text-white"
+                      fill="white"
+                    />
+                  )}
+                </motion.div>
+              </div>
+            </motion.div>
+
+            {/* Meta row */}
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.55 }}
+              className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] uppercase tracking-[0.22em] text-[#8C8780]"
+            >
+              <span className="tabular-nums">{song.bpm ?? 80} BPM</span>
+              <span className="text-[#D2C9B6]">·</span>
+              <span>{song.keySignature ?? "C"}</span>
+              <span className="text-[#D2C9B6]">·</span>
+              <span className="tabular-nums">{durLabel}</span>
+              <span className="text-[#D2C9B6]">·</span>
+              <span>{dateLabel}</span>
+            </motion.div>
+
+            {/* Editorial caption */}
+            <motion.p
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.16, duration: 0.55 }}
+              className="font-serif-italic mt-3 text-[14px] leading-[1.55] text-[#6F6A63] md:text-[15px]"
+            >
+              {(t("song.caption") || "Made by humming, {date}.").replace(
+                "{date}",
+                longDateLabel,
+              )}
+            </motion.p>
+
+            {/* Export list */}
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.24, duration: 0.5 }}
+              className="eyebrow mt-12 text-[#FF8A5C]"
+            >
+              {t("song.export.eyebrow") || "EXPORT"}
+            </motion.p>
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.28, duration: 0.55 }}
+              className="mt-3 divide-y divide-[#E5DDD0] border-t border-b border-[#E5DDD0]"
+            >
+              <ExportRow
+                label={t("song.export.audio.label") || "Audio"}
+                hint={t("song.export.audio.hint") || "mp3"}
+                cost={t("song.export.free") || "free"}
+                disabled={!song.mp3DataUrl}
+                disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
+                busy={busy === "audio"}
+                onClick={exportAudio}
+              />
+              <ExportRow
+                label={t("song.export.html.label") || "Share card"}
+                hint={t("song.export.html.hint") || "self-contained html"}
+                cost={t("song.export.free") || "free"}
+                busy={busy === "html"}
+                onClick={exportHtml}
+              />
+              <ExportRow
+                label={t("song.export.poster.label") || "Poster"}
+                hint={t("song.export.poster.hint") || "png"}
+                cost={t("song.export.free") || "free"}
+                busy={busy === "poster"}
+                onClick={exportPoster}
+              />
+              <ExportRow
+                label={t("song.export.video.label") || "Audio video"}
+                hint={
+                  videoSupport.supported
+                    ? t("song.export.video.hint") || "webm"
+                    : t("song.export.video_unsupported_hint") ||
+                      "your browser can't render webm"
+                }
+                cost={t("song.export.cost.video") || "2 notes"}
+                disabled={!videoSupport.supported || !song.mp3DataUrl}
+                busy={busy === "video"}
+                onClick={exportVideo}
+              />
+            </motion.div>
+
+            {/* Tertiary footer */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+              className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2"
+            >
+              <button
+                onClick={() => router.push("/studio")}
+                className="font-serif-italic text-[15px] text-[#FF5924] hover:text-[#D9421A] underline-mm transition-colors"
+              >
+                {t("song.edit_again") || "Edit again"}
+              </button>
+              <button
+                onClick={() => router.push("/gallery")}
+                className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
+              >
+                {t("song.back_to_gallery") || "Back to gallery"}
+              </button>
+            </motion.div>
+          </div>
+        </div>
       </div>
+
+      {/* Delete confirm */}
+      <AnimatePresence>
+        {deleteOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 flex items-center justify-center bg-[#1A1A1A]/45 backdrop-blur-sm px-5"
+            onClick={() => setDeleteOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.96 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              className="mm-card w-full max-w-sm px-6 py-7 text-center"
+            >
+              <p className="eyebrow text-[#FF8A5C] mb-3">{t("song.delete.eyebrow") || "REMOVE"}</p>
+              <h3 className="font-serif text-[24px] text-[#1A1A1A] leading-tight">
+                {t("song.delete.title") || "Delete this little song?"}
+              </h3>
+              <p className="mt-2 text-[13px] text-[#8C8780] leading-relaxed">
+                {t("song.delete.body") ||
+                  "It will be gone from your gallery. You can hum it again later."}
+              </p>
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={() => setDeleteOpen(false)}
+                  className="flex-1 h-11 rounded-[18px] border border-[#E5DDD0] text-[#1A1A1A] text-[14px] hover:bg-white transition-colors"
+                >
+                  {t("common.cancel") || "Keep"}
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="flex-1 h-11 rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors"
+                >
+                  {t("song.delete.confirm") || "Delete"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function MetaCard({
-  title, vibe, bpm, keySig, duration, createdAt, translator,
+/* ── Sub-components ───────────────────────────────────────────────── */
+
+function ExportRow({
+  label,
+  hint,
+  cost,
+  disabled,
+  disabledHint,
+  busy,
+  onClick,
 }: {
-  title: string;
-  vibe: string;
-  bpm: number;
-  keySig: string;
-  duration: number;
-  createdAt: string;
-  translator: (k: string) => string;
+  label: string;
+  hint: string;
+  cost: string;
+  disabled?: boolean;
+  disabledHint?: string;
+  busy: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div
-      className="bg-[#FFFEFB] rounded-2xl p-6"
-      style={{ boxShadow: "0 2px 12px rgba(26, 26, 26,0.06)" }}
+    <motion.button
+      whileHover={!disabled ? { x: 2 } : undefined}
+      whileTap={!disabled ? { scale: 0.99 } : undefined}
+      onClick={onClick}
+      disabled={disabled || busy}
+      className={`group flex w-full items-center justify-between gap-4 px-1 py-4 text-left transition-colors ${
+        disabled ? "opacity-45" : "hover:bg-[#FFFEFB]/60"
+      }`}
     >
-      <h1
-        className="font-serif text-[#1A1A1A] text-[24px] leading-tight mb-4"
-        style={{ letterSpacing: "-0.012em" }}
-      >
-        {title}
-      </h1>
-      <div className="flex flex-wrap gap-2">
-        <MetaBadge label={translator("song.meta.vibe")} value={vibe} />
-        <MetaBadge label={translator("song.meta.bpm")} value={String(bpm)} />
-        <MetaBadge label={translator("song.meta.key")} value={keySig} />
-        <MetaBadge label={translator("song.meta.duration")} value={`${duration}s`} />
+      <div className="min-w-0">
+        <p className="font-serif-italic text-[18px] text-[#1A1A1A] leading-tight md:text-[20px]">
+          {label}
+        </p>
+        <p className="mt-1 text-[11px] tracking-[0.04em] text-[#8C8780]">
+          {disabled && disabledHint ? disabledHint : hint}
+        </p>
       </div>
-      <p className="text-[#B8B0A2] text-[11px] mt-4 tracking-[0.06em]">
-        {new Date(createdAt).toLocaleDateString(undefined, {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })}
-      </p>
-    </div>
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="text-[11px] uppercase tracking-[0.22em] text-[#B6B0A4]">
+          {cost}
+        </span>
+        {busy ? (
+          <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#1A1A1A] border-t-transparent" />
+        ) : (
+          <span
+            className="text-[#1A1A1A] text-[18px] transition-transform group-hover:translate-x-0.5"
+            aria-hidden
+          >
+            →
+          </span>
+        )}
+      </div>
+    </motion.button>
   );
 }
 
-function MetaBadge({ label, value }: { label: string; value: string }) {
+function MenuItem({
+  children,
+  onClick,
+  danger,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  danger?: boolean;
+}) {
   return (
-    <div className="px-3 py-1.5 rounded-xl bg-[#EFE8DA] text-center">
-      <p className="text-[#8C8780] text-[10px] font-medium uppercase">{label}</p>
-      <p className="text-[#1A1A1A] text-sm font-semibold">{value}</p>
-    </div>
+    <button
+      onClick={onClick}
+      className={`w-full text-left px-4 py-2.5 text-[13px] transition-colors ${
+        danger
+          ? "text-[#D9421A] hover:bg-[#FFE6DA]"
+          : "text-[#1A1A1A] hover:bg-[#F5F1EB]"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
