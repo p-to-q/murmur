@@ -106,6 +106,13 @@ Per PR:
 - keep heavyweight audio regression work out of the default PR gate unless the
   change actually touches the audio pipeline contract
 
+Per local operator session:
+
+- bring up the web app and audio worker
+- run `bun run smoke:local` before assuming the stack itself is healthy
+- when smoke passes but the audio loop still feels wrong, escalate to
+  `bun run audit:audio:acceptance` instead of debugging from vibes alone
+
 Per release candidate:
 
 - confirm CI is green on `main`
