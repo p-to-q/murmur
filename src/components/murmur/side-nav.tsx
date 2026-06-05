@@ -1,23 +1,63 @@
 "use client";
+
+/**
+ * SideNav v3 — typographic margin.
+ *
+ * Throws out the icon list, the card surface, the right-side border, and the
+ * floating active-dot. Replaces them with a manuscript-style page edge:
+ *
+ *   - Transparent background; PageBackdrop drifts under it.
+ *   - Three destinations stacked vertically, separated by hairline rules.
+ *   - Active destination gets a 1.5 px coral vertical line at the row's left
+ *     edge (the "margin marker" of an old book) and shifts to serif italic.
+ *   - Hover: the word slides 4 px right, ink darkens.
+ *   - Brand glyph at top breathes when global audio is playing.
+ *   - Balance chip + language switch live at the bottom in tiny pill form.
+ *
+ * Two states: expanded (208 px) + collapsed (56 px). Width is read by
+ * layout.tsx via `--side-nav-w` on <html.nav-collapsed>; the toggle is
+ * persisted in localStorage.
+ *
+ * No icons in this surface. Words ARE the navigation.
+ */
+
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { cn } from "@/utils/utils";
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronsLeft, ChevronsRight } from "lucide-react";
+
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
-import { MurmurMark } from "./murmur-mark";
+import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { NAV_ITEMS } from "./nav-items";
+import { MurmurMark } from "./murmur-mark";
 
-/**
- * Desktop sidebar — 232px column on md+. Quiet, no card chrome, just nav and
- * a soft one-line sign-off at the bottom.
- */
+const STORAGE_KEY = "murmur:side-nav-collapsed";
+
 export function SideNav() {
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslator();
   const lang = useI18nStore((s) => s.lang);
-  const { resetFlow } = useMurmurStore();
+  const setLang = useI18nStore((s) => s.setLang);
+  const { resetFlow, isPlaying, auditioningVersionId } = useMurmurStore();
+  const { balance } = useUserBalance();
+  const audioActive = isPlaying || auditioningVersionId !== null;
+
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return localStorage.getItem(STORAGE_KEY) === "1";
+  });
+  useEffect(() => {
+    const html = document.documentElement;
+    if (collapsed) html.classList.add("nav-collapsed");
+    else html.classList.remove("nav-collapsed");
+    localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
+  }, [collapsed]);
 
   const goHome = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -26,91 +66,302 @@ export function SideNav() {
     router.push("/");
   };
 
+  const items = NAV_ITEMS.filter((it) => it.desktopNav !== false);
+
   return (
     <aside
-      className="hidden md:flex fixed top-0 left-0 bottom-0 w-[232px] z-40 flex-col bg-[#FFFEFB] border-r border-[#ECE5D6] px-6 py-8"
+      className="hidden md:flex fixed top-0 left-0 bottom-0 z-40 flex-col"
       style={{
+        width: "var(--side-nav-w)",
         paddingTop: "max(env(safe-area-inset-top, 0px), 32px)",
-        background:
-          "radial-gradient(circle at 84% 12%, rgba(255,138,92,0.10), transparent 0 26%), #FFFEFB",
+        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 28px)",
+        transition: "width 0.36s cubic-bezier(0.22, 1, 0.36, 1)",
       }}
+      aria-label="Primary navigation"
     >
-      <Link
-        href="/"
-        onClick={goHome}
-        className="mb-12 inline-flex items-center transition-opacity hover:opacity-80"
+      {/* ── Brand row ────────────────────────────────────────────── */}
+      <div
+        className={collapsed ? "flex justify-center px-0 mb-2" : "flex items-center justify-between px-7 pr-5 mb-2"}
       >
-        <MurmurMark size={34} />
-      </Link>
+        <button
+          onClick={goHome}
+          aria-label="Murmur — home"
+          className={collapsed ? "group inline-flex items-center justify-center" : "group inline-flex items-center justify-start"}
+        >
+          <AnimatePresence initial={false} mode="wait">
+            {collapsed ? (
+              <motion.span
+                key="collapsed-glyph"
+                initial={{ opacity: 0, scale: 0.78, rotate: -8 }}
+                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                exit={{ opacity: 0, scale: 0.84, rotate: 8 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                className="inline-flex"
+              >
+                <BrandGlyph audioActive={audioActive} />
+              </motion.span>
+            ) : (
+              <motion.span
+                key="expanded-mark"
+                initial={{ opacity: 0, x: -10, scale: 0.96 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: -6, scale: 0.98 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                className="transition-opacity group-hover:opacity-90"
+              >
+                <MurmurMark size={34} yOffset={0} className="h-[34px]" />
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
 
-      <nav className="flex flex-col gap-[2px]">
-        {NAV_ITEMS.filter((item) => item.desktopNav !== false).map((item) => {
+        {!collapsed && (
+          <button
+            onClick={() => setCollapsed(true)}
+            aria-label="Collapse navigation"
+            className="ml-7 shrink-0 text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
+          >
+            <ChevronsLeft className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {collapsed && (
+        <button
+          onClick={() => setCollapsed(false)}
+          aria-label="Expand navigation"
+          className="mt-3 mx-auto text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
+        >
+          <ChevronsRight className="h-3.5 w-3.5" />
+        </button>
+      )}
+
+      {/* ── Destinations ─────────────────────────────────────────── */}
+      <nav className={collapsed ? "mt-10 px-0 flex flex-col items-center gap-7" : "mt-10 px-7"}>
+        {items.map((item, i) => {
           const isActive =
             item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-          const Icon = item.icon;
-          const label = t(item.labelKey);
-          const baseClass = cn(
-            "group flex items-center gap-3 px-2.5 py-2 rounded-md transition-colors duration-150",
-            isActive
-              ? "text-[#1A1A1A]"
-              : "text-[#8C8780] hover:text-[#1A1A1A]"
-          );
+          const label = t(item.labelKey) || item.fallback;
 
-          const content = (
-            <>
-              <span
-                className={cn(
-                  "flex h-[18px] w-[18px] shrink-0 items-center justify-center transition-colors",
-                  isActive
-                    ? "text-[#FF5924]"
-                    : "text-[#BFB6A8] group-hover:text-[#1A1A1A]"
-                )}
-              >
-                <Icon className="h-[18px] w-[18px]" active={isActive} />
-              </span>
-              <span
-                className={cn(
-                  "min-w-0 tracking-[0.01em]",
-                  lang === "zh" ? "text-[15px]" : "text-[14px]"
-                )}
-              >
-                {label}
-              </span>
-              {isActive ? (
-                <span className="ml-auto h-[5px] w-[5px] rounded-full bg-[#FF5924]" />
-              ) : null}
-            </>
-          );
+          if (collapsed) {
+            return (
+              <CollapsedDot
+                key={item.href}
+                isActive={isActive}
+                onActivate={(e) => {
+                  if (item.href === "/") {
+                    goHome(e);
+                  } else {
+                    router.push(item.href);
+                  }
+                }}
+                label={label}
+              />
+            );
+          }
 
+          const body = (
+            <ManuscriptRow
+              label={label}
+              isActive={isActive}
+              showRule={i > 0}
+              lang={lang}
+              meta={item.href === "/topup" ? `${balance?.notes ?? "—"}` : undefined}
+            />
+          );
           return item.href === "/" ? (
             <button
               key={item.href}
               onClick={goHome}
-              className={cn(baseClass, "text-left w-full")}
+              className="block w-full text-left"
             >
-              {content}
+              {body}
             </button>
           ) : (
-            <Link key={item.href} href={item.href} className={baseClass}>
-              {content}
+            <Link key={item.href} href={item.href} className="block">
+              {body}
             </Link>
           );
         })}
       </nav>
 
-      <div className="mt-auto pt-10 px-1">
-        <p className="font-serif text-[#1A1A1A] text-[22px] leading-none tracking-[-0.04em] mb-4">
-          ○
-        </p>
-        <p className="font-serif-italic text-[#1A1A1A] text-[15px] leading-[1.25]">
-          A hum of yours,
-          <br />
-          becomes a song.
-        </p>
-        <p className="mt-4 text-[10px] text-[#B6B0A4] tracking-[0.2em] uppercase">
-          private music oasis
-        </p>
+      <div className="flex-1" />
+
+      {/* ── Footer: balance + language ───────────────────────────── */}
+      <div className={collapsed ? "px-0 flex flex-col items-center gap-3" : "px-7"}>
+        {!collapsed && (
+          <Link
+            href="/topup"
+            className="group block mb-4 transition-colors"
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-[0.22em] text-[#B6B0A4]">
+                {t("nav.notes") || "notes"}
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.22em] text-[#8C8780] group-hover:text-[#FF5924] transition-colors">
+                {t("nav.topup") || "top up"}
+              </span>
+            </div>
+            <p className="mt-1 font-serif text-[#1A1A1A] text-[24px] leading-none tabular-nums">
+              {balance?.notes ?? "—"}
+            </p>
+            <div className="mt-3 h-px w-full bg-[#E5DDD0]" />
+          </Link>
+        )}
+
+        {collapsed && (
+          <Link
+            href="/topup"
+            className="block mb-2 text-[#1A1A1A] hover:text-[#FF5924] transition-colors"
+          >
+            <span className="font-serif text-[14px] tabular-nums">
+              {balance?.notes ?? "—"}
+            </span>
+          </Link>
+        )}
+
+        <div className={collapsed ? "flex flex-col gap-0.5" : "flex gap-1"}>
+          <LangSwitch
+            collapsed={collapsed}
+            active={lang === "zh"}
+            label="中"
+            onClick={() => setLang("zh")}
+          />
+          <LangSwitch
+            collapsed={collapsed}
+            active={lang === "en"}
+            label="EN"
+            onClick={() => setLang("en")}
+          />
+        </div>
       </div>
     </aside>
+  );
+}
+
+/* ── Brand glyph — small disc that breathes when audio plays ───────── */
+
+function BrandGlyph({ audioActive }: { audioActive: boolean }) {
+  return (
+    <span
+      className={`inline-flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[#1A1A1A] ${audioActive ? "mark-breathe" : ""}`}
+      aria-hidden
+    >
+      <motion.span
+        animate={
+          audioActive
+            ? { scale: [1, 1.3, 1], opacity: [1, 0.75, 1] }
+            : { scale: 1, opacity: 1 }
+        }
+        transition={
+          audioActive
+            ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" }
+            : { duration: 0.3 }
+        }
+        className="block h-[6px] w-[6px] rounded-full bg-[#FF5924]"
+      />
+    </span>
+  );
+}
+
+/* ── Expanded destination row — "manuscript style" ─────────────────── */
+
+function ManuscriptRow({
+  label,
+  isActive,
+  showRule,
+  lang,
+  meta,
+}: {
+  label: string;
+  isActive: boolean;
+  showRule: boolean;
+  lang: string;
+  meta?: string;
+}) {
+  return (
+    <div className={`group relative ${showRule ? "pt-4 mt-4 border-t border-[#E5DDD0]/70" : "pt-2"}`}>
+      {/* Margin marker — coral hairline at the row's left edge */}
+      <span
+        className={`absolute left-[-28px] top-1/2 -translate-y-1/2 h-7 w-[1.5px] bg-[#FF5924] transition-opacity duration-300 ${isActive ? "opacity-100" : "opacity-0"}`}
+        aria-hidden
+      />
+      <div className="flex items-baseline justify-between gap-3">
+        <span
+          className={`transition-all duration-200 group-hover:translate-x-[3px] ${
+            isActive
+              ? lang === "zh"
+                ? "font-chinese-title-italic text-[24px] text-[#1A1A1A]"
+                : "font-serif-italic text-[25px] text-[#1A1A1A]"
+              : lang === "zh"
+                ? "font-chinese-title text-[18px] text-[#8C8780] group-hover:text-[#1A1A1A]"
+                : "text-[17px] font-medium tracking-[0.01em] text-[#8C8780] group-hover:text-[#1A1A1A]"
+          }`}
+        >
+          {label}
+        </span>
+        {meta && (
+          <span className="text-[11px] tabular-nums text-[#B6B0A4]">{meta}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Collapsed destination — a single dot ──────────────────────────── */
+
+function CollapsedDot({
+  isActive,
+  onActivate,
+  label,
+}: {
+  isActive: boolean;
+  onActivate: (e: React.MouseEvent) => void;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onActivate}
+      aria-label={label}
+      title={label}
+      className="group relative flex h-7 w-7 items-center justify-center"
+    >
+      <span
+        className={`h-[8px] w-[8px] rounded-full transition-all duration-200 ${
+          isActive
+            ? "bg-[#FF5924] scale-100"
+            : "bg-transparent border border-[#B6B0A4] scale-90 group-hover:border-[#1A1A1A] group-hover:scale-100"
+        }`}
+      />
+    </button>
+  );
+}
+
+/* ── Tiny language switch ──────────────────────────────────────────── */
+
+function LangSwitch({
+  collapsed,
+  active,
+  label,
+  onClick,
+}: {
+  collapsed: boolean;
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-md transition-colors text-[10px] tracking-[0.04em] ${
+        collapsed ? "h-5 w-5" : "h-6 px-2"
+      } ${
+        active
+          ? "text-[#1A1A1A]"
+          : "text-[#B6B0A4] hover:text-[#1A1A1A]"
+      }`}
+    >
+      {label}
+    </button>
   );
 }

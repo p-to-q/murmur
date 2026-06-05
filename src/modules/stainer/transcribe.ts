@@ -1,67 +1,58 @@
-// Stainer — single transcription orchestrator. All UI must call this — never
-// import providers directly. Provider order is informed by NEXT_PUBLIC_TRANSCRIPTION_PROVIDER
-// but the facade always falls through to a fixture so the experience never
-// dead-ends on the user.
-//
-// Layers (live recordings):
-//   1. browser-yin           — zero-deps, offline, ~instant
-//   2. remote-python (PYIN)  — higher accuracy, requires worker URL
-//   3. browser-basic-pitch   — opt-in upgrade, ~7MB model
-//   4. fixture               — last-resort demo melody so the UI never blocks
-//
-// When the caller does not supply an audioBlob (e.g. "Try the example melody"
-// button), fixture is the only sensible provider.
-
 import type {
   TranscriptionInput,
   TranscriptionResult,
 } from "@/modules/shared/types";
+import { log } from "@/lib/observability/log";
+import { transcribeRecording } from "@/lib/api/transcribe";
 import { transcribeFixture } from "./providers/fixture";
-import { transcribeRemotePython } from "./providers/remote-python";
-import { transcribeBrowserBasicPitch } from "./providers/browser-basic-pitch";
-import { transcribeBrowserYIN } from "./providers/browser-yin";
-import {
-  getConfiguredTranscriptionProvider,
-  getResolvedProviderOrder,
-  type RuntimeProviderStatus,
-} from "./runtime";
 
-type Provider = (i: TranscriptionInput) => Promise<TranscriptionResult>;
-
-const PROVIDERS: Record<RuntimeProviderStatus["id"], Provider> = {
-  "remote-python": transcribeRemotePython,
-  "browser-yin": transcribeBrowserYIN,
-  "browser-basic-pitch": transcribeBrowserBasicPitch,
-  fixture: transcribeFixture,
-};
-
-function liveProviders(): Provider[] {
-  const configured = getConfiguredTranscriptionProvider();
-  return getResolvedProviderOrder(configured).map((status) => PROVIDERS[status.id]);
-}
-
+/**
+ * Stainer is the single client transcription facade.
+ *
+ * Live recordings are sent to the server-authoritative `/api/transcribe`
+ * route. Fixture is available only for explicit demo calls where `audioBlob`
+ * is omitted; real audio never silently falls through to demo content.
+ */
 export async function transcribeWithStainer(
   input: TranscriptionInput,
 ): Promise<TranscriptionResult> {
-  // No audio at all → only fixture makes sense.
-  const providers = !input.audioBlob
-    ? [transcribeFixture]
-    : liveProviders();
+  const startedAt = performance.now();
 
-  const warnings: string[] = [];
-  for (const provider of providers) {
-    try {
-      const result = await provider(input);
-      return { ...result, warnings: [...result.warnings, ...warnings] };
-    } catch (error) {
-      warnings.push(
-        `${provider.name}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
+  log("transcribe.requested", {
+    hasAudioBlob: !!input.audioBlob,
+    providerHint: input.providerHint ?? null,
+    targetInstrument: input.targetInstrument ?? null,
+  });
+
+  try {
+    const result = input.audioBlob
+      ? await transcribeRecording(input.audioBlob, {
+          targetInstrument: input.targetInstrument,
+        })
+      : await transcribeFixture(input);
+
+    log("transcribe.completed", {
+      provider: result.provider,
+      rawNoteCount: result.rawNotes.length,
+      cleanNoteCount: result.cleanMelody.notes.length,
+      selectedMelodyKind: result.selectedMelodyKind,
+      warningCount: result.warnings.length,
+      snr: result.diagnostics?.snr ?? null,
+      voicedRatio: result.diagnostics?.voicedRatio ?? null,
+    }, {
+      durationMs: Math.round(performance.now() - startedAt),
+    });
+
+    return result;
+  } catch (error) {
+    log("transcribe.failed", {
+      error_code: "client_transcribe_failed",
+      hasAudioBlob: !!input.audioBlob,
+      message: error instanceof Error ? error.message : String(error),
+    }, {
+      durationMs: Math.round(performance.now() - startedAt),
+      level: "warn",
+    });
+    throw error;
   }
-
-  // Fixture is in the list — this only fires if even fixture throws.
-  throw new Error(`All Stainer providers failed: ${warnings.join("; ")}`);
 }

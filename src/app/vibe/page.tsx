@@ -1,9 +1,15 @@
-import { redirect } from "next/navigation";
+import { VibeScreen } from "@/components/screens/VibeScreen";
 
-// The standalone /vibe page was an orphan in the journey: tapping a vibe card
-// here just bounced back to /. The real Vibe surface is StudioScreen, which is
-// reached *through* the Hum → Pick → Studio flow. We keep the URL alive but
-// redirect anyone landing on it back to the entry point.
+/**
+ * /vibe — the *discover* moment in the journey.
+ *
+ * v2 promotes Vibe from an overlay sibling of HumScreen to its own route so
+ * hard refresh, share-link, and shell-native navigation (Capacitor, Taro) all
+ * work. The signature iris-close transition still plays on mount.
+ *
+ * Hard-refresh recovery: if there are no vibeVersions in the store, the
+ * screen redirects to "/" internally (see VibeScreen useEffect).
+ */
 export default function VibePage() {
-  redirect("/");
+  return <VibeScreen />;
 }

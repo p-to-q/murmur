@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "ledger_idempotency_idx" ON "notes_ledger" USING btree ("user_id","reason","external_ref") WHERE "notes_ledger"."external_ref" IS NOT NULL;
