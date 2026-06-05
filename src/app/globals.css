@@ -70,7 +70,7 @@
 
 :root {
   --murmur-font-sans: var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --murmur-font-serif: Georgia, "Iowan Old Style", "Times New Roman", Times, var(--murmur-font-chinese), serif;
+  --murmur-font-serif: var(--font-instrument-serif), Georgia, "Iowan Old Style", "Times New Roman", Times, serif;
   --murmur-font-chinese: "LXGW WenKai TC", "PingFang TC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --radius: 0.625rem; /* mymind cards are tight — 10px feels right */
   --background: #F5F1EB;
@@ -421,6 +421,42 @@
   50%      { transform: scale(1.035); opacity: 0.92; }
 }
 .mark-breathe { animation: mark-breathe 5s ease-in-out infinite; }
+
+/* Desktop side-nav paper treatment — keep the existing cream tone, add only
+   a gentle tooth/noise so the rail feels like material rather than glass. */
+.side-nav-paper {
+  position: fixed;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 82% 10%, rgba(255, 230, 218, 0.34), transparent 0 24%),
+    linear-gradient(180deg, rgba(255, 254, 251, 0.94), rgba(245, 241, 235, 0.90));
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.side-nav-paper::before,
+.side-nav-paper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.side-nav-paper::before {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.22'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  opacity: 0.22;
+  mix-blend-mode: multiply;
+}
+
+.side-nav-paper::after {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 20%, rgba(210, 201, 182, 0.06) 100%),
+    radial-gradient(circle at 14% 16%, rgba(255, 255, 255, 0.28), transparent 0 18%);
+  opacity: 0.7;
+}
 
 /* Floating pill bottom-nav drop-in (mobile) */
 .nav-pill {

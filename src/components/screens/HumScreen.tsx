@@ -36,6 +36,7 @@ const MAX_DURATION = 15;
 // Idle headline rotation interval (ms)
 const IDLE_ROTATE_INTERVAL = 5000;
 const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
+const ENABLE_HUM_ENTRANCE_MOTION = process.env.NODE_ENV === "production";
 
 /**
  * Surface variants the Hum screen knows how to render. The router below
@@ -559,9 +560,9 @@ export function HumScreen() {
               {isIdle && !humError && (
                 <motion.h1
                   key={`idle-${idleIndex}`}
-                  initial={{ opacity: 0, y: 16 }}
+                  initial={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0, y: 16 } : false}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
+                  exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0, y: -12 } : undefined}
                   transition={{
                     duration: 0.7,
                     ease: [0.22, 1, 0.36, 1],
@@ -575,9 +576,9 @@ export function HumScreen() {
               {isRecording && (
                 <motion.div
                   key="recording-text"
-                  initial={{ opacity: 0, y: 16 }}
+                  initial={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0, y: 16 } : false}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
+                  exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0, y: -12 } : undefined}
                   transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <h1 className="hero-serif text-[#1A1A1A] text-[36px] md:text-[52px] lg:text-[60px] leading-[1.1]">
@@ -609,17 +610,17 @@ export function HumScreen() {
               {isProcessing && (
                 <motion.div
                   key="processing-text"
-                  initial={{ opacity: 0, y: 16 }}
+                  initial={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0, y: 16 } : false}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
+                  exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0, y: -12 } : undefined}
                   transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <AnimatePresence mode="wait">
                     <motion.h1
                       key={processingMessage}
-                      initial={{ opacity: 0, y: 8 }}
+                      initial={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0, y: 8 } : false}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
+                      exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0, y: -8 } : undefined}
                       transition={{ duration: 0.3 }}
                       className="hero-serif text-[#1A1A1A] text-[28px] md:text-[42px] lg:text-[48px] leading-[1.15]"
                     >
@@ -840,9 +841,9 @@ export function HumScreen() {
             {isIdle && !humError && (
               <motion.div
                 key="cta"
-                initial={{ opacity: 0, y: 8 }}
+                initial={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0, y: 8 } : false}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
+                exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0, y: 8 } : undefined}
                 transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                 className="flex items-end gap-4"
               >

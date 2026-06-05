@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource/lxgw-wenkai-tc/300.css";
 import "@fontsource/lxgw-wenkai-tc/400.css";
 import "@fontsource/lxgw-wenkai-tc/700.css";
+import { Instrument_Serif } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
@@ -14,6 +15,13 @@ import { cn } from "@/utils/utils";
 const SITE_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
   : undefined;
+
+const instrumentalSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-instrument-serif",
+});
 
 export const metadata: Metadata = {
   ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
@@ -44,7 +52,11 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={cn("h-full antialiased font-sans", GeistSans.variable)}
+      className={cn(
+        "h-full antialiased font-sans",
+        GeistSans.variable,
+        instrumentalSerif.variable,
+      )}
     >
       <body className="min-h-svh flex flex-col bg-[#F5F1EB]">
         <I18nHydrator />
