@@ -1,10 +1,21 @@
 import type {
-  ArrangementState, CleanMelody, TrackState, VibeVersion, VisualConfig,
+  ArrangementState,
+  CleanMelody,
+  MelodySelectionKind,
+  TrackState,
+  VibeVersion,
+  VisualConfig,
 } from "@/modules/shared/types";
-import { VIBE_PRESETS } from "@/presets/vibes";
+import { VIBE_PRESETS, type VibeId, type VibePreset } from "@/presets/vibes";
 import { mulberry32, hashString, pick } from "@/lib/music/seeded-random";
 import type { BassPattern } from "@/lib/music/bass-engine";
 import type { DrumPattern } from "@/lib/music/drum-engine";
+import { log } from "@/lib/observability/log";
+import {
+  INSTRUMENT_RANGES,
+  clampPitchToInstrument,
+  type InstrumentId,
+} from "@murmur/core/music/instrument-ranges";
 import { generateStrummerCode } from "./generate-code";
 
 /**
@@ -136,7 +147,12 @@ const ENSEMBLES: Record<string, Ensemble[]> = {
 
 // ── Vibe selection (kept as before but cleaner) ────────────────────────
 
-function pickThreeDistinctVibes(melody: CleanMelody) {
+type PreferredVibeMode = "boost" | "anchor";
+
+function pickThreeDistinctVibes(
+  melody: CleanMelody,
+  options: { preferredVibeId?: VibeId; preferredVibeMode?: PreferredVibeMode } = {},
+) {
   const scored = VIBE_PRESETS.map((p) => {
     let score = Math.random() * 2.0;
     if (melody.scale === "minor" && ["cinematic", "bedroom", "rain"].includes(p.id)) score += 1.5;
@@ -145,10 +161,21 @@ function pickThreeDistinctVibes(melody: CleanMelody) {
     if (melody.bpm > 100 && p.energy > 0.6) score += 0.8;
     if (melody.contour === "rising" && ["party", "synth", "sunset"].includes(p.id)) score += 0.6;
     if (melody.contour === "falling" && ["cinematic", "bedroom", "rain"].includes(p.id)) score += 0.6;
+    if (options.preferredVibeMode === "boost" && options.preferredVibeId === p.id) score += 1.8;
+    if (options.preferredVibeMode === "anchor" && options.preferredVibeId === p.id) score += 3.2;
     return { preset: p, score };
   });
   scored.sort((a, b) => b.score - a.score);
   const sorted = scored.map((s) => s.preset);
+  const preferredPreset =
+    options.preferredVibeId
+      ? sorted.find((preset) => preset.id === options.preferredVibeId) ?? null
+      : null;
+
+  if (preferredPreset && options.preferredVibeMode === "anchor") {
+    return pickAnchoredVibes(sorted, preferredPreset);
+  }
+
   const top    = sorted[0]!;
   const middle = sorted[Math.floor(sorted.length / 2)]!;
   const bottom = sorted[sorted.length - 1]!;
@@ -161,38 +188,128 @@ function pickThreeDistinctVibes(melody: CleanMelody) {
   return picks.slice(0, 3);
 }
 
+function pickAnchoredVibes(sorted: VibePreset[], anchor: VibePreset) {
+  const withoutAnchor = sorted.filter((preset) => preset.id !== anchor.id);
+  const top = withoutAnchor[0] ?? anchor;
+  const middle = withoutAnchor[Math.floor(withoutAnchor.length / 2)] ?? withoutAnchor[1] ?? anchor;
+
+  const picks = [anchor];
+  if (!picks.some((preset) => preset.id === top.id)) picks.push(top);
+  if (!picks.some((preset) => preset.id === middle.id)) picks.push(middle);
+
+  const fallback = withoutAnchor.find((preset) => !picks.some((picked) => picked.id === preset.id));
+  if (fallback) picks.push(fallback);
+  return picks.slice(0, 3);
+}
+
 // ── Track helper ───────────────────────────────────────────────────────
 
-function track(instrument: string, currentPattern: string, intensity: number, enabled = true): TrackState {
-  return { enabled, intensity, originalPattern: currentPattern, currentPattern, instrument, versionHistory: [] };
+function track(
+  instrument: string,
+  currentPattern: string,
+  intensity: number,
+  enabled = true,
+  typedFields: Partial<
+    Pick<TrackState, "melodyPitchSequence" | "chordsTag" | "bassPattern" | "drumsPattern" | "texturePreset">
+  > = {},
+): TrackState {
+  return {
+    enabled,
+    intensity,
+    originalPattern: currentPattern,
+    currentPattern,
+    instrument,
+    versionHistory: [],
+    ...typedFields,
+  };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────
 
-export function generateVibeVersions(melody: CleanMelody): VibeVersion[] {
-  const picks = pickThreeDistinctVibes(melody);
+export function generateVibeVersions(
+  melody: CleanMelody,
+  options: {
+    draftId?: string;
+    originFlowId?: string;
+    parentSongId?: string | null;
+    rootSongId?: string | null;
+    lineageDepth?: number;
+    sourceType?: VibeVersion["sourceType"];
+    sourceMelodyKind?: MelodySelectionKind;
+    preferredVibeId?: VibeId;
+    preferredVibeMode?: PreferredVibeMode;
+  } = {},
+): VibeVersion[] {
+  const startedAt = performance.now();
+  const picks = pickThreeDistinctVibes(melody, {
+    preferredVibeId: options.preferredVibeId,
+    preferredVibeMode: options.preferredVibeMode,
+  });
+  let rangeClampCount = 0;
+  const draftId = options.draftId ?? crypto.randomUUID();
+  const originFlowId = options.originFlowId ?? crypto.randomUUID();
+  const parentSongId = options.parentSongId ?? null;
+  const rootSongId = options.rootSongId ?? null;
+  const lineageDepth = options.lineageDepth ?? 0;
+  const sourceType = options.sourceType ?? "hum";
+  const sourceMelodyKind = options.sourceMelodyKind ?? "corrected";
 
-  return picks.map((preset) => {
+  const versions: VibeVersion[] = picks.map((preset) => {
     const id = crypto.randomUUID();
     const rng = mulberry32(hashString(id));
     const candidates = ENSEMBLES[preset.id] ?? ENSEMBLES.sunset!;
     const ensemble = pick(rng, candidates);
+    const melodyFit = clampMelodyToCarrier(melody, ensemble.melody.instrument);
+    if (melodyFit.applied) rangeClampCount += 1;
 
-    // currentPattern semantics (post-rewrite):
-    //   melody.currentPattern   — for display/edit only; runtime uses melody.notes
-    //   chords.currentPattern   — kept for legacy; chord-engine reads version.id
-    //   bass.currentPattern     — BassPattern name ("walking" etc), read by assembleSong
-    //   drums.currentPattern    — DrumPattern name, read by assembleSong
-    const melPat   = melody.notes.map((n) => n.pitch).join(" ");
+    // currentPattern remains for legacy rows and Strummer code display. New
+    // runtime reads should prefer the typed fields below.
+    const melPat   = melodyFit.melody.notes.map((n) => n.pitch).join(" ");
     const chordPat = `gen:${preset.id}`; // marker — real chords come from chord-engine
 
     const arr: ArrangementState = {
-      melody:  track(ensemble.melody.instrument,  melPat,                  ensemble.melody.intensity),
-      chords:  track(ensemble.chords.instrument,  chordPat,                ensemble.chords.intensity),
-      strings: track(ensemble.strings.instrument, chordPat,                ensemble.strings.intensity, ensemble.strings.enabled),
-      drums:   track(ensemble.drums.instrument,   ensemble.drums.pattern,  ensemble.drums.intensity),
-      bass:    track(ensemble.bass.instrument,    ensemble.bass.pattern,   ensemble.bass.intensity),
-      texture: track(ensemble.texture.instrument, `tex:${preset.id}`,      ensemble.texture.intensity, ensemble.texture.enabled),
+      melody: track(
+        ensemble.melody.instrument,
+        melPat,
+        ensemble.melody.intensity,
+        true,
+        { melodyPitchSequence: melodyFit.melody.notes.map((n) => n.pitch) },
+      ),
+      chords: track(
+        ensemble.chords.instrument,
+        chordPat,
+        ensemble.chords.intensity,
+        true,
+        { chordsTag: preset.id },
+      ),
+      strings: track(
+        ensemble.strings.instrument,
+        chordPat,
+        ensemble.strings.intensity,
+        ensemble.strings.enabled,
+        { chordsTag: preset.id },
+      ),
+      drums: track(
+        ensemble.drums.instrument,
+        ensemble.drums.pattern,
+        ensemble.drums.intensity,
+        true,
+        { drumsPattern: ensemble.drums.pattern },
+      ),
+      bass: track(
+        ensemble.bass.instrument,
+        ensemble.bass.pattern,
+        ensemble.bass.intensity,
+        true,
+        { bassPattern: ensemble.bass.pattern },
+      ),
+      texture: track(
+        ensemble.texture.instrument,
+        `tex:${preset.id}`,
+        ensemble.texture.intensity,
+        ensemble.texture.enabled,
+        { texturePreset: preset.id },
+      ),
     };
 
     const visualConfig: VisualConfig = {
@@ -204,13 +321,71 @@ export function generateVibeVersions(melody: CleanMelody): VibeVersion[] {
 
     return {
       id,
+      draftId,
+      originFlowId,
+      parentSongId,
+      rootSongId,
+      lineageDepth,
+      sourceType,
+      sourceMelodyKind,
+      editCount: 0,
+      editDepth: "fresh",
+      versionSeed: id,
       title: preset.titleGenerator(),
       vibe: preset.label,
       tags: [...preset.tags],
-      melody,
+      melody: melodyFit.melody,
       arrangementState: arr,
       visualConfig,
       strummerCode: generateStrummerCode(arr),
     };
   });
+
+  log("arrangement.generated", {
+    bpm: melody.bpm,
+    key: melody.key,
+    scale: melody.scale,
+    noteCount: melody.notes.length,
+    sourceMelodyKind,
+    melodyCarriers: versions.map((version) => version.arrangementState.melody.instrument),
+    rangeClampCount,
+    versionIds: versions.map((version) => version.id),
+    vibes: versions.map((version) => version.vibe),
+  }, {
+    durationMs: Math.round(performance.now() - startedAt),
+  });
+
+  return versions;
+}
+
+function clampMelodyToCarrier(
+  melody: CleanMelody,
+  instrument: string,
+): { melody: CleanMelody; applied: boolean } {
+  if (!isInstrumentId(instrument)) {
+    return { melody, applied: false };
+  }
+
+  const range = INSTRUMENT_RANGES[instrument];
+  if (!range.canCarryMelody) {
+    return { melody, applied: false };
+  }
+
+  const clampedNotes = clampPitchToInstrument(melody.notes, instrument);
+  const applied = clampedNotes.some((note, index) => note.pitch !== melody.notes[index]?.pitch);
+  if (!applied) {
+    return { melody, applied: false };
+  }
+
+  return {
+    melody: {
+      ...melody,
+      notes: clampedNotes,
+    },
+    applied: true,
+  };
+}
+
+function isInstrumentId(value: string): value is InstrumentId {
+  return value in INSTRUMENT_RANGES;
 }

@@ -49,9 +49,16 @@ const QUICK_GROUPS: QuickGroup[] = [
 export interface AurisPanelProps {
   busy: boolean;
   onApply: (prompt: string) => Promise<void> | void;
+  promptPlaceholder?: string;
+  helperText?: string;
 }
 
-export function AurisPanel({ busy, onApply }: AurisPanelProps) {
+export function AurisPanel({
+  busy,
+  onApply,
+  promptPlaceholder,
+  helperText,
+}: AurisPanelProps) {
   const t = useTranslator();
   const [prompt, setPrompt] = useState("");
 
@@ -83,7 +90,7 @@ export function AurisPanel({ busy, onApply }: AurisPanelProps) {
           onKeyDown={(event) => {
             if (event.key === "Enter") void submit();
           }}
-          placeholder={t("studio.prompt.placeholder")}
+          placeholder={promptPlaceholder ?? t("studio.prompt.placeholder")}
           className="min-w-0 flex-1 rounded-[18px] border border-[#E6DDCF] bg-white/85 px-4 py-2.5 text-[13px] text-[#1A1A1A] outline-none transition-colors placeholder:text-[#9B9488] focus:border-[#FF8A5C]"
         />
         <button
@@ -95,7 +102,9 @@ export function AurisPanel({ busy, onApply }: AurisPanelProps) {
         </button>
       </div>
 
-      <p className="mt-4 text-[11px] text-[#8C8780]">{t("studio.auris.sub")}</p>
+      <p className="mt-4 text-[11px] text-[#8C8780]">
+        {helperText ?? t("studio.auris.sub")}
+      </p>
 
       <div className="mt-2.5 space-y-2">
         {QUICK_GROUPS.map((group) => (

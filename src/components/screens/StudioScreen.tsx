@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -18,6 +17,12 @@ import {
 } from "@/modules/strummer/apply-edit";
 import { classifyPromptWithLLM } from "@/lib/api/strummer";
 import { memory } from "@/lib/platform/memory";
+import {
+  bumpVersionEditState,
+  getEditDepthLabel,
+  resetVersionEditState,
+} from "@/modules/music/edit-depth";
+import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import type {
   ArrangementState,
   TrackState,
@@ -27,12 +32,8 @@ import type {
 import { AurisPanel } from "@/components/studio/auris-panel";
 import { TrackMixer } from "@/components/studio/track-mixer";
 import { SceneGrid } from "@/components/studio/scene-grid";
-import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
 export function StudioScreen() {
-  // Studio is intentionally not a DAW. It compresses arrangement control into
-  // three legible surfaces: direct track shaping, mood/scene shifts, and a
-  // natural-language AI edit path. The goal is guided authorship, not maximal knobs.
   const router = useRouter();
   const t = useTranslator();
   const currentVersion = useMurmurStore((state) => state.currentVersion);
@@ -64,6 +65,8 @@ function StudioContent({ version }: { version: VibeVersion }) {
 
   const currentVersion = version;
   const arrangement = currentVersion.arrangementState;
+  const melodyOrigin = getMelodyOriginCopy(currentVersion.sourceMelodyKind, t);
+  const editDepthLabel = getEditDepthLabel(currentVersion.editDepth, t);
 
   const applyTokens = (
     nextVersion: VibeVersion,
@@ -77,12 +80,12 @@ function StudioContent({ version }: { version: VibeVersion }) {
       nextBpm = Math.max(40, Math.min(200, nextBpm + tempoDelta(token)));
     }
 
-    return {
+    return bumpVersionEditState({
       ...nextVersion,
       melody: { ...nextVersion.melody, bpm: nextBpm },
       arrangementState: nextArrangement,
       strummerCode: generateStrummerCode(nextArrangement),
-    };
+    });
   };
 
   const restartPlayback = (nextVersion: VibeVersion) => {
@@ -96,11 +99,11 @@ function StudioContent({ version }: { version: VibeVersion }) {
         ...arrangement,
         [key]: { ...arrangement[key], ...patch },
       };
-      const nextVersion: VibeVersion = {
+      const nextVersion = bumpVersionEditState({
         ...currentVersion,
         arrangementState: nextArrangement,
         strummerCode: generateStrummerCode(nextArrangement),
-      };
+      });
       setCurrentVersion(nextVersion);
       if (isPlaying) restartPlayback(nextVersion);
     },
@@ -122,6 +125,21 @@ function StudioContent({ version }: { version: VibeVersion }) {
         setCurrentVersion(nextVersion);
         if (isPlaying) restartPlayback(nextVersion);
         toast.success(t("studio.prompt.applied"));
+        memory
+          .reportAction({
+            content: `Studio rule edit: "${prompt}" -> ${ruleToken}`,
+            event_type: "update",
+            page: "studio",
+            metadata: {
+              type: "studio_prompt_rule",
+              prompt,
+              token: ruleToken,
+              source_melody_kind: currentVersion.sourceMelodyKind,
+              edit_depth: nextVersion.editDepth,
+              edit_count: nextVersion.editCount,
+            },
+          })
+          .catch(() => {});
         return;
       }
 
@@ -133,10 +151,17 @@ function StudioContent({ version }: { version: VibeVersion }) {
         toast.success(t("studio.prompt.applied"));
         memory
           .reportAction({
-            content: `Studio LLM edit: "${prompt}" → ${llmTokens.join(", ")}`,
+            content: `Studio LLM edit: "${prompt}" -> ${llmTokens.join(", ")}`,
             event_type: "update",
             page: "studio",
-            metadata: { type: "studio_prompt", prompt, tokens: llmTokens },
+            metadata: {
+              type: "studio_prompt",
+              prompt,
+              tokens: llmTokens,
+              source_melody_kind: currentVersion.sourceMelodyKind,
+              edit_depth: nextVersion.editDepth,
+              edit_count: nextVersion.editCount,
+            },
           })
           .catch(() => {});
         return;
@@ -150,14 +175,27 @@ function StudioContent({ version }: { version: VibeVersion }) {
 
   const handleRestore = () => {
     const restoredArrangement = applyEdit(arrangement, "restore_all");
-    const nextVersion: VibeVersion = {
+    const nextVersion = resetVersionEditState({
       ...currentVersion,
       arrangementState: restoredArrangement,
       strummerCode: generateStrummerCode(restoredArrangement),
-    };
+    });
     setCurrentVersion(nextVersion);
     if (isPlaying) restartPlayback(nextVersion);
     toast(t("studio.restore_toast"));
+    memory
+      .reportAction({
+        content: `Restored studio arrangement for "${currentVersion.title}"`,
+        event_type: "update",
+        page: "studio",
+        metadata: {
+          type: "studio_restore",
+          source_melody_kind: currentVersion.sourceMelodyKind,
+          edit_depth: nextVersion.editDepth,
+          edit_count: nextVersion.editCount,
+        },
+      })
+      .catch(() => {});
   };
 
   const togglePlay = () => {
@@ -176,18 +214,49 @@ function StudioContent({ version }: { version: VibeVersion }) {
     setIsPlaying(false);
     memory
       .reportAction({
-        content: `Studio → Name flow for "${currentVersion.title}"`,
+        content: `Studio -> Name flow for "${currentVersion.title}"`,
         event_type: "navigate",
         page: "studio",
-        metadata: { type: "open_name", vibe: currentVersion.vibe },
+        metadata: {
+          type: "open_name",
+          vibe: currentVersion.vibe,
+          source_melody_kind: currentVersion.sourceMelodyKind,
+          edit_depth: currentVersion.editDepth,
+          edit_count: currentVersion.editCount,
+        },
       })
       .catch(() => {});
     router.push("/studio/name");
   };
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
-      <PageBackdrop variant="soft" />
+    <div className="relative min-h-svh overflow-hidden bg-[#EEEDF2]">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <div
+          className="aurora-blob-2 absolute rounded-full"
+          style={{
+            width: "min(52vw, 520px)",
+            height: "min(42vw, 420px)",
+            right: "-10%",
+            top: "3%",
+            background:
+              "radial-gradient(ellipse at center, rgba(201,182,228,0.24) 0%, rgba(200,180,240,0.06) 55%, transparent 75%)",
+            filter: "blur(55px)",
+          }}
+        />
+        <div
+          className="aurora-blob-3 absolute rounded-full"
+          style={{
+            width: "min(44vw, 430px)",
+            height: "min(38vw, 360px)",
+            left: "-6%",
+            top: "26%",
+            background:
+              "radial-gradient(ellipse at center, rgba(255,200,140,0.18) 0%, rgba(255,180,100,0.05) 55%, transparent 75%)",
+            filter: "blur(50px)",
+          }}
+        />
+      </div>
 
       <div className="relative z-10 min-h-svh flex flex-col">
         <div
@@ -276,11 +345,22 @@ function StudioContent({ version }: { version: VibeVersion }) {
                 <h2 className="font-serif text-[24px] leading-[1.05] text-[#1A1A1A] md:text-[28px]">
                   {t("studio.overview.title")}
                 </h2>
+                <p className="mt-3 max-w-[28rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
+                  {t("studio.overview.sub")}
+                </p>
 
                 <div className="mt-5 grid grid-cols-2 gap-2.5">
                   <MetaPill
                     label={t("song.meta.vibe")}
                     value={currentVersion.vibe}
+                  />
+                  <MetaPill
+                    label={t("studio.origin.label")}
+                    value={melodyOrigin.label}
+                  />
+                  <MetaPill
+                    label={t("studio.edit_depth.label")}
+                    value={editDepthLabel}
                   />
                   <MetaPill
                     label={t("song.meta.key")}
@@ -295,11 +375,19 @@ function StudioContent({ version }: { version: VibeVersion }) {
                     value={currentVersion.arrangementState.melody.instrument}
                   />
                 </div>
+                <p className="mt-4 text-[12px] leading-[1.6] text-[#6F6A63] md:text-[13px]">
+                  {melodyOrigin.studioBody}
+                </p>
               </div>
             </div>
 
             <div className="mt-5 space-y-5">
-              <AurisPanel busy={promptBusy} onApply={handlePrompt} />
+              <AurisPanel
+                busy={promptBusy}
+                onApply={handlePrompt}
+                promptPlaceholder={melodyOrigin.promptPlaceholder}
+                helperText={melodyOrigin.studioBody}
+              />
               <TrackMixer arrangement={arrangement} onTrack={updateTrack} />
               <SceneGrid onPick={(scene) => handleScene(scene.tokens)} />
             </div>
@@ -307,8 +395,9 @@ function StudioContent({ version }: { version: VibeVersion }) {
         </div>
 
         <div
-          className="fixed left-0 right-0 bg-gradient-to-t from-[#F5F1EB] via-[#F5F1EB] to-transparent px-5 pt-6 pb-5 md:left-[232px] md:px-8"
+          className="fixed left-0 right-0 bg-gradient-to-t from-[#EEEDF2] via-[#EEEDF2] to-transparent px-5 pt-6 pb-5 md:px-8"
           style={{
+            left: "var(--side-nav-w)",
             bottom: "env(safe-area-inset-bottom, 0px)",
           }}
         >
