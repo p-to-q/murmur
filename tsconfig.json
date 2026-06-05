@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@murmur/core": ["./packages/murmur-core/src/index.ts"],
+      "@murmur/core/*": ["./packages/murmur-core/src/*"]
     }
   },
   "include": [

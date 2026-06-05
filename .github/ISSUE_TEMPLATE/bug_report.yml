@@ -1,0 +1,72 @@
+name: Bug report
+description: Report a product, workflow, or infrastructure bug.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for writing this up. Please give us the shortest path to reproduce it and any support code or error text you saw.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One-sentence description of the bug.
+      placeholder: Hum transcription fails after recording on Safari
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: List the exact path through the product.
+      placeholder: |
+        1. Open the Hum screen
+        2. Record 8 seconds of humming
+        3. Tap continue
+        4. See error toast
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: The hum should transcribe and continue to Vibe.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: The flow falls back to fixture audio and shows a support code.
+    validations:
+      required: true
+  - type: input
+    id: support_code
+    attributes:
+      label: Support code
+      description: If the UI showed a support code, paste it here.
+      placeholder: HUM-WORKER_UNAVAILABLE-Y72ZLB
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - Web app
+        - Audio worker
+        - Database / auth / billing
+        - Docs / tooling / CI
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, device, OS, region, branch, or commit if known.
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs, screenshots, or extra evidence
+      description: Paste logs or links if you have them.

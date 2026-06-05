@@ -11,13 +11,13 @@ If you are reviewing this repo with a code bot judge or a design bot judge,
 start here:
 
 - Product + design + engineering overview:
-  [docs/judges-guide.md](/Users/dujiayi/murmur/docs/judges-guide.md)
+  [docs/judges-guide.md](./docs/judges-guide.md)
 - Melody, arrangement, and render pipeline:
-  [docs/music-engine.md](/Users/dujiayi/murmur/docs/music-engine.md)
+  [docs/music-engine.md](./docs/music-engine.md)
 - Provider and transcription fallback strategy:
-  [docs/provider-strategy.md](/Users/dujiayi/murmur/docs/provider-strategy.md)
+  [docs/provider-strategy.md](./docs/provider-strategy.md)
 - Verification notes:
-  [docs/verification.md](/Users/dujiayi/murmur/docs/verification.md)
+  [docs/verification.md](./docs/verification.md)
 
 ## What We Tried To Make Deliberately
 
@@ -35,15 +35,15 @@ start here:
 ## Key Visible Files
 
 - Entry flow shell:
-  [src/app/page.tsx](/Users/dujiayi/murmur/src/app/page.tsx)
+  [src/app/page.tsx](./src/app/page.tsx)
 - Capture / transcription handoff:
-  [src/components/screens/HumScreen.tsx](/Users/dujiayi/murmur/src/components/screens/HumScreen.tsx)
+  [src/components/screens/HumScreen.tsx](./src/components/screens/HumScreen.tsx)
 - Arrangement editing surface:
-  [src/components/screens/StudioScreen.tsx](/Users/dujiayi/murmur/src/components/screens/StudioScreen.tsx)
+  [src/components/screens/StudioScreen.tsx](./src/components/screens/StudioScreen.tsx)
 - Saved song playback + export surface:
-  [src/components/screens/SongDetailScreen.tsx](/Users/dujiayi/murmur/src/components/screens/SongDetailScreen.tsx)
+  [src/components/screens/SongDetailScreen.tsx](./src/components/screens/SongDetailScreen.tsx)
 - Real audio+video export:
-  [src/modules/export/export-webm.ts](/Users/dujiayi/murmur/src/modules/export/export-webm.ts)
+  [src/modules/export/export-webm.ts](./src/modules/export/export-webm.ts)
 
 ## Getting Started
 
@@ -90,7 +90,7 @@ cp .env.example .env
 ### Notes
 
 - Authentication, notifications, and AI now go through Murmur's local
-  platform adapter under [src/lib/platform](/Users/dujiayi/murmur/src/lib/platform).
+  platform adapter under [src/lib/platform](./src/lib/platform).
 - The notification publisher is currently a stub so local development and demo
   flows stay usable without external push infrastructure.
 - The Strummer edit route expects an OpenAI-compatible chat API.
@@ -108,3 +108,7 @@ cp .env.example .env
 ## Learn More
 
 - [Next.js Documentation](https://nextjs.org/docs)
+- [Repository operations](./docs/repository-operations.md)
+- [Contributing](./CONTRIBUTING.md)
+- [Security policy](./SECURITY.md)
+- [Support guide](./SUPPORT.md)

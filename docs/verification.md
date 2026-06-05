@@ -8,7 +8,8 @@
 - [x] `bunx next build` — 14 routes compile cleanly (Turbopack)
 - [x] `bun run lint` — 0 errors, 1 pre-existing warning
 - [x] Music engine v2: rhythm-engine + chord-engine + bass-engine + drum-engine + assemble-song wired through both live preview and offline render
-- [x] Hum → Stainer facade → browser-yin / fixture → 3 VibeVersions
+- [x] Hum demo → Stainer facade → fixture → 3 VibeVersions
+- [ ] Live hum → `/api/transcribe` → audio worker → 3 VibeVersions
 - [x] VersionCardsOverlay shows 3 cards, audition with synth, "Pick" routes to Studio
 - [x] StudioScreen mixer + 8 scene presets + restore button
 - [x] StudioScreen prompt bar — rule parser + LLM fallback (/api/strummer/edit)
@@ -28,8 +29,7 @@
 - [x] Guest mode (`userId="guest"`) preserved for hackathon demo
 
 ### Optional upgrades (off by default)
-- [ ] Browser Basic Pitch — opt-in via `NEXT_PUBLIC_ENABLE_BASIC_PITCH_BROWSER=true`
-- [ ] PYIN remote worker — set `NEXT_PUBLIC_REMOTE_PYIN_WORKER_URL` (or legacy `NEXT_PUBLIC_BASIC_PITCH_WORKER_URL`)
+- [ ] PYIN audio worker — set server-only `AUDIO_WORKER_URL`
 - [ ] Native push notifications — local adapter is stubbed until a real gateway is configured
 
 ### Known limitations
@@ -45,6 +45,6 @@
 
 ### Demo safety
 Three demo modes still work without any network:
-1. Live hum → browser-yin → 3 cards → Studio → save (MP3 rendered) → Gallery
+1. Live hum → `/api/transcribe` → 3 cards → Studio → save (MP3 rendered) → Gallery
 2. Mic denied → "Try with an example melody" → fixture → identical flow
 3. Pre-saved songs visible in Gallery with sticker record wall layout

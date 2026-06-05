@@ -1,9 +1,7 @@
-const projectRoot = import.meta.dirname;
-
 const config = {
   plugins: {
     "@tailwindcss/postcss": {
-      base: projectRoot,
+      optimize: false,
     },
   },
 };

@@ -1,0 +1,35 @@
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
+          - "docs/**"
+
+slice/infra:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "scripts/**"
+          - "package.json"
+          - "bun.lock"
+          - "workers/audio-engine/requirements*.txt"
+
+slice/tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.test.*"
+          - "**/*.spec.*"
+          - "test/**"
+          - "tests/**"
+          - "workers/audio-engine/tests*/**"
+
+type/governance:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "AGENTS.md"
+          - "CONTRIBUTING.md"
+          - "SECURITY.md"
+          - "SUPPORT.md"
+          - "WORKFLOW.md"
+          - ".github/**"
+          - "docs/repository-operations.md"
+          - "docs/review-gates.md"

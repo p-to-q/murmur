@@ -1,0 +1,12 @@
+type/bug:
+  - '/\bbug\b|\bbroken\b|\brepro\b|\bfailing\b|\berror\b/i'
+type/feature:
+  - '/\bfeature\b|\brequest\b|\bproposal\b|\bimprove\b/i'
+type/question:
+  - '/\bquestion\b|\bhow do\b|\bwhy\b|\bhelp\b/i'
+type/governance:
+  - '/\bgovernance\b|\bworkflow\b|\blabel\b|\bsecurity\b|\brelease\b/i'
+slice/research:
+  - '/\bresearch\b|\bpaper\b|\baudit\b|\bbenchmark\b/i'
+slice/infra:
+  - '/\bci\b|\bcd\b|\bworkflow\b|\bdependabot\b|\bautomation\b|\bbuild\b/i'
