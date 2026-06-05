@@ -34,11 +34,11 @@ The product is currently optimized for:
 
 Read these first before making non-trivial changes:
 
-- [README.md](/Users/dujiayi/murmur/README.md)
-- [docs/architecture.md](/Users/dujiayi/murmur/docs/architecture.md)
-- [docs/delivery-cadence.md](/Users/dujiayi/murmur/docs/delivery-cadence.md)
-- [docs/engineering-principles.md](/Users/dujiayi/murmur/docs/engineering-principles.md)
-- [docs/review-gates.md](/Users/dujiayi/murmur/docs/review-gates.md)
+- [README.md](./README.md)
+- [docs/architecture.md](./docs/architecture.md)
+- [docs/delivery-cadence.md](./docs/delivery-cadence.md)
+- [docs/engineering-principles.md](./docs/engineering-principles.md)
+- [docs/review-gates.md](./docs/review-gates.md)
 
 The main boundaries are:
 

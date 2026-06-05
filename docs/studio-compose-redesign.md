@@ -85,7 +85,7 @@ hierarchy, every page is an "aha" rather than a tool wall.
 ## 5. Scene cards as the dominant edit surface
 
 The five scenes already exist:
-[scene-presets.ts](/Users/dujiayi/murmur/src/components/studio/scene-presets.ts).
+[scene-presets.ts](../src/components/studio/scene-presets.ts).
 Make them the dominant Plane 2 element with three changes:
 
 1. **Bigger cards.** Bento layout (2 + 3 or 1 + 2 + 2) instead of a
@@ -103,7 +103,7 @@ Scene labels stay copy-driven via i18n keys.
 ## 6. Auris input — keep, slim down
 
 Keep the natural-language input
-([auris-panel.tsx](/Users/dujiayi/murmur/src/components/studio/auris-panel.tsx))
+([auris-panel.tsx](../src/components/studio/auris-panel.tsx))
 but:
 
 - **Remove the 9 quick chips.** They duplicate the scene cards (mood
@@ -116,13 +116,13 @@ but:
   shimmer so the user sees Auris "thinking" instead of nothing.
 
 The LLM classifier route
-([api/strummer/edit](/Users/dujiayi/murmur/src/app/api/strummer/edit/route.ts))
+([api/strummer/edit](../src/app/api/strummer/edit/route.ts))
 does not change. It still returns EditTokens that `applyEdit` consumes.
 
 ## 7. TrackMixer — demote to Plane 3
 
 Keep
-[track-mixer.tsx](/Users/dujiayi/murmur/src/components/studio/track-mixer.tsx)
+[track-mixer.tsx](../src/components/studio/track-mixer.tsx)
 intact but hide it by default. Surface it from a small inline link on
 Plane 2:
 

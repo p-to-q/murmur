@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Murmur contributing guide
+    url: https://github.com/p-to-q/murmur/blob/main/CONTRIBUTING.md
+    about: Read this first for setup, validation, and reporting guidance.

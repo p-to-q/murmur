@@ -1,0 +1,36 @@
+name: Stale
+
+on:
+  schedule:
+    - cron: "0 2 * * 2"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark stale issues and PRs
+        uses: actions/stale@v9
+        with:
+          days-before-stale: 21
+          days-before-close: 7
+          stale-issue-label: stale
+          stale-pr-label: stale
+          exempt-issue-labels: pinned,security,planned
+          exempt-pr-labels: pinned,release-blocker
+          stale-issue-message: >
+            This issue has gone quiet for 21 days. If it is still active, leave a
+            short update and it will stay open.
+          stale-pr-message: >
+            This PR has gone quiet for 21 days. If work is still active, leave a
+            short update or re-request review.
+          close-issue-message: >
+            Closing for inactivity after 7 more days. Re-open with fresh context
+            if the problem is still current.
+          close-pr-message: >
+            Closing for inactivity after 7 more days. Re-open when the branch is
+            ready to move again.

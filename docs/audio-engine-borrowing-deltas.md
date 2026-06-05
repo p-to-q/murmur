@@ -21,13 +21,13 @@ reference implementations and records the highest-value next moves.
 Current local boundaries:
 
 - worker:
-  [workers/audio-engine/main.py](/Users/dujiayi/murmur/workers/audio-engine/main.py)
+  [workers/audio-engine/main.py](../workers/audio-engine/main.py)
 - server normalization:
-  [src/lib/platform/audio-worker.ts](/Users/dujiayi/murmur/src/lib/platform/audio-worker.ts)
+  [src/lib/platform/audio-worker.ts](../src/lib/platform/audio-worker.ts)
 - client facade:
-  [src/modules/stainer/transcribe.ts](/Users/dujiayi/murmur/src/modules/stainer/transcribe.ts)
+  [src/modules/stainer/transcribe.ts](../src/modules/stainer/transcribe.ts)
 - melody repair and selection:
-  [src/modules/music/humming-engine.ts](/Users/dujiayi/murmur/src/modules/music/humming-engine.ts)
+  [src/modules/music/humming-engine.ts](../src/modules/music/humming-engine.ts)
 
 What Murmur already does well:
 

@@ -80,7 +80,7 @@ Manifest format:
 
 Example:
 
-- [workers/audio-engine/tools/dataset_manifest.example.json](/Users/dujiayi/murmur/workers/audio-engine/tools/dataset_manifest.example.json)
+- [workers/audio-engine/tools/dataset_manifest.example.json](../workers/audio-engine/tools/dataset_manifest.example.json)
 
 This lets us do two things:
 

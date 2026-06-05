@@ -11,39 +11,39 @@ If you are reviewing this repo with a code bot judge or a design bot judge,
 start here:
 
 - Product + design + engineering overview:
-  [docs/judges-guide.md](/Users/dujiayi/murmur/docs/judges-guide.md)
+  [docs/judges-guide.md](./docs/judges-guide.md)
 - Runtime architecture:
-  [docs/architecture.md](/Users/dujiayi/murmur/docs/architecture.md)
+  [docs/architecture.md](./docs/architecture.md)
 - Runtime surfaces:
-  [docs/runtime-surfaces.md](/Users/dujiayi/murmur/docs/runtime-surfaces.md)
+  [docs/runtime-surfaces.md](./docs/runtime-surfaces.md)
 - Delivery cadence:
-  [docs/delivery-cadence.md](/Users/dujiayi/murmur/docs/delivery-cadence.md)
+  [docs/delivery-cadence.md](./docs/delivery-cadence.md)
 - Engineering principles:
-  [docs/engineering-principles.md](/Users/dujiayi/murmur/docs/engineering-principles.md)
+  [docs/engineering-principles.md](./docs/engineering-principles.md)
 - Review gates:
-  [docs/review-gates.md](/Users/dujiayi/murmur/docs/review-gates.md)
+  [docs/review-gates.md](./docs/review-gates.md)
 - Workflow contract:
-  [WORKFLOW.md](/Users/dujiayi/murmur/WORKFLOW.md)
+  [WORKFLOW.md](./WORKFLOW.md)
 - Packaging and release:
-  [docs/packaging-and-release.md](/Users/dujiayi/murmur/docs/packaging-and-release.md)
+  [docs/packaging-and-release.md](./docs/packaging-and-release.md)
 - Melody, arrangement, and render pipeline:
-  [docs/music-engine.md](/Users/dujiayi/murmur/docs/music-engine.md)
+  [docs/music-engine.md](./docs/music-engine.md)
 - Humming engine v2 direction:
-  [docs/humming-engine-v2.md](/Users/dujiayi/murmur/docs/humming-engine-v2.md)
+  [docs/humming-engine-v2.md](./docs/humming-engine-v2.md)
 - Humming research landscape + borrowing plan:
-  [docs/humming-research-landscape.md](/Users/dujiayi/murmur/docs/humming-research-landscape.md)
+  [docs/humming-research-landscape.md](./docs/humming-research-landscape.md)
 - Audio-engine borrowing deltas:
-  [docs/audio-engine-borrowing-deltas.md](/Users/dujiayi/murmur/docs/audio-engine-borrowing-deltas.md)
+  [docs/audio-engine-borrowing-deltas.md](./docs/audio-engine-borrowing-deltas.md)
 - Audio-system closure, fallback, datasets, and supportability:
-  [docs/audio-system-closure.md](/Users/dujiayi/murmur/docs/audio-system-closure.md)
+  [docs/audio-system-closure.md](./docs/audio-system-closure.md)
 - Audio architecture loop:
-  [docs/audio-architecture-loop.md](/Users/dujiayi/murmur/docs/audio-architecture-loop.md)
+  [docs/audio-architecture-loop.md](./docs/audio-architecture-loop.md)
 - Audio dataset ingestion:
-  [docs/audio-dataset-ingestion.md](/Users/dujiayi/murmur/docs/audio-dataset-ingestion.md)
+  [docs/audio-dataset-ingestion.md](./docs/audio-dataset-ingestion.md)
 - Provider and transcription fallback strategy:
-  [docs/provider-strategy.md](/Users/dujiayi/murmur/docs/provider-strategy.md)
+  [docs/provider-strategy.md](./docs/provider-strategy.md)
 - Verification notes:
-  [docs/verification.md](/Users/dujiayi/murmur/docs/verification.md)
+  [docs/verification.md](./docs/verification.md)
 
 ## What We Tried To Make Deliberately
 
@@ -61,15 +61,15 @@ start here:
 ## Key Visible Files
 
 - Entry flow shell:
-  [src/app/page.tsx](/Users/dujiayi/murmur/src/app/page.tsx)
+  [src/app/page.tsx](./src/app/page.tsx)
 - Capture / transcription handoff:
-  [src/components/screens/HumScreen.tsx](/Users/dujiayi/murmur/src/components/screens/HumScreen.tsx)
+  [src/components/screens/HumScreen.tsx](./src/components/screens/HumScreen.tsx)
 - Arrangement editing surface:
-  [src/components/screens/StudioScreen.tsx](/Users/dujiayi/murmur/src/components/screens/StudioScreen.tsx)
+  [src/components/screens/StudioScreen.tsx](./src/components/screens/StudioScreen.tsx)
 - Saved song playback + export surface:
-  [src/components/screens/SongDetailScreen.tsx](/Users/dujiayi/murmur/src/components/screens/SongDetailScreen.tsx)
+  [src/components/screens/SongDetailScreen.tsx](./src/components/screens/SongDetailScreen.tsx)
 - Real audio+video export:
-  [src/modules/export/export-webm.ts](/Users/dujiayi/murmur/src/modules/export/export-webm.ts)
+  [src/modules/export/export-webm.ts](./src/modules/export/export-webm.ts)
 
 ## Getting Started
 
@@ -136,7 +136,7 @@ if the shipped path regresses.
 
 To convert a downloaded public dataset or an internal recording folder into a
 Murmur audit manifest, use the builder documented in
-[docs/audio-dataset-ingestion.md](/Users/dujiayi/murmur/docs/audio-dataset-ingestion.md).
+[docs/audio-dataset-ingestion.md](./docs/audio-dataset-ingestion.md).
 The closure command uses a suite config so the synthetic baseline is always
 required while local public datasets and internal golden sets can remain
 optional until they exist on disk.
@@ -239,7 +239,7 @@ cp .env.example .env
 ### Notes
 
 - Authentication, notifications, and AI now go through Murmur's local
-  platform adapter under [src/lib/platform](/Users/dujiayi/murmur/src/lib/platform).
+  platform adapter under [src/lib/platform](./src/lib/platform).
 - Real recordings go through server `/api/transcribe`; the fixture melody is
   only used when the user explicitly chooses the demo action.
 - In local development, billing fallback is enabled by default. Hum, save, and

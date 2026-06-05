@@ -46,6 +46,6 @@ Before merging:
 
 ## Current Murmur cadence
 
-See [docs/delivery-cadence.md](/Users/dujiayi/murmur/docs/delivery-cadence.md).
+See [docs/delivery-cadence.md](./docs/delivery-cadence.md).
 Default rhythm is one visible outcome per week, with smaller PRs merged along
 the way.

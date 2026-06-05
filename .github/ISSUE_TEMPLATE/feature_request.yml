@@ -1,0 +1,44 @@
+name: Feature request
+description: Propose a product, platform, or workflow improvement.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What user or operator pain is real today?
+      placeholder: The current Gallery does not let us inspect melody lineage after generation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the smallest useful change.
+      placeholder: Add a hidden detail sheet in Gallery for melody origin, confidence, and repair notes.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Product surface
+        - Audio pipeline
+        - Platform / backend
+        - Tooling / CI / release
+        - Documentation
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints or non-goals
+      description: Note anything that must stay stable.
+  - type: textarea
+    id: success
+    attributes:
+      label: Success signal
+      description: How would we know this was good enough?

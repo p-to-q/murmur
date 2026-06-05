@@ -16,6 +16,7 @@ remain the source of truth for everything the v2 docs do not override.
 - [delivery-cadence.md](delivery-cadence.md)
 - [review-gates.md](review-gates.md)
 - [packaging-and-release.md](packaging-and-release.md)
+- [repository-operations.md](repository-operations.md)
 - [verification.md](verification.md)
 
 ## 2. v2 plan — narrative (2026-06)

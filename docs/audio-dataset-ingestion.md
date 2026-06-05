@@ -114,7 +114,7 @@ Keys may be:
 
 There is also an example for Murmur's own golden-set style here:
 
-- [workers/audio-engine/tools/pitch-maps/murmur-golden.example.json](/Users/dujiayi/murmur/workers/audio-engine/tools/pitch-maps/murmur-golden.example.json)
+- [workers/audio-engine/tools/pitch-maps/murmur-golden.example.json](../workers/audio-engine/tools/pitch-maps/murmur-golden.example.json)
 
 ## 4. Run the audit
 
@@ -152,7 +152,7 @@ bun run audit:audio:closure
 
 This runs the suite config at:
 
-- [workers/audio-engine/tools/audio_eval_closure.example.json](/Users/dujiayi/murmur/workers/audio-engine/tools/audio_eval_closure.example.json)
+- [workers/audio-engine/tools/audio_eval_closure.example.json](../workers/audio-engine/tools/audio_eval_closure.example.json)
 
 Behavior:
 

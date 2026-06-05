@@ -44,8 +44,8 @@ back, not "we'll fix it in follow-up."
 - Exhaustive `switch`: end with `default: assertNever(value)`.
 - Prefer `const` arrays of literal strings + a derived union over a
   free-standing union when the values exist at runtime
-  (cf. `TRANSCRIPTION_PROVIDER_IDS` in
-  [runtime.ts](/Users/dujiayi/murmur/src/modules/stainer/runtime.ts)).
+  (cf. the instrument / provider registries in
+  [audio-worker.ts](../src/lib/platform/audio-worker.ts)).
 
 ### Zod boundary
 
@@ -206,7 +206,8 @@ Today's v1 surfaces marked deprecated immediately:
 - `src/lib/music/stainer.ts` and `src/lib/music/providers/*` (replaced by
   `packages/murmur-core/...`).
 - `src/modules/stainer/providers/browser-basic-pitch.ts` and
-  `remote-python.ts` (replaced by server pipeline).
+  the old remote worker prototype (replaced by the server pipeline in
+  `src/lib/platform/audio-worker.ts` + `workers/audio-engine/main.py`).
 - `users.notesBalance < 0` writes (no caller should produce these; the
   only writers are the helpers).
 - `songs.mp3DataUrl` writes (object storage now).

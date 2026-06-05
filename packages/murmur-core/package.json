@@ -13,7 +13,7 @@
     "./shared-types": "./src/shared-types/index.ts"
   },
   "scripts": {
-    "lint": "echo 'no lint configured yet'",
-    "test": "echo 'no tests yet'"
+    "lint": "echo 'murmur-core uses the root ESLint config'",
+    "test": "bun test src"
   }
 }

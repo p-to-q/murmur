@@ -51,7 +51,7 @@ Should eventually expose:
 
 Current boundary:
 
-- [src/app/api/transcribe/route.ts](/Users/dujiayi/murmur/src/app/api/transcribe/route.ts)
+- [src/app/api/transcribe/route.ts](../src/app/api/transcribe/route.ts)
 
 Responsibilities:
 
@@ -64,7 +64,7 @@ Responsibilities:
 
 Current boundary:
 
-- [workers/audio-engine/main.py](/Users/dujiayi/murmur/workers/audio-engine/main.py)
+- [workers/audio-engine/main.py](../workers/audio-engine/main.py)
 
 Responsibilities:
 
@@ -93,7 +93,7 @@ Responsibilities:
 
 Current boundary:
 
-- [src/modules/music/humming-engine.ts](/Users/dujiayi/murmur/src/modules/music/humming-engine.ts)
+- [src/modules/music/humming-engine.ts](../src/modules/music/humming-engine.ts)
 
 Responsibilities:
 
@@ -316,7 +316,7 @@ cadentially awkward.
 
 See also:
 
-- [audio-system-closure.md](/Users/dujiayi/murmur/docs/audio-system-closure.md)
+- [audio-system-closure.md](../docs/audio-system-closure.md)
 - render / timbre upgrades after the melody front-end stabilizes.
 
 ## 7.1 What happens when acceptance is poor now

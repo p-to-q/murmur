@@ -8,9 +8,9 @@ daily, treat them as ±5%.
 
 This doc is a sibling to:
 
-- [docs/research-2026-06.md](/Users/dujiayi/murmur/docs/research-2026-06.md) — distribution / audio / China / IAP risk audit.
-- [docs/cross-platform-strategy.md](/Users/dujiayi/murmur/docs/cross-platform-strategy.md) — chosen framework path per surface.
-- [docs/engineering-principles.md](/Users/dujiayi/murmur/docs/engineering-principles.md) — "smallest correct change" stance.
+- [docs/research-2026-06.md](./research-2026-06.md) — distribution / audio / China / IAP risk audit.
+- [docs/cross-platform-strategy.md](./cross-platform-strategy.md) — chosen framework path per surface.
+- [docs/engineering-principles.md](./engineering-principles.md) — "smallest correct change" stance.
 
 It overrides neither. Where this doc and a phase plan disagree about
 which library to adopt, the recommendation here is the *current* finding

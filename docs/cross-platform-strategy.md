@@ -82,7 +82,7 @@ capable hardware. See `humming-engine-v2.md`.
 ### 4.1 Web — stay on Next.js (App Router)
 
 Current stack is healthy.
-[package.json](/Users/dujiayi/murmur/package.json) shows Next 16 + React 19
+[package.json](../package.json) shows Next 16 + React 19
 + Tailwind 4 + Bun. No reason to migrate.
 
 Migration the v2 plan *does* need on the web:
