@@ -110,6 +110,8 @@ Per local operator session:
 
 - bring up the web app and audio worker
 - run `bun run smoke:local` before assuming the stack itself is healthy
+- use `bun run verify:local` when you want the compact local gate, not just
+  liveness
 - when smoke passes but the audio loop still feels wrong, escalate to
   `bun run audit:audio:acceptance` instead of debugging from vibes alone
 

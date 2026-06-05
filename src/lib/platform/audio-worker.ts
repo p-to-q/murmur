@@ -270,11 +270,7 @@ export function normalizeWorkerResponse(
 }
 
 function getAudioWorkerUrl(): string | null {
-  return (
-    process.env.AUDIO_WORKER_URL?.trim() ||
-    process.env.BASIC_PITCH_WORKER_URL?.trim() ||
-    null
-  );
+  return process.env.AUDIO_WORKER_URL?.trim() || null;
 }
 
 function normalizeProvider(value: string | undefined): TranscriptionProvider {

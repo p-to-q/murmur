@@ -106,6 +106,15 @@ That smoke check verifies:
 - `/api/transcribe` fails gracefully with `audio_required` instead of 500
 - the audio worker `/health` endpoint is alive
 
+For the slightly stronger local operator loop, use:
+
+```bash
+bun run verify:local
+```
+
+That bundles the stack smoke check with local markdown-link validation,
+repository lint, and audio-worker unit coverage.
+
 For local persistence, start Postgres first:
 
 ```bash
