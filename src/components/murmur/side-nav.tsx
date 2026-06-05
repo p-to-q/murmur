@@ -35,6 +35,7 @@ import { NAV_ITEMS } from "./nav-items";
 import { MurmurMark } from "./murmur-mark";
 
 const STORAGE_KEY = "murmur:side-nav-collapsed";
+const ENABLE_NAV_ENTRANCE_MOTION = process.env.NODE_ENV === "production";
 
 export function SideNav() {
   const pathname = usePathname();
@@ -70,7 +71,7 @@ export function SideNav() {
 
   return (
     <aside
-      className="hidden md:flex fixed top-0 left-0 bottom-0 z-40 flex-col"
+      className="side-nav-paper hidden md:flex fixed top-0 left-0 bottom-0 z-40 flex-col"
       style={{
         width: "var(--side-nav-w)",
         paddingTop: "max(env(safe-area-inset-top, 0px), 32px)",
@@ -92,9 +93,9 @@ export function SideNav() {
             {collapsed ? (
               <motion.span
                 key="collapsed-glyph"
-                initial={{ opacity: 0, scale: 0.78, rotate: -8 }}
+                initial={ENABLE_NAV_ENTRANCE_MOTION ? { opacity: 0, scale: 0.78, rotate: -8 } : false}
                 animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                exit={{ opacity: 0, scale: 0.84, rotate: 8 }}
+                exit={ENABLE_NAV_ENTRANCE_MOTION ? { opacity: 0, scale: 0.84, rotate: 8 } : undefined}
                 transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
                 className="inline-flex"
               >
@@ -103,9 +104,9 @@ export function SideNav() {
             ) : (
               <motion.span
                 key="expanded-mark"
-                initial={{ opacity: 0, x: -10, scale: 0.96 }}
+                initial={ENABLE_NAV_ENTRANCE_MOTION ? { opacity: 0, x: -10, scale: 0.96 } : false}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: -6, scale: 0.98 }}
+                exit={ENABLE_NAV_ENTRANCE_MOTION ? { opacity: 0, x: -6, scale: 0.98 } : undefined}
                 transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                 className="transition-opacity group-hover:opacity-90"
               >
@@ -295,7 +296,7 @@ function ManuscriptRow({
                 : "font-serif-italic text-[25px] text-[#1A1A1A]"
               : lang === "zh"
                 ? "font-chinese-title text-[18px] text-[#8C8780] group-hover:text-[#1A1A1A]"
-                : "text-[17px] font-medium tracking-[0.01em] text-[#8C8780] group-hover:text-[#1A1A1A]"
+                : "font-serif text-[20px] tracking-[0.005em] text-[#8C8780] group-hover:text-[#1A1A1A]"
           }`}
         >
           {label}
