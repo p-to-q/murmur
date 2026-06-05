@@ -93,6 +93,19 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+For a fast "is the local stack alive?" pass once web + worker are running:
+
+```bash
+bun run smoke:local
+```
+
+That smoke check verifies:
+
+- the web app answers on `localhost`
+- `/api/user/balance` still returns the expected shape
+- `/api/transcribe` fails gracefully with `audio_required` instead of 500
+- the audio worker `/health` endpoint is alive
+
 For local persistence, start Postgres first:
 
 ```bash
