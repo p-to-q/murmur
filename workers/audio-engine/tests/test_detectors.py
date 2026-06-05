@@ -103,6 +103,7 @@ def fail_swiftf0(_audio, _config):
 def return_empty_pyin(_audio, _config):
     return PitchDetection(
         provider="pyin",
+        timestamps=[],
         f0=[],
         voiced=[],
         confidence=[],

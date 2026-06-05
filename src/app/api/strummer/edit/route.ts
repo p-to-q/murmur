@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRequestAuth } from "@/lib/auth";
+import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { getNotesBalance, spendNotes } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 import { ai } from "@/lib/platform/ai-server";
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
       { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
-  if (balance.notes < COST.llm_edit) {
+  if (!shouldBypassBillingInDevelopment() && balance.notes < COST.llm_edit) {
     return NextResponse.json(
       {
         error: "insufficient_notes",
@@ -117,60 +118,62 @@ export async function POST(req: NextRequest) {
 
     const text = completion.choices[0]?.message?.content ?? "";
     const tokens = extractTokens(text);
-    let spend: Awaited<ReturnType<typeof spendNotes>>;
-    try {
-      spend = await spendNotes({
-        userId,
-        cost: COST.llm_edit,
-        reason: "spend:llm_edit",
-        externalRef: requestId,
-        metadata: {
-          promptLength: prompt.length,
-          tokenCount: tokens.length,
-        },
-      });
-    } catch (error) {
-      return NextResponse.json(
-        {
-          error: "billing_unavailable",
-          message: error instanceof Error ? error.message : "Could not spend Murmur Notes",
-          requestId,
-        },
-        { status: 503, headers: { "X-Request-Id": requestId } },
-      );
-    }
-
-    if (!spend.ok) {
-      if (spend.reason === "user_not_found") {
+    if (!shouldBypassBillingInDevelopment()) {
+      let spend: Awaited<ReturnType<typeof spendNotes>>;
+      try {
+        spend = await spendNotes({
+          userId,
+          cost: COST.llm_edit,
+          reason: "spend:llm_edit",
+          externalRef: requestId,
+          metadata: {
+            promptLength: prompt.length,
+            tokenCount: tokens.length,
+          },
+        });
+      } catch (error) {
         return NextResponse.json(
-          { error: "billing_unavailable", message: "User balance is unavailable", requestId },
+          {
+            error: "billing_unavailable",
+            message: error instanceof Error ? error.message : "Could not spend Murmur Notes",
+            requestId,
+          },
           { status: 503, headers: { "X-Request-Id": requestId } },
         );
       }
 
-      return NextResponse.json(
-        {
-          error: "insufficient_notes",
-          message: "Not enough Murmur Notes",
-          currentBalance: spend.currentBalance,
-          cost: COST.llm_edit,
-          requestId,
-        },
-        { status: 402, headers: { "X-Request-Id": requestId } },
-      );
-    }
+      if (!spend.ok) {
+        if (spend.reason === "user_not_found") {
+          return NextResponse.json(
+            { error: "billing_unavailable", message: "User balance is unavailable", requestId },
+            { status: 503, headers: { "X-Request-Id": requestId } },
+          );
+        }
 
-    log("notes.spent", {
-      reason: "spend:llm_edit",
-      cost: COST.llm_edit,
-      balanceAfter: spend.balanceAfter,
-      ledgerId: spend.ledgerId,
-    }, {
-      route: ROUTE,
-      requestId,
-      userId,
-      sessionId: auth.sessionId,
-    });
+        return NextResponse.json(
+          {
+            error: "insufficient_notes",
+            message: "Not enough Murmur Notes",
+            currentBalance: spend.currentBalance,
+            cost: COST.llm_edit,
+            requestId,
+          },
+          { status: 402, headers: { "X-Request-Id": requestId } },
+        );
+      }
+
+      log("notes.spent", {
+        reason: "spend:llm_edit",
+        cost: COST.llm_edit,
+        balanceAfter: spend.balanceAfter,
+        ledgerId: spend.ledgerId,
+      }, {
+        route: ROUTE,
+        requestId,
+        userId,
+        sessionId: auth.sessionId,
+      });
+    }
 
     return NextResponse.json(
       { tokens, raw: text.slice(0, 400), requestId },

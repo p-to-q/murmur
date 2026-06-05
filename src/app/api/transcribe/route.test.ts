@@ -31,6 +31,7 @@ let nextSpendResult: SpendNotesResult = {
   duplicate: false,
 };
 let nextSpendThrows: Error | null = null;
+let nextBalanceThrows: Error | null = null;
 let nextWorkerImpl: (() => Promise<TranscriptionResult>) | null = null;
 const lastSpendInputs: SpendNotesInput[] = [];
 
@@ -40,6 +41,42 @@ const stubTranscription: TranscriptionResult = {
     { pitch: 64, start: 0, duration: 0.4, velocity: 0.7, confidence: 0.9 },
     { pitch: 67, start: 0.5, duration: 0.4, velocity: 0.7, confidence: 0.9 },
   ],
+  melodies: {
+    intent: {
+      notes: [
+        { pitch: 64, start: 0, duration: 0.4, velocity: 0.7, confidence: 0.9 },
+        { pitch: 67, start: 0.5, duration: 0.4, velocity: 0.7, confidence: 0.9 },
+      ],
+      key: "C",
+      scale: "major",
+      bpm: 120,
+      duration: 0.9,
+      contour: "rising",
+    },
+    corrected: {
+      notes: [
+        { pitch: 64, start: 0, duration: 0.5, velocity: 0.7, confidence: 0.9 },
+        { pitch: 67, start: 0.5, duration: 0.5, velocity: 0.7, confidence: 0.9 },
+      ],
+      key: "C",
+      scale: "major",
+      bpm: 120,
+      duration: 1.0,
+      contour: "rising",
+    },
+    musical: {
+      notes: [
+        { pitch: 64, start: 0, duration: 0.5, velocity: 0.7, confidence: 0.9 },
+        { pitch: 67, start: 0.5, duration: 0.5, velocity: 0.7, confidence: 0.9 },
+      ],
+      key: "C",
+      scale: "major",
+      bpm: 120,
+      duration: 1.0,
+      contour: "rising",
+    },
+  },
+  selectedMelodyKind: "corrected",
   cleanMelody: {
     notes: [
       { pitch: 64, start: 0, duration: 0.5, velocity: 0.7, confidence: 0.9 },
@@ -69,7 +106,10 @@ mock.module("@/lib/auth", () => ({
 }));
 
 mock.module("@/lib/db/queries/notes-ledger", () => ({
-  getNotesBalance: async () => nextBalance,
+  getNotesBalance: async () => {
+    if (nextBalanceThrows) throw nextBalanceThrows;
+    return nextBalance;
+  },
   spendNotes: async (input: SpendNotesInput) => {
     lastSpendInputs.push(input);
     if (nextSpendThrows) throw nextSpendThrows;
@@ -161,6 +201,7 @@ beforeEach(() => {
     duplicate: false,
   };
   nextSpendThrows = null;
+  nextBalanceThrows = null;
   nextWorkerImpl = async () => stubTranscription;
   lastSpendInputs.length = 0;
 });
@@ -178,6 +219,8 @@ describe("POST /api/transcribe", () => {
     const body = (await response.json()) as TranscriptionResult;
     expect(body.provider).toBe("swiftf0");
     expect(body.cleanMelody.notes).toHaveLength(2);
+    expect(body.melodies.corrected.notes).toHaveLength(2);
+    expect(body.selectedMelodyKind).toBe("corrected");
     expect(lastSpendInputs).toHaveLength(1);
     expect(lastSpendInputs[0]?.reason).toBe("spend:hum");
     expect(lastSpendInputs[0]?.cost).toBe(1);
@@ -279,6 +322,60 @@ describe("POST /api/transcribe", () => {
     expect(response.status).toBe(503);
     const body = (await response.json()) as { error: string };
     expect(body.error).toBe("billing_unavailable");
+  });
+
+  it("keeps local demos usable when billing is unavailable in development", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    process.env.NODE_ENV = "development";
+    process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
+    nextBalanceThrows = new Error("db offline");
+
+    try {
+      const form = new FormData();
+      form.append("audio", audioFile());
+      const response = await POST(buildRequest(form, { requestId: "req_dev_bypass" }));
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as TranscriptionResult;
+      expect(body.provider).toBe("swiftf0");
+      expect(lastSpendInputs).toHaveLength(0);
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+      if (prevFlag === undefined) {
+        delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+      } else {
+        process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
+      }
+    }
+  });
+
+  it("bypasses insufficient balance in development when dev billing fallback is enabled", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    process.env.NODE_ENV = "development";
+    process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
+    nextBalance = {
+      ok: true,
+      userId: "usr_test",
+      notes: 0,
+      planTier: "free",
+      freeNotesGrantedAt: new Date(),
+    };
+
+    try {
+      const form = new FormData();
+      form.append("audio", audioFile());
+      const response = await POST(buildRequest(form, { requestId: "req_dev_unlimited" }));
+      expect(response.status).toBe(200);
+      expect(lastSpendInputs).toHaveLength(0);
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+      if (prevFlag === undefined) {
+        delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+      } else {
+        process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
+      }
+    }
   });
 
   it("respects the auth resolver returning a 401 envelope", async () => {

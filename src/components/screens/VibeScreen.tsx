@@ -80,6 +80,8 @@ export function VibeScreen() {
 
   const [phase, setPhase] = useState<Phase>("closing");
   const [pickingId, setPickingId] = useState<string | null>(null);
+  const sourceVersion = vibeVersions[0] ?? null;
+  const fromSavedSong = sourceVersion?.sourceType === "library";
 
   /* ── Arrival sequence ─────────────────────────────────────────── */
   useEffect(() => {
@@ -159,6 +161,7 @@ export function VibeScreen() {
       draftId: currentDraftId ?? vibeVersions[0]!.draftId,
       originFlowId: currentFlowId ?? vibeVersions[0]!.originFlowId,
       sourceType: vibeVersions[0]!.sourceType,
+      sourceMelodyKind: vibeVersions[0]!.sourceMelodyKind,
     });
     setVibeVersions(fresh);
   }, [currentDraftId, currentFlowId, setAuditioning, setVibeVersions, vibeVersions]);
@@ -167,8 +170,12 @@ export function VibeScreen() {
     synth.stop();
     setAuditioning(null);
     resetFlow();
+    if (fromSavedSong && sourceVersion?.draftId) {
+      router.push(`/song/${sourceVersion.draftId}`);
+      return;
+    }
     router.push("/");
-  }, [resetFlow, router, setAuditioning]);
+  }, [fromSavedSong, resetFlow, router, setAuditioning, sourceVersion]);
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
@@ -230,7 +237,9 @@ export function VibeScreen() {
                   onClick={handleBack}
                   className="mb-5 text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
                 >
-                  ← {t("vibe.back") || "Try a different hum"}
+                  ← {fromSavedSong
+                    ? t("vibe.back.saved") || "Back to your song"
+                    : t("vibe.back") || "Try a different hum"}
                 </motion.button>
                 <motion.p
                   initial={{ opacity: 0, y: 6 }}
@@ -238,7 +247,9 @@ export function VibeScreen() {
                   transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
                   className="eyebrow text-[#FF8A5C]"
                 >
-                  {t("vibe.eyebrow") || "THREE WAYS"}
+                  {fromSavedSong
+                    ? t("vibe.saved.eyebrow") || "THREE MORE"
+                    : t("vibe.eyebrow") || "THREE WAYS"}
                 </motion.p>
                 <motion.h1
                   initial={{ opacity: 0, y: 12 }}
@@ -246,7 +257,9 @@ export function VibeScreen() {
                   transition={{ delay: 0.05, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
                   className="hero-serif mt-3 text-[#1A1A1A] text-[32px] leading-[1.04] md:text-[52px]"
                 >
-                  {t("vibe.headline") || "Pick the one your hum is asking to become."}
+                  {fromSavedSong
+                    ? t("vibe.saved.headline") || "Pick the next shape this song wants to take."
+                    : t("vibe.headline") || "Pick the one your hum is asking to become."}
                 </motion.h1>
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -254,7 +267,9 @@ export function VibeScreen() {
                   transition={{ delay: 0.15, duration: 0.5 }}
                   className="font-serif-italic mt-3 text-[13px] text-[#8C8780] md:text-[14px]"
                 >
-                  {t("cards.sub.short") || "Listen, then pick the one that feels right."}
+                  {fromSavedSong
+                    ? t("vibe.saved.sub") || "Same melody spine, three fresh readings."
+                    : t("cards.sub.short") || "Listen, then pick the one that feels right."}
                 </motion.p>
               </div>
 

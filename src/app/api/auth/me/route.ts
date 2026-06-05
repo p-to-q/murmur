@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRequestAuth } from "@/lib/auth";
 import { buildAuthMePayload } from "@/lib/auth/me-payload";
+import { getDevBalanceFallback, shouldUseDevBalanceFallback } from "@/lib/billing/dev-balance";
 import { getNotesBalance } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 
@@ -36,6 +37,28 @@ export async function GET(request: NextRequest) {
       }),
     );
   } catch (error) {
+    if (shouldUseDevBalanceFallback()) {
+      log("auth.me_failed", {
+        error: error instanceof Error ? error.message : String(error),
+        fallback: "local_demo_snapshot",
+      }, {
+        route: ROUTE,
+        userId: auth.user.id,
+        sessionId: auth.sessionId,
+        level: "warn",
+      });
+
+      const fallback = getDevBalanceFallback();
+      return NextResponse.json(
+        buildAuthMePayload({
+          user: auth.user,
+          source: auth.source,
+          sessionId: auth.sessionId,
+          balance: fallback,
+        }),
+      );
+    }
+
     log("auth.me_failed", {
       error: error instanceof Error ? error.message : String(error),
     }, {

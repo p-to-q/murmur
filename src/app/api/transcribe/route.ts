@@ -6,6 +6,7 @@ import {
   transcribeWithAudioWorker,
 } from "@/lib/platform/audio-worker";
 import { resolveRequestAuth } from "@/lib/auth";
+import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { getNotesBalance, spendNotes } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 import { COST } from "@murmur/core";
@@ -26,6 +27,8 @@ type TranscribeRouteError =
   | "insufficient_notes"
   | "billing_unavailable"
   | "server_error";
+
+type BillingMode = "ledger" | "dev_fallback";
 
 /**
  * POST /api/transcribe
@@ -85,25 +88,80 @@ export async function POST(request: NextRequest) {
     }
 
     let balance: Awaited<ReturnType<typeof getNotesBalance>>;
+    let billingMode: BillingMode = "ledger";
     try {
       balance = await getNotesBalance(userId);
     } catch (error) {
-      return fail("billing_unavailable", "User balance is unavailable", 503, {
-        requestId,
-        userId,
-        startedAt,
-        phase: "billing",
-        ext: { message: error instanceof Error ? error.message : String(error) },
-      });
+      if (shouldBypassBillingForLocalDemo()) {
+        billingMode = "dev_fallback";
+        log("user.balance_failed", {
+          phase: "billing",
+          message: error instanceof Error ? error.message : String(error),
+          fallback: "local_demo_bypass",
+        }, {
+          route: ROUTE,
+          requestId,
+          userId,
+          sessionId: auth.sessionId,
+          level: "warn",
+        });
+        balance = {
+          ok: true,
+          userId,
+          notes: Number.POSITIVE_INFINITY,
+          planTier: "free",
+          freeNotesGrantedAt: new Date(),
+        };
+      } else {
+        return fail("billing_unavailable", "User balance is unavailable", 503, {
+          requestId,
+          userId,
+          startedAt,
+          phase: "billing",
+          ext: { message: error instanceof Error ? error.message : String(error) },
+        });
+      }
     }
 
     if (!balance.ok) {
-      return fail("billing_unavailable", "User balance is unavailable", 503, {
-        requestId,
+      if (shouldBypassBillingForLocalDemo()) {
+        billingMode = "dev_fallback";
+        log("user.balance_failed", {
+          phase: "billing",
+          reason: balance.reason,
+          fallback: "local_demo_bypass",
+        }, {
+          route: ROUTE,
+          requestId,
+          userId,
+          sessionId: auth.sessionId,
+          level: "warn",
+        });
+        balance = {
+          ok: true,
+          userId,
+          notes: Number.POSITIVE_INFINITY,
+          planTier: "free",
+          freeNotesGrantedAt: new Date(),
+        };
+      } else {
+        return fail("billing_unavailable", "User balance is unavailable", 503, {
+          requestId,
+          userId,
+          startedAt,
+          phase: "billing",
+        });
+      }
+    }
+    if (billingMode === "ledger" && shouldBypassBillingForLocalDemo()) {
+      billingMode = "dev_fallback";
+      balance = {
+        ok: true,
         userId,
-        startedAt,
-        phase: "billing",
-      });
+        notes: Number.POSITIVE_INFINITY,
+        planTier: "free",
+        freeNotesGrantedAt: new Date(),
+      };
     }
     if (balance.notes < COST.hum) {
       return fail("insufficient_notes", "Not enough Murmur Notes", 402, {
@@ -121,7 +179,8 @@ export async function POST(request: NextRequest) {
       format: audio.type || "unknown",
       targetInstrument,
       cost: COST.hum,
-      balanceBefore: balance.notes,
+      balanceBefore: Number.isFinite(balance.notes) ? balance.notes : null,
+      billingMode,
     }, {
       route: ROUTE,
       requestId,
@@ -135,51 +194,69 @@ export async function POST(request: NextRequest) {
       requestId,
     });
 
-    let spend: Awaited<ReturnType<typeof spendNotes>>;
-    try {
-      spend = await spendNotes({
-        userId,
-        cost: COST.hum,
+    let spend:
+      | Awaited<ReturnType<typeof spendNotes>>
+      | {
+          ok: true;
+          ledgerId: null;
+          balanceBefore: null;
+          balanceAfter: null;
+          duplicate: false;
+        };
+    if (billingMode === "dev_fallback") {
+      spend = {
+        ok: true,
+        ledgerId: null,
+        balanceBefore: null,
+        balanceAfter: null,
+        duplicate: false,
+      };
+    } else {
+      try {
+        spend = await spendNotes({
+          userId,
+          cost: COST.hum,
+          reason: "spend:hum",
+          externalRef: requestId,
+          metadata: {
+            provider: result.provider,
+            noteCount: result.cleanMelody.notes.length,
+            targetInstrument,
+          },
+        });
+      } catch (error) {
+        return fail("billing_unavailable", "Could not spend Murmur Notes", 503, {
+          requestId,
+          userId,
+          startedAt,
+          phase: "billing",
+          ext: { message: error instanceof Error ? error.message : String(error) },
+        });
+      }
+
+      if (!spend.ok) {
+        return fail("insufficient_notes", "Not enough Murmur Notes", 402, {
+          requestId,
+          userId,
+          startedAt,
+          phase: "billing",
+          ext: { currentBalance: spend.currentBalance, cost: COST.hum },
+          body: { currentBalance: spend.currentBalance, cost: COST.hum },
+        });
+      }
+
+      log("notes.spent", {
         reason: "spend:hum",
-        externalRef: requestId,
-        metadata: {
-          provider: result.provider,
-          noteCount: result.cleanMelody.notes.length,
-          targetInstrument,
-        },
-      });
-    } catch (error) {
-      return fail("billing_unavailable", "Could not spend Murmur Notes", 503, {
+        cost: COST.hum,
+        balanceAfter: spend.balanceAfter,
+        ledgerId: spend.ledgerId,
+      }, {
+        route: ROUTE,
         requestId,
         userId,
-        startedAt,
-        phase: "billing",
-        ext: { message: error instanceof Error ? error.message : String(error) },
+        sessionId: auth.sessionId,
       });
     }
-
-    if (!spend.ok) {
-      return fail("insufficient_notes", "Not enough Murmur Notes", 402, {
-        requestId,
-        userId,
-        startedAt,
-        phase: "billing",
-        ext: { currentBalance: spend.currentBalance, cost: COST.hum },
-        body: { currentBalance: spend.currentBalance, cost: COST.hum },
-      });
-    }
-
-    log("notes.spent", {
-      reason: "spend:hum",
-      cost: COST.hum,
-      balanceAfter: spend.balanceAfter,
-      ledgerId: spend.ledgerId,
-    }, {
-      route: ROUTE,
-      requestId,
-      userId,
-      sessionId: auth.sessionId,
-    });
 
     log("transcribe.completed", {
       provider: result.provider,
@@ -191,10 +268,14 @@ export async function POST(request: NextRequest) {
       polishMs: result.diagnostics?.polishMs ?? null,
       snr: result.diagnostics?.snr ?? null,
       voicedRatio: result.diagnostics?.voicedRatio ?? null,
+      acceptanceScore: result.diagnostics?.acceptanceScore ?? null,
+      musicFeelScore: result.diagnostics?.musicFeelScore ?? null,
+      noteHypothesis: result.diagnostics?.noteHypothesis ?? null,
       targetInstrument,
       rangeClampApplied: result.diagnostics?.rangeClampApplied ?? false,
       cost: COST.hum,
       balanceAfter: spend.balanceAfter,
+      billingMode,
     }, {
       route: ROUTE,
       requestId,
@@ -224,6 +305,10 @@ export async function POST(request: NextRequest) {
       ext: { message: error instanceof Error ? error.message : String(error) },
     });
   }
+}
+
+function shouldBypassBillingForLocalDemo(): boolean {
+  return shouldBypassBillingInDevelopment();
 }
 
 function fail(

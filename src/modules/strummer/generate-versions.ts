@@ -1,7 +1,12 @@
 import type {
-  ArrangementState, CleanMelody, TrackState, VibeVersion, VisualConfig,
+  ArrangementState,
+  CleanMelody,
+  MelodySelectionKind,
+  TrackState,
+  VibeVersion,
+  VisualConfig,
 } from "@/modules/shared/types";
-import { VIBE_PRESETS } from "@/presets/vibes";
+import { VIBE_PRESETS, type VibeId, type VibePreset } from "@/presets/vibes";
 import { mulberry32, hashString, pick } from "@/lib/music/seeded-random";
 import type { BassPattern } from "@/lib/music/bass-engine";
 import type { DrumPattern } from "@/lib/music/drum-engine";
@@ -142,7 +147,12 @@ const ENSEMBLES: Record<string, Ensemble[]> = {
 
 // ── Vibe selection (kept as before but cleaner) ────────────────────────
 
-function pickThreeDistinctVibes(melody: CleanMelody) {
+type PreferredVibeMode = "boost" | "anchor";
+
+function pickThreeDistinctVibes(
+  melody: CleanMelody,
+  options: { preferredVibeId?: VibeId; preferredVibeMode?: PreferredVibeMode } = {},
+) {
   const scored = VIBE_PRESETS.map((p) => {
     let score = Math.random() * 2.0;
     if (melody.scale === "minor" && ["cinematic", "bedroom", "rain"].includes(p.id)) score += 1.5;
@@ -151,10 +161,21 @@ function pickThreeDistinctVibes(melody: CleanMelody) {
     if (melody.bpm > 100 && p.energy > 0.6) score += 0.8;
     if (melody.contour === "rising" && ["party", "synth", "sunset"].includes(p.id)) score += 0.6;
     if (melody.contour === "falling" && ["cinematic", "bedroom", "rain"].includes(p.id)) score += 0.6;
+    if (options.preferredVibeMode === "boost" && options.preferredVibeId === p.id) score += 1.8;
+    if (options.preferredVibeMode === "anchor" && options.preferredVibeId === p.id) score += 3.2;
     return { preset: p, score };
   });
   scored.sort((a, b) => b.score - a.score);
   const sorted = scored.map((s) => s.preset);
+  const preferredPreset =
+    options.preferredVibeId
+      ? sorted.find((preset) => preset.id === options.preferredVibeId) ?? null
+      : null;
+
+  if (preferredPreset && options.preferredVibeMode === "anchor") {
+    return pickAnchoredVibes(sorted, preferredPreset);
+  }
+
   const top    = sorted[0]!;
   const middle = sorted[Math.floor(sorted.length / 2)]!;
   const bottom = sorted[sorted.length - 1]!;
@@ -164,6 +185,20 @@ function pickThreeDistinctVibes(melody: CleanMelody) {
   else picks.push(sorted[1]!);
   const third = [bottom, ...sorted].find((p) => !picks.some((q) => q.id === p.id));
   if (third) picks.push(third);
+  return picks.slice(0, 3);
+}
+
+function pickAnchoredVibes(sorted: VibePreset[], anchor: VibePreset) {
+  const withoutAnchor = sorted.filter((preset) => preset.id !== anchor.id);
+  const top = withoutAnchor[0] ?? anchor;
+  const middle = withoutAnchor[Math.floor(withoutAnchor.length / 2)] ?? withoutAnchor[1] ?? anchor;
+
+  const picks = [anchor];
+  if (!picks.some((preset) => preset.id === top.id)) picks.push(top);
+  if (!picks.some((preset) => preset.id === middle.id)) picks.push(middle);
+
+  const fallback = withoutAnchor.find((preset) => !picks.some((picked) => picked.id === preset.id));
+  if (fallback) picks.push(fallback);
   return picks.slice(0, 3);
 }
 
@@ -196,17 +231,30 @@ export function generateVibeVersions(
   options: {
     draftId?: string;
     originFlowId?: string;
+    parentSongId?: string | null;
+    rootSongId?: string | null;
+    lineageDepth?: number;
     sourceType?: VibeVersion["sourceType"];
+    sourceMelodyKind?: MelodySelectionKind;
+    preferredVibeId?: VibeId;
+    preferredVibeMode?: PreferredVibeMode;
   } = {},
 ): VibeVersion[] {
   const startedAt = performance.now();
-  const picks = pickThreeDistinctVibes(melody);
+  const picks = pickThreeDistinctVibes(melody, {
+    preferredVibeId: options.preferredVibeId,
+    preferredVibeMode: options.preferredVibeMode,
+  });
   let rangeClampCount = 0;
   const draftId = options.draftId ?? crypto.randomUUID();
   const originFlowId = options.originFlowId ?? crypto.randomUUID();
+  const parentSongId = options.parentSongId ?? null;
+  const rootSongId = options.rootSongId ?? null;
+  const lineageDepth = options.lineageDepth ?? 0;
   const sourceType = options.sourceType ?? "hum";
+  const sourceMelodyKind = options.sourceMelodyKind ?? "corrected";
 
-  const versions = picks.map((preset) => {
+  const versions: VibeVersion[] = picks.map((preset) => {
     const id = crypto.randomUUID();
     const rng = mulberry32(hashString(id));
     const candidates = ENSEMBLES[preset.id] ?? ENSEMBLES.sunset!;
@@ -275,7 +323,13 @@ export function generateVibeVersions(
       id,
       draftId,
       originFlowId,
+      parentSongId,
+      rootSongId,
+      lineageDepth,
       sourceType,
+      sourceMelodyKind,
+      editCount: 0,
+      editDepth: "fresh",
       versionSeed: id,
       title: preset.titleGenerator(),
       vibe: preset.label,
@@ -292,6 +346,7 @@ export function generateVibeVersions(
     key: melody.key,
     scale: melody.scale,
     noteCount: melody.notes.length,
+    sourceMelodyKind,
     melodyCarriers: versions.map((version) => version.arrangementState.melody.instrument),
     rangeClampCount,
     versionIds: versions.map((version) => version.id),

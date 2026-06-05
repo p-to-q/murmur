@@ -22,17 +22,22 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { UserBadge } from "@/components/user-profile/user-badge";
 import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
+import { usePreferencesStore } from "@/lib/store/preferences-store";
 
 export function MeScreen() {
+  const searchParams = useSearchParams();
   const [songCount, setSongCount] = useState(0);
   const t = useTranslator();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
   const { balance, isLoading } = useUserBalance();
+  const repairBias = usePreferencesStore((state) => state.repairBias);
+  const setRepairBias = usePreferencesStore((state) => state.setRepairBias);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +66,7 @@ export function MeScreen() {
     songCount > 0
       ? t("me.glance.cta_songs") || "Open gallery"
       : t("me.glance.cta_empty") || "Start a hum";
+  const showDebugLink = searchParams.get("debug") === "1";
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
@@ -134,6 +140,62 @@ export function MeScreen() {
           </div>
         </Card>
 
+        <Card>
+          <SectionLabel>{t("me.repair_bias.title") || "CREATIVE BIAS"}</SectionLabel>
+          <div className="space-y-4">
+            <p className="max-w-[30rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
+              {t("me.repair_bias.helper") ||
+                "This only nudges Murmur when a take could go more than one sensible way."}
+            </p>
+            <div className="rounded-[18px] border border-[#E7DCCB] bg-[#FFFCF7] px-4 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-[12px] tracking-[0.06em] text-[#A56A3A]">
+                    {t("me.repair_bias.left") || "Closer to your hum"}
+                  </p>
+                  <p className="mt-1 text-[12px] leading-[1.5] text-[#8C8780]">
+                    {t("me.repair_bias.left_note") ||
+                      "Keep closer to the line you just hummed."}
+                  </p>
+                </div>
+                <div className="min-w-0 text-right">
+                  <p className="text-[12px] tracking-[0.06em] text-[#A56A3A]">
+                    {t("me.repair_bias.right") || "More songlike"}
+                  </p>
+                  <p className="mt-1 text-[12px] leading-[1.5] text-[#8C8780]">
+                    {t("me.repair_bias.right_note") ||
+                      "Hey, this is not us saying you sang badly."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <input
+                  aria-label={t("me.repair_bias.title") || "Creative bias"}
+                  type="range"
+                  min={-100}
+                  max={100}
+                  step={1}
+                  value={Math.round(repairBias * 100)}
+                  onChange={(event) => {
+                    setRepairBias(Number(event.target.value) / 100);
+                  }}
+                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[#E7DCCB]"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, #E6D3BC 0%, #F6E6D2 50%, #FFD2BE 100%)",
+                  }}
+                />
+                <div className="mt-3 flex items-center justify-between text-[11px] tracking-[0.04em] text-[#8C8780]">
+                  <span>{t("me.repair_bias.live.left") || "Closer"}</span>
+                  <span>{t("me.repair_bias.live.center") || "Balanced"}</span>
+                  <span>{t("me.repair_bias.live.right") || "Sweeter"}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+
         {/* Language */}
         <Card>
           <SectionLabel>{t("me.language.title")}</SectionLabel>
@@ -188,6 +250,14 @@ export function MeScreen() {
       {/* ── Tertiary footer ─────────────────────────────────────────── */}
       <div className="relative z-10 px-6 md:px-12 max-w-3xl pb-28">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px] tracking-[0.04em] text-[#8C8780]">
+          {showDebugLink ? (
+            <>
+              <Link href="/me/debug?debug=1" className="hover:text-[#1A1A1A] transition-colors">
+                {t("me.debug") || "Debug"}
+              </Link>
+              <span className="text-[#D2C9B6]">·</span>
+            </>
+          ) : null}
           <Link href="/me/settings" className="hover:text-[#1A1A1A] transition-colors">
             {t("me.settings") || "Settings"}
           </Link>

@@ -42,6 +42,9 @@ export interface VisualConfig {
   posterBg?: string;
 }
 
+export type MelodySelectionKind = "intent" | "corrected" | "musical";
+export type EditDepth = "fresh" | "shaped" | "reworked";
+
 // ─── Drizzle table ─────────────────────────────────────────────────────────────
 
 export const songs = pgTable("songs", {
@@ -54,6 +57,12 @@ export const songs = pgTable("songs", {
   keySignature: text("key_signature").notNull().default("C"),
   scaleType: text("scale_type").notNull().default("minor"),
   duration: integer("duration").notNull().default(0),
+  parentSongId: text("parent_song_id"),
+  rootSongId: text("root_song_id"),
+  lineageDepth: integer("lineage_depth").notNull().default(0),
+  sourceMelodyKind: text("source_melody_kind").notNull().default("corrected").$type<MelodySelectionKind>(),
+  editCount: integer("edit_count").notNull().default(0),
+  editDepth: text("edit_depth").notNull().default("fresh").$type<EditDepth>(),
   // Audio — base64 data URL or CDN URL; null until generated
   mp3DataUrl: text("mp3_data_url"),
   // JSON blobs

@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRequestAuth } from "@/lib/auth";
-import { getSongsByUser, createSongWithSpend } from "@/lib/db/queries/songs";
+import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
+import { getSongsByUser, createSong, createSongWithSpend } from "@/lib/db/queries/songs";
 import { log } from "@/lib/observability/log";
 import { COST } from "@murmur/core";
+import { deriveEditDepth, normalizeEditCount } from "@/modules/music/edit-depth";
+import { normalizeLineageDepth, resolveParentSongId, resolveRootSongId } from "@/modules/music/lineage";
+import type { MelodySelectionKind } from "@/modules/shared/types";
 
 const ROUTE = "/api/songs";
+const MELODY_SELECTION_KINDS = new Set<MelodySelectionKind>(["intent", "corrected", "musical"]);
 
 export async function GET(req: NextRequest) {
   const auth = await resolveRequestAuth(req);
@@ -39,8 +44,33 @@ export async function POST(req: NextRequest) {
   const userId = auth.user.id;
   try {
     const body = await req.json();
+    const editCount = normalizeEditCount(body.editCount);
+    const lineageDepth = normalizeLineageDepth(body.lineageDepth);
+    const sourceMelodyKind = isMelodySelectionKind(body.sourceMelodyKind)
+      ? body.sourceMelodyKind
+      : "corrected";
+    const editDepth = deriveEditDepth(editCount);
+    const parentSongId = resolveParentSongId({ id: String(body.id ?? ""), parentSongId: body.parentSongId });
+    const rootSongId = resolveRootSongId({ id: String(body.id ?? ""), rootSongId: body.rootSongId });
+    if (shouldBypassBillingInDevelopment()) {
+      const song = await createSong({
+        ...body,
+        userId,
+        parentSongId,
+        rootSongId,
+        lineageDepth,
+        sourceMelodyKind,
+        editCount,
+        editDepth,
+      });
+
+      return NextResponse.json(song, {
+        headers: { "X-Request-Id": requestId },
+      });
+    }
+
     const result = await createSongWithSpend(
-      { ...body, userId },
+      { ...body, userId, parentSongId, rootSongId, lineageDepth, sourceMelodyKind, editCount, editDepth },
       {
         cost: COST.save,
         externalRef: requestId,
@@ -139,4 +169,8 @@ function isDatabaseUnavailable(error: unknown): boolean {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isMelodySelectionKind(value: unknown): value is MelodySelectionKind {
+  return typeof value === "string" && MELODY_SELECTION_KINDS.has(value as MelodySelectionKind);
 }

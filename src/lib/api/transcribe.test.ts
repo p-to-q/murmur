@@ -90,6 +90,50 @@ describe("transcribeRecording typed error mapping", () => {
     }
   });
 
+  it("preserves worker_unconfigured so the UI can explain local setup issues", async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse(
+        {
+          error: "worker_unconfigured",
+          message: "AUDIO_WORKER_URL is not configured",
+          requestId: "req_unconfigured",
+        },
+        503,
+      )) as typeof fetch;
+
+    try {
+      await transcribeRecording(blob());
+      throw new Error("expected transcribeRecording to throw");
+    } catch (error) {
+      const typed = error as TranscribeRequestError;
+      expect(typed.code).toBe("worker_unconfigured");
+      expect(typed.status).toBe(503);
+      expect(typed.requestId).toBe("req_unconfigured");
+    }
+  });
+
+  it("preserves billing_unavailable so local and prod copy stay honest", async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse(
+        {
+          error: "billing_unavailable",
+          message: "User balance is unavailable",
+          requestId: "req_billing",
+        },
+        503,
+      )) as typeof fetch;
+
+    try {
+      await transcribeRecording(blob());
+      throw new Error("expected transcribeRecording to throw");
+    } catch (error) {
+      const typed = error as TranscribeRequestError;
+      expect(typed.code).toBe("billing_unavailable");
+      expect(typed.status).toBe(503);
+      expect(typed.requestId).toBe("req_billing");
+    }
+  });
+
   it("falls back to status-derived codes when the body lacks a typed error", async () => {
     globalThis.fetch = (async () => new Response("nope", { status: 429 })) as typeof fetch;
     try {

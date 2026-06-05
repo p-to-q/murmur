@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 import librosa
+import numpy as np
 
 from audio_engine.detectors import DetectorConfig, PitchDetection
 
@@ -21,8 +22,12 @@ def detect_pyin(audio: object, config: DetectorConfig) -> PitchDetection:
         hop_length=config.hop_length,
         fill_na=float("nan"),
     )
+    timestamps = np.arange(len(f0), dtype=np.float32) * (
+        config.hop_length / config.sample_rate
+    )
     return PitchDetection(
         provider="pyin",
+        timestamps=timestamps,
         f0=f0,
         voiced=voiced_flag,
         confidence=voiced_probs,

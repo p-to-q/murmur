@@ -23,19 +23,24 @@ const KNOWN_HUM: MelodyNote[] = [
 describe("music smoke path", () => {
   it("transcribes the explicit demo fixture and assembles a playable song", async () => {
     const transcription = await transcribeWithStainer({});
-    const versions = generateVibeVersions(transcription.cleanMelody);
+    const versions = generateVibeVersions(transcription.cleanMelody, {
+      sourceMelodyKind: transcription.selectedMelodyKind,
+    });
     const assembled = assembleSong(versions[0]!);
 
     expect(transcription.provider).toBe("fixture");
     expect(transcription.cleanMelody.notes.length).toBeGreaterThan(0);
     expect(versions).toHaveLength(3);
+    expect(versions[0]?.sourceMelodyKind).toBe(transcription.selectedMelodyKind);
     expect(assembled.totalDuration).toBeGreaterThan(0);
     expect(assembled.chords.length).toBeGreaterThan(0);
   });
 
   it("polishes a known hum, generates typed tracks, and assembles output", () => {
     const melody = polishMelody(KNOWN_HUM);
-    const versions = generateVibeVersions(melody);
+    const versions = generateVibeVersions(melody, {
+      sourceMelodyKind: "corrected",
+    });
 
     expect(versions).toHaveLength(3);
     const version = versions[0]!;
@@ -53,6 +58,7 @@ describe("music smoke path", () => {
     expect(version.arrangementState.melody.melodyPitchSequence).toEqual(
       version.melody.notes.map((note) => note.pitch),
     );
+    expect(version.sourceMelodyKind).toBe("corrected");
     expect(version.arrangementState.chords.chordsTag).toBeTruthy();
     expect(version.arrangementState.bass.bassPattern).toBeTruthy();
     expect(version.arrangementState.drums.drumsPattern).toBeTruthy();

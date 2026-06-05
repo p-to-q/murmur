@@ -26,6 +26,7 @@ def detect_swiftf0(audio: object, config: DetectorConfig) -> PitchDetection:
 
     return PitchDetection(
         provider="swiftf0",
+        timestamps=result.timestamps,
         f0=result.pitch_hz,
         voiced=result.voicing,
         confidence=result.confidence,

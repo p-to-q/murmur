@@ -1,8 +1,9 @@
 # Observability
 
 Murmur today logs `console.error` on failure and nothing on success.
-That is the wrong baseline for a product that hides its biggest failure
-mode (silent fixture substitution) deep in a fallback chain. v2's
+That is the wrong baseline for a product whose biggest risk used to be
+silent fixture substitution, and whose current behavior still includes a
+very narrow auto-rescue path for transient hum failures. v2's
 observability target: **when the user says "音频结果不对," we can find
 out within 60 seconds what went wrong, for which user, in which region,
 with which provider chain, and against what code revision**.

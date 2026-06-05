@@ -1,0 +1,131 @@
+{
+  "providers": {
+    "auto": {
+      "summary": {
+        "passMin": 12,
+        "warnMax": 0,
+        "failMax": 0,
+        "errorMax": 0,
+        "repairTriggeredCountMin": 1
+      },
+      "cases": {
+        "noisy_scale": {
+          "statusIn": ["pass"],
+          "pitchMatchScoreMin": 0.95,
+          "noteCountMin": 3,
+          "providerIn": ["swiftf0"],
+          "diagnostics": {
+            "firstOnsetLagMax": 0.05,
+            "acceptanceScoreMin": 0.7
+          }
+        },
+        "two_tigers_phrase": {
+          "statusIn": ["pass"],
+          "pitchMatchScoreMin": 0.95,
+          "noteCountMin": 8,
+          "providerIn": ["swiftf0"]
+        },
+        "brightest_star_hook": {
+          "statusIn": ["pass"],
+          "pitchMatchScoreMin": 0.95,
+          "noteCountMin": 6,
+          "providerIn": ["swiftf0"]
+        },
+        "overheld_middle_phrase": {
+          "statusIn": ["pass"],
+          "pitchMatchScoreMin": 0.95,
+          "noteCountMin": 4,
+          "providerIn": ["swiftf0"],
+          "diagnostics": {
+            "repairTriggeredMin": 1,
+            "acceptanceScoreMin": 0.8
+          }
+        },
+        "urgent_hook_fragment": {
+          "statusIn": ["pass"],
+          "pitchMatchScoreMin": 0.95,
+          "noteCountMin": 5,
+          "providerIn": ["swiftf0"],
+          "diagnostics": {
+            "musicFeelScoreMin": 0.74
+          }
+        }
+      }
+    },
+    "swiftf0": {
+      "summary": {
+        "passMin": 12,
+        "warnMax": 0,
+        "failMax": 0,
+        "errorMax": 0,
+        "providerReroutedCountMin": 2
+      },
+      "cases": {
+        "noisy_scale": {
+          "statusIn": ["pass"],
+          "pitchMatchScoreMin": 0.95,
+          "noteCountMin": 3,
+          "diagnostics": {
+            "firstOnsetLagMax": 0.05
+          }
+        },
+        "overheld_middle_phrase": {
+          "statusIn": ["pass"],
+          "providerIn": ["swiftf0"],
+          "diagnostics": {
+            "repairTriggeredMin": 1,
+            "acceptanceScoreMin": 0.8
+          }
+        }
+      }
+    },
+    "pyin": {
+      "summary": {
+        "passMin": 12,
+        "warnMax": 0,
+        "failMax": 0,
+        "errorMax": 0,
+        "providerReroutedCountMin": 7,
+        "repairTriggeredCountMin": 1
+      },
+      "cases": {
+        "noisy_scale": {
+          "statusIn": ["pass"],
+          "pitchMatchScoreMin": 0.95,
+          "noteCountMin": 3,
+          "providerIn": ["swiftf0"],
+          "diagnostics": {
+            "acceptanceScoreMin": 0.45
+          }
+        },
+        "two_tigers_phrase": {
+          "statusIn": ["pass"],
+          "noteCountMin": 8,
+          "providerIn": ["swiftf0"]
+        },
+        "brightest_star_hook": {
+          "statusIn": ["pass"],
+          "noteCountMin": 6,
+          "providerIn": ["swiftf0"]
+        },
+        "overheld_middle_phrase": {
+          "statusIn": ["pass"],
+          "providerIn": ["swiftf0"],
+          "diagnostics": {
+            "repairTriggeredMin": 1,
+            "providerReroutedMin": 1,
+            "acceptanceScoreMin": 0.8
+          }
+        },
+        "urgent_hook_fragment": {
+          "statusIn": ["pass"],
+          "noteCountMin": 5,
+          "providerIn": ["swiftf0"],
+          "diagnostics": {
+            "musicFeelScoreMin": 0.74
+          }
+        }
+      }
+    }
+  }
+}

@@ -66,12 +66,16 @@ a shared logical core**.
                                                domains)
 ```
 
-**Single source of truth for product logic = the backend.** Pitch detection,
-arrangement, payment, quotas, storage all live there. Each shell owns
-**capture + playback + UI**; nothing musically important is reimplemented.
+**Single source of truth for product logic = the shared melody contract plus
+the backend.** Payment, quotas, storage, and the highest-confidence audio path
+live on the backend. Each shell owns **capture + playback + UI**, and capable
+clients may run a lighter local melody pass for fast preview or privacy-first
+operation as long as they preserve the same contract.
 
-This is what makes a hum-to-song app actually portable: the *only* hard
-thing — the audio brain — runs once.
+This keeps Murmur portable without forcing every inference step onto the server.
+Cloud mode remains the reference-quality path; device mode exists to reduce
+latency, reduce backend pressure, and support stronger local experiences on
+capable hardware. See `humming-engine-v2.md`.
 
 ## 4. Per-target framework choice
 

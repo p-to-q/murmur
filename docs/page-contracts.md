@@ -44,8 +44,8 @@ type HumScreenState = {
   amplitude: number;         // 0–1, RMS reactive level meter (driven by AnalyserNode)
   idleHeadlineIndex: number; // rotates through 5 idle copy strings
   processingMessage: string; // the rotating "listening / polishing / …" copy
-  micFailed: boolean;        // permission denied OR all transcribe fallbacks exhausted
-  transcribeError: TranscribeErrorCode | null;  // NEW — was: silent fixture
+  micFailed: boolean;        // permission denied OR capture cannot start
+  transcribeError: TranscribeErrorCode | null;  // typed user-facing failure family
 };
 
 type TranscribeErrorCode =
@@ -97,22 +97,34 @@ type TranscribeErrorCode =
 |---|---|---|---|
 | `start_recording` | pointerDown on orb (idle, mic granted) | flips to `recording`, starts timer + analyser RAF | `{ type: "hum_start" }` |
 | `stop_recording` | pointerUp / pointerLeave / 15 s elapsed | stops MediaRecorder, transitions to `processing`, calls `/api/transcribe` | `{ type: "hum_stop", duration }` |
-| `try_demo_melody` | click on **Try a demo melody** (NEW button) | bypasses `/api/transcribe`, runs local fixture | `{ type: "hum_demo" }` |
+| `try_demo_melody` | click on **Try a demo melody** | bypasses `/api/transcribe`, runs local fixture | `{ type: "hum_demo" }` |
 | `retry_after_error` | click "Try again" on error surface | resets state to idle | `{ type: "hum_retry", error_code }` |
 | `mic_permission_denied` | `getUserMedia` rejection | `micFailed = true` | `{ type: "mic_denied" }` |
 | `transcribe_success` | 200 from API | `setVibeVersions(generateVibeVersions(cleanMelody))`, navigate to VersionCards | `{ type: "hum_transcribe", provider, bpm, key, notes }` |
 | `transcribe_error` | 402 / 422 / 5xx | show error surface with `transcribeError` code | `{ type: "hum_error", code }` |
+| `fixture_rescue_auto` | first isolated transient failure after known-good live use | auto-run fixture to save the session, while still logging the failure | `{ type: "hum_fixture_rescue", code, request_id }` |
 
 ### Done
 
-- [ ] No silent fixture fallback. Fixture only reached via the explicit
-      "Try a demo melody" button.
+- [ ] No broad silent fixture masking. Automatic fixture rescue is allowed only
+      for a narrow transient-failure bucket after known-good live success, and
+      must stop after repeated failures.
 - [ ] 402 / 422 / 5xx each surface a distinct copy line; user can retry
       or "Try a demo" from each.
 - [ ] Level meter shows usable signal during recording (driven by
       AnalyserNode, not cosmetic).
 - [ ] Mic permission denial surfaces a clear path: "use demo," "try
       again," or "settings link" (iOS / Android shell).
+- [ ] Support code only appears for persistent / hard failures, not the first
+      product-handled transient blip.
+      Current rule: show it immediately for hard backend faults, but hide it
+      for the first post-success transient failure and only surface it once the
+      issue looks persistent or the session never reached a healthy live hum.
+- [ ] Automatic fixture rescue stays in the "save the moment, not hide the
+      outage" lane:
+      only after at least one live success, never for fundamental audio errors,
+      never on cold-start failures, and it stops once transient failures repeat
+      closely enough to look like a sustained outage.
 - [ ] `transcribe_success` dispatches `setVibeVersions` AND navigates
       via `router.push("/vibe")` (today it relies on Vibe being a sibling
       overlay; v2 makes Vibe its own route).

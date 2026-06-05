@@ -35,6 +35,7 @@ export async function transcribeWithStainer(
       provider: result.provider,
       rawNoteCount: result.rawNotes.length,
       cleanNoteCount: result.cleanMelody.notes.length,
+      selectedMelodyKind: result.selectedMelodyKind,
       warningCount: result.warnings.length,
       snr: result.diagnostics?.snr ?? null,
       voicedRatio: result.diagnostics?.voicedRatio ?? null,

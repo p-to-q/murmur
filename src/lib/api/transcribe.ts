@@ -18,6 +18,8 @@ export type TranscribeRequestErrorCode =
   | "insufficient_notes"
   | "rate_limited"
   | "no_voiced_frames"
+  | "worker_unconfigured"
+  | "billing_unavailable"
   | "worker_unavailable"
   | "server_error"
   | "network_error";
@@ -29,10 +31,10 @@ const SERVER_ERROR_TO_CLIENT: Record<string, TranscribeRequestErrorCode> = {
   insufficient_notes: "insufficient_notes",
   rate_limited: "rate_limited",
   no_voiced_frames: "no_voiced_frames",
-  worker_unconfigured: "worker_unavailable",
+  worker_unconfigured: "worker_unconfigured",
   worker_http_error: "worker_unavailable",
   worker_invalid_response: "worker_unavailable",
-  billing_unavailable: "worker_unavailable",
+  billing_unavailable: "billing_unavailable",
   server_error: "server_error",
 };
 

@@ -1,5 +1,10 @@
 # Audio Pipeline Redesign — Hum → Score → Arrangement
 
+> This document remains the detailed upstream pipeline note. For the broader
+> product and correction philosophy, including cloud/device dual execution and
+> the `IntentMelody -> CorrectedMelody -> MusicalMelody` model, see
+> `docs/humming-engine-v2.md`.
+
 ## 1. Goal
 
 The hum → song result currently sounds wrong often enough that the user is
@@ -18,8 +23,11 @@ This document specifies the v2 audio pipeline:
 5. **Arrangement** continues to run wherever the host can run it (browser
    today; server tomorrow when 微信 MP needs it).
 
-The pipeline is **server-authoritative** so the same algorithm runs across
-Web, iOS, Android, and 微信 MP. See `cross-platform-strategy.md`.
+The pipeline should remain **contract-authoritative** across Web, iOS, Android,
+and 微信 MP. In practice, Cloud mode remains the reference implementation, while
+Device mode may run a lighter version of the same melody contract when local
+performance or privacy calls for it. See `cross-platform-strategy.md` and
+`humming-engine-v2.md`.
 
 This doc does **not** redesign the arrangement engines
 (rhythm / chord / bass / drum) — those are working and are documented in

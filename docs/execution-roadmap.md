@@ -54,7 +54,7 @@ visible change.
 ### Phase 1 — Audio pipeline v2 (2–3 weeks)
 
 Goal: ship the new `/api/transcribe` so a real hum produces a usable
-score, with no silent fixture fallback.
+score, with no broad silent fixture masking.
 
 See `audio-pipeline-redesign.md` for component decisions.
 
@@ -71,7 +71,9 @@ Stops:
    `/api/transcribe`. Delete browser-yin / browser-basic-pitch /
    remote-python providers.
 7. Add the explicit "Try a demo melody" button + a real "couldn't hear
-   that" error path on HumScreen. Fixture is no longer silent fallback.
+   that" error path on HumScreen. Fixture is no longer a broad silent
+   fallback; only a narrow transient rescue path may auto-fire after a
+   known-good live success.
 8. Add diagnostics (snr, voicedRatio, provider) to MeScreen for
    power users, removed from default view.
 

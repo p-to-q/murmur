@@ -27,6 +27,7 @@ class PitchDetection:
     """Raw frame-level f0 output from a detector provider."""
 
     provider: PitchProviderId
+    timestamps: object
     f0: object
     voiced: object
     confidence: object
@@ -68,6 +69,7 @@ def detect_pitch(audio: object, config: DetectorConfig) -> PitchDetection:
             detection = detect_pitch(audio, replace_provider(config, "pyin"))
             return PitchDetection(
                 provider=detection.provider,
+                timestamps=detection.timestamps,
                 f0=detection.f0,
                 voiced=detection.voiced,
                 confidence=detection.confidence,

@@ -1,0 +1,41 @@
+{
+  "suites": [
+    {
+      "name": "synthetic_baseline",
+      "priority": 2,
+      "required": true,
+      "strict": true,
+      "allProviders": true
+    },
+    {
+      "name": "humtrans_local",
+      "priority": 3,
+      "required": false,
+      "strict": false,
+      "allProviders": true,
+      "manifest": "tools/manifests/humtrans.local.json",
+      "manifestOnly": true,
+      "manifestRoot": "tools/datasets/humtrans"
+    },
+    {
+      "name": "vocadito_report",
+      "priority": 1,
+      "required": false,
+      "strict": false,
+      "allProviders": true,
+      "manifest": "tools/manifests/vocadito.local.json",
+      "manifestOnly": true,
+      "manifestRoot": "tools/datasets/vocadito"
+    },
+    {
+      "name": "murmur_golden_local",
+      "priority": 2,
+      "required": false,
+      "strict": false,
+      "allProviders": true,
+      "manifest": "tools/manifests/murmur-golden.local.json",
+      "manifestOnly": true,
+      "manifestRoot": "tools/datasets/murmur-golden"
+    }
+  ]
+}

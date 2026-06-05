@@ -16,6 +16,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { memory } from "@/lib/platform/memory";
 
 import { useTranslator } from "@/lib/i18n";
+import { getLineageLabel } from "@/modules/music/lineage";
+import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import type { SongCard } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCoverArt } from "@/components/song-detail/song-cover-art";
@@ -133,6 +135,7 @@ export function GalleryScreen() {
                   key={song.id}
                   song={song}
                   index={i}
+                  t={t}
                   onClick={() => handleSongClick(song)}
                 />
               ))}
@@ -159,10 +162,12 @@ function SongTile({
   song,
   index,
   onClick,
+  t,
 }: {
   song: SongWithMeta;
   index: number;
   onClick: () => void;
+  t: (key: string) => string;
 }) {
   const gradient =
     (song.visualConfig as { posterBg?: string }).posterBg ??
@@ -173,6 +178,16 @@ function SongTile({
     .map((w) => w[0] ?? "")
     .join("")
     .slice(0, 2);
+  const melodyOrigin = getMelodyOriginCopy(song.sourceMelodyKind ?? "corrected", t);
+  const lineageLabel = getLineageLabel(song, (key) => {
+    if (key === "lineage.original") {
+      return t("gallery.tile.original") || "Original";
+    }
+    if (key === "lineage.branch_n") {
+      return t("gallery.tile.branch_n") || "Branch {n}";
+    }
+    return t(key);
+  });
 
   return (
     <motion.button
@@ -214,6 +229,9 @@ function SongTile({
       <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1] tabular-nums">
         {song.vibe}
         {song.bpm ? ` · ${song.bpm} BPM` : ""}
+      </p>
+      <p className="mt-2 text-[11px] leading-[1.45] text-[#8C8780]">
+        {melodyOrigin.label} · {lineageLabel}
       </p>
     </motion.button>
   );

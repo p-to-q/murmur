@@ -13,6 +13,7 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     ".claude/**",
+    "workers/audio-engine/.venv/**",
   ]),
 ]);
 

@@ -17,6 +17,12 @@ import {
 } from "@/modules/strummer/apply-edit";
 import { classifyPromptWithLLM } from "@/lib/api/strummer";
 import { memory } from "@/lib/platform/memory";
+import {
+  bumpVersionEditState,
+  getEditDepthLabel,
+  resetVersionEditState,
+} from "@/modules/music/edit-depth";
+import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import type {
   ArrangementState,
   TrackState,
@@ -59,6 +65,8 @@ function StudioContent({ version }: { version: VibeVersion }) {
 
   const currentVersion = version;
   const arrangement = currentVersion.arrangementState;
+  const melodyOrigin = getMelodyOriginCopy(currentVersion.sourceMelodyKind, t);
+  const editDepthLabel = getEditDepthLabel(currentVersion.editDepth, t);
 
   const applyTokens = (
     nextVersion: VibeVersion,
@@ -72,12 +80,12 @@ function StudioContent({ version }: { version: VibeVersion }) {
       nextBpm = Math.max(40, Math.min(200, nextBpm + tempoDelta(token)));
     }
 
-    return {
+    return bumpVersionEditState({
       ...nextVersion,
       melody: { ...nextVersion.melody, bpm: nextBpm },
       arrangementState: nextArrangement,
       strummerCode: generateStrummerCode(nextArrangement),
-    };
+    });
   };
 
   const restartPlayback = (nextVersion: VibeVersion) => {
@@ -91,11 +99,11 @@ function StudioContent({ version }: { version: VibeVersion }) {
         ...arrangement,
         [key]: { ...arrangement[key], ...patch },
       };
-      const nextVersion: VibeVersion = {
+      const nextVersion = bumpVersionEditState({
         ...currentVersion,
         arrangementState: nextArrangement,
         strummerCode: generateStrummerCode(nextArrangement),
-      };
+      });
       setCurrentVersion(nextVersion);
       if (isPlaying) restartPlayback(nextVersion);
     },
@@ -117,6 +125,21 @@ function StudioContent({ version }: { version: VibeVersion }) {
         setCurrentVersion(nextVersion);
         if (isPlaying) restartPlayback(nextVersion);
         toast.success(t("studio.prompt.applied"));
+        memory
+          .reportAction({
+            content: `Studio rule edit: "${prompt}" -> ${ruleToken}`,
+            event_type: "update",
+            page: "studio",
+            metadata: {
+              type: "studio_prompt_rule",
+              prompt,
+              token: ruleToken,
+              source_melody_kind: currentVersion.sourceMelodyKind,
+              edit_depth: nextVersion.editDepth,
+              edit_count: nextVersion.editCount,
+            },
+          })
+          .catch(() => {});
         return;
       }
 
@@ -131,7 +154,14 @@ function StudioContent({ version }: { version: VibeVersion }) {
             content: `Studio LLM edit: "${prompt}" -> ${llmTokens.join(", ")}`,
             event_type: "update",
             page: "studio",
-            metadata: { type: "studio_prompt", prompt, tokens: llmTokens },
+            metadata: {
+              type: "studio_prompt",
+              prompt,
+              tokens: llmTokens,
+              source_melody_kind: currentVersion.sourceMelodyKind,
+              edit_depth: nextVersion.editDepth,
+              edit_count: nextVersion.editCount,
+            },
           })
           .catch(() => {});
         return;
@@ -145,14 +175,27 @@ function StudioContent({ version }: { version: VibeVersion }) {
 
   const handleRestore = () => {
     const restoredArrangement = applyEdit(arrangement, "restore_all");
-    const nextVersion: VibeVersion = {
+    const nextVersion = resetVersionEditState({
       ...currentVersion,
       arrangementState: restoredArrangement,
       strummerCode: generateStrummerCode(restoredArrangement),
-    };
+    });
     setCurrentVersion(nextVersion);
     if (isPlaying) restartPlayback(nextVersion);
     toast(t("studio.restore_toast"));
+    memory
+      .reportAction({
+        content: `Restored studio arrangement for "${currentVersion.title}"`,
+        event_type: "update",
+        page: "studio",
+        metadata: {
+          type: "studio_restore",
+          source_melody_kind: currentVersion.sourceMelodyKind,
+          edit_depth: nextVersion.editDepth,
+          edit_count: nextVersion.editCount,
+        },
+      })
+      .catch(() => {});
   };
 
   const togglePlay = () => {
@@ -174,7 +217,13 @@ function StudioContent({ version }: { version: VibeVersion }) {
         content: `Studio -> Name flow for "${currentVersion.title}"`,
         event_type: "navigate",
         page: "studio",
-        metadata: { type: "open_name", vibe: currentVersion.vibe },
+        metadata: {
+          type: "open_name",
+          vibe: currentVersion.vibe,
+          source_melody_kind: currentVersion.sourceMelodyKind,
+          edit_depth: currentVersion.editDepth,
+          edit_count: currentVersion.editCount,
+        },
       })
       .catch(() => {});
     router.push("/studio/name");
@@ -306,6 +355,14 @@ function StudioContent({ version }: { version: VibeVersion }) {
                     value={currentVersion.vibe}
                   />
                   <MetaPill
+                    label={t("studio.origin.label")}
+                    value={melodyOrigin.label}
+                  />
+                  <MetaPill
+                    label={t("studio.edit_depth.label")}
+                    value={editDepthLabel}
+                  />
+                  <MetaPill
                     label={t("song.meta.key")}
                     value={currentVersion.melody.key}
                   />
@@ -318,11 +375,19 @@ function StudioContent({ version }: { version: VibeVersion }) {
                     value={currentVersion.arrangementState.melody.instrument}
                   />
                 </div>
+                <p className="mt-4 text-[12px] leading-[1.6] text-[#6F6A63] md:text-[13px]">
+                  {melodyOrigin.studioBody}
+                </p>
               </div>
             </div>
 
             <div className="mt-5 space-y-5">
-              <AurisPanel busy={promptBusy} onApply={handlePrompt} />
+              <AurisPanel
+                busy={promptBusy}
+                onApply={handlePrompt}
+                promptPlaceholder={melodyOrigin.promptPlaceholder}
+                helperText={melodyOrigin.studioBody}
+              />
               <TrackMixer arrangement={arrangement} onTrack={updateTrack} />
               <SceneGrid onPick={(scene) => handleScene(scene.tokens)} />
             </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveRequestAuth } from "@/lib/auth";
+import { getDevBalanceFallback, shouldUseDevBalanceFallback } from "@/lib/billing/dev-balance";
 import { nextNotesRefillAt } from "@/lib/billing/notes-clock";
 import { getNotesBalance } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
@@ -33,6 +34,24 @@ export async function GET(request: NextRequest) {
       nextRefillAt: nextNotesRefillAt().toISOString(),
     });
   } catch (error) {
+    if (shouldUseDevBalanceFallback()) {
+      log("user.balance_failed", {
+        error: error instanceof Error ? error.message : String(error),
+        fallback: "local_demo_snapshot",
+      }, {
+        route: ROUTE,
+        userId,
+        sessionId: auth.sessionId,
+        level: "warn",
+      });
+      const fallback = getDevBalanceFallback();
+      return NextResponse.json({
+        notes: fallback.notes,
+        planTier: fallback.planTier,
+        nextRefillAt: nextNotesRefillAt().toISOString(),
+      });
+    }
+
     log("user.balance_failed", {
       error: error instanceof Error ? error.message : String(error),
     }, {

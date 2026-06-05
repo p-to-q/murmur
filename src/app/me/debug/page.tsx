@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { formatHumSupportCode } from "@/lib/observability/support-code";
 import type { RecentEvent } from "@/lib/observability/recent-events";
 
 const REFRESH_INTERVAL_MS = 2_000;
@@ -38,11 +41,13 @@ const LEVEL_COLOR: Record<string, string> = {
  * incident triage. Pure read surface; no mutations.
  */
 export default function DebugPage() {
+  const searchParams = useSearchParams();
   const [events, setEvents] = useState<RecentEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [filter, setFilter] = useState<EventFilter>("all");
   const [paused, setPaused] = useState(false);
+  const debugEnabled = searchParams.get("debug") === "1";
 
   const refresh = useCallback(async () => {
     try {
@@ -99,6 +104,34 @@ export default function DebugPage() {
       // for an internal-only debug surface.
     }
   }, [events, updatedAt]);
+
+  if (!debugEnabled) {
+    return (
+      <div className="min-h-svh bg-[#F5F1EB] px-6 py-12 text-[#1A1A1A]">
+        <div className="mx-auto max-w-2xl rounded-[18px] border border-[#1A1A1A]/10 bg-white px-6 py-8">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-[#8C8780]">
+            Murmur / Debug
+          </p>
+          <h1 className="mt-3 hero-serif text-[28px] leading-tight">
+            Hidden by default
+          </h1>
+          <p className="mt-3 text-[14px] leading-[1.6] text-[#6F6A63]">
+            This page is for support and audio investigation. Add
+            <span className="mx-1 font-mono text-[13px] text-[#1A1A1A]">
+              ?debug=1
+            </span>
+            when you need the live event stream.
+          </p>
+          <Link
+            href="/me"
+            className="mt-5 inline-flex rounded-full border border-[#E7DCCB] px-4 py-2 text-[12px] tracking-[0.06em] text-[#6F6A63] transition-colors hover:border-[#D6C7B0] hover:text-[#1A1A1A]"
+          >
+            Back to Me
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-svh bg-[#F5F1EB] text-[#1A1A1A]">
@@ -193,6 +226,15 @@ export default function DebugPage() {
                 {event.requestId && (
                   <span className="text-[#8C8780]">
                     req · {event.requestId.slice(0, 8)}
+                  </span>
+                )}
+                {typeof event.ext.error_code === "string" && (
+                  <span className="text-[#8C8780]">
+                    code ·{" "}
+                    {formatHumSupportCode({
+                      code: event.ext.error_code,
+                      requestId: event.requestId,
+                    })}
                   </span>
                 )}
               </div>

@@ -2,26 +2,14 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource/lxgw-wenkai-tc/300.css";
 import "@fontsource/lxgw-wenkai-tc/400.css";
 import "@fontsource/lxgw-wenkai-tc/700.css";
+import { GeistSans } from "geist/font/sans";
 import "./globals.css";
-import { Geist, Instrument_Serif } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { BottomNav } from "@/components/murmur/bottom-nav";
 import { SideNav } from "@/components/murmur/side-nav";
 import { AudioUnlock } from "@/components/murmur/audio-unlock";
 import { I18nHydrator } from "@/lib/i18n";
 import { cn } from "@/utils/utils";
-
-const geist = Geist({
-  subsets: ["latin"],
-  variable: "--murmur-font-sans-loaded",
-});
-const serif = Instrument_Serif({
-  subsets: ["latin"],
-  variable: "--murmur-font-serif-loaded",
-  weight: ["400"],
-  style: ["normal", "italic"],
-  display: "swap",
-});
 
 const SITE_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -56,11 +44,7 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={cn(
-        "h-full antialiased font-sans",
-        geist.variable,
-        serif.variable
-      )}
+      className={cn("h-full antialiased font-sans", GeistSans.variable)}
     >
       <body className="min-h-svh flex flex-col bg-[#F5F1EB]">
         <I18nHydrator />

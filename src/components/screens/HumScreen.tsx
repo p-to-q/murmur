@@ -3,23 +3,39 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { usePreferencesStore } from "@/lib/store/preferences-store";
 import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import { startAudioContext } from "@/lib/music/tone-player";
 import { transcribeWithStainer } from "@/modules/stainer/transcribe";
+import { selectGenerationMelody } from "@/modules/music/humming-engine";
 import { useTranslator } from "@/lib/i18n";
 import { memory } from "@/lib/platform/memory";
 import { log } from "@/lib/observability/log";
 import { trimRecordingForUpload } from "@/lib/audio/recording-trim";
+import {
+  INITIAL_FIXTURE_RESCUE_STATE,
+  type FixtureRescueState,
+  noteFixtureRescueUsed,
+  noteLiveFailure,
+  noteLiveSuccess,
+  parseFixtureRescueState,
+  serializeFixtureRescueState,
+  shouldAutoRescueWithFixture,
+} from "@/lib/audio/fixture-rescue-policy";
+import { humErrorLogLevel } from "@/lib/audio/hum-error-log-level";
+import { shouldShowHumSupportCode } from "@/lib/audio/hum-support-visibility";
 import {
   TranscribeRequestError,
   type TranscribeRequestErrorCode,
 } from "@/lib/api/transcribe";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { MurmurMark } from "@/components/murmur/murmur-mark";
+import { formatHumSupportCode } from "@/lib/observability/support-code";
 
 const MAX_DURATION = 15;
 // Idle headline rotation interval (ms)
 const IDLE_ROTATE_INTERVAL = 5000;
+const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
 
 /**
  * Surface variants the Hum screen knows how to render. The router below
@@ -39,6 +55,7 @@ interface HumErrorState {
   code: TranscribeRequestErrorCode | "mic_unavailable";
   requestId: string | null;
   currentBalance: number | null;
+  showSupportCode: boolean;
 }
 
 function variantForCode(code: TranscribeRequestErrorCode): HumErrorVariant {
@@ -54,6 +71,8 @@ function variantForCode(code: TranscribeRequestErrorCode): HumErrorVariant {
     case "rate_limited":
       return "rate_limited";
     case "worker_unavailable":
+    case "worker_unconfigured":
+    case "billing_unavailable":
     case "server_error":
     case "network_error":
       return "unavailable";
@@ -75,6 +94,7 @@ export function HumScreen() {
     processingMessage,
     resetFlow,
   } = useMurmurStore();
+  const repairBias = usePreferencesStore((state) => state.repairBias);
   const t = useTranslator();
   const router = useRouter();
 
@@ -189,28 +209,34 @@ export function HumScreen() {
       const result = await transcribeWithStainer({ audioBlob: preparedBlob });
       const draftId = crypto.randomUUID();
       const flowId = crypto.randomUUID();
-      const versions = generateVibeVersions(result.cleanMelody, {
+      const selectedMelody = selectGenerationMelody(result, { repairBias });
+      const versions = generateVibeVersions(selectedMelody.melody, {
         draftId,
         originFlowId: flowId,
         sourceType: blob ? "hum" : "demo",
+        sourceMelodyKind: selectedMelody.kind,
       });
       setVibeVersions(versions);
       setCurrentDraftId(draftId);
       setCurrentFlowId(flowId);
       memory
         .reportAction({
-          content: `Stainer ${result.provider} → ${result.cleanMelody.notes.length} notes → ${versions.length} versions`,
+          content: `Stainer ${result.provider} → ${selectedMelody.kind} ${selectedMelody.melody.notes.length} notes → ${versions.length} versions`,
           event_type: "create",
           page: "hum",
           metadata: {
             type: "hum_transcribe",
             provider: result.provider,
-            bpm: result.cleanMelody.bpm,
-            key: result.cleanMelody.key,
-            notes: result.cleanMelody.notes.length,
+            selected_melody_kind: selectedMelody.kind,
+            bpm: selectedMelody.melody.bpm,
+            key: selectedMelody.melody.key,
+            notes: selectedMelody.melody.notes.length,
           },
         })
         .catch(() => {});
+      if (blob) {
+        writeFixtureRescueState(noteLiveSuccess(readFixtureRescueState()));
+      }
       // A live take debits the balance server-side; pull the fresh number
       // so the next idle render reflects reality. Demo runs (blob === undefined)
       // never touch the ledger, so we skip the refresh round-trip there.
@@ -220,15 +246,36 @@ export function HumScreen() {
       // transition mounts on /vibe instead of bouncing through an overlay.
       router.push("/vibe");
     } catch (e) {
-      const errorState = mapErrorToHumState(e);
+      const fixtureStateBefore = readFixtureRescueState();
+      const rescueEligible =
+        blob &&
+        e instanceof TranscribeRequestError &&
+        shouldAutoRescueWithFixture({
+          state: fixtureStateBefore,
+          code: e.code,
+        });
+      let fixtureStateAfterFailure = fixtureStateBefore;
+      if (blob && e instanceof TranscribeRequestError) {
+        fixtureStateAfterFailure = noteLiveFailure(
+          fixtureStateBefore,
+          e.code,
+        );
+        writeFixtureRescueState(fixtureStateAfterFailure);
+      }
+      const errorState = mapErrorToHumState(e, fixtureStateAfterFailure);
+      const errorLogLevel =
+        e instanceof TranscribeRequestError
+          ? humErrorLogLevel(e.code)
+          : "error";
       log("transcribe.failed", {
         error_code: errorState.code,
         variant: errorState.variant,
         request_id: errorState.requestId,
         current_balance: errorState.currentBalance,
+        rescue_eligible: !!rescueEligible,
         message: e instanceof Error ? e.message : String(e),
       }, {
-        level: errorState.variant === "unavailable" ? "error" : "warn",
+        level: errorLogLevel,
       });
       memory
         .reportAction({
@@ -246,6 +293,25 @@ export function HumScreen() {
       // The server already committed (or refunded) before throwing; a fresh
       // balance keeps the idle pill from telling the user a lie.
       if (blob) void refreshBalance();
+      if (rescueEligible) {
+        writeFixtureRescueState(
+          noteFixtureRescueUsed(readFixtureRescueState()),
+        );
+        memory
+          .reportAction({
+            content: `Hum rescued with fixture after transient ${errorState.code}`,
+            event_type: "update",
+            page: "hum",
+            metadata: {
+              type: "hum_fixture_rescue",
+              code: errorState.code,
+              request_id: errorState.requestId,
+            },
+          })
+          .catch(() => {});
+        await transcribeAndGenerate(undefined);
+        return;
+      }
       setRecordingState("idle");
       setCurrentDraftId(null);
       setCurrentFlowId(null);
@@ -255,13 +321,20 @@ export function HumScreen() {
     }
   };
 
-  const mapErrorToHumState = (error: unknown): HumErrorState => {
+  const mapErrorToHumState = (
+    error: unknown,
+    fixtureState: FixtureRescueState,
+  ): HumErrorState => {
     if (error instanceof TranscribeRequestError) {
       return {
         variant: variantForCode(error.code),
         code: error.code,
         requestId: error.requestId,
         currentBalance: error.currentBalance,
+        showSupportCode: shouldShowHumSupportCode({
+          code: error.code,
+          state: fixtureState,
+        }),
       };
     }
     return {
@@ -269,6 +342,7 @@ export function HumScreen() {
       code: "server_error",
       requestId: null,
       currentBalance: null,
+      showSupportCode: true,
     };
   };
 
@@ -374,6 +448,7 @@ export function HumScreen() {
         code: "mic_unavailable",
         requestId: null,
         currentBalance: null,
+        showSupportCode: false,
       });
     }
   };
@@ -396,7 +471,7 @@ export function HumScreen() {
   const isRecording = recordingState === "recording";
   const isProcessing = recordingState === "processing";
 
-  const errorCopy = humError ? copyForVariant(humError.variant, t) : null;
+  const errorCopy = humError ? copyForState(humError, t) : null;
 
   // Ring progress SVG values
   const ringRadius = 140;
@@ -877,9 +952,12 @@ export function HumScreen() {
                 >
                   {errorCopy.retry}
                 </button>
-                {humError.requestId && (
+                {humError.requestId && humError.showSupportCode && (
                   <p className="mt-4 text-[10px] tracking-[0.18em] uppercase text-[#B6B0A4]">
-                    ref · {humError.requestId.slice(0, 8)}
+                    code · {formatHumSupportCode({
+                      code: humError.code,
+                      requestId: humError.requestId,
+                    })}
                   </p>
                 )}
               </div>
@@ -891,11 +969,43 @@ export function HumScreen() {
   );
 }
 
-function copyForVariant(
-  variant: HumErrorVariant,
+function readFixtureRescueState() {
+  if (typeof window === "undefined") return INITIAL_FIXTURE_RESCUE_STATE;
+  return parseFixtureRescueState(
+    window.localStorage.getItem(FIXTURE_RESCUE_STORAGE_KEY),
+  );
+}
+
+function writeFixtureRescueState(
+  state: ReturnType<typeof readFixtureRescueState>,
+) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    FIXTURE_RESCUE_STORAGE_KEY,
+    serializeFixtureRescueState(state),
+  );
+}
+
+function copyForState(
+  error: HumErrorState,
   t: (key: Parameters<ReturnType<typeof useTranslator>>[0]) => string,
 ): { title: string; detail: string; retry: string } {
-  switch (variant) {
+  if (error.code === "worker_unconfigured") {
+    return {
+      title: t("hum.err.worker_unconfigured.title"),
+      detail: t("hum.err.worker_unconfigured.detail"),
+      retry: t("hum.err.unavailable.cta_retry"),
+    };
+  }
+  if (error.code === "billing_unavailable") {
+    return {
+      title: t("hum.err.billing_unavailable.title"),
+      detail: t("hum.err.billing_unavailable.detail"),
+      retry: t("hum.err.unavailable.cta_retry"),
+    };
+  }
+
+  switch (error.variant) {
     case "mic":
       return {
         title: t("hum.mic.title"),

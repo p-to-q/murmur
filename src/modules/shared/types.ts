@@ -15,6 +15,15 @@ export type CleanMelody = {
   contour: "rising" | "falling" | "wave" | "flat";
 };
 
+export type TranscriptionMelodies = {
+  intent: CleanMelody;
+  corrected: CleanMelody;
+  musical: CleanMelody;
+};
+
+export type MelodySelectionKind = keyof TranscriptionMelodies;
+export type EditDepth = "fresh" | "shaped" | "reworked";
+
 export type TrackState = {
   enabled: boolean;
   intensity: number;
@@ -55,7 +64,13 @@ export type VibeVersion = {
   id: string;
   draftId: string;
   originFlowId: string;
+  parentSongId?: string | null;
+  rootSongId?: string | null;
+  lineageDepth: number;
   sourceType: "hum" | "demo" | "library";
+  sourceMelodyKind: MelodySelectionKind;
+  editCount: number;
+  editDepth: EditDepth;
   versionSeed: string;
   title: string;
   vibe: string;
@@ -77,6 +92,12 @@ export type SongCard = {
   vibe: string;
   duration: number;
   arrangementState: ArrangementState;
+  sourceMelodyKind?: MelodySelectionKind;
+  editCount?: number;
+  editDepth?: EditDepth;
+  parentSongId?: string | null;
+  rootSongId?: string | null;
+  lineageDepth?: number;
   createdAt: string;
 };
 
@@ -93,6 +114,19 @@ export type TranscriptionDiagnostics = {
   duration: number;
   snr: number | null;
   voicedRatio: number | null;
+  rmsDbfs?: number | null;
+  peakDbfs?: number | null;
+  clippingRatio?: number | null;
+  acceptanceScore?: number | null;
+  musicFeelScore?: number | null;
+  rushedRatio?: number | null;
+  ambiguousMidRatio?: number | null;
+  cadenceRatio?: number | null;
+  excessiveHoldRatio?: number | null;
+  interiorHoldRatio?: number | null;
+  onsetFragmentation?: number | null;
+  firstOnsetLag?: number | null;
+  urgentCoherence?: number | null;
   frameCount?: number;
   denoiseMs?: number;
   denoiseProvider?: "off" | "deepfilternet";
@@ -102,11 +136,37 @@ export type TranscriptionDiagnostics = {
   workerMs?: number;
   targetInstrument?: string;
   rangeClampApplied?: boolean;
+  selectedMelodyKind?: MelodySelectionKind;
+  noteHypothesis?: string;
+  noteProposalProfile?: string;
+  noteProposalCandidates?: string;
+  proposalGlideRatio?: number | null;
+  proposalWobbleRatio?: number | null;
+  proposalUrgentRatio?: number | null;
+  hypothesisCandidates?: string;
+  ensembleCandidates?: string;
+  ensembleDecision?: string;
+  ensembleSelected?: string;
+  repairTriggered?: boolean;
+  repairTriggerReason?: string;
+  repairCandidates?: string;
+  providerRerouted?: boolean;
+};
+
+export type TranscriptionContour = {
+  timestamps: number[];
+  pitchHz: Array<number | null>;
+  confidence: number[];
+  voiced: boolean[];
+  hopSeconds: number;
 };
 
 export type TranscriptionResult = {
   provider: TranscriptionProvider;
   rawNotes: MelodyNote[];
+  contour?: TranscriptionContour;
+  melodies: TranscriptionMelodies;
+  selectedMelodyKind: MelodySelectionKind;
   cleanMelody: CleanMelody;
   warnings: string[];
   diagnostics?: TranscriptionDiagnostics;

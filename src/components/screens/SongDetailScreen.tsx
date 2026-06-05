@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 import { useTranslator } from "@/lib/i18n";
 import { getPlayer, startAudioContext } from "@/lib/music/tone-player";
+import { useMurmurStore } from "@/lib/store/murmur-store";
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { buildShareHtml, downloadHtml } from "@/modules/export/render-share-html";
@@ -41,6 +42,12 @@ import {
   getWebMExportSupport,
   WebMExportError,
 } from "@/modules/export/export-webm";
+import {
+  buildSavedSongVibeVersions,
+  hydrateSavedSongToVersion,
+} from "@/modules/music/saved-song-version";
+import { buildLineageTrail } from "@/modules/music/lineage";
+import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
@@ -54,8 +61,14 @@ type ExportKey = "audio" | "html" | "poster" | "video";
 export function SongDetailScreen({ songId }: { songId: string }) {
   const router = useRouter();
   const t = useTranslator();
+  const setCurrentVersion = useMurmurStore((state) => state.setCurrentVersion);
+  const setVibeVersions = useMurmurStore((state) => state.setVibeVersions);
+  const setCurrentDraftId = useMurmurStore((state) => state.setCurrentDraftId);
+  const setCurrentFlowId = useMurmurStore((state) => state.setCurrentFlowId);
 
   const [song, setSong] = useState<Song | null>(null);
+  const [parentSong, setParentSong] = useState<Song | null>(null);
+  const [rootSong, setRootSong] = useState<Song | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -104,6 +117,40 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       getPlayer().stop().catch(() => {});
     };
   }, []);
+
+  useEffect(() => {
+    if (!song) return;
+
+    const parentId =
+      typeof song.parentSongId === "string" && song.parentSongId !== song.id
+        ? song.parentSongId
+        : null;
+    const rootId =
+      typeof song.rootSongId === "string" && song.rootSongId !== song.id
+        ? song.rootSongId
+        : null;
+
+    if (!parentId && !rootId) {
+      return;
+    }
+
+    let active = true;
+    const load = async () => {
+      const entries = await Promise.all([
+        fetchRelatedSong(parentId),
+        fetchRelatedSong(rootId),
+      ]);
+      if (!active) return;
+      setParentSong(entries[0]);
+      setRootSong(entries[1]);
+    };
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, [song]);
 
   /* ── Playback (mp3 first; tone fallback) ──────────────────────────── */
   const playWithTone = useCallback(async () => {
@@ -373,6 +420,51 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   });
   const durSec = Math.round(song.duration);
   const durLabel = `${Math.floor(durSec / 60)}:${String(durSec % 60).padStart(2, "0")}`;
+  const melodyOrigin = getMelodyOriginCopy(song.sourceMelodyKind, t);
+  const effectiveParentSong = parentSong?.id === song.parentSongId ? parentSong : null;
+  const effectiveRootSong =
+    rootSong?.id === song.rootSongId && rootSong?.id !== song.id
+      ? rootSong
+      : null;
+
+  const handleEditAgain = () => {
+    const version = hydrateSavedSongToVersion(song);
+    setCurrentVersion(version);
+    memory
+      .reportAction({
+        content: `Reopened "${song.title}" in studio`,
+        event_type: "update",
+        page: "song-detail",
+        metadata: {
+          type: "song_reopen",
+          song_id: song.id,
+          source_melody_kind: version.sourceMelodyKind,
+        },
+      })
+      .catch(() => {});
+    router.push("/studio");
+  };
+
+  const handleRemixAgain = () => {
+    const versions = buildSavedSongVibeVersions(song);
+    setVibeVersions(versions);
+    setCurrentDraftId(song.id);
+    setCurrentFlowId(`saved-${song.id}`);
+    setCurrentVersion(null);
+    memory
+      .reportAction({
+        content: `Remixed "${song.title}" into fresh vibe choices`,
+        event_type: "navigate",
+        page: "song-detail",
+        metadata: {
+          type: "song_remix",
+          song_id: song.id,
+          source_melody_kind: song.sourceMelodyKind ?? "corrected",
+        },
+      })
+      .catch(() => {});
+    router.push("/vibe");
+  };
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
@@ -412,7 +504,15 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                   <MenuItem
                     onClick={() => {
                       setMenuOpen(false);
-                      router.push("/studio");
+                      handleRemixAgain();
+                    }}
+                  >
+                    {t("song.remix_again") || "Try new versions"}
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      setMenuOpen(false);
+                      handleEditAgain();
                     }}
                   >
                     {t("song.edit_again") || "Edit again"}
@@ -510,11 +610,30 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               <span>{dateLabel}</span>
             </motion.div>
 
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.13, duration: 0.55 }}
+              className="mt-4 rounded-[20px] border border-[#E5DDD0] bg-[#FFFEFB]/80 px-4 py-3"
+            >
+              <p className="text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
+                {t("song.melody_origin.eyebrow") || "MELODY SHAPE"}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <span className="rounded-full bg-[#F3E7D9] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[#A56A3A]">
+                  {melodyOrigin.label}
+                </span>
+                <p className="font-serif-italic text-[14px] leading-[1.45] text-[#6F6A63]">
+                  {melodyOrigin.detailBody}
+                </p>
+              </div>
+            </motion.div>
+
             {/* Editorial caption */}
             <motion.p
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.16, duration: 0.55 }}
+              transition={{ delay: 0.18, duration: 0.55 }}
               className="font-serif-italic mt-3 text-[14px] leading-[1.55] text-[#6F6A63] md:text-[15px]"
             >
               {(t("song.caption") || "Made by humming, {date}.").replace(
@@ -522,6 +641,20 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 longDateLabel,
               )}
             </motion.p>
+
+            <SourceTracePanel
+              song={song}
+              melodyOrigin={melodyOrigin}
+              t={t}
+            />
+
+            <LineagePanel
+              song={song}
+              parentSong={effectiveParentSong}
+              rootSong={effectiveRootSong}
+              t={t}
+              onOpenSong={(id) => router.push(`/song/${id}`)}
+            />
 
             {/* Export list */}
             <motion.p
@@ -584,7 +717,13 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2"
             >
               <button
-                onClick={() => router.push("/studio")}
+                onClick={handleRemixAgain}
+                className="font-serif-italic text-[15px] text-[#1A1A1A] hover:text-[#FF5924] underline-mm transition-colors"
+              >
+                {t("song.remix_again") || "Try new versions"}
+              </button>
+              <button
+                onClick={handleEditAgain}
                 className="font-serif-italic text-[15px] text-[#FF5924] hover:text-[#D9421A] underline-mm transition-colors"
               >
                 {t("song.edit_again") || "Edit again"}
@@ -648,6 +787,17 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   );
 }
 
+async function fetchRelatedSong(songId: string | null): Promise<Song | null> {
+  if (!songId) return null;
+  try {
+    const response = await fetch(`/api/songs/${songId}`);
+    if (!response.ok) return null;
+    return await response.json() as Song;
+  } catch {
+    return null;
+  }
+}
+
 /* ── Sub-components ───────────────────────────────────────────────── */
 
 function ExportRow({
@@ -701,6 +851,199 @@ function ExportRow({
         )}
       </div>
     </motion.button>
+  );
+}
+
+function LineagePanel({
+  song,
+  parentSong,
+  rootSong,
+  t,
+  onOpenSong,
+}: {
+  song: Song;
+  parentSong: Song | null;
+  rootSong: Song | null;
+  t: (key: string) => string;
+  onOpenSong: (id: string) => void;
+}) {
+  const hasBranchContext =
+    song.lineageDepth && song.lineageDepth > 0
+      ? true
+      : !!song.parentSongId || !!song.rootSongId;
+  const trail = buildLineageTrail(song, {
+    parentSong,
+    rootSong,
+  });
+
+  if (!hasBranchContext) {
+    return (
+      <motion.details
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.21, duration: 0.55 }}
+        className="mt-6 rounded-[20px] border border-[#E5DDD0] bg-white/78 px-4 py-4"
+      >
+        <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
+          {t("song.lineage.reveal") || "Open song path"}
+        </summary>
+        <p className="mt-3 font-serif-italic text-[14px] leading-[1.5] text-[#6F6A63]">
+          {t("song.lineage.original") || "This one is still the original branch point."}
+        </p>
+      </motion.details>
+    );
+  }
+
+  return (
+    <motion.details
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.21, duration: 0.55 }}
+      className="mt-6 rounded-[20px] border border-[#E5DDD0] bg-white/78 px-4 py-4"
+    >
+      <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
+        {t("song.lineage.reveal") || "Open song path"}
+      </summary>
+      <p className="mt-3 font-serif-italic text-[14px] leading-[1.5] text-[#6F6A63]">
+        {(t("song.lineage.branch_body") || "This song keeps a trail back to the versions it grew from.")
+          .replace("{depth}", String(song.lineageDepth ?? 0))}
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {trail.map((node, index) => (
+          <div key={`${node.kind}-${node.song.id}`} className="contents">
+            {index > 0 ? (
+              <span className="px-1 text-[12px] text-[#B7AEA1]">→</span>
+            ) : null}
+            <LineageTrailCard
+              label={
+                node.kind === "root"
+                  ? t("song.lineage.root") || "Root"
+                  : node.kind === "parent"
+                    ? t("song.lineage.parent") || "Parent"
+                    : t("song.lineage.current") || "Current"
+              }
+              song={node.song}
+              current={node.song.id === song.id}
+              onOpenSong={onOpenSong}
+            />
+          </div>
+        ))}
+      </div>
+    </motion.details>
+  );
+}
+
+function SourceTracePanel({
+  song,
+  melodyOrigin,
+  t,
+}: {
+  song: Song;
+  melodyOrigin: ReturnType<typeof getMelodyOriginCopy>;
+  t: (key: string) => string;
+}) {
+  const depth = song.lineageDepth ?? 0;
+  const branchLabel =
+    depth > 0
+      ? (t("song.trace.branch.depth") || "Branch depth {depth}").replace(
+          "{depth}",
+          String(depth),
+        )
+      : t("song.trace.branch.original") || "Original take";
+
+  return (
+    <motion.details
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2, duration: 0.55 }}
+      className="mt-6 rounded-[20px] border border-[#E5DDD0] bg-white/78 px-4 py-4"
+    >
+      <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
+        {t("song.trace.reveal") || "Open source trace"}
+      </summary>
+      <p className="mt-3 font-serif-italic text-[14px] leading-[1.5] text-[#6F6A63]">
+        {t("song.trace.body") ||
+          "This is where Murmur quietly keeps the story of how this version landed here."}
+      </p>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <TraceCard
+          eyebrow={t("song.trace.melody") || "Melody stance"}
+          title={melodyOrigin.label}
+          body={melodyOrigin.detailBody}
+        />
+        <TraceCard
+          eyebrow={t("song.trace.branch") || "Version path"}
+          title={branchLabel}
+          body={
+            depth > 0
+              ? t("song.trace.branch.body") ||
+                "You can trace this version back through earlier branches in the song path below."
+              : t("song.trace.branch.original_body") ||
+                "This one is still the first saved branch point for this melody idea."
+          }
+        />
+        <TraceCard
+          eyebrow={t("song.trace.editing") || "Editing cue"}
+          title={t("song.trace.editing.title") || "Where to push next"}
+          body={melodyOrigin.studioBody}
+        />
+      </div>
+    </motion.details>
+  );
+}
+
+function TraceCard({
+  eyebrow,
+  title,
+  body,
+}: {
+  eyebrow: string;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="rounded-[18px] border border-[#ECE2D5] bg-[#FFFCF8] px-4 py-4">
+      <p className="text-[10px] uppercase tracking-[0.18em] text-[#B7AEA1]">
+        {eyebrow}
+      </p>
+      <p className="mt-2 font-serif text-[18px] leading-tight text-[#1A1A1A]">
+        {title}
+      </p>
+      <p className="mt-2 text-[12px] leading-[1.55] text-[#6F6A63]">{body}</p>
+    </div>
+  );
+}
+
+function LineageTrailCard({
+  label,
+  song,
+  current,
+  onOpenSong,
+}: {
+  label: string;
+  song: Song;
+  current: boolean;
+  onOpenSong: (id: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (!current) onOpenSong(song.id);
+      }}
+      disabled={current}
+      className={`rounded-[18px] border px-4 py-3 text-left transition-colors ${
+        current
+          ? "border-[#FFC9B3] bg-[#FFF4EE]"
+          : "border-[#E8DECF] bg-[#FFFEFB] enabled:hover:border-[#FF8A5C]"
+      } disabled:opacity-100`}
+    >
+      <p className="text-[10px] uppercase tracking-[0.18em] text-[#B3AA9C]">{label}</p>
+      <p className="mt-1 font-serif text-[16px] leading-tight text-[#1A1A1A]">{song.title}</p>
+      {song.vibe ? (
+        <p className="mt-1 text-[12px] text-[#8C8780]">{song.vibe}</p>
+      ) : null}
+    </button>
   );
 }
 
