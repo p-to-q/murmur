@@ -39,7 +39,13 @@ jobs:
       - name: Install audio worker dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r workers/audio-engine/requirements.txt
+          if [ -f workers/audio-engine/requirements.txt ]; then
+            python -m pip install -r workers/audio-engine/requirements.txt
+          elif [ -f workers/basic-pitch-service/requirements.txt ]; then
+            python -m pip install -r workers/basic-pitch-service/requirements.txt
+          else
+            echo "No Python worker requirements found"
+          fi
 
       - name: Full audio worker tests
         run: bun run test:audio:full

@@ -337,7 +337,7 @@ here so the user model is self-contained.
 
 ## 10. Audit log + memory adapter
 
-`memory.reportAction` events (see [memory.ts](/Users/dujiayi/murmur/src/lib/platform/memory.ts))
+`memory.reportAction` events (see [memory.ts](../src/lib/platform/memory.ts))
 become the unified audit log post-v2:
 
 - All client-driven user actions emit one event with `userId`,

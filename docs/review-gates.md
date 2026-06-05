@@ -39,7 +39,7 @@ Record:
 - what residual risk remains
 
 Repository automation that reinforces these gates lives in
-[repository-operations.md](/Users/dujiayi/murmur/docs/repository-operations.md).
+[repository-operations.md](./repository-operations.md).
 
 ## Escalate to a design note or ADR when
 

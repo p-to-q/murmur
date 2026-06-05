@@ -107,6 +107,11 @@ export function clampPitchToInstrument(
   if (!range.canCarryMelody) {
     throw new Error(`Instrument ${instrumentId} is not a melody carrier`);
   }
+  if (range.highMidi - range.lowMidi < 12) {
+    throw new Error(
+      `Instrument ${instrumentId} range must span at least one octave`,
+    );
+  }
   if (notes.length === 0) return notes;
 
   const median = medianPitch(notes);

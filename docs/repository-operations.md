@@ -13,23 +13,23 @@ priority. It covers repository hygiene, review entry points, and automation.
 Murmur now uses standard GitHub-native governance surfaces instead of ad hoc
 repo rituals:
 
-- [`.github/workflows/ci.yml`](/Users/dujiayi/murmur/.github/workflows/ci.yml)
+- [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
   runs lint, tests, audio-worker tests, and build on PRs and pushes to `main`.
-- [`.github/workflows/dependency-review.yml`](/Users/dujiayi/murmur/.github/workflows/dependency-review.yml)
+- [`.github/workflows/dependency-review.yml`](../.github/workflows/dependency-review.yml)
   checks incoming dependency risk on PRs.
-- [`.github/workflows/codeql.yml`](/Users/dujiayi/murmur/.github/workflows/codeql.yml)
+- [`.github/workflows/codeql.yml`](../.github/workflows/codeql.yml)
   runs GitHub Advanced Security's static analysis for TypeScript and Python.
-- [`.github/workflows/stale.yml`](/Users/dujiayi/murmur/.github/workflows/stale.yml)
+- [`.github/workflows/stale.yml`](../.github/workflows/stale.yml)
   closes abandoned issues and PRs after a cooling period.
-- [`.github/workflows/link-check.yml`](/Users/dujiayi/murmur/.github/workflows/link-check.yml)
+- [`.github/workflows/link-check.yml`](../.github/workflows/link-check.yml)
   validates local Markdown links with a cheap deterministic check on a schedule
   and by manual trigger.
-- [`.github/workflows/label-sync.yml`](/Users/dujiayi/murmur/.github/workflows/label-sync.yml)
+- [`.github/workflows/label-sync.yml`](../.github/workflows/label-sync.yml)
   keeps the repo's label set aligned with the checked-in taxonomy.
-- [`.github/workflows/labeler.yml`](/Users/dujiayi/murmur/.github/workflows/labeler.yml)
-  and [`.github/workflows/issue-labeler.yml`](/Users/dujiayi/murmur/.github/workflows/issue-labeler.yml)
+- [`.github/workflows/labeler.yml`](../.github/workflows/labeler.yml)
+  and [`.github/workflows/issue-labeler.yml`](../.github/workflows/issue-labeler.yml)
   add lightweight automatic labels to PRs and issues.
-- [`.github/dependabot.yml`](/Users/dujiayi/murmur/.github/dependabot.yml)
+- [`.github/dependabot.yml`](../.github/dependabot.yml)
   opens weekly dependency maintenance PRs for Bun/npm, Python, and GitHub
   Actions.
 
@@ -54,12 +54,12 @@ That is intentional, not forgotten:
 
 The repo also ships standard GitHub collaboration surfaces:
 
-- [`.github/pull_request_template.md`](/Users/dujiayi/murmur/.github/pull_request_template.md)
-- [`.github/ISSUE_TEMPLATE/bug_report.yml`](/Users/dujiayi/murmur/.github/ISSUE_TEMPLATE/bug_report.yml)
-- [`.github/ISSUE_TEMPLATE/feature_request.yml`](/Users/dujiayi/murmur/.github/ISSUE_TEMPLATE/feature_request.yml)
-- [CONTRIBUTING.md](/Users/dujiayi/murmur/CONTRIBUTING.md)
-- [SECURITY.md](/Users/dujiayi/murmur/SECURITY.md)
-- [SUPPORT.md](/Users/dujiayi/murmur/SUPPORT.md)
+- [`.github/pull_request_template.md`](../.github/pull_request_template.md)
+- [`.github/ISSUE_TEMPLATE/bug_report.yml`](../.github/ISSUE_TEMPLATE/bug_report.yml)
+- [`.github/ISSUE_TEMPLATE/feature_request.yml`](../.github/ISSUE_TEMPLATE/feature_request.yml)
+- [CONTRIBUTING.md](../CONTRIBUTING.md)
+- [SECURITY.md](../SECURITY.md)
+- [SUPPORT.md](../SUPPORT.md)
 
 The goal is simple: every change, bug, and security concern should have a
 default place to land without relying on oral tradition.

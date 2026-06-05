@@ -55,7 +55,7 @@ per day. Enough to feel the product; not enough to abuse the LLM endpoint.
 
 ### 4.1 Schema additions
 
-Add to [users.ts](/Users/dujiayi/murmur/src/lib/db/schema/users.ts):
+Add to [users.ts](../src/lib/db/schema/users.ts):
 
 ```ts
 // users table additions

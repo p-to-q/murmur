@@ -63,9 +63,9 @@ The front-end leans toward a calmer, more editorial composition:
 
 This is easiest to see in:
 
-- [src/components/screens/HumScreen.tsx](/Users/dujiayi/murmur/src/components/screens/HumScreen.tsx)
-- [src/components/screens/StudioScreen.tsx](/Users/dujiayi/murmur/src/components/screens/StudioScreen.tsx)
-- [src/components/screens/SongDetailScreen.tsx](/Users/dujiayi/murmur/src/components/screens/SongDetailScreen.tsx)
+- [src/components/screens/HumScreen.tsx](../src/components/screens/HumScreen.tsx)
+- [src/components/screens/StudioScreen.tsx](../src/components/screens/StudioScreen.tsx)
+- [src/components/screens/SongDetailScreen.tsx](../src/components/screens/SongDetailScreen.tsx)
 
 ### 3.3 Guided Creativity
 
@@ -96,8 +96,8 @@ It continues through:
 
 See:
 
-- [docs/music-engine.md](/Users/dujiayi/murmur/docs/music-engine.md)
-- [src/modules/music/melody-polisher.ts](/Users/dujiayi/murmur/src/modules/music/melody-polisher.ts)
+- [docs/music-engine.md](./music-engine.md)
+- [src/modules/music/melody-polisher.ts](../src/modules/music/melody-polisher.ts)
 
 ### 4.2 Shared Musical Core
 
@@ -126,9 +126,9 @@ The hierarchy is:
 
 See:
 
-- [docs/provider-strategy.md](/Users/dujiayi/murmur/docs/provider-strategy.md)
-- [src/app/api/transcribe/route.ts](/Users/dujiayi/murmur/src/app/api/transcribe/route.ts)
-- [src/modules/stainer/transcribe.ts](/Users/dujiayi/murmur/src/modules/stainer/transcribe.ts)
+- [docs/provider-strategy.md](./provider-strategy.md)
+- [src/app/api/transcribe/route.ts](../src/app/api/transcribe/route.ts)
+- [src/modules/stainer/transcribe.ts](../src/modules/stainer/transcribe.ts)
 
 ### 4.4 Export Is Treated As Product Surface
 
@@ -142,9 +142,9 @@ the system, so it has its own design/engineering layer:
 
 See:
 
-- [src/components/song-detail/share-actions.tsx](/Users/dujiayi/murmur/src/components/song-detail/share-actions.tsx)
-- [src/modules/export/render-share-html.ts](/Users/dujiayi/murmur/src/modules/export/render-share-html.ts)
-- [src/modules/export/export-webm.ts](/Users/dujiayi/murmur/src/modules/export/export-webm.ts)
+- [src/components/song-detail/share-actions.tsx](../src/components/song-detail/share-actions.tsx)
+- [src/modules/export/render-share-html.ts](../src/modules/export/render-share-html.ts)
+- [src/modules/export/export-webm.ts](../src/modules/export/export-webm.ts)
 
 ## 5. Granularity We Want Reviewers To Notice
 
@@ -207,13 +207,13 @@ collapsing.
 
 If you only have a few minutes, read in this order:
 
-1. [README.md](/Users/dujiayi/murmur/README.md)
-2. [docs/judges-guide.md](/Users/dujiayi/murmur/docs/judges-guide.md)
-3. [docs/music-engine.md](/Users/dujiayi/murmur/docs/music-engine.md)
-4. [src/components/screens/HumScreen.tsx](/Users/dujiayi/murmur/src/components/screens/HumScreen.tsx)
-5. [src/components/screens/StudioScreen.tsx](/Users/dujiayi/murmur/src/components/screens/StudioScreen.tsx)
-6. [src/components/screens/SongDetailScreen.tsx](/Users/dujiayi/murmur/src/components/screens/SongDetailScreen.tsx)
-7. [src/modules/export/export-webm.ts](/Users/dujiayi/murmur/src/modules/export/export-webm.ts)
+1. [README.md](../README.md)
+2. [docs/judges-guide.md](./judges-guide.md)
+3. [docs/music-engine.md](./music-engine.md)
+4. [src/components/screens/HumScreen.tsx](../src/components/screens/HumScreen.tsx)
+5. [src/components/screens/StudioScreen.tsx](../src/components/screens/StudioScreen.tsx)
+6. [src/components/screens/SongDetailScreen.tsx](../src/components/screens/SongDetailScreen.tsx)
+7. [src/modules/export/export-webm.ts](../src/modules/export/export-webm.ts)
 
 ## 7. Short Summary
 

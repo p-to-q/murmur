@@ -7,10 +7,10 @@ reviewable changes that keep the end-to-end creation flow demonstrable.
 
 Read these first:
 
-- [README.md](/Users/dujiayi/murmur/README.md)
-- [AGENTS.md](/Users/dujiayi/murmur/AGENTS.md)
-- [docs/architecture.md](/Users/dujiayi/murmur/docs/architecture.md)
-- [docs/review-gates.md](/Users/dujiayi/murmur/docs/review-gates.md)
+- [README.md](./README.md)
+- [AGENTS.md](./AGENTS.md)
+- [docs/architecture.md](./docs/architecture.md)
+- [docs/review-gates.md](./docs/review-gates.md)
 
 ## Local setup
 

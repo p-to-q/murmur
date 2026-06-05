@@ -45,7 +45,7 @@ back, not "we'll fix it in follow-up."
 - Prefer `const` arrays of literal strings + a derived union over a
   free-standing union when the values exist at runtime
   (cf. `TRANSCRIPTION_PROVIDER_IDS` in
-  [runtime.ts](/Users/dujiayi/murmur/src/modules/stainer/runtime.ts)).
+  [runtime.ts](../src/modules/stainer/runtime.ts)).
 
 ### Zod boundary
 

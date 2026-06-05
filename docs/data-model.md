@@ -54,7 +54,7 @@ Each migration must be reversible. Drizzle generates `up.sql` +
 ### 3.1 `users` (extended)
 
 Current shape in
-[users.ts](/Users/dujiayi/murmur/src/lib/db/schema/users.ts): id /
+[users.ts](../src/lib/db/schema/users.ts): id /
 email / name / avatarUrl / createdAt / updatedAt.
 
 v2 additions:
@@ -234,7 +234,7 @@ Lifecycle:
 ### 3.6 `songs` (extended)
 
 Current shape in
-[songs.ts](/Users/dujiayi/murmur/src/lib/db/schema/songs.ts). v2
+[songs.ts](../src/lib/db/schema/songs.ts). v2
 changes:
 
 ```ts

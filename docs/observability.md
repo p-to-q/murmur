@@ -13,9 +13,9 @@ stack. It anchors the observability intent that other docs already rely on.
 
 Today's checked-in observability code lives here:
 
-- [src/lib/observability/log.ts](/Users/dujiayi/murmur/src/lib/observability/log.ts)
-- [src/lib/observability/recent-events.ts](/Users/dujiayi/murmur/src/lib/observability/recent-events.ts)
-- [src/app/me/page.tsx](/Users/dujiayi/murmur/src/app/me/page.tsx) for the
+- [src/lib/observability/log.ts](../src/lib/observability/log.ts)
+- [src/lib/observability/recent-events.ts](../src/lib/observability/recent-events.ts)
+- [src/app/me/page.tsx](../src/app/me/page.tsx) for the
   current user-facing debug and support-adjacent surface
 
 ## Minimum contract
