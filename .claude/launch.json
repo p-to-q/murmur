@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "murmur",
-      "runtimeExecutable": "/Users/simonsun/.bun/bin/bun",
+      "runtimeExecutable": "/opt/homebrew/bin/bun",
       "runtimeArgs": ["dev"],
       "port": 3000,
       "autoPort": true

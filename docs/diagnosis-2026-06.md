@@ -1,0 +1,310 @@
+# Murmur Diagnosis — 2026-06
+
+This document is the factual reality check the Murmur v2 roadmap is built on.
+It was written after a full read of `src/` + `workers/` + `docs/` on
+2026-06-03, after PR#1 (Eazo decouple) merged. Every claim points at a file
+path so downstream agents can verify before changing anything.
+
+This is **not** a wish list. Sibling docs cover what to build next:
+
+- `docs/audio-pipeline-redesign.md` — the new hum → score pipeline
+- `docs/cross-platform-strategy.md` — Web + iOS + Android + 微信小程序
+- `docs/studio-compose-redesign.md` — Studio / Compose UX simplification
+- `docs/payment-topup-feature.md` — pay + top-up surfaces
+- `docs/execution-roadmap.md` — sequenced execution plan
+
+If something here contradicts those, this file wins for "what currently is."
+
+---
+
+## 1. Product shape (today)
+
+- **Stack:** Next.js 16 (App Router) + React 19 + Bun + Tailwind 4 + Tone.js +
+  Drizzle/Postgres. ~12.5k LOC across 117 `.ts/.tsx` files. See
+  [package.json](/Users/dujiayi/murmur/package.json).
+- **Five-step arc:** `Hum → Vibe → Studio → Gallery → SongDetail`. Entry
+  shell at [src/app/page.tsx](/Users/dujiayi/murmur/src/app/page.tsx).
+- **Live screens:**
+  [HumScreen](/Users/dujiayi/murmur/src/components/screens/HumScreen.tsx),
+  [VersionCardsOverlay](/Users/dujiayi/murmur/src/components/screens/VersionCardsOverlay.tsx),
+  [StudioScreen](/Users/dujiayi/murmur/src/components/screens/StudioScreen.tsx),
+  [NameScreen](/Users/dujiayi/murmur/src/components/screens/NameScreen.tsx),
+  [GalleryScreen](/Users/dujiayi/murmur/src/components/screens/GalleryScreen.tsx),
+  [SongDetailScreen](/Users/dujiayi/murmur/src/components/screens/SongDetailScreen.tsx),
+  [MeScreen](/Users/dujiayi/murmur/src/components/screens/MeScreen.tsx).
+- **No payment / no top-up / no quota** anywhere. Users table has only
+  `id / email / name / avatarUrl / createdAt / updatedAt` —
+  [users.ts](/Users/dujiayi/murmur/src/lib/db/schema/users.ts).
+- **Auth is a header stub.** `getRequestUser()` reads `x-murmur-user-id` and
+  returns `"guest"` if absent —
+  [server-auth.ts](/Users/dujiayi/murmur/src/lib/platform/server-auth.ts).
+  Anyone can pose as any userId.
+- **Notifications publisher is a stub.** Acknowledged in `architecture.md`.
+- **i18n:** Chinese + English via [src/lib/i18n](/Users/dujiayi/murmur/src/lib/i18n).
+  Locale auto-detected, switcher in MeScreen.
+
+## 2. Audio + arrangement pipeline (today)
+
+The pipeline runs as documented in
+[docs/music-engine.md](/Users/dujiayi/murmur/docs/music-engine.md), but the
+runtime reality has a few important gaps the doc doesn't surface.
+
+### 2.1 Capture
+
+[HumScreen.tsx](/Users/dujiayi/murmur/src/components/screens/HumScreen.tsx):
+
+- 15 s max recording, browser `MediaRecorder` with
+  `audio/webm;codecs=opus → audio/webm → audio/mp4` selection.
+- **No client-side denoise.** Raw mic stream is the only input.
+- **No silence trim, no level normalization.** A user starts and ends with
+  ambient noise; the YIN frontend sees it as low-confidence frames and
+  generates short "ghost" notes that the polisher then has to filter.
+- No live "level meter that means something" — the aurora reactivity is
+  cosmetic only.
+
+### 2.2 Transcription facade
+
+[src/modules/stainer/transcribe.ts](/Users/dujiayi/murmur/src/modules/stainer/transcribe.ts):
+
+- Provider order resolved from `NEXT_PUBLIC_TRANSCRIPTION_PROVIDER` and
+  enabled-at-build feature flags.
+- **Default chain (`auto`):** `remote-python → browser-yin →
+  browser-basic-pitch → fixture`.
+- **Silent fixture fallback is the most dangerous failure mode in the
+  product.** If a real recording's YIN result has zero notes and the worker
+  is missing, the chain falls all the way through to one of five hand-picked
+  fixture melodies (C minor / G major / A minor / F major / D minor) — see
+  [fixture.ts](/Users/dujiayi/murmur/src/modules/stainer/providers/fixture.ts).
+  The user sees a "real" song that isn't theirs. The HumScreen has no
+  affordance to tell them this happened. `provider-strategy.md` claims real
+  audio "no longer receives silent fixture substitution," but the chain
+  still ends in fixture; the substitution only fails when **even fixture**
+  throws.
+- `NEXT_PUBLIC_TRANSCRIPTION_PROVIDER` is a build-time env var
+  (`process.env.NEXT_PUBLIC_*`), so it is **not switchable at runtime**.
+  MeScreen surfaces the resolved chain as debug text.
+
+### 2.3 Pitch detection
+
+Two real implementations and two stubs:
+
+- **`browser-yin`** —
+  [pitch-engine.ts](/Users/dujiayi/murmur/src/lib/music/pitch-engine.ts).
+  Hand-rolled YIN with `YIN_THRESHOLD = 0.20`, frame 2048 / hop 512 at
+  44.1 kHz, voice MIDI range C2–C6 (36–84).
+  - No HPSS, no harmonic-product spectrum, no octave-jump correction.
+    Humming "嗯——" through "啊——" can flip octaves frame-to-frame; the
+    `PITCH_CHANGE_TOLERANCE = 1.5` semitone merge only catches micro-drift,
+    not octave jumps.
+  - Recovers from `decodeAudioData` failure by returning **empty notes
+    instead of throwing**, which directly hands control to fixture downstream
+    (see 2.2). This was an Eazo iframe workaround; it now hides errors.
+- **`remote-python`** —
+  [remote-python.ts](/Users/dujiayi/murmur/src/modules/stainer/providers/remote-python.ts).
+  Posts `audio/webm` blob as multipart to a worker URL set via
+  `NEXT_PUBLIC_REMOTE_PYIN_WORKER_URL`. **Not configured in any committed
+  `.env`** — worker URL is empty in `.env.example`. The worker was renamed
+  during Phase 1 to
+  [workers/audio-engine/main.py](/Users/dujiayi/murmur/workers/audio-engine/main.py)
+  and runs **librosa pYIN** (not Basic
+  Pitch), `fmin=75, fmax=1050, fr=22050`, same C2–C6 clamp.
+  - There is no deploy target / Dockerfile / CI / hosting note for this
+    worker. It currently only exists on the developer's laptop.
+- **`browser-basic-pitch`** — gated by
+  `NEXT_PUBLIC_ENABLE_BASIC_PITCH_BROWSER === "true"` (currently false), uses
+  a 7 MB CDN model on unpkg, decodes at 22.05 kHz, and is poly-aware.
+  Benchmarks (see audio redesign doc) put Basic Pitch's monophonic accuracy
+  far below pYIN/CREPE — keeping it as a fallback for pure-hum input is
+  questionable.
+- **`fixture`** — see above. Always present, demo-only by intent but
+  user-facing by accident.
+
+### 2.4 Melody polisher
+
+[melody-polisher.ts](/Users/dujiayi/murmur/src/modules/music/melody-polisher.ts).
+This is where most of the "musical lawfulness" of the output comes from. It
+does a lot:
+
+1. Confidence + duration filter (≥0.42, ≥0.06 s).
+2. Noise-burst compaction.
+3. Adjacent near-unison merge.
+4. Pitch-outlier removal.
+5. 1–3-note contour smoothing.
+6. BPM detection (IOI-mode based) →
+   [rhythm-engine.ts](/Users/dujiayi/murmur/src/lib/music/rhythm-engine.ts).
+7. 16th-note soft quantize (softness 0.22).
+8. Tonal profile across five modes (major / minor / dorian / phrygian /
+   pentatonic), Krumhansl-style scored scale fit + first-note / last-note
+   anchor bonus + brightness bonus.
+9. Snap each note ±3 semitones to the chosen scale.
+10. Cadence stabilization on the last two notes (toward root / fifth /
+    third).
+11. Final re-merge of adjacent unison.
+
+This is the heaviest single inference layer in the codebase. The audio
+quality complaint **is partially this layer's fault**: when raw input is
+broken (octave jumps, ghost notes), the polisher's outlier filter cannot
+distinguish "user actually jumped an octave" from "YIN guessed wrong," and
+its scale fit will commit to a wrong tonality if more than half the notes
+are wrong. The polisher assumes a roughly-correct pitch contour; YIN under
+noise does not give it one.
+
+There is also **no instrument-range constraint**. `inferTonalProfile` picks
+a key but never asks "is this melody actually singable on the chosen
+instrument?" The user explicitly named this as a product goal in the v2
+brief.
+
+### 2.5 Arrangement (Strummer)
+
+- [generate-versions.ts](/Users/dujiayi/murmur/src/modules/strummer/generate-versions.ts)
+  picks three vibes from six presets (sunset / bedroom / cinematic / party /
+  rain / synth — see
+  [vibes.ts](/Users/dujiayi/murmur/src/presets/vibes.ts)). Each vibe has
+  two ensembles; the seeded RNG picks one. Determinism on `version.id`.
+- Chord / bass / drum engines live in
+  [src/lib/music/](/Users/dujiayi/murmur/src/lib/music/) and produce a
+  unified `AssembledSong` consumed by both the live SimpleSynth preview and
+  the offline Tone.js render. This is the cleanest, most-internally-coherent
+  part of the system; do **not** rewrite without a forcing reason.
+- All arrangement runs **client-side**. The server only stores blobs.
+
+### 2.6 Studio edits
+
+[applyEdit](/Users/dujiayi/murmur/src/modules/strummer/apply-edit.ts) is the
+single mutation surface for `ArrangementState`. 28 allowlisted EditTokens
+covering mood / drums / bass / strings / tempo / instrument swaps / preset
+shifts / restore. LLM classifier at
+[/api/strummer/edit](/Users/dujiayi/murmur/src/app/api/strummer/edit/route.ts)
+asks deepseek to pick ≤3 tokens, validates output against `ALL_EDIT_TOKENS`.
+Falls back to a Chinese+English rule parser
+([parsePromptToToken](/Users/dujiayi/murmur/src/modules/strummer/apply-edit.ts:265))
+if the LLM is unavailable.
+
+This design is clean. The product-level complaint about Studio (see §3) is
+not that the *mechanism* is wrong, it is that the *visible surface* is
+larger than the mechanism deserves.
+
+### 2.7 Save / export
+
+- Save goes Studio → NameScreen → `/api/songs` (POST), persisting
+  [songs.ts](/Users/dujiayi/murmur/src/lib/db/schema/songs.ts) row with
+  `arrangementState` + `visualConfig` JSON blobs + a base64 `mp3DataUrl`.
+- Export surface on SongDetailScreen offers MP3 / share-HTML / poster PNG /
+  audio-backed WebM. Render code in
+  [src/modules/export/](/Users/dujiayi/murmur/src/modules/export/).
+- **`mp3DataUrl` is stored as a base64 data URL inside Postgres.** A 30 s
+  mono MP3 at 128 kbps is ~480 KB; base64 → ~640 KB. Hundred saves per user
+  → ~64 MB of JSON-column rows. This will not scale; needs object storage
+  (S3 / R2 / 腾讯云 COS) before launch.
+- SongDetail's `playWithTone` fallback (when `mp3DataUrl` is missing)
+  reconstructs the melody from
+  `arrangementState.melody.currentPattern.split(" ").map(Number)` — i.e. a
+  flat pitch sequence at 0.5 s steps. This silently throws away rhythm,
+  BPM, and the real arrangement engine. It will play, but it will sound
+  wrong, and users won't know the difference unless they compare side by
+  side.
+
+## 3. Studio / Compose UX reality
+
+[StudioScreen.tsx](/Users/dujiayi/murmur/src/components/screens/StudioScreen.tsx)
+currently shows, on one page:
+
+- Header (back, title + vibe + BPM, restore).
+- Hero card (gradient + play / pause + title + BPM pill).
+- Overview panel (4 meta pills: vibe / key / BPM / melody instrument).
+- **AurisPanel** — text input + 9 chips arranged in 3 groups
+  (balance / color / motion) +
+  [AurisPanel](/Users/dujiayi/murmur/src/components/studio/auris-panel.tsx).
+- **TrackMixer** — 6 instrument rows, each a toggle + 0–100% slider
+  ([track-mixer.tsx](/Users/dujiayi/murmur/src/components/studio/track-mixer.tsx)).
+- **SceneGrid** — 5 mood cards (warm / cinematic / minimal / lush /
+  brighter) with particle accents
+  ([scene-grid.tsx](/Users/dujiayi/murmur/src/components/studio/scene-grid.tsx)
+  + [scene-presets.ts](/Users/dujiayi/murmur/src/components/studio/scene-presets.ts)).
+- Save CTA.
+
+Counted: **~28 interactive surfaces** on one screen, before any save / back /
+play affordance. The user's complaint ("选项太多、交互不清晰") is
+factual. AGENTS.md already says "Murmur is intentionally not a DAW" — Studio
+ships against that intent.
+
+## 4. Other screens — quick state
+
+- **GalleryScreen** — clean, MyMind-style grid, OK. Loads from `/api/songs`
+  on every visit. No deletion UI; only an inferred `removeSong` in the
+  store with no caller wired.
+- **SongDetailScreen** — works when `mp3DataUrl` exists; degrades silently
+  (§2.7). Exposes a "Sliders" button that drops user back into Studio for
+  the same song, which is correct but unlabelled. Manual playback fallback
+  is musically wrong.
+- **MeScreen** — exposes runtime transcription-chain debug strings
+  ("remote-python -> browser-yin -> fixture") to end users; status text like
+  "Strummer v0.2" is dev-facing copy in user space. The "A QUIET PLACE"
+  manifesto is good. No payment / plan / quota panel exists.
+- **VersionCardsOverlay** — 3-card vibe-pick overlay, working.
+- **NameScreen** — pre-save naming step, working.
+
+## 5. State + persistence
+
+[murmur-store.ts](/Users/dujiayi/murmur/src/lib/store/murmur-store.ts) is
+in-memory zustand with no persistence. Implications:
+
+- A user who refreshes between "vibes generated" and "save" loses
+  everything: melody, versions, current version. There is no draft / autosave.
+- `setSongs` is overwritten on every gallery load from `/api/songs`. The
+  client never authoritatively owns Gallery state.
+- Browser autoplay rules + `startAudioContext()` are honored, but a
+  hard refresh during processing leaves Tone.js + AudioContext orphaned —
+  no global teardown.
+
+## 6. API surface
+
+`src/app/api/`:
+
+| Route | Notes |
+|---|---|
+| `POST /api/transcribe` | Proxies to Python worker. **Unused by client**; the client calls the worker URL directly via the stainer facade. Dead route. |
+| `POST /api/strummer/edit` | LLM edit token classifier. Working when `OPENAI_API_KEY` set. |
+| `GET / POST /api/songs` | Gallery CRUD. |
+| `GET / PATCH / DELETE /api/songs/[id]` | Song detail / mutate. |
+| `GET / PATCH /api/user/profile` | Profile sync. |
+| `POST /api/notifications/test` | Stub. |
+| `POST /api/notifications/cron/daily-digest` | Cron route; publisher is a stub. |
+| `GET / POST /api/mcp` | Model Context Protocol bridge for `getStats / listSongs / getSong / deleteSong`. |
+
+## 7. Multi-platform reality
+
+- The repo is web-only. No iOS / Android / 小程序 / Electron shell
+  references anywhere in `src/` or `workers/`.
+- Audio capture uses **`navigator.mediaDevices.getUserMedia` +
+  `MediaRecorder`** with WebM/Opus. This API is browser-native; iOS Safari
+  16+, Android Chrome, and Capacitor WebViews support it. **WeChat
+  mini-program cannot run this code** — it would need `wx.getRecorderManager`.
+- The melody polisher and YIN engine are pure TypeScript and would survive
+  a port to any JS runtime. The Tone.js renderer needs `OfflineAudioContext`,
+  which a WeChat mini-program does not expose.
+- Implication: a server-side audio + arrangement pipeline is the only path
+  that unifies these targets cleanly. See `cross-platform-strategy.md`.
+
+## 8. Open observations the v2 plan should not forget
+
+1. The "MP3-in-Postgres" pattern (§2.7) will block any serious launch.
+2. `auth-client` / `server-auth` are stubs that any caller can spoof; no
+   payment work is meaningful until this is real.
+3. The fixture silent-fallback (§2.2) needs a user-visible "we couldn't
+   read your hum, here are options" surface before any audio investment
+   pays off.
+4. There is no rate limit / quota / abuse-protection on `/api/strummer/edit`
+   — anyone with the public route can burn the OpenAI quota.
+5. There are no integration tests on the audio pipeline. The verification
+   log in [verification.md](/Users/dujiayi/murmur/docs/verification.md) is
+   manual + UI-only.
+6. The Python worker has no deployment story. It is documented as a real
+   provider but cannot be reached in production.
+7. `currentPattern` is overloaded: for `melody` it stores
+   `"60 62 64 …"`; for `chords` it stores `"gen:sunset"`; for `bass / drums`
+   it stores pattern-name strings; for `texture` it stores `"tex:rain"`.
+   See `assemble-song.ts:90` for the mapping. This double-meaning is the
+   root cause of SongDetail's broken fallback playback (§2.7).
+
+These are the surfaces the v2 docs build on.
