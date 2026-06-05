@@ -1,21 +1,20 @@
-name: CI
+name: Audio Acceptance
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+  schedule:
+    - cron: "30 18 * * 1-5"
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: audio-acceptance-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  verify:
-    timeout-minutes: 25
+  acceptance:
+    timeout-minutes: 45
     runs-on: ubuntu-latest
 
     steps:
@@ -34,7 +33,7 @@ jobs:
           cache: "pip"
           cache-dependency-path: workers/audio-engine/requirements*.txt
 
-      - name: Install dependencies
+      - name: Install Bun dependencies
         run: bun install --frozen-lockfile
 
       - name: Install audio worker dependencies
@@ -42,17 +41,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r workers/audio-engine/requirements.txt
 
-      - name: Lint
-        run: bun run lint
+      - name: Run audio acceptance suite
+        run: bun run audit:audio:acceptance
 
-      - name: Check local markdown links
-        run: bun run check:links
-
-      - name: Test
-        run: bun test
-
-      - name: Audio worker tests
-        run: bun run test:audio
-
-      - name: Build
-        run: bun run build
+      - name: Upload audio acceptance reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio-acceptance-reports
+          path: |
+            workers/audio-engine/tools/reports/audio-closure.md
+            workers/audio-engine/tools/reports/audio-acceptance.md
+            workers/audio-engine/tools/reports/audio-acceptance.json
+          if-no-files-found: warn

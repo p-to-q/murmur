@@ -9,13 +9,13 @@ permissions:
 jobs:
   dependency-review:
     if: github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Dependency review
-        continue-on-error: true
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
