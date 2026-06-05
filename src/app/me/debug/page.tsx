@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatHumSupportCode } from "@/lib/observability/support-code";
@@ -41,6 +41,14 @@ const LEVEL_COLOR: Record<string, string> = {
  * incident triage. Pure read surface; no mutations.
  */
 export default function DebugPage() {
+  return (
+    <Suspense fallback={<DebugPageFallback />}>
+      <DebugPageContent />
+    </Suspense>
+  );
+}
+
+function DebugPageContent() {
   const searchParams = useSearchParams();
   const [events, setEvents] = useState<RecentEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -247,6 +255,24 @@ export default function DebugPage() {
           ))}
         </ol>
       </main>
+    </div>
+  );
+}
+
+function DebugPageFallback() {
+  return (
+    <div className="min-h-svh bg-[#F5F1EB] px-6 py-12 text-[#1A1A1A]">
+      <div className="mx-auto max-w-2xl rounded-[18px] border border-[#1A1A1A]/10 bg-white px-6 py-8">
+        <p className="text-[10px] uppercase tracking-[0.24em] text-[#8C8780]">
+          Murmur / Debug
+        </p>
+        <h1 className="mt-3 hero-serif text-[28px] leading-tight">
+          Loading debug surface
+        </h1>
+        <p className="mt-3 text-[14px] leading-[1.6] text-[#6F6A63]">
+          Preparing the recent event stream…
+        </p>
+      </div>
     </div>
   );
 }

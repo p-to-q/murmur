@@ -10,6 +10,14 @@ let nextAuth: ResolvedRequestAuth = {
 };
 
 const createdSongs: Array<Record<string, unknown>> = [];
+const createSongMock = mock(async (data: Record<string, unknown>) => {
+  createdSongs.push(data);
+  return {
+    ...data,
+    createdAt: new Date("2026-06-05T12:00:00.000Z"),
+    updatedAt: new Date("2026-06-05T12:00:00.000Z"),
+  };
+});
 const createSongWithSpendMock = mock(async (data: Record<string, unknown>) => {
   createdSongs.push(data);
   return {
@@ -35,6 +43,7 @@ mock.module("@/lib/auth", () => ({
 
 mock.module("@/lib/db/queries/songs", () => ({
   getSongsByUser: mock(async () => []),
+  createSong: createSongMock,
   createSongWithSpend: createSongWithSpendMock,
 }));
 
@@ -59,6 +68,7 @@ beforeEach(() => {
     sessionId: "sess_song",
   };
   createdSongs.length = 0;
+  createSongMock.mockClear();
   createSongWithSpendMock.mockClear();
 });
 
@@ -151,5 +161,40 @@ describe("POST /api/songs", () => {
     const body = await response.json() as Record<string, unknown>;
     expect(body.sourceMelodyKind).toBe("corrected");
     expect(body.editDepth).toBe("fresh");
+  });
+
+  it("rejects malformed payloads instead of forwarding raw JSON into persistence", async () => {
+    const response = await POST(buildRequest({
+      id: "song_bad",
+      title: "Broken Draft",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: "fast",
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+      injected: { shouldNotPersist: true },
+    } as unknown as Record<string, unknown>));
+
+    expect(response.status).toBe(400);
+    expect(createdSongs).toHaveLength(0);
+    const body = await response.json() as { error: string; issues: Array<{ path: string }> };
+    expect(body.error).toBe("validation_error");
+    expect(body.issues.some((issue) => issue.path === "bpm")).toBe(true);
   });
 });

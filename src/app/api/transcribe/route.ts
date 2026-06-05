@@ -7,7 +7,7 @@ import {
 } from "@/lib/platform/audio-worker";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
-import { getNotesBalance, spendNotes } from "@/lib/db/queries/notes-ledger";
+import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 import { COST } from "@murmur/core";
 
@@ -188,12 +188,6 @@ export async function POST(request: NextRequest) {
       sessionId: auth.sessionId,
     });
 
-    const result = await transcribeWithAudioWorker({
-      audio,
-      targetInstrument,
-      requestId,
-    });
-
     let spend:
       | Awaited<ReturnType<typeof spendNotes>>
       | {
@@ -219,8 +213,8 @@ export async function POST(request: NextRequest) {
           reason: "spend:hum",
           externalRef: requestId,
           metadata: {
-            provider: result.provider,
-            noteCount: result.cleanMelody.notes.length,
+            route: ROUTE,
+            phase: "preflight",
             targetInstrument,
           },
         });
@@ -245,17 +239,37 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      log("notes.spent", {
-        reason: "spend:hum",
-        cost: COST.hum,
-        balanceAfter: spend.balanceAfter,
-        ledgerId: spend.ledgerId,
-      }, {
-        route: ROUTE,
+      if (!spend.duplicate) {
+        log("notes.spent", {
+          reason: "spend:hum",
+          cost: COST.hum,
+          balanceAfter: spend.balanceAfter,
+          ledgerId: spend.ledgerId,
+        }, {
+          route: ROUTE,
+          requestId,
+          userId,
+          sessionId: auth.sessionId,
+        });
+      }
+    }
+
+    let result: Awaited<ReturnType<typeof transcribeWithAudioWorker>>;
+    try {
+      result = await transcribeWithAudioWorker({
+        audio,
+        targetInstrument,
+        requestId,
+      });
+    } catch (error) {
+      await refundSpendIfNeeded({
+        spend,
         requestId,
         userId,
         sessionId: auth.sessionId,
+        targetInstrument,
       });
+      throw error;
     }
 
     log("transcribe.completed", {
@@ -309,6 +323,77 @@ export async function POST(request: NextRequest) {
 
 function shouldBypassBillingForLocalDemo(): boolean {
   return shouldBypassBillingInDevelopment();
+}
+
+async function refundSpendIfNeeded(options: {
+  spend:
+    | Awaited<ReturnType<typeof spendNotes>>
+    | {
+        ok: true;
+        ledgerId: null;
+        balanceBefore: null;
+        balanceAfter: null;
+        duplicate: false;
+      };
+  requestId: string;
+  userId: string;
+  sessionId: string | null;
+  targetInstrument: string;
+}): Promise<void> {
+  if (!options.spend.ok) return;
+  if (options.spend.ledgerId === null || options.spend.duplicate) return;
+
+  try {
+    const refund = await refundNotes({
+      originalLedgerId: options.spend.ledgerId,
+      metadata: {
+        requestId: options.requestId,
+        targetInstrument: options.targetInstrument,
+        trigger: "transcribe_worker_failed",
+      },
+    });
+
+    if (refund.ok) {
+      if (!refund.duplicate) {
+        log("notes.granted", {
+          reason: "refund:spend",
+          delta: refund.amount,
+          balanceAfter: refund.balanceAfter,
+          originalLedgerId: refund.originalLedgerId,
+          refundLedgerId: refund.refundLedgerId,
+        }, {
+          route: ROUTE,
+          requestId: options.requestId,
+          userId: options.userId,
+          sessionId: options.sessionId,
+          level: "warn",
+        });
+      }
+      return;
+    }
+
+    log("notes.refund_failed", {
+      requestLedgerId: options.spend.ledgerId,
+      reason: refund.reason,
+    }, {
+      route: ROUTE,
+      requestId: options.requestId,
+      userId: options.userId,
+      sessionId: options.sessionId,
+      level: "error",
+    });
+  } catch (error) {
+    log("notes.refund_failed", {
+      requestLedgerId: options.spend.ledgerId,
+      reason: error instanceof Error ? error.message : String(error),
+    }, {
+      route: ROUTE,
+      requestId: options.requestId,
+      userId: options.userId,
+      sessionId: options.sessionId,
+      level: "error",
+    });
+  }
 }
 
 function fail(

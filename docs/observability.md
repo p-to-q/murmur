@@ -277,6 +277,10 @@ gets extra treatment:
   `POST /replay` takes a stored sample id and runs the pipeline,
   returning the full diagnostic JSON. Codex implements this as the
   primary debugging affordance.
+- **Debug route access**: `/api/observability/recent-events` and
+  `/me/debug` stay dev-only / flag-gated, and they additionally require
+  a signed-in non-guest session so the ring buffer does not become an
+  anonymous local probe surface.
 
 ---
 

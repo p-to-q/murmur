@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import type {
   BalanceResult,
+  RefundNotesInput,
   SpendNotesInput,
   SpendNotesResult,
 } from "@/lib/db/queries/notes-ledger";
@@ -32,8 +33,10 @@ let nextSpendResult: SpendNotesResult = {
 };
 let nextSpendThrows: Error | null = null;
 let nextBalanceThrows: Error | null = null;
+let nextRefundThrows: Error | null = null;
 let nextWorkerImpl: (() => Promise<TranscriptionResult>) | null = null;
 const lastSpendInputs: SpendNotesInput[] = [];
+const lastRefundInputs: RefundNotesInput[] = [];
 
 const stubTranscription: TranscriptionResult = {
   provider: "swiftf0",
@@ -114,6 +117,19 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
     lastSpendInputs.push(input);
     if (nextSpendThrows) throw nextSpendThrows;
     return nextSpendResult;
+  },
+  refundNotes: async (input: RefundNotesInput) => {
+    lastRefundInputs.push(input);
+    if (nextRefundThrows) throw nextRefundThrows;
+    return {
+      ok: true as const,
+      refundLedgerId: "nle_refund",
+      originalLedgerId: input.originalLedgerId,
+      balanceBefore: 9,
+      balanceAfter: 10,
+      amount: 1,
+      duplicate: false,
+    };
   },
 }));
 
@@ -202,8 +218,10 @@ beforeEach(() => {
   };
   nextSpendThrows = null;
   nextBalanceThrows = null;
+  nextRefundThrows = null;
   nextWorkerImpl = async () => stubTranscription;
   lastSpendInputs.length = 0;
+  lastRefundInputs.length = 0;
 });
 
 describe("POST /api/transcribe", () => {
@@ -222,6 +240,7 @@ describe("POST /api/transcribe", () => {
     expect(body.melodies.corrected.notes).toHaveLength(2);
     expect(body.selectedMelodyKind).toBe("corrected");
     expect(lastSpendInputs).toHaveLength(1);
+    expect(lastRefundInputs).toHaveLength(0);
     expect(lastSpendInputs[0]?.reason).toBe("spend:hum");
     expect(lastSpendInputs[0]?.cost).toBe(1);
   });
@@ -294,7 +313,9 @@ describe("POST /api/transcribe", () => {
     expect(response.status).toBe(422);
     const body = (await response.json()) as { error: string };
     expect(body.error).toBe("no_voiced_frames");
-    expect(lastSpendInputs).toHaveLength(0);
+    expect(lastSpendInputs).toHaveLength(1);
+    expect(lastRefundInputs).toHaveLength(1);
+    expect(lastRefundInputs[0]?.originalLedgerId).toBe("nle_test");
   });
 
   it("returns 502 when the worker is unreachable", async () => {
@@ -311,7 +332,8 @@ describe("POST /api/transcribe", () => {
     expect(response.status).toBe(502);
     const body = (await response.json()) as { error: string };
     expect(body.error).toBe("worker_http_error");
-    expect(lastSpendInputs).toHaveLength(0);
+    expect(lastSpendInputs).toHaveLength(1);
+    expect(lastRefundInputs).toHaveLength(1);
   });
 
   it("returns 503 when the ledger spend throws", async () => {
@@ -339,6 +361,7 @@ describe("POST /api/transcribe", () => {
       const body = (await response.json()) as TranscriptionResult;
       expect(body.provider).toBe("swiftf0");
       expect(lastSpendInputs).toHaveLength(0);
+      expect(lastRefundInputs).toHaveLength(0);
     } finally {
       process.env.NODE_ENV = prevNodeEnv;
       if (prevFlag === undefined) {
@@ -368,6 +391,7 @@ describe("POST /api/transcribe", () => {
       const response = await POST(buildRequest(form, { requestId: "req_dev_unlimited" }));
       expect(response.status).toBe(200);
       expect(lastSpendInputs).toHaveLength(0);
+      expect(lastRefundInputs).toHaveLength(0);
     } finally {
       process.env.NODE_ENV = prevNodeEnv;
       if (prevFlag === undefined) {
@@ -391,5 +415,29 @@ describe("POST /api/transcribe", () => {
     const response = await POST(buildRequest(form));
     expect(response.status).toBe(401);
     expect(lastSpendInputs).toHaveLength(0);
+  });
+
+  it("does not refund duplicate spends on worker failure", async () => {
+    nextSpendResult = {
+      ok: true,
+      ledgerId: "nle_existing",
+      balanceBefore: 10,
+      balanceAfter: 9,
+      duplicate: true,
+    };
+    nextWorkerImpl = async () => {
+      throw new AudioWorkerError(
+        "worker_http_error",
+        "Audio worker unreachable",
+        502,
+      );
+    };
+
+    const form = new FormData();
+    form.append("audio", audioFile());
+    const response = await POST(buildRequest(form));
+    expect(response.status).toBe(502);
+    expect(lastSpendInputs).toHaveLength(1);
+    expect(lastRefundInputs).toHaveLength(0);
   });
 });

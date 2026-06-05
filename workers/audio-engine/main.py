@@ -9,6 +9,7 @@ so algorithm changes do not leak into the Next.js /api/transcribe route.
 from __future__ import annotations
 
 import io
+import hmac
 import logging
 import math
 import os
@@ -20,7 +21,6 @@ import librosa
 import numpy as np
 import soundfile as sf
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
 
 from audio_engine.denoise import (
     DenoiseConfig,
@@ -39,13 +39,6 @@ from audio_engine.frames import pyin_to_notes
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Murmur Audio Engine", version="0.3.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 SR = 22050
 FMIN = 75
@@ -136,7 +129,8 @@ def require_worker_auth(authorization: Annotated[str | None, Header()] = None) -
     expected = os.getenv("AUDIO_WORKER_TOKEN", "").strip()
     if not expected:
         return
-    if authorization != f"Bearer {expected}":
+    provided = authorization or ""
+    if not hmac.compare_digest(provided, f"Bearer {expected}"):
         raise HTTPException(status_code=401, detail="unauthorized")
 
 

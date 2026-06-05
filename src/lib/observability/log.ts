@@ -20,6 +20,7 @@ export type LogEvent =
   | "transcribe.failed"
   | "notes.spent"
   | "notes.granted"
+  | "notes.refund_failed"
   | "user.balance_failed"
   | "arrangement.generated"
   | "song.list_failed"

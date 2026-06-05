@@ -131,6 +131,10 @@ def fetch_remote_range(url: str, start: int, end: int) -> bytes:
 def extract_archive(archive_path: Path, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(archive_path) as archive:
+        for member in archive.infolist():
+            destination = (out_dir / member.filename).resolve()
+            if out_dir.resolve() not in destination.parents and destination != out_dir.resolve():
+                raise ValueError(f"archive entry escapes destination: {member.filename}")
         archive.extractall(out_dir)
 
 

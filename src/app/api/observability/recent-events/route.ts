@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { resolveRequestAuth } from "@/lib/auth";
 import { getRecentEvents } from "@/lib/observability/recent-events";
 
 export const runtime = "nodejs";
@@ -16,10 +17,24 @@ export const runtime = "nodejs";
  * leaks to a real user. The buffer itself already redacts raw / audio
  * fields, but the gate is the second line of defense.
  */
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!isDebugSurfaceEnabled()) {
     return NextResponse.json(
       { error: "forbidden", message: "Debug surface disabled" },
+      { status: 403 },
+    );
+  }
+
+  const auth = await resolveRequestAuth(request);
+  if (!auth.ok) {
+    return NextResponse.json(
+      { error: "unauthorized", message: "Authentication required" },
+      { status: 401 },
+    );
+  }
+  if (auth.source === "guest") {
+    return NextResponse.json(
+      { error: "forbidden", message: "Debug surface requires a signed-in session" },
       { status: 403 },
     );
   }
