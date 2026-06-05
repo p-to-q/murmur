@@ -1,101 +1,127 @@
 "use client";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { cn } from "@/utils/utils";
-import { useMurmurStore } from "@/lib/store/murmur-store";
-import { getPlayer } from "@/lib/music/tone-player";
-import { useTranslator } from "@/lib/i18n";
-import { NAV_ITEMS } from "./nav-items";
 
 /**
- * Mobile bottom nav — 5 items, Create raised in the centre.
- * Layout: [Vibe][Studio]  ◉ CREATE ◉  [Gallery][Me]
+ * BottomNav v3 — typographic footer.
+ *
+ * Throws out the floating pill, the icons, the colored chrome. Replaces it
+ * with a single line of serif-italic words centered at the bottom of the
+ * page. No card, no border, no shadow — typography directly on the cream.
+ *
+ *   Hum  ·  Gallery  ·  Me
+ *
+ * Active = coral + 1.5 px `underline-mm`. Inactive = mute, no underline.
+ * Auto-hides on flow screens (vibe, studio, name, checkout) so the focused
+ * page owns the bottom edge for its own CTA.
+ *
+ * The pattern intentionally mirrors the desktop manuscript margin: three
+ * words, no icons. Mobile reads the words as a footer line; desktop reads
+ * them as a marginal contents column.
  */
-// Pages whose own bottom UI (e.g. Studio's save bar) conflicts with the raised
-// Create button — hide bottom nav there to keep the focused workspace clean.
-const HIDE_ON: string[] = ["/studio"];
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { useMurmurStore } from "@/lib/store/murmur-store";
+import { getPlayer } from "@/lib/music/tone-player";
+import { useI18nStore, useTranslator } from "@/lib/i18n";
+import { NAV_ITEMS } from "./nav-items";
+
+/** Routes where the footer line fades out so a focused flow owns the bottom.
+ *  Hum (`/`) belongs here too: the user is already in the capture moment,
+ *  the orb is the action, and Hum's own bottom bar (brand mark + CTA pill)
+ *  is the only bottom content the page needs. */
+const HIDE_ON: string[] = ["/", "/studio", "/vibe", "/topup/checkout", "/studio/name"];
 
 export function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslator();
+  const lang = useI18nStore((s) => s.lang);
   const { resetFlow } = useMurmurStore();
 
-  if (HIDE_ON.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-    return null;
-  }
+  const isHidden = HIDE_ON.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
 
-  const handleCreate = (e: React.MouseEvent) => {
+  const goHome = (e: React.MouseEvent) => {
     e.preventDefault();
     getPlayer().stop().catch(() => {});
     resetFlow();
     router.push("/");
   };
 
-  const items = NAV_ITEMS.filter((item) => item.mobileNav !== false);
-  const createIdx = items.findIndex((it) => it.href === "/");
-  const left = createIdx >= 0 ? items.slice(0, createIdx) : items.slice(0, 2);
-  const right = createIdx >= 0 ? items.slice(createIdx + 1) : items.slice(2);
-  const createItem = items[createIdx];
-
-  const renderSmall = (item: (typeof items)[number]) => {
-    const isActive =
-      item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-    const Icon = item.icon;
-    const label = t(item.labelKey);
-    return (
-      <Link
-        key={item.href}
-        href={item.href}
-        aria-label={label}
-        className={cn(
-          "flex flex-1 flex-col items-center justify-center gap-1 pt-2 pb-1 transition-colors",
-          isActive ? "text-[#1A1A1A]" : "text-[#A29A8C] hover:text-[#1A1A1A]"
-        )}
-      >
-        <Icon
-          className={cn(
-            "h-[22px] w-[22px] transition-colors",
-            isActive ? "text-[#FF5924]" : ""
-          )}
-          active={isActive}
-        />
-        <span className="text-[10px] tracking-[0.04em] leading-none">
-          {label}
-        </span>
-      </Link>
-    );
-  };
+  const items = NAV_ITEMS.filter((it) => it.mobileNav !== false);
 
   return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-50 md:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-    >
-      <div className="relative bg-[#FFFEFB]/95 backdrop-blur-md border-t border-[#ECE5D6]">
-        <div className="flex items-stretch justify-between h-[68px] px-2">
-          {left.map(renderSmall)}
-          <div className="w-[78px] shrink-0" aria-hidden="true" />
-          {right.map(renderSmall)}
-        </div>
+    <AnimatePresence>
+      {!isHidden && (
+        <motion.nav
+          key="bottom-nav"
+          initial={{ y: 18, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 18, opacity: 0 }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          className="fixed inset-x-0 z-50 flex justify-center md:hidden pointer-events-none"
+          style={{
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
+          }}
+          aria-label="Primary navigation"
+        >
+          <ul className="pointer-events-auto inline-flex items-baseline gap-3 px-2">
+            {items.map((item, i) => {
+              const isActive =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname.startsWith(item.href);
+              const label = t(item.labelKey) || item.fallback;
+              const showSep = i > 0;
 
-        {createItem ? (
-          <button
-            onClick={handleCreate}
-            aria-label={t(createItem.labelKey)}
-            className="absolute left-1/2 -translate-x-1/2 -top-6 flex h-[60px] w-[60px] items-center justify-center rounded-full text-white shadow-[0_10px_28px_rgba(255,89,36,0.45)] transition-transform active:scale-95"
-            style={{
-              background:
-                "radial-gradient(circle at 30% 28%, #FFB48A 0%, #FF8A5C 38%, #FF5924 100%)",
-            }}
-          >
-            <createItem.icon
-              className="h-[26px] w-[26px] text-white"
-              active
-            />
-          </button>
-        ) : null}
-      </div>
-    </nav>
+              const inner = (
+                <span
+                  className={`relative inline-block transition-colors ${
+                    isActive
+                      ? lang === "zh"
+                        ? "font-chinese-title-italic text-[16px] text-[#FF5924] underline-mm"
+                        : "font-serif-italic text-[16px] text-[#FF5924] underline-mm"
+                      : lang === "zh"
+                        ? "font-chinese-title text-[14px] text-[#8C8780] hover:text-[#1A1A1A]"
+                        : "text-[13px] font-medium tracking-[0.01em] text-[#8C8780] hover:text-[#1A1A1A]"
+                  }`}
+                >
+                  {label}
+                </span>
+              );
+
+              return (
+                <li key={item.href} className="inline-flex items-baseline gap-3">
+                  {showSep && (
+                    <span className="text-[#D2C9B6] text-[12px]" aria-hidden>
+                      ·
+                    </span>
+                  )}
+                  {item.href === "/" ? (
+                    <button
+                      onClick={goHome}
+                      aria-label={label}
+                      className="px-1 py-1 transition-transform active:scale-95"
+                    >
+                      {inner}
+                    </button>
+                  ) : (
+                    <Link
+                      href={item.href}
+                      aria-label={label}
+                      className="block px-1 py-1 transition-transform active:scale-95"
+                    >
+                      {inner}
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </motion.nav>
+      )}
+    </AnimatePresence>
   );
 }

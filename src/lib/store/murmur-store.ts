@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { VibeVersion, SongCard } from "@/modules/shared/types";
+import type { VibeVersion } from "@/modules/shared/types";
 
 export type RecordingState = "idle" | "recording" | "processing" | "done" | "error";
 
@@ -17,12 +17,10 @@ interface MurmurStore {
   // Selected version for studio editing
   currentVersion: VibeVersion | null;
   setCurrentVersion: (v: VibeVersion | null) => void;
-
-  // Gallery songs (loaded from DB)
-  songs: SongCard[];
-  setSongs: (s: SongCard[]) => void;
-  addSong: (s: SongCard) => void;
-  removeSong: (id: string) => void;
+  currentDraftId: string | null;
+  setCurrentDraftId: (id: string | null) => void;
+  currentFlowId: string | null;
+  setCurrentFlowId: (id: string | null) => void;
 
   // Playback state — which version/song is currently playing audio
   isPlaying: boolean;
@@ -50,12 +48,10 @@ export const useMurmurStore = create<MurmurStore>((set) => ({
 
   currentVersion: null,
   setCurrentVersion: (v) => set({ currentVersion: v }),
-
-  songs: [],
-  setSongs: (s) => set({ songs: s }),
-  addSong: (s) => set((state) => ({ songs: [s, ...state.songs] })),
-  removeSong: (id) =>
-    set((state) => ({ songs: state.songs.filter((s) => s.id !== id) })),
+  currentDraftId: null,
+  setCurrentDraftId: (id) => set({ currentDraftId: id }),
+  currentFlowId: null,
+  setCurrentFlowId: (id) => set({ currentFlowId: id }),
 
   isPlaying: false,
   playingSongId: null,
@@ -72,6 +68,8 @@ export const useMurmurStore = create<MurmurStore>((set) => ({
       recordingState: "idle",
       vibeVersions: [],
       currentVersion: null,
+      currentDraftId: null,
+      currentFlowId: null,
       processingMessage: "",
       auditioningVersionId: null,
       isPlaying: false,

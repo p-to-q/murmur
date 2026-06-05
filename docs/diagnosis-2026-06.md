@@ -66,23 +66,16 @@ runtime reality has a few important gaps the doc doesn't surface.
 
 [src/modules/stainer/transcribe.ts](../src/modules/stainer/transcribe.ts):
 
-- Provider order resolved from `NEXT_PUBLIC_TRANSCRIPTION_PROVIDER` and
-  enabled-at-build feature flags.
-- **Default chain (`auto`):** `remote-python → browser-yin →
-  browser-basic-pitch → fixture`.
-- **Silent fixture fallback is the most dangerous failure mode in the
-  product.** If a real recording's YIN result has zero notes and the worker
-  is missing, the chain falls all the way through to one of five hand-picked
-  fixture melodies (C minor / G major / A minor / F major / D minor) — see
+- This legacy facade now feeds the server-authoritative path instead of
+  choosing among browser providers at runtime.
+- The effective default chain today is `web /api/transcribe →
+  [audio-worker.ts](../src/lib/platform/audio-worker.ts) →
+  [workers/audio-engine/main.py](../workers/audio-engine/main.py)`.
+- Silent fixture substitution is no longer allowed on the main hum path;
+  fixtures are reserved for explicit demo / rescue surfaces such as
   [fixture.ts](../src/modules/stainer/providers/fixture.ts).
-  The user sees a "real" song that isn't theirs. The HumScreen has no
-  affordance to tell them this happened. `provider-strategy.md` claims real
-  audio "no longer receives silent fixture substitution," but the chain
-  still ends in fixture; the substitution only fails when **even fixture**
-  throws.
-- `NEXT_PUBLIC_TRANSCRIPTION_PROVIDER` is a build-time env var
-  (`process.env.NEXT_PUBLIC_*`), so it is **not switchable at runtime**.
-  MeScreen surfaces the resolved chain as debug text.
+- Provider switching moved out of `NEXT_PUBLIC_*` runtime flags and into
+  server / worker configuration plus the humming-engine selection logic.
 
 ### 2.3 Pitch detection
 
@@ -99,17 +92,12 @@ Two real implementations and two stubs:
   - Recovers from `decodeAudioData` failure by returning **empty notes
     instead of throwing**, which directly hands control to fixture downstream
     (see 2.2). This was an Eazo iframe workaround; it now hides errors.
-- **`remote-python`** —
-  [remote-python.ts](../src/modules/stainer/providers/remote-python.ts).
-  Posts `audio/webm` blob as multipart to a worker URL set via
-  `NEXT_PUBLIC_REMOTE_PYIN_WORKER_URL`. **Not configured in any committed
-  `.env`** — worker URL is empty in `.env.example`. The worker was renamed
-  during Phase 1 to
-  [workers/basic-pitch-service/main.py](../workers/basic-pitch-service/main.py)
-  and runs **librosa pYIN** (not Basic
-  Pitch), `fmin=75, fmax=1050, fr=22050`, same C2–C6 clamp.
-  - There is no deploy target / Dockerfile / CI / hosting note for this
-    worker. It currently only exists on the developer's laptop.
+- **Server audio worker** —
+  [audio-worker.ts](../src/lib/platform/audio-worker.ts) posts multipart
+  audio to [workers/audio-engine/main.py](../workers/audio-engine/main.py),
+  which now owns the worker contract and runs the current detector stack.
+  - Deploy / CI / hosting notes live with the audio-engine workspace rather
+    than the deleted `basic-pitch-service` prototype.
 - **`browser-basic-pitch`** — gated by
   `NEXT_PUBLIC_ENABLE_BASIC_PITCH_BROWSER === "true"` (currently false), uses
   a 7 MB CDN model on unpkg, decodes at 22.05 kHz, and is poly-aware.

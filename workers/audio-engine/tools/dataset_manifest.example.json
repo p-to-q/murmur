@@ -1,0 +1,13 @@
+[
+  {
+    "name": "my_public_dataset_take_001",
+    "family": "humtrans",
+    "source": "public_dataset",
+    "path": "public-dataset/take_001.wav",
+    "expected_min_notes": 4,
+    "expected_pitches": [60, 62, 64, 67],
+    "pitch_match_min": 0.65,
+    "music_feel_min": 0.48,
+    "tags": ["real", "public-dataset", "humming"]
+  }
+]

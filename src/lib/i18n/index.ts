@@ -52,7 +52,16 @@ export function I18nHydrator() {
   useEffect(() => {
     const initial = pickInitialLang();
     if (initial !== useI18nStore.getState().lang) setLang(initial);
+    const html = document.documentElement;
+    html.dataset.lang = initial;
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const html = document.documentElement;
+    const unsubscribe = useI18nStore.subscribe((state) => {
+      html.dataset.lang = state.lang;
+    });
+    return unsubscribe;
   }, []);
   return null;
 }

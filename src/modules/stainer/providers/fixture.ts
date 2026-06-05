@@ -1,6 +1,10 @@
 // Fixture provider — 多段预置旋律，随机抽取，保证每次演示有变化
 import type { TranscriptionInput, TranscriptionResult } from "@/modules/shared/types";
 import { polishMelody } from "@/modules/music/melody-polisher";
+import {
+  buildTranscriptionMelodies,
+  chooseGenerationMelodyKind,
+} from "@/modules/music/humming-engine";
 
 // velocity 全部 0–1 范围（已 /127）
 const FIXTURE_MELODIES = [
@@ -65,11 +69,21 @@ export async function transcribeFixture(
   const idx = Math.floor(Math.random() * FIXTURE_MELODIES.length);
   const rawNotes = FIXTURE_MELODIES[idx]!;
   const cleanMelody = polishMelody(rawNotes);
+  const melodies = buildTranscriptionMelodies(rawNotes, cleanMelody);
+  const selectedMelodyKind = chooseGenerationMelodyKind({ melodies });
 
   return {
     provider: "fixture",
     rawNotes,
-    cleanMelody,
+    melodies,
+    selectedMelodyKind,
+    cleanMelody: melodies.corrected,
     warnings: [],
+    diagnostics: {
+      duration: melodies.corrected.duration,
+      snr: null,
+      voicedRatio: null,
+      selectedMelodyKind,
+    },
   };
 }

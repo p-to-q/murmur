@@ -1,10 +1,15 @@
 import type { Metadata, Viewport } from "next";
+import "@fontsource/lxgw-wenkai-tc/300.css";
+import "@fontsource/lxgw-wenkai-tc/400.css";
+import "@fontsource/lxgw-wenkai-tc/700.css";
+import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { BottomNav } from "@/components/murmur/bottom-nav";
 import { SideNav } from "@/components/murmur/side-nav";
 import { AudioUnlock } from "@/components/murmur/audio-unlock";
 import { I18nHydrator } from "@/lib/i18n";
+import { cn } from "@/utils/utils";
 
 const SITE_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -37,7 +42,10 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-CN" className="h-full antialiased font-sans">
+    <html
+      lang="zh-CN"
+      className={cn("h-full antialiased font-sans", GeistSans.variable)}
+    >
       <body className="min-h-svh flex flex-col bg-[#F5F1EB]">
         <I18nHydrator />
         {/* Desktop sidebar (md+) — mobile hides via internal media query */}
@@ -46,9 +54,11 @@ export default function RootLayout({
             - mobile  → reserves bottom for nav (with safe-area)
             - desktop → reserves left 232px for sidebar */}
         <main
-          className="flex-1 md:pl-[232px]"
+          className="flex-1"
           style={{
+            paddingLeft: "var(--side-nav-w)",
             paddingBottom: "var(--main-pb)",
+            transition: "padding-left 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         >
           {children}

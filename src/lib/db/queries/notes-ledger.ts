@@ -1,0 +1,442 @@
+import { randomUUID } from "crypto";
+import { and, eq } from "drizzle-orm";
+import { db } from "../client";
+import { notesLedger } from "../schema/notes-ledger";
+import { users } from "../schema/users";
+import type { NotesReason } from "@murmur/core";
+import {
+  decideGrant,
+  decideRefund,
+  decideSpend,
+  refundReferenceFor,
+  type ExistingLedgerRow,
+} from "@/lib/billing/notes-ledger-decisions";
+
+// Re-export so existing imports `from "@/lib/db/queries/notes-ledger"`
+// continue to work; tests that mock this module won't accidentally
+// shadow the pure decisions, which live in their own module.
+export {
+  decideGrant,
+  decideRefund,
+  decideSpend,
+  refundReferenceFor,
+  type ExistingLedgerRow,
+} from "@/lib/billing/notes-ledger-decisions";
+
+export type SpendReason = Extract<NotesReason, `spend:${string}`>;
+export type GrantReason = Exclude<NotesReason, SpendReason>;
+
+export type BalanceResult =
+  | {
+      ok: true;
+      userId: string;
+      notes: number;
+      planTier: "free" | "premium";
+      freeNotesGrantedAt: Date;
+    }
+  | {
+      ok: false;
+      reason: "user_not_found";
+      notes: 0;
+    };
+
+export type SpendNotesResult =
+  | {
+      ok: true;
+      ledgerId: string;
+      balanceBefore: number;
+      balanceAfter: number;
+      /**
+       * True when this call hit an existing ledger row for the same
+       * (userId, reason, externalRef) tuple and returned the prior
+       * outcome without writing. Callers logging "user spent N notes"
+       * should suppress the log when `duplicate === true`.
+       */
+      duplicate: boolean;
+    }
+  | {
+      ok: false;
+      reason: "insufficient_notes" | "user_not_found";
+      currentBalance: number;
+    };
+
+export type GrantNotesResult =
+  | {
+      ok: true;
+      ledgerId: string;
+      balanceBefore: number;
+      balanceAfter: number;
+      duplicate: boolean;
+    }
+  | {
+      ok: false;
+      reason: "user_not_found";
+    };
+
+export type RefundNotesResult =
+  | {
+      ok: true;
+      refundLedgerId: string;
+      originalLedgerId: string;
+      balanceBefore: number;
+      balanceAfter: number;
+      amount: number;
+      duplicate: boolean;
+    }
+  | {
+      ok: false;
+      reason: "original_not_found" | "original_not_a_spend" | "user_not_found";
+    };
+
+export type SpendNotesInput = {
+  userId: string;
+  cost: number;
+  reason: SpendReason;
+  externalRef?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type GrantNotesInput = {
+  userId: string;
+  amount: number;
+  reason: GrantReason;
+  externalRef?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type RefundNotesInput = {
+  originalLedgerId: string;
+  /**
+   * Optional override; defaults to `grant:refund`. Provided so
+   * partial refunds tied to a specific provider event can carry a
+   * narrower reason if you ever need to slice ledger queries by it.
+   */
+  reason?: GrantReason;
+  metadata?: Record<string, unknown>;
+};
+
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// ─── DB orchestration ──────────────────────────────────────────────
+
+export async function getNotesBalance(userId: string): Promise<BalanceResult> {
+  await ensureBillingAccount(userId);
+
+  const [row] = await db
+    .select({
+      id: users.id,
+      notesBalance: users.notesBalance,
+      planTier: users.planTier,
+      freeNotesGrantedAt: users.freeNotesGrantedAt,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  if (!row) {
+    return { ok: false, reason: "user_not_found", notes: 0 };
+  }
+
+  return {
+    ok: true,
+    userId: row.id,
+    notes: row.notesBalance,
+    planTier: normalizePlanTier(row.planTier),
+    freeNotesGrantedAt: row.freeNotesGrantedAt,
+  };
+}
+
+export async function spendNotes(input: SpendNotesInput): Promise<SpendNotesResult> {
+  await ensureBillingAccount(input.userId);
+
+  return db.transaction((tx) => spendNotesInTransaction(tx, input));
+}
+
+export async function spendNotesInTransaction(
+  tx: DbTransaction,
+  input: SpendNotesInput,
+): Promise<SpendNotesResult> {
+  const cost = normalizePositiveNotes(input.cost, "cost");
+
+  const user = await lockUserRow(tx, input.userId);
+  if (!user) {
+    return { ok: false, reason: "user_not_found", currentBalance: 0 };
+  }
+
+  const existing = input.externalRef
+    ? await findIdempotentLedger(tx, input.userId, input.reason, input.externalRef)
+    : null;
+
+  const decision = decideSpend({
+    currentBalance: user.notesBalance,
+    cost,
+    existing,
+  });
+
+  if (decision.kind === "insufficient") {
+    return {
+      ok: false,
+      reason: "insufficient_notes",
+      currentBalance: decision.currentBalance,
+    };
+  }
+  if (decision.kind === "duplicate") {
+    return {
+      ok: true,
+      ledgerId: decision.ledgerId,
+      balanceBefore: decision.balanceBefore,
+      balanceAfter: decision.balanceAfter,
+      duplicate: true,
+    };
+  }
+
+  const ledgerId = createLedgerId();
+  await tx.insert(notesLedger).values({
+    id: ledgerId,
+    userId: input.userId,
+    delta: -cost,
+    reason: input.reason,
+    externalRef: input.externalRef,
+    metadata: input.metadata ?? {},
+  });
+  await tx
+    .update(users)
+    .set({ notesBalance: decision.balanceAfter, updatedAt: new Date() })
+    .where(eq(users.id, input.userId));
+
+  return {
+    ok: true,
+    ledgerId,
+    balanceBefore: user.notesBalance,
+    balanceAfter: decision.balanceAfter,
+    duplicate: false,
+  };
+}
+
+export async function grantNotes(input: GrantNotesInput): Promise<GrantNotesResult> {
+  const amount = normalizePositiveNotes(input.amount, "amount");
+
+  return db.transaction(async (tx) => {
+    const user = await lockUserRow(tx, input.userId);
+    if (!user) return { ok: false, reason: "user_not_found" };
+
+    const existing = input.externalRef
+      ? await findIdempotentLedger(tx, input.userId, input.reason, input.externalRef)
+      : null;
+
+    const decision = decideGrant({
+      currentBalance: user.notesBalance,
+      amount,
+      existing,
+    });
+
+    if (decision.kind === "duplicate") {
+      return {
+        ok: true,
+        ledgerId: decision.ledgerId,
+        balanceBefore: decision.balanceBefore,
+        balanceAfter: decision.balanceAfter,
+        duplicate: true,
+      };
+    }
+
+    const ledgerId = createLedgerId();
+    await tx.insert(notesLedger).values({
+      id: ledgerId,
+      userId: input.userId,
+      delta: amount,
+      reason: input.reason,
+      externalRef: input.externalRef,
+      metadata: input.metadata ?? {},
+    });
+    await tx
+      .update(users)
+      .set({ notesBalance: decision.balanceAfter, updatedAt: new Date() })
+      .where(eq(users.id, input.userId));
+
+    return {
+      ok: true,
+      ledgerId,
+      balanceBefore: user.notesBalance,
+      balanceAfter: decision.balanceAfter,
+      duplicate: false,
+    };
+  });
+}
+
+/**
+ * Reverse a prior spend by inserting a positive-delta ledger row tied
+ * to the original spend's id. Idempotent — calling twice with the
+ * same originalLedgerId returns the existing refund row.
+ *
+ * Refunds are never destructive: the original spend row stays in the
+ * ledger. The invariant `SUM(delta WHERE user_id = U) = balance`
+ * holds because the refund row's positive delta cancels the spend's
+ * negative delta.
+ */
+export async function refundNotes(input: RefundNotesInput): Promise<RefundNotesResult> {
+  const refundReason: GrantReason = input.reason ?? "refund:spend";
+  const refundExternalRef = refundReferenceFor(input.originalLedgerId);
+
+  return db.transaction(async (tx) => {
+    const [original] = await tx
+      .select({
+        id: notesLedger.id,
+        userId: notesLedger.userId,
+        delta: notesLedger.delta,
+      })
+      .from(notesLedger)
+      .where(eq(notesLedger.id, input.originalLedgerId))
+      .limit(1);
+
+    if (!original) return { ok: false, reason: "original_not_found" };
+
+    const user = await lockUserRow(tx, original.userId);
+    if (!user) return { ok: false, reason: "user_not_found" };
+
+    const existingRefund = await findIdempotentLedger(
+      tx,
+      original.userId,
+      refundReason,
+      refundExternalRef,
+    );
+
+    const decision = decideRefund({
+      currentBalance: user.notesBalance,
+      original,
+      existingRefund,
+    });
+
+    if (decision.kind === "original_missing") {
+      return { ok: false, reason: "original_not_found" };
+    }
+    if (decision.kind === "original_not_spend") {
+      return { ok: false, reason: "original_not_a_spend" };
+    }
+
+    if (decision.kind === "duplicate") {
+      return {
+        ok: true,
+        refundLedgerId: decision.ledgerId,
+        originalLedgerId: original.id,
+        balanceBefore: user.notesBalance,
+        balanceAfter: decision.balanceAfter,
+        amount: decision.amount,
+        duplicate: true,
+      };
+    }
+
+    const refundLedgerId = createLedgerId();
+    await tx.insert(notesLedger).values({
+      id: refundLedgerId,
+      userId: original.userId,
+      delta: decision.amount,
+      reason: refundReason,
+      externalRef: refundExternalRef,
+      metadata: { ...(input.metadata ?? {}), refunds: original.id },
+    });
+    await tx
+      .update(users)
+      .set({ notesBalance: decision.balanceAfter, updatedAt: new Date() })
+      .where(eq(users.id, original.userId));
+
+    return {
+      ok: true,
+      refundLedgerId,
+      originalLedgerId: original.id,
+      balanceBefore: user.notesBalance,
+      balanceAfter: decision.balanceAfter,
+      amount: decision.amount,
+      duplicate: false,
+    };
+  });
+}
+
+export async function ensureBillingAccount(userId: string): Promise<void> {
+  await ensureGuestBillingUser(userId);
+  await ensureInitialLedgerForUser(userId);
+}
+
+async function ensureGuestBillingUser(userId: string): Promise<void> {
+  if (userId !== "guest") return;
+
+  await db
+    .insert(users)
+    .values({ id: "guest", name: "Local Creator" })
+    .onConflictDoNothing();
+}
+
+async function ensureInitialLedgerForUser(userId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const user = await lockUserRow(tx, userId);
+    if (!user || user.notesBalance <= 0) return;
+
+    const [existingLedger] = await tx
+      .select({ id: notesLedger.id })
+      .from(notesLedger)
+      .where(eq(notesLedger.userId, userId))
+      .limit(1);
+
+    if (existingLedger) return;
+
+    await tx.insert(notesLedger).values({
+      id: createLedgerId(),
+      userId,
+      delta: user.notesBalance,
+      reason: userId === "guest" ? "grant:signup_bonus" : "grant:cutover_gift",
+      externalRef: "initial_balance",
+      metadata: { source: "ensure_initial_ledger" },
+    });
+  });
+}
+
+async function lockUserRow(
+  tx: DbTransaction,
+  userId: string,
+): Promise<{ id: string; notesBalance: number } | null> {
+  const [user] = await tx
+    .select({
+      id: users.id,
+      notesBalance: users.notesBalance,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+    .for("update");
+  return user ?? null;
+}
+
+async function findIdempotentLedger(
+  tx: DbTransaction,
+  userId: string,
+  reason: string,
+  externalRef: string,
+): Promise<ExistingLedgerRow | null> {
+  const [row] = await tx
+    .select({ id: notesLedger.id, delta: notesLedger.delta })
+    .from(notesLedger)
+    .where(
+      and(
+        eq(notesLedger.userId, userId),
+        eq(notesLedger.reason, reason),
+        eq(notesLedger.externalRef, externalRef),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+function normalizePositiveNotes(value: number, name: string): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer note amount`);
+  }
+  return value;
+}
+
+function normalizePlanTier(value: string): "free" | "premium" {
+  return value === "premium" ? "premium" : "free";
+}
+
+function createLedgerId(): string {
+  return `nle_${Date.now().toString(36)}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+}

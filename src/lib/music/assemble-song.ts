@@ -60,15 +60,18 @@ export function assembleSong(version: VibeVersion): AssembledSong {
   // ── Chord track via chord-engine (voiced, phrase-aware) ────────────
   const chordTrack = buildChordTrack(melody, vibeKeyFromArrangement(version), version.id);
 
-  // ── Bass line — derive pattern from arrangement.bass.currentPattern ─
-  // Stored as a magic string; default to per-vibe sensible choice.
-  const bassPattern = pickBassPattern(arrangement.bass.currentPattern, version.id);
+  const bassPattern = pickBassPattern(
+    arrangement.bass.bassPattern ?? arrangement.bass.currentPattern,
+    version.id,
+  );
   const bass = arrangement.bass.enabled
     ? buildBassLine({ chords: chordTrack.events, bpm: melody.bpm, pattern: bassPattern })
     : [];
 
   // ── Drums ──────────────────────────────────────────────────────────
-  const drumPattern = pickDrumPattern(arrangement.drums.currentPattern);
+  const drumPattern = pickDrumPattern(
+    arrangement.drums.drumsPattern ?? arrangement.drums.currentPattern,
+  );
   const phraseBoundaries = detectPhrases(melody.notes, melody.bpm).map((p) => p.end);
   const drums = arrangement.drums.enabled
     ? buildDrumTrack({
@@ -108,10 +111,11 @@ function pickDrumPattern(stored: string): DrumPattern {
   return "soft";
 }
 
-/** generate-versions stamps `chords.currentPattern` as "gen:<vibeId>" so we
-    can recover the vibe id deterministically here. Falls back to a tag
-    heuristic for any legacy data (saved before this change). */
+/** Prefer the typed v2 chord tag, then fall back to the legacy
+    `currentPattern = "gen:<vibeId>"` stamp for saved v1 rows. */
 function vibeKeyFromArrangement(version: VibeVersion): string {
+  const typedTag = version.arrangementState.chords.chordsTag;
+  if (typedTag) return typedTag;
   const stamp = version.arrangementState.chords.currentPattern;
   if (stamp.startsWith("gen:")) return stamp.slice(4);
   const tag = (version.tags[0] ?? "").toLowerCase();

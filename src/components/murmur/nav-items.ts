@@ -16,6 +16,8 @@ export type NavItem = {
   href: string;
   icon: NavIconComponent;
   labelKey: TKey;
+  /** Display label in English when i18n key is missing. */
+  fallback: string;
   /** false = hide from mobile bottom nav (default: true) */
   mobileNav?: boolean;
   /** false = hide from desktop sidebar (default: true) */
@@ -23,10 +25,9 @@ export type NavItem = {
 };
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/vibe", icon: VibeNavIcon, labelKey: "nav.vibe" },
-  { href: "/studio", icon: StudioNavIcon, labelKey: "nav.studio" },
-  // Create sits in the visual centre on mobile, second from top on desktop
-  { href: "/", icon: CreateNavIcon, labelKey: "nav.create" },
-  { href: "/gallery", icon: GalleryNavIcon, labelKey: "nav.gallery" },
-  { href: "/me", icon: MeNavIcon, labelKey: "nav.me" },
+  { href: "/",        icon: CreateNavIcon,  labelKey: "nav.create",  fallback: "Hum" },
+  { href: "/vibe",    icon: VibeNavIcon,    labelKey: "nav.vibe",    fallback: "Vibe", mobileNav: false },
+  { href: "/studio",  icon: StudioNavIcon,  labelKey: "nav.studio",  fallback: "Studio", mobileNav: false },
+  { href: "/gallery", icon: GalleryNavIcon, labelKey: "nav.gallery", fallback: "Gallery" },
+  { href: "/me",      icon: MeNavIcon,      labelKey: "nav.me",      fallback: "Me" },
 ];

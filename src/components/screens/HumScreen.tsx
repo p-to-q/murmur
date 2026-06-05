@@ -1,16 +1,83 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { usePreferencesStore } from "@/lib/store/preferences-store";
 import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import { startAudioContext } from "@/lib/music/tone-player";
 import { transcribeWithStainer } from "@/modules/stainer/transcribe";
+import { selectGenerationMelody } from "@/modules/music/humming-engine";
 import { useTranslator } from "@/lib/i18n";
 import { memory } from "@/lib/platform/memory";
+import { log } from "@/lib/observability/log";
+import { trimRecordingForUpload } from "@/lib/audio/recording-trim";
+import {
+  INITIAL_FIXTURE_RESCUE_STATE,
+  type FixtureRescueState,
+  noteFixtureRescueUsed,
+  noteLiveFailure,
+  noteLiveSuccess,
+  parseFixtureRescueState,
+  serializeFixtureRescueState,
+  shouldAutoRescueWithFixture,
+} from "@/lib/audio/fixture-rescue-policy";
+import { humErrorLogLevel } from "@/lib/audio/hum-error-log-level";
+import { shouldShowHumSupportCode } from "@/lib/audio/hum-support-visibility";
+import {
+  TranscribeRequestError,
+  type TranscribeRequestErrorCode,
+} from "@/lib/api/transcribe";
+import { useUserBalance } from "@/lib/hooks/use-user-balance";
+import { MurmurMark } from "@/components/murmur/murmur-mark";
+import { formatHumSupportCode } from "@/lib/observability/support-code";
 
 const MAX_DURATION = 15;
 // Idle headline rotation interval (ms)
 const IDLE_ROTATE_INTERVAL = 5000;
+const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
+
+/**
+ * Surface variants the Hum screen knows how to render. The router below
+ * maps every `TranscribeRequestErrorCode` to exactly one variant — keep
+ * the relationship in sync with `docs/page-contracts.md` §1.
+ */
+type HumErrorVariant =
+  | "mic"
+  | "inaudible"
+  | "too_short"
+  | "insufficient"
+  | "rate_limited"
+  | "unavailable";
+
+interface HumErrorState {
+  variant: HumErrorVariant;
+  code: TranscribeRequestErrorCode | "mic_unavailable";
+  requestId: string | null;
+  currentBalance: number | null;
+  showSupportCode: boolean;
+}
+
+function variantForCode(code: TranscribeRequestErrorCode): HumErrorVariant {
+  switch (code) {
+    case "no_voiced_frames":
+      return "inaudible";
+    case "audio_required":
+    case "audio_too_large":
+    case "validation_error":
+      return "too_short";
+    case "insufficient_notes":
+      return "insufficient";
+    case "rate_limited":
+      return "rate_limited";
+    case "worker_unavailable":
+    case "worker_unconfigured":
+    case "billing_unavailable":
+    case "server_error":
+    case "network_error":
+      return "unavailable";
+  }
+}
 
 export function HumScreen() {
   // This screen is deliberately doing two jobs at once:
@@ -21,14 +88,20 @@ export function HumScreen() {
     recordingState,
     setRecordingState,
     setVibeVersions,
+    setCurrentDraftId,
+    setCurrentFlowId,
     setProcessingMessage,
     processingMessage,
     resetFlow,
   } = useMurmurStore();
+  const repairBias = usePreferencesStore((state) => state.repairBias);
   const t = useTranslator();
+  const router = useRouter();
 
   const [recordingTime, setRecordingTime] = useState(0);
-  const [micFailed, setMicFailed] = useState(false);
+  const [humError, setHumError] = useState<HumErrorState | null>(null);
+  const [levelState, setLevelState] = useState<"idle" | "quiet" | "heard">("idle");
+  const { balance, refresh: refreshBalance } = useUserBalance();
   const [idleIndex, setIdleIndex] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -41,6 +114,8 @@ export function HumScreen() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number>(0);
+  const quietSinceRef = useRef<number | null>(null);
+  const levelStateRef = useRef<"idle" | "quiet" | "heard">("idle");
   // Raw amplitude motion value → spring-smoothed for silky blob animation
   const amplitudeMv = useMotionValue(0);
   const amplitudeSpring = useSpring(amplitudeMv, { stiffness: 30, damping: 12 });
@@ -49,6 +124,12 @@ export function HumScreen() {
   const blob2Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.28]);
   const blob3Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.22]);
   const blobOpacity = useTransform(amplitudeSpring, [0, 1], [1, 2.2]);
+
+  const setInputLevelState = useCallback((next: "idle" | "quiet" | "heard") => {
+    if (levelStateRef.current === next) return;
+    levelStateRef.current = next;
+    setLevelState(next);
+  }, []);
 
   const IDLE_HEADLINES = useMemo(
     () => [
@@ -85,7 +166,7 @@ export function HumScreen() {
 
   // Rotate idle headlines
   useEffect(() => {
-    if (recordingState !== "idle" || micFailed) {
+    if (recordingState !== "idle" || humError) {
       if (idleTimerRef.current) clearInterval(idleTimerRef.current);
       return;
     }
@@ -95,7 +176,7 @@ export function HumScreen() {
     return () => {
       if (idleTimerRef.current) clearInterval(idleTimerRef.current);
     };
-  }, [recordingState, micFailed, IDLE_HEADLINES.length]);
+  }, [recordingState, humError, IDLE_HEADLINES.length]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === "recording") {
@@ -124,46 +205,186 @@ export function HumScreen() {
     setRecordingState("processing");
     tickMessages();
     try {
-      const result = await transcribeWithStainer({ audioBlob: blob });
-      const versions = generateVibeVersions(result.cleanMelody);
+      const preparedBlob = blob ? await prepareAudioBlob(blob) : undefined;
+      const result = await transcribeWithStainer({ audioBlob: preparedBlob });
+      const draftId = crypto.randomUUID();
+      const flowId = crypto.randomUUID();
+      const selectedMelody = selectGenerationMelody(result, { repairBias });
+      const versions = generateVibeVersions(selectedMelody.melody, {
+        draftId,
+        originFlowId: flowId,
+        sourceType: blob ? "hum" : "demo",
+        sourceMelodyKind: selectedMelody.kind,
+      });
       setVibeVersions(versions);
+      setCurrentDraftId(draftId);
+      setCurrentFlowId(flowId);
       memory
         .reportAction({
-          content: `Stainer ${result.provider} → ${result.cleanMelody.notes.length} notes → ${versions.length} versions`,
+          content: `Stainer ${result.provider} → ${selectedMelody.kind} ${selectedMelody.melody.notes.length} notes → ${versions.length} versions`,
           event_type: "create",
           page: "hum",
           metadata: {
             type: "hum_transcribe",
             provider: result.provider,
-            bpm: result.cleanMelody.bpm,
-            key: result.cleanMelody.key,
-            notes: result.cleanMelody.notes.length,
+            selected_melody_kind: selectedMelody.kind,
+            bpm: selectedMelody.melody.bpm,
+            key: selectedMelody.melody.key,
+            notes: selectedMelody.melody.notes.length,
           },
         })
         .catch(() => {});
+      if (blob) {
+        writeFixtureRescueState(noteLiveSuccess(readFixtureRescueState()));
+      }
+      // A live take debits the balance server-side; pull the fresh number
+      // so the next idle render reflects reality. Demo runs (blob === undefined)
+      // never touch the ledger, so we skip the refresh round-trip there.
+      if (blob) void refreshBalance();
       setRecordingState("done");
+      // Vibe is its own route in v2; hand the journey off so the iris-close
+      // transition mounts on /vibe instead of bouncing through an overlay.
+      router.push("/vibe");
     } catch (e) {
-      console.error("[HumScreen] stainer failed:", e);
+      const fixtureStateBefore = readFixtureRescueState();
+      const rescueEligible =
+        blob &&
+        e instanceof TranscribeRequestError &&
+        shouldAutoRescueWithFixture({
+          state: fixtureStateBefore,
+          code: e.code,
+        });
+      let fixtureStateAfterFailure = fixtureStateBefore;
+      if (blob && e instanceof TranscribeRequestError) {
+        fixtureStateAfterFailure = noteLiveFailure(
+          fixtureStateBefore,
+          e.code,
+        );
+        writeFixtureRescueState(fixtureStateAfterFailure);
+      }
+      const errorState = mapErrorToHumState(e, fixtureStateAfterFailure);
+      const errorLogLevel =
+        e instanceof TranscribeRequestError
+          ? humErrorLogLevel(e.code)
+          : "error";
+      log("transcribe.failed", {
+        error_code: errorState.code,
+        variant: errorState.variant,
+        request_id: errorState.requestId,
+        current_balance: errorState.currentBalance,
+        rescue_eligible: !!rescueEligible,
+        message: e instanceof Error ? e.message : String(e),
+      }, {
+        level: errorLogLevel,
+      });
+      memory
+        .reportAction({
+          content: `Hum failed: ${errorState.code}`,
+          event_type: "error",
+          page: "hum",
+          metadata: {
+            type: "hum_error",
+            code: errorState.code,
+            variant: errorState.variant,
+            request_id: errorState.requestId,
+          },
+        })
+        .catch(() => {});
+      // The server already committed (or refunded) before throwing; a fresh
+      // balance keeps the idle pill from telling the user a lie.
+      if (blob) void refreshBalance();
+      if (rescueEligible) {
+        writeFixtureRescueState(
+          noteFixtureRescueUsed(readFixtureRescueState()),
+        );
+        memory
+          .reportAction({
+            content: `Hum rescued with fixture after transient ${errorState.code}`,
+            event_type: "update",
+            page: "hum",
+            metadata: {
+              type: "hum_fixture_rescue",
+              code: errorState.code,
+              request_id: errorState.requestId,
+            },
+          })
+          .catch(() => {});
+        await transcribeAndGenerate(undefined);
+        return;
+      }
       setRecordingState("idle");
-      setMicFailed(true);
+      setCurrentDraftId(null);
+      setCurrentFlowId(null);
+      setHumError(errorState);
     } finally {
       stopMessages();
+    }
+  };
+
+  const mapErrorToHumState = (
+    error: unknown,
+    fixtureState: FixtureRescueState,
+  ): HumErrorState => {
+    if (error instanceof TranscribeRequestError) {
+      return {
+        variant: variantForCode(error.code),
+        code: error.code,
+        requestId: error.requestId,
+        currentBalance: error.currentBalance,
+        showSupportCode: shouldShowHumSupportCode({
+          code: error.code,
+          state: fixtureState,
+        }),
+      };
+    }
+    return {
+      variant: "inaudible",
+      code: "server_error",
+      requestId: null,
+      currentBalance: null,
+      showSupportCode: true,
+    };
+  };
+
+  const prepareAudioBlob = async (blob: Blob): Promise<Blob> => {
+    try {
+      const result = await trimRecordingForUpload(blob);
+      log("capture.prepared", {
+        originalBytes: blob.size,
+        uploadBytes: result.blob.size,
+        originalDurationMs: result.originalDurationMs,
+        trimmedDurationMs: result.trimmedDurationMs,
+        trimmed: result.trimmed,
+        uploadType: result.blob.type || "unknown",
+      });
+      return result.blob;
+    } catch (error) {
+      log("capture.failed", {
+        error_code: "trim_failed",
+        message: error instanceof Error ? error.message : String(error),
+      }, {
+        level: "warn",
+      });
+      return blob;
     }
   };
 
   const stopAudioAnalyser = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
     analyserRef.current = null;
+    quietSinceRef.current = null;
+    setInputLevelState("idle");
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => {});
       audioCtxRef.current = null;
     }
     amplitudeMv.set(0);
-  }, [amplitudeMv]);
+  }, [amplitudeMv, setInputLevelState]);
 
   const startRecording = async () => {
     startAudioContext();
-    setMicFailed(false);
+    setHumError(null);
+    setInputLevelState("idle");
     setRecordingTime(0);
     chunksRef.current = [];
 
@@ -193,6 +414,7 @@ export function HumScreen() {
         for (const v of dataArray) sum += ((v - 128) / 128) ** 2;
         const rms = Math.sqrt(sum / dataArray.length);
         amplitudeMv.set(Math.min(rms * 5, 1));
+        updateInputLevel(rms);
         rafRef.current = requestAnimationFrame(tick);
       };
       rafRef.current = requestAnimationFrame(tick);
@@ -215,14 +437,41 @@ export function HumScreen() {
         1000,
       );
     } catch (err) {
-      console.warn("[HumScreen] mic denied:", err);
-      setMicFailed(true);
+      log("capture.failed", {
+        error_code: "mic_unavailable",
+        message: err instanceof Error ? err.message : String(err),
+      }, {
+        level: "warn",
+      });
+      setHumError({
+        variant: "mic",
+        code: "mic_unavailable",
+        requestId: null,
+        currentBalance: null,
+        showSupportCode: false,
+      });
     }
   };
+
+  const updateInputLevel = useCallback((rms: number) => {
+    const now = performance.now();
+    if (rms >= 0.025) {
+      quietSinceRef.current = null;
+      setInputLevelState("heard");
+      return;
+    }
+
+    quietSinceRef.current ??= now;
+    if (now - quietSinceRef.current > 1000) {
+      setInputLevelState("quiet");
+    }
+  }, [setInputLevelState]);
 
   const isIdle = recordingState === "idle";
   const isRecording = recordingState === "recording";
   const isProcessing = recordingState === "processing";
+
+  const errorCopy = humError ? copyForState(humError, t) : null;
 
   // Ring progress SVG values
   const ringRadius = 140;
@@ -307,7 +556,7 @@ export function HumScreen() {
           {/* ── Left column: headline text ────────────────────── */}
           <div className="flex-shrink-0 w-full md:w-auto md:max-w-[420px] lg:max-w-[480px] text-center md:text-left pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
             <AnimatePresence mode="wait">
-              {isIdle && !micFailed && (
+              {isIdle && !humError && (
                 <motion.h1
                   key={`idle-${idleIndex}`}
                   initial={{ opacity: 0, y: 16 }}
@@ -339,6 +588,19 @@ export function HumScreen() {
                     <span className="text-[#8C8780] text-[13px] tabular-nums tracking-[0.12em] font-mono">
                       {String(recordingTime).padStart(2, "0")}s /{" "}
                       {MAX_DURATION}s
+                    </span>
+                  </div>
+                  <div className="mt-4 flex flex-col items-center md:items-start gap-2">
+                    <div className="h-1 w-28 overflow-hidden rounded-full bg-white/70">
+                      <motion.div
+                        className="h-full origin-left rounded-full bg-[#FF5924]"
+                        style={{ scaleX: amplitudeSpring }}
+                      />
+                    </div>
+                    <span className="text-[#8C8780] text-[11px] tracking-[0.14em] uppercase">
+                      {levelState === "quiet"
+                        ? t("hum.level.quiet")
+                        : t("hum.level.heard")}
                     </span>
                   </div>
                 </motion.div>
@@ -441,7 +703,7 @@ export function HumScreen() {
               {/* White orb button */}
               <motion.button
                 onPointerDown={() => {
-                  if (isIdle && !micFailed) {
+                  if (isIdle && !humError) {
                     startAudioContext();
                     startRecording();
                   }
@@ -474,7 +736,7 @@ export function HumScreen() {
                 aria-label={isIdle ? t("hum.start") : t("hum.stop")}
               >
                 <AnimatePresence mode="wait">
-                  {isIdle && !micFailed && (
+                  {isIdle && !humError && (
                     <motion.svg
                       key="mic-icon"
                       width="40"
@@ -564,41 +826,78 @@ export function HumScreen() {
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
         >
           {/* Brand mark — bottom left */}
-          <span className="text-[#8C8780] text-[11px] tracking-[0.2em] uppercase font-medium select-none">
-            murmur
+          <span className="inline-flex h-[48px] items-end pl-0.5 select-none">
+            <MurmurMark
+              size={48}
+              yOffset={2}
+              className="h-[48px] items-end"
+              imageClassName="drop-shadow-[0_10px_20px_rgba(26,26,26,0.07)]"
+            />
           </span>
 
           {/* CTA pill — bottom right */}
           <AnimatePresence mode="wait">
-            {isIdle && !micFailed && (
-              <motion.button
+            {isIdle && !humError && (
+              <motion.div
                 key="cta"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
                 transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                onClick={() => {
-                  startAudioContext();
-                  startRecording();
-                }}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#FF5924] text-white text-[13px] font-medium tracking-[0.04em] hover:bg-[#D9421A] transition-colors duration-200"
-                style={{
-                  boxShadow: "0 4px 16px rgba(255,89,36,0.25)",
-                }}
+                className="flex items-end gap-4"
               >
-                {t("hum.cta")}
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
+                {balance && (
+                  <span
+                    className="pb-1 text-[#8C8780] text-[11px] tracking-[0.12em] uppercase select-none tabular-nums"
+                    title={
+                      balance.notes <= 0
+                        ? t("hum.balance.zero")
+                        : t("hum.balance.one_take")
+                    }
+                  >
+                    <span
+                      className={
+                        balance.notes <= 0 ? "text-[#FF5924]" : "text-[#1A1A1A]"
+                      }
+                    >
+                      {balance.notes}
+                    </span>{" "}
+                    {t("hum.balance.label")}
+                  </span>
+                )}
+                <button
+                  onClick={() => {
+                    startAudioContext();
+                    transcribeAndGenerate(undefined);
+                  }}
+                  className="pb-1 text-[#8C8780] text-[12px] tracking-[0.12em] uppercase hover:text-[#1A1A1A] transition-colors"
                 >
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
-              </motion.button>
+                  {t("hum.demo.cta")}
+                </button>
+                <button
+                  onClick={() => {
+                    startAudioContext();
+                    startRecording();
+                  }}
+                  className="inline-flex h-11 items-center gap-2 px-5 rounded-full bg-[#FF5924] text-white text-[13px] font-medium tracking-[0.04em] hover:bg-[#D9421A] transition-colors duration-200"
+                  style={{
+                    boxShadow: "0 4px 16px rgba(255,89,36,0.25)",
+                  }}
+                >
+                  {t("hum.cta")}
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                  >
+                    <path d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </button>
+              </motion.div>
             )}
             {isRecording && (
               <motion.span
@@ -614,11 +913,11 @@ export function HumScreen() {
           </AnimatePresence>
         </div>
 
-        {/* ── Mic failed fallback ─────────────────────────────── */}
+        {/* ── Capture / transcription fallback ────────────────── */}
         <AnimatePresence>
-          {isIdle && micFailed && (
+          {isIdle && humError && errorCopy && (
             <motion.div
-              key="mic-failed"
+              key={`${humError.variant}-${humError.code}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
@@ -626,14 +925,15 @@ export function HumScreen() {
             >
               <div className="mm-card px-6 py-8 max-w-sm w-full text-center">
                 <p className="text-[#1A1A1A] text-[15px] font-medium mb-2">
-                  {t("hum.mic.title")}
+                  {errorCopy.title}
                 </p>
                 <p className="text-[#8C8780] text-[13px] leading-relaxed mb-6">
-                  {t("hum.mic.detail")}
+                  {errorCopy.detail}
                 </p>
                 <button
                   onClick={() => {
                     startAudioContext();
+                    setHumError(null);
                     transcribeAndGenerate(undefined);
                   }}
                   className="mm-btn-primary w-full justify-center mb-3"
@@ -643,13 +943,23 @@ export function HumScreen() {
                 <button
                   onClick={() => {
                     startAudioContext();
-                    setMicFailed(false);
-                    startRecording();
+                    setHumError(null);
+                    if (humError.variant === "mic") {
+                      startRecording();
+                    }
                   }}
                   className="text-[#8C8780] text-[13px] underline-mm"
                 >
-                  {t("hum.mic.cta_retry")}
+                  {errorCopy.retry}
                 </button>
+                {humError.requestId && humError.showSupportCode && (
+                  <p className="mt-4 text-[10px] tracking-[0.18em] uppercase text-[#B6B0A4]">
+                    code · {formatHumSupportCode({
+                      code: humError.code,
+                      requestId: humError.requestId,
+                    })}
+                  </p>
+                )}
               </div>
             </motion.div>
           )}
@@ -657,4 +967,80 @@ export function HumScreen() {
       </div>
     </div>
   );
+}
+
+function readFixtureRescueState() {
+  if (typeof window === "undefined") return INITIAL_FIXTURE_RESCUE_STATE;
+  return parseFixtureRescueState(
+    window.localStorage.getItem(FIXTURE_RESCUE_STORAGE_KEY),
+  );
+}
+
+function writeFixtureRescueState(
+  state: ReturnType<typeof readFixtureRescueState>,
+) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    FIXTURE_RESCUE_STORAGE_KEY,
+    serializeFixtureRescueState(state),
+  );
+}
+
+function copyForState(
+  error: HumErrorState,
+  t: (key: Parameters<ReturnType<typeof useTranslator>>[0]) => string,
+): { title: string; detail: string; retry: string } {
+  if (error.code === "worker_unconfigured") {
+    return {
+      title: t("hum.err.worker_unconfigured.title"),
+      detail: t("hum.err.worker_unconfigured.detail"),
+      retry: t("hum.err.unavailable.cta_retry"),
+    };
+  }
+  if (error.code === "billing_unavailable") {
+    return {
+      title: t("hum.err.billing_unavailable.title"),
+      detail: t("hum.err.billing_unavailable.detail"),
+      retry: t("hum.err.unavailable.cta_retry"),
+    };
+  }
+
+  switch (error.variant) {
+    case "mic":
+      return {
+        title: t("hum.mic.title"),
+        detail: t("hum.mic.detail"),
+        retry: t("hum.mic.cta_retry"),
+      };
+    case "inaudible":
+      return {
+        title: t("hum.hear.title"),
+        detail: t("hum.hear.detail"),
+        retry: t("hum.hear.cta_retry"),
+      };
+    case "too_short":
+      return {
+        title: t("hum.err.too_short.title"),
+        detail: t("hum.err.too_short.detail"),
+        retry: t("hum.err.too_short.cta_retry"),
+      };
+    case "insufficient":
+      return {
+        title: t("hum.err.insufficient.title"),
+        detail: t("hum.err.insufficient.detail"),
+        retry: t("hum.err.insufficient.cta_retry"),
+      };
+    case "rate_limited":
+      return {
+        title: t("hum.err.rate_limited.title"),
+        detail: t("hum.err.rate_limited.detail"),
+        retry: t("hum.err.rate_limited.cta_retry"),
+      };
+    case "unavailable":
+      return {
+        title: t("hum.err.unavailable.title"),
+        detail: t("hum.err.unavailable.detail"),
+        retry: t("hum.err.unavailable.cta_retry"),
+      };
+  }
 }
