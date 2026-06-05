@@ -1,0 +1,54 @@
+- name: type/bug
+  color: d73a4a
+  description: Broken expected behavior
+- name: type/feature
+  color: a2eeef
+  description: New capability or user-facing improvement
+- name: type/question
+  color: d876e3
+  description: Needs an answer before implementation
+- name: type/governance
+  color: 5319e7
+  description: Workflow, policy, release, security, or repo-governance change
+- name: status/needs-triage
+  color: cfd3d7
+  description: Needs first maintainer pass
+- name: status/ready
+  color: 0e8a16
+  description: Actionable now
+- name: status/blocked
+  color: b60205
+  description: Blocked by a named dependency
+- name: status/needs-review
+  color: 0052cc
+  description: Awaiting reviewer pass
+- name: priority/p0
+  color: b60205
+  description: Must resolve before the current mainline gate
+- name: priority/p1
+  color: d93f0b
+  description: High priority after the current mainline gate
+- name: priority/p2
+  color: fbca04
+  description: Important but not current-mainline blocking
+- name: slice/docs
+  color: 0075ca
+  description: Documentation work
+- name: slice/tests
+  color: 0075ca
+  description: Tests and fixtures
+- name: slice/implementation
+  color: 0075ca
+  description: Product or backend implementation
+- name: slice/infra
+  color: 0075ca
+  description: CI, automation, dependencies, and tooling
+- name: slice/research
+  color: 0075ca
+  description: Research that should feed a durable product or engineering change
+- name: dependencies
+  color: 0366d6
+  description: Dependency updates
+- name: documentation
+  color: 0075ca
+  description: Improvements or additions to docs

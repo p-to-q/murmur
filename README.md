@@ -108,3 +108,7 @@ cp .env.example .env
 ## Learn More
 
 - [Next.js Documentation](https://nextjs.org/docs)
+- [Repository operations](/Users/dujiayi/murmur/docs/repository-operations.md)
+- [Contributing](/Users/dujiayi/murmur/CONTRIBUTING.md)
+- [Security policy](/Users/dujiayi/murmur/SECURITY.md)
+- [Support guide](/Users/dujiayi/murmur/SUPPORT.md)

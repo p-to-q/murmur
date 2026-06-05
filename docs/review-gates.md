@@ -38,6 +38,9 @@ Record:
 - what was not run
 - what residual risk remains
 
+Repository automation that reinforces these gates lives in
+[repository-operations.md](/Users/dujiayi/murmur/docs/repository-operations.md).
+
 ## Escalate to a design note or ADR when
 
 - saved song compatibility changes

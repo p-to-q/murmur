@@ -105,7 +105,7 @@ Two real implementations and two stubs:
   `NEXT_PUBLIC_REMOTE_PYIN_WORKER_URL`. **Not configured in any committed
   `.env`** — worker URL is empty in `.env.example`. The worker was renamed
   during Phase 1 to
-  [workers/audio-engine/main.py](/Users/dujiayi/murmur/workers/audio-engine/main.py)
+  [workers/basic-pitch-service/main.py](/Users/dujiayi/murmur/workers/basic-pitch-service/main.py)
   and runs **librosa pYIN** (not Basic
   Pitch), `fmin=75, fmax=1050, fr=22050`, same C2–C6 clamp.
   - There is no deploy target / Dockerfile / CI / hosting note for this
