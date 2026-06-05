@@ -1,0 +1,13 @@
+{
+  "suites": [
+    {
+      "name": "humtrans_local",
+      "required": true,
+      "strict": false,
+      "allProviders": true,
+      "manifest": "tools/manifests/humtrans.local.json",
+      "manifestOnly": true,
+      "manifestRoot": "tools/datasets/humtrans"
+    }
+  ]
+}

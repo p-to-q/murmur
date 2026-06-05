@@ -105,6 +105,9 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+workers/audio-engine/tools/manifests/*.local.json
+workers/audio-engine/tools/pitch-maps/*.local.json
+workers/audio-engine/tools/datasets/
 
 # Object storage local-fs adapter (src/lib/storage)
 .murmur/
