@@ -36,7 +36,7 @@ updates:
       - "javascript"
 
   - package-ecosystem: "pip"
-    directory: "/workers/basic-pitch-service"
+    directory: "/workers/audio-engine"
     schedule:
       interval: "weekly"
       day: "monday"
