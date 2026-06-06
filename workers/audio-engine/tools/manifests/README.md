@@ -23,8 +23,8 @@ These files should normally stay out of Git.
 They point at datasets or recordings that already exist on your machine and are
 referenced by:
 
-- [audio_eval_closure.example.json](/Users/dujiayi/murmur/workers/audio-engine/tools/audio_eval_closure.example.json)
-- [audio-dataset-ingestion.md](/Users/dujiayi/murmur/docs/audio-dataset-ingestion.md)
+- [audio_eval_closure.example.json](../audio_eval_closure.example.json)
+- [audio-dataset-ingestion.md](../../../../docs/audio-dataset-ingestion.md)
 
 Recommended shape:
 
