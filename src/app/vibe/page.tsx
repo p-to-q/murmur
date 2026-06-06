@@ -10,6 +10,18 @@ import { VibeScreen } from "@/components/screens/VibeScreen";
  * Hard-refresh recovery: if there are no vibeVersions in the store, the
  * screen redirects to "/" internally (see VibeScreen useEffect).
  */
-export default function VibePage() {
-  return <VibeScreen />;
+export default async function VibePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ demo?: string }>;
+}) {
+  const params = searchParams ? await searchParams : undefined;
+  const demo = params?.demo === "1";
+
+  return (
+    <>
+      {demo ? <span hidden>demo-vibe-route</span> : null}
+      <VibeScreen initialDemo={demo} />
+    </>
+  );
 }

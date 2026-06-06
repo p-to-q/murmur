@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getSongById, deleteSong } from "@/lib/db/queries/songs";
+import { deleteSongForUser, getSongByIdForUser } from "@/lib/db/queries/songs";
 
 export function registerDeleteSong(server: McpServer, userId: string) {
   server.registerTool(
@@ -12,14 +12,20 @@ export function registerDeleteSong(server: McpServer, userId: string) {
       },
     },
     async ({ id }) => {
-      const song = await getSongById(id);
-      if (!song || song.userId !== userId) {
+      const song = await getSongByIdForUser(id, userId);
+      if (!song) {
         return {
           isError: true,
           content: [{ type: "text", text: `Song ${id} not found.` }],
         };
       }
-      await deleteSong(id);
+      const deleted = await deleteSongForUser(id, userId);
+      if (!deleted) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: `Song ${id} not found.` }],
+        };
+      }
       return {
         content: [{ type: "text", text: `Song "${song.title}" deleted.` }],
       };

@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { getObjectStore, StorageError } from "@/lib/storage";
 import { log } from "@/lib/observability/log";
+import { StorageError, type ObjectStore } from "@/lib/storage/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+let cachedLocalStore: ObjectStore | null = null;
 
 /**
  * GET /api/storage/local/<key...>
@@ -27,20 +29,8 @@ export async function GET(
   const { key: segments } = await params;
   const key = Array.isArray(segments) ? segments.join("/") : "";
 
-  let store;
-  try {
-    store = getObjectStore();
-  } catch (cause) {
-    if (cause instanceof StorageError && cause.code === "driver_unconfigured") {
-      return NextResponse.json(
-        { error: "not_found" },
-        { status: 404 },
-      );
-    }
-    throw cause;
-  }
-
-  if (store.driver !== "local-fs") {
+  const store = await getLocalServeStore();
+  if (!store) {
     return NextResponse.json(
       { error: "not_found" },
       { status: 404 },
@@ -78,4 +68,24 @@ export async function GET(
       "X-Murmur-Storage-Scope": object.scope,
     },
   });
+}
+
+async function getLocalServeStore(): Promise<ObjectStore | null> {
+  const driver = process.env.MURMUR_STORAGE_DRIVER?.trim().toLowerCase();
+
+  if (driver && driver !== "local-fs") {
+    return null;
+  }
+
+  if (!driver && process.env.NODE_ENV === "production") {
+    return null;
+  }
+
+  if (cachedLocalStore) {
+    return cachedLocalStore;
+  }
+
+  const { createLocalFsStore } = await import("@/lib/storage/adapters/local-fs");
+  cachedLocalStore = createLocalFsStore();
+  return cachedLocalStore;
 }

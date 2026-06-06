@@ -24,6 +24,7 @@ import { memory } from "@/lib/platform/memory";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator } from "@/lib/i18n";
 import { synth } from "@/lib/music/simple-synth";
+import { buildDemoFlowState } from "@/modules/demo/demo-flow";
 import { renderAudio } from "@/modules/export/render-mp3";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
@@ -43,15 +44,42 @@ const VIBE_NAME_SUGGESTIONS: Record<string, string[]> = {
 };
 const FALLBACK_SUGGESTIONS = ["Soft Evening", "Window Song", "Tiny Movie"];
 
-export function NameScreen() {
+export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const router = useRouter();
   const t = useTranslator();
   const currentVersion = useMurmurStore((s) => s.currentVersion);
+  const setCurrentVersion = useMurmurStore((s) => s.setCurrentVersion);
+  const setVibeVersions = useMurmurStore((s) => s.setVibeVersions);
+  const setCurrentDraftId = useMurmurStore((s) => s.setCurrentDraftId);
+  const setCurrentFlowId = useMurmurStore((s) => s.setCurrentFlowId);
+  const demoSeededRef = useRef(false);
+  const demoEnabled = initialDemo;
 
   const [title, setTitle] = useState(currentVersion?.title ?? "");
   const [isSaving, setIsSaving] = useState(false);
   const [processingIdx, setProcessingIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!demoEnabled || currentVersion || demoSeededRef.current) {
+      return;
+    }
+    demoSeededRef.current = true;
+    const demo = buildDemoFlowState();
+    setVibeVersions(demo.versions);
+    setCurrentDraftId(demo.draftId);
+    setCurrentFlowId(demo.flowId);
+    setCurrentVersion(demo.currentVersion);
+    setTitle(demo.currentVersion.title);
+  }, [
+    currentVersion,
+    demoEnabled,
+    setCurrentDraftId,
+    setCurrentFlowId,
+    setCurrentVersion,
+    setTitle,
+    setVibeVersions,
+  ]);
 
   /* ── Suggestions ──────────────────────────────────────────────── */
   const suggestions = useMemo(() => {
@@ -78,10 +106,11 @@ export function NameScreen() {
   );
 
   useEffect(() => {
+    if (!currentVersion) return;
     synth.stop();
     inputRef.current?.focus();
     inputRef.current?.select();
-  }, []);
+  }, [currentVersion]);
 
   useEffect(() => {
     if (!isSaving) return;
@@ -92,6 +121,17 @@ export function NameScreen() {
   }, [isSaving, PROCESSING_COPY.length]);
 
   if (!currentVersion) {
+    if (demoEnabled) {
+      return (
+        <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+          <PageBackdrop />
+          <div className="relative z-10 flex min-h-svh flex-col items-center justify-center px-6 text-center">
+            <p className="eyebrow mb-3 text-[#FF8A5C]">{t("name.eyebrow") || "NAME IT"}</p>
+            <p className="text-base text-[#8C8780]">{t("hum.proc.polishing")}</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
         <PageBackdrop />

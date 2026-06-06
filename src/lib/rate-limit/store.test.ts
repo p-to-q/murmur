@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "bun:test";
+import { afterEach, describe, expect, it, beforeEach } from "bun:test";
 
 import { createMemoryRateLimitStore } from "./adapters/memory";
 import { getRateLimitStore, rateLimitOrThrow, resetCachedRateLimitStore } from "./index";
@@ -130,9 +130,21 @@ describe("rateLimitOrThrow", () => {
 });
 
 describe("getRateLimitStore (env-driven factory)", () => {
+  let previousDriver: string | undefined;
+
   beforeEach(() => {
+    previousDriver = process.env.MURMUR_RATE_LIMIT_DRIVER;
     resetCachedRateLimitStore();
     delete process.env.MURMUR_RATE_LIMIT_DRIVER;
+  });
+
+  afterEach(() => {
+    resetCachedRateLimitStore();
+    if (previousDriver === undefined) {
+      delete process.env.MURMUR_RATE_LIMIT_DRIVER;
+    } else {
+      process.env.MURMUR_RATE_LIMIT_DRIVER = previousDriver;
+    }
   });
 
   it("defaults to memory when env is unset", () => {

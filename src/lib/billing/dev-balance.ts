@@ -4,16 +4,27 @@ export type DevBalanceFallback = {
 };
 
 const DEFAULT_DEV_NOTES = 9_999;
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
-export function shouldUseDevBalanceFallback(): boolean {
-  return (
-    process.env.NODE_ENV === "development" &&
-    process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK !== "0"
-  );
+export function shouldUseDevBalanceFallback(options: {
+  host?: string | null;
+} = {}): boolean {
+  if (process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK === "0") {
+    return false;
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    return true;
+  }
+
+  const host = options.host?.trim().toLowerCase();
+  return !!host && LOOPBACK_HOSTS.has(host);
 }
 
-export function shouldBypassBillingInDevelopment(): boolean {
-  return shouldUseDevBalanceFallback();
+export function shouldBypassBillingInDevelopment(options: {
+  host?: string | null;
+} = {}): boolean {
+  return shouldUseDevBalanceFallback(options);
 }
 
 export function getDevBalanceFallback(): DevBalanceFallback {

@@ -19,7 +19,7 @@
  *   - Title in serif italic — a vibe is a poem, not a setting.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Play, Pause } from "lucide-react";
@@ -30,6 +30,7 @@ import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator } from "@/lib/i18n";
 import { synth } from "@/lib/music/simple-synth";
 import { generateVibeVersions } from "@/modules/strummer/generate-versions";
+import { buildDemoFlowState } from "@/modules/demo/demo-flow";
 import type { VibeVersion } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { MurmurWave } from "@/components/murmur/murmur-wave";
@@ -64,13 +65,15 @@ function playShutterClick() {
   }
 }
 
-export function VibeScreen() {
+export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const router = useRouter();
   const t = useTranslator();
   const {
     vibeVersions,
     setVibeVersions,
     setCurrentVersion,
+    setCurrentDraftId,
+    setCurrentFlowId,
     currentDraftId,
     currentFlowId,
     auditioningVersionId,
@@ -80,8 +83,10 @@ export function VibeScreen() {
 
   const [phase, setPhase] = useState<Phase>("closing");
   const [pickingId, setPickingId] = useState<string | null>(null);
+  const demoSeededRef = useRef(false);
   const sourceVersion = vibeVersions[0] ?? null;
   const fromSavedSong = sourceVersion?.sourceType === "library";
+  const demoEnabled = initialDemo;
 
   /* ── Arrival sequence ─────────────────────────────────────────── */
   useEffect(() => {
@@ -98,10 +103,27 @@ export function VibeScreen() {
 
   /* ── Hard-refresh guard: no versions → bounce to / ───────────── */
   useEffect(() => {
-    if (phase === "cards" && vibeVersions.length === 0) {
+    if (!demoEnabled || vibeVersions.length > 0 || demoSeededRef.current) {
+      return;
+    }
+    demoSeededRef.current = true;
+    const demo = buildDemoFlowState();
+    setVibeVersions(demo.versions);
+    setCurrentDraftId(demo.draftId);
+    setCurrentFlowId(demo.flowId);
+  }, [
+    demoEnabled,
+    setCurrentDraftId,
+    setCurrentFlowId,
+    setVibeVersions,
+    vibeVersions.length,
+  ]);
+
+  useEffect(() => {
+    if (phase === "cards" && vibeVersions.length === 0 && !demoEnabled) {
       router.replace("/");
     }
-  }, [phase, vibeVersions.length, router]);
+  }, [demoEnabled, phase, vibeVersions.length, router]);
 
   /* ── Stop synth on unmount ────────────────────────────────────── */
   useEffect(() => {
@@ -181,7 +203,7 @@ export function VibeScreen() {
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       {/* ── Phase 1: iris-close + rainbow ring ───────────────────── */}
       {phase === "closing" && (
-        <div className="fixed inset-0 z-[60]">
+        <div className="pointer-events-none fixed inset-0 z-[60]">
           <div className="absolute inset-0 iris-close bg-[#1A1A1A]" />
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div

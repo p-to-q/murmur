@@ -36,6 +36,7 @@ export const DICT = {
   "hum.cta.release":   { zh: "松开结束",      en: "RELEASE TO STOP" },
   "hum.demo.cta":      { zh: "示例旋律",      en: "Try demo" },
   "hum.recording":     { zh: "正在听…",    en: "Listening…" },
+  "hum.level.idle":    { zh: "正在听",      en: "Listening" },
   "hum.level.heard":   { zh: "听到了",      en: "Signal heard" },
   "hum.level.quiet":   { zh: "再大声一点",  en: "A bit louder" },
   "hum.tap_stop":      { zh: "点击方块停止", en: "Tap the square to stop" },
@@ -143,6 +144,7 @@ export const DICT = {
   "studio.saving":         { zh: "保存中…",     en: "Saving…" },
   "studio.save_ok":        { zh: "已保存到灵感集", en: "Saved to your Gallery" },
   "studio.save_err":       { zh: "保存失败，请重试", en: "Save failed — please retry" },
+  "studio.empty.eyebrow":   { zh: "还没开始", en: "EMPTY" },
   "studio.empty":          { zh: "还没有选定版本", en: "No version selected yet" },
   "studio.empty.cta":      { zh: "去哼一段旋律", en: "Hum a melody" },
   "studio.rendering":      { zh: "正在渲染音频和分享页…", en: "Rendering audio + share page…" },
@@ -196,6 +198,7 @@ export const DICT = {
   "gallery.tile.branch_n": { zh: "分支 {n}", en: "Branch {n}" },
 
   // ── SongDetail ─────────────────────────────────────────────────────
+  "song.not_found.eyebrow": { zh: "空白唱片", en: "EMPTY RECORD" },
   "song.not_found":      { zh: "找不到这首歌",       en: "Song not found" },
   "song.back_to_gallery":{ zh: "返回灵感集",         en: "Back to Gallery" },
   "song.remix_again":    { zh: "再生三版",           en: "Try new versions" },
@@ -303,6 +306,67 @@ export const DICT = {
   "me.repair_bias.live.left": { zh: "偏原唱", en: "Closer" },
   "me.repair_bias.live.center": { zh: "默认", en: "Balanced" },
   "me.repair_bias.live.right": { zh: "偏好听", en: "Sweeter" },
+
+  // ── Settings ───────────────────────────────────────────────────────
+  "settings.eyebrow":          { zh: "设置", en: "SETTINGS" },
+  "settings.title":            { zh: "设置", en: "Settings" },
+  "settings.sub":              { zh: "平时保持安静，需要时再把底层线路打开。", en: "Keep the product quiet, and open the wiring only when you need it." },
+  "settings.language.title":   { zh: "语言", en: "Language" },
+  "settings.creative.title":   { zh: "创作偏好", en: "Creative bias" },
+  "settings.developer.title":  { zh: "开发者模式", en: "Developer mode" },
+  "settings.developer.body":   { zh: "显示渲染前的文案 token、QA 路由、性能提示和运行诊断。", en: "Expose pre-render copy tokens, QA routes, performance hints, and runtime diagnostics." },
+  "settings.developer.debug":  { zh: "打开调试台", en: "Open debug" },
+  "settings.developer.health": { zh: "QA 健康 JSON", en: "QA health JSON" },
+  "settings.developer.i18n":   { zh: "i18n JSON", en: "i18n JSON" },
+
+  // ── Common ──────────────────────────────────────────────────────────
+  "common.back":                 { zh: "返回",     en: "Back" },
+  "common.cancel":               { zh: "取消",     en: "Cancel" },
+
+  // ── Topup ──────────────────────────────────────────────────────────
+  "topup.header":                { zh: "灵感币",                  en: "MURMUR NOTES" },
+  "topup.eyebrow":               { zh: "灵感币",                  en: "MURMUR NOTES" },
+  "topup.headline":              { zh: "多一点灵感币，多几首小歌。", en: "More notes, more little songs." },
+  "topup.balance":               { zh: "你的余额",                en: "you have" },
+  "topup.balance.sub":           { zh: "颗灵感币 · 每天 0 点补 5 颗", en: "notes · 5 refill every day at midnight" },
+  "topup.pick.eyebrow":          { zh: "选一档",                  en: "PICK A TOP UP" },
+  "topup.notes_label":           { zh: "灵感币",                  en: "notes" },
+  "topup.badge.popular":         { zh: "热门",                    en: "popular" },
+  "topup.badge.best":            { zh: "最划算",                  en: "best value" },
+  "topup.cta":                   { zh: "买 {notes} 颗 — {price}", en: "Buy {notes} notes — {price}" },
+  "topup.provider.stripe":       { zh: "用 Stripe 支付",          en: "pay via Stripe" },
+  "topup.provider.wechat":       { zh: "用微信支付",              en: "pay via WeChat" },
+  "topup.restore":               { zh: "恢复已购买",              en: "Restore purchases" },
+  "topup.terms":                 { zh: "条款",                    en: "Terms" },
+  "topup.privacy":               { zh: "隐私",                    en: "Privacy" },
+
+  // ── Checkout ───────────────────────────────────────────────────────
+  "checkout.header":             { zh: "结账",      en: "CHECKOUT" },
+  "checkout.eyebrow":            { zh: "马上就好",  en: "ALMOST THERE" },
+  "checkout.headline.requesting":{ zh: "正在为你开通…",       en: "Holding the door open." },
+  "checkout.headline.ok":        { zh: "搞定，慢慢享受。",     en: "Done. Enjoy." },
+  "checkout.headline.canceled":  { zh: "你刚刚退回来了。",     en: "You stepped back." },
+  "checkout.headline.failed":    { zh: "没顺利完成。",         en: "Couldn't finish that." },
+  "checkout.notes":              { zh: "灵感币",   en: "notes" },
+  "checkout.proc.opening":       { zh: "正在打开支付页",   en: "opening secure checkout" },
+  "checkout.proc.connecting":    { zh: "对接支付方",       en: "connecting to provider" },
+  "checkout.proc.confirming":    { zh: "确认订单",        en: "confirming purchase" },
+  "checkout.proc.almost":        { zh: "马上就好",        en: "almost there" },
+  "checkout.ok":                 { zh: "全部就绪。",      en: "All set." },
+  "checkout.redirecting":        { zh: "正在带你回去…",    en: "taking you back…" },
+  "checkout.canceled":           { zh: "没事，再来一次？",      en: "No worries. Try again?" },
+  "checkout.retry":              { zh: "重新选一档",       en: "Pick a top up" },
+  "checkout.failed":             { zh: "我们这边出了点小问题。", en: "Something tripped on our end." },
+  "checkout.try_again":          { zh: "再试一次",         en: "Try again" },
+  "checkout.different":          { zh: "换个支付方式",     en: "use a different method" },
+  "checkout.toast.success":      { zh: "已经多了 {notes} 颗灵感币。", en: "+{notes} notes added." },
+
+  // ── Side / bottom nav ──────────────────────────────────────────────
+  "nav.flow.vibe":               { zh: "风物",     en: "Vibe" },
+  "nav.flow.studio":             { zh: "谱室",     en: "Studio" },
+  "nav.flow.name":               { zh: "命名",     en: "Name it" },
+  "nav.flow.topup":              { zh: "补给",     en: "Top up" },
+  "nav.flow.checkout":           { zh: "结账",     en: "Checkout" },
 } as const;
 
 export type TKey = keyof typeof DICT;

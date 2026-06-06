@@ -1,5 +1,10 @@
 # Execution Roadmap — Murmur v2
 
+Historical note: this roadmap still includes migration steps written while the
+worker rename and browser-provider retirement were in progress. Read it as
+sequencing context, not as a statement that those legacy paths are still
+current architecture.
+
 ## 1. Purpose
 
 This file sequences the work specified in the other v2 docs so the

@@ -35,6 +35,8 @@ export interface RateLimitOptions {
 
 export interface RateLimitResult {
   allowed: boolean;
+  /** Configured bucket capacity, echoed so route handlers can emit standard headers. */
+  limit: number;
   /** Tokens left in the bucket after this hit (floored to whole tokens for callers/UIs). */
   remaining: number;
   /** When the bucket is projected to refill to `cost` tokens. Always set. */

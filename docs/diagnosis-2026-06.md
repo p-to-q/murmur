@@ -79,6 +79,10 @@ runtime reality has a few important gaps the doc doesn't surface.
 
 ### 2.3 Pitch detection
 
+Historical note: the browser-provider references in this section are kept to
+explain the diagnosis that led to the current server-worker path. They are not
+the recommended architecture for new work.
+
 Two real implementations and two stubs:
 
 - **`browser-yin`** —

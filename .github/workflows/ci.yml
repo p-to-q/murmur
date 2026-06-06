@@ -54,5 +54,8 @@ jobs:
       - name: Audio worker tests
         run: bun run test:audio
 
-      - name: Build
-        run: bun run build
+      - name: Build audit
+        run: bun run build:audit
+
+      - name: Local stack smoke
+        run: bash scripts/ci-local-stack-smoke.sh

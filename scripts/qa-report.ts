@@ -1,0 +1,86 @@
+import { QA_ROUTE_CONTRACTS } from "@/lib/qa/qa-routes";
+
+const webBase = (process.env.MURMUR_WEB_BASE_URL ?? "http://127.0.0.1:3000").replace(/\/+$/, "");
+const workerBase = (
+  process.env.AUDIO_WORKER_URL?.trim() || "http://127.0.0.1:8001"
+).replace(/\/+$/, "");
+
+type CheckSummary = {
+  name: string;
+  ok: boolean;
+  detail: string;
+};
+
+async function main() {
+  const [qaHealth, workerHealth, pageChecks] = await Promise.all([
+    fetchJson(`${webBase}/api/qa/health`),
+    fetchJson(`${workerBase}/health`),
+    Promise.all(QA_ROUTE_CONTRACTS.map(checkRoute)),
+  ]);
+
+  const report = {
+    capturedAt: new Date().toISOString(),
+    webBase,
+    workerBase,
+    qaHealth,
+    workerHealth,
+    pageChecks,
+    ok:
+      qaHealth.ok &&
+      workerHealth.ok &&
+      pageChecks.every((check) => check.ok),
+  };
+
+  for (const check of pageChecks) {
+    console.log(`${check.ok ? "PASS" : "FAIL"} ${check.name}: ${check.detail}`);
+  }
+
+  console.log(JSON.stringify(report, null, 2));
+
+  if (!report.ok) {
+    process.exitCode = 1;
+  }
+}
+
+async function fetchJson(url: string): Promise<{ ok: boolean; status: number | null; body: unknown }> {
+  try {
+    const response = await fetch(url, { redirect: "follow" });
+    return {
+      ok: response.ok,
+      status: response.status,
+      body: await response.json(),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: null,
+      body: { error: error instanceof Error ? error.message : String(error) },
+    };
+  }
+}
+
+async function checkRoute(
+  route: (typeof QA_ROUTE_CONTRACTS)[number],
+): Promise<CheckSummary> {
+  try {
+    const response = await fetch(`${webBase}${route.href}`, { redirect: "follow" });
+    const html = await response.text();
+    const missing = route.markers.filter((marker) => !html.includes(marker));
+    return {
+      name: route.name,
+      ok: response.ok && missing.length === 0,
+      detail:
+        missing.length === 0
+          ? `status=${response.status} markers=${route.markers.length}`
+          : `status=${response.status} missing=${missing.join(", ")}`,
+    };
+  } catch (error) {
+    return {
+      name: route.name,
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+await main();

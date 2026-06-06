@@ -6,6 +6,7 @@ import type {
   SpendNotesInput,
   SpendNotesResult,
 } from "@/lib/db/queries/notes-ledger";
+import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 import type { TranscriptionResult } from "@/modules/shared/types";
 
@@ -184,11 +185,11 @@ function audioFile(bytes = 1024, type = "audio/webm"): File {
 
 function buildRequest(
   form: FormData,
-  options: { requestId?: string } = {},
+  options: { requestId?: string; url?: string } = {},
 ): NextRequest {
   const headers = new Headers();
   if (options.requestId) headers.set("x-request-id", options.requestId);
-  return new Request("http://test.local/api/transcribe", {
+  return new Request(options.url ?? "http://test.local/api/transcribe", {
     method: "POST",
     body: form,
     headers,
@@ -196,6 +197,9 @@ function buildRequest(
 }
 
 beforeEach(() => {
+  delete process.env.MURMUR_RATE_LIMIT_DRIVER;
+  resetCachedRateLimitStore();
+  getRateLimitStore().resetAll();
   nextAuth = {
     ok: true,
     user: { id: "usr_test", email: null, name: "Test User", avatarUrl: null },
@@ -299,6 +303,31 @@ describe("POST /api/transcribe", () => {
     expect(lastSpendInputs).toHaveLength(0);
   });
 
+  it("returns 429 before billing or worker work when rate-limited", async () => {
+    const store = getRateLimitStore();
+    const form = new FormData();
+    form.append("audio", audioFile());
+    form.append("targetInstrument", "piano");
+
+    for (let i = 0; i < 10; i += 1) {
+      await store.hit("/api/transcribe:user:usr_test", {
+        capacity: 10,
+        refillWindowMs: 60_000,
+      });
+    }
+
+    const response = await POST(buildRequest(form, { requestId: "req_rate_limited" }));
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBeTruthy();
+    expect(response.headers.get("X-RateLimit-Limit")).toBe("10");
+    const body = await response.json() as { error: string; requestId: string };
+    expect(body.error).toBe("rate_limited");
+    expect(body.requestId).toBe("req_rate_limited");
+    expect(lastSpendInputs).toHaveLength(0);
+    expect(lastRefundInputs).toHaveLength(0);
+  });
+
   it("surfaces the worker's no_voiced_frames as 422", async () => {
     nextWorkerImpl = async () => {
       throw new AudioWorkerError(
@@ -389,6 +418,35 @@ describe("POST /api/transcribe", () => {
       const form = new FormData();
       form.append("audio", audioFile());
       const response = await POST(buildRequest(form, { requestId: "req_dev_unlimited" }));
+      expect(response.status).toBe(200);
+      expect(lastSpendInputs).toHaveLength(0);
+      expect(lastRefundInputs).toHaveLength(0);
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+      if (prevFlag === undefined) {
+        delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+      } else {
+        process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
+      }
+    }
+  });
+
+  it("keeps localhost previews usable when billing is unavailable outside dev mode", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    process.env.NODE_ENV = "production";
+    process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
+    nextBalanceThrows = new Error("db offline");
+
+    try {
+      const form = new FormData();
+      form.append("audio", audioFile());
+      const response = await POST(
+        buildRequest(form, {
+          requestId: "req_localhost_bypass",
+          url: "http://localhost:3000/api/transcribe",
+        }),
+      );
       expect(response.status).toBe(200);
       expect(lastSpendInputs).toHaveLength(0);
       expect(lastRefundInputs).toHaveLength(0);

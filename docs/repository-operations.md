@@ -3,6 +3,9 @@
 This document describes the operational governance that keeps Murmur reviewable,
 maintainable, and safe to iterate on.
 
+For the short, current-state product-engineering assessment, also see
+[docs/closure-audit.md](./closure-audit.md).
+
 ## Out of scope
 
 This document does not choose a deployment vendor or define product roadmap
@@ -15,7 +18,8 @@ repo rituals:
 
 - [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
   runs the fast required gate on PRs and pushes to `main`: lint, link checks,
-  TypeScript/Bun tests, audio-worker smoke tests, and build.
+  TypeScript/Bun tests, audio-worker tests, build audit, and a real local-stack
+  smoke against the built app plus a live worker.
 - [`.github/workflows/audio-acceptance.yml`](../.github/workflows/audio-acceptance.yml)
   runs the heavier unattended audio acceptance loop on a weekday schedule and
   on manual demand, then uploads the generated reports as artifacts.
@@ -48,6 +52,11 @@ The split between `ci.yml` and `audio-acceptance.yml` is intentional:
 - The repo no longer pretends the deleted `basic-pitch-service` worker is a
   supported fallback path; verification now targets `workers/audio-engine`
   directly so stale infrastructure cannot silently mask breakage.
+- CI now also proves that the built Next.js app and a live worker can boot
+  together and satisfy the same compact smoke contract used by local operators.
+- That compact smoke now includes page-contract checks for the primary route
+  shells (`/`, `/gallery`, `/me`, `/studio`, `/vibe`), so repo health is not
+  inferred from APIs alone.
 
 ## Known limits right now
 
@@ -62,6 +71,13 @@ limits are different:
   locked yet.
 - Audio acceptance is automated, but the dataset mix is still bounded by what
   can be checked in or deterministically scaffolded inside CI.
+- `next build` is green, but Next.js 16.2.4 + Turbopack still emits one
+  non-blocking NFT tracing warning for the dev-only
+  `/api/storage/local/[...key]` route because it late-loads the filesystem
+  adapter. Treat that as a known tooling edge, not as proof that the production
+  storage path is wired incorrectly. `bun run build:audit` now codifies this:
+  the known warning is allowed, but any additional build warnings fail the
+  governance gate.
 
 ## Human entry points
 
@@ -112,6 +128,15 @@ Per local operator session:
 - run `bun run smoke:local` before assuming the stack itself is healthy
 - use `bun run verify:local` when you want the compact local gate, not just
   liveness
+- use `bun run qa:report` when you want one machine-readable snapshot covering
+  QA health, worker health, and every shared QA route contract
+- use `/vibe?demo=1`, `/studio?demo=1`, and `/studio/name?demo=1` when you
+  need to inspect or regress mid-journey screens without recreating state by
+  hand
+- use `/me/debug?debug=1` as the hidden QA cockpit: recent pipeline events plus
+  direct links into the mainline and demo-route checkpoints
+- use `/api/qa/health` when you want a quick machine-readable snapshot of web +
+  worker + QA-route health without reading the full event stream
 - when smoke passes but the audio loop still feels wrong, escalate to
   `bun run audit:audio:acceptance` instead of debugging from vibes alone
 

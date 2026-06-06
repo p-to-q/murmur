@@ -12,6 +12,7 @@ import { useTranslator } from "@/lib/i18n";
 import { memory } from "@/lib/platform/memory";
 import { log } from "@/lib/observability/log";
 import { trimRecordingForUpload } from "@/lib/audio/recording-trim";
+import { inputLevelLabelKey, nextInputLevelDecision } from "@/lib/audio/input-level";
 import {
   INITIAL_FIXTURE_RESCUE_STATE,
   type FixtureRescueState,
@@ -102,7 +103,7 @@ export function HumScreen() {
   const [recordingTime, setRecordingTime] = useState(0);
   const [humError, setHumError] = useState<HumErrorState | null>(null);
   const [levelState, setLevelState] = useState<"idle" | "quiet" | "heard">("idle");
-  const { balance, refresh: refreshBalance } = useUserBalance();
+  const { refresh: refreshBalance } = useUserBalance();
   const [idleIndex, setIdleIndex] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -116,6 +117,8 @@ export function HumScreen() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number>(0);
   const quietSinceRef = useRef<number | null>(null);
+  const heardSignalRef = useRef(false);
+  const recordingStartedAtRef = useRef<number | null>(null);
   const levelStateRef = useRef<"idle" | "quiet" | "heard">("idle");
   // Raw amplitude motion value → spring-smoothed for silky blob animation
   const amplitudeMv = useMotionValue(0);
@@ -374,6 +377,8 @@ export function HumScreen() {
     cancelAnimationFrame(rafRef.current);
     analyserRef.current = null;
     quietSinceRef.current = null;
+    heardSignalRef.current = false;
+    recordingStartedAtRef.current = null;
     setInputLevelState("idle");
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => {});
@@ -388,6 +393,9 @@ export function HumScreen() {
     setInputLevelState("idle");
     setRecordingTime(0);
     chunksRef.current = [];
+    quietSinceRef.current = null;
+    heardSignalRef.current = false;
+    recordingStartedAtRef.current = null;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -407,8 +415,9 @@ export function HumScreen() {
       analyserRef.current = analyser;
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-      const tick = () => {
+      const tick = (now: number) => {
         if (!analyserRef.current) return;
+        recordingStartedAtRef.current ??= now;
         analyserRef.current.getByteTimeDomainData(dataArray);
         // RMS amplitude, scaled up so speaking/humming reaches ~0.8-1.0
         let sum = 0;
@@ -455,17 +464,17 @@ export function HumScreen() {
   };
 
   const updateInputLevel = useCallback((rms: number) => {
-    const now = performance.now();
-    if (rms >= 0.025) {
-      quietSinceRef.current = null;
-      setInputLevelState("heard");
-      return;
-    }
-
-    quietSinceRef.current ??= now;
-    if (now - quietSinceRef.current > 1000) {
-      setInputLevelState("quiet");
-    }
+    const startedAt = recordingStartedAtRef.current;
+    const elapsedMs = startedAt === null ? 0 : performance.now() - startedAt;
+    const decision = nextInputLevelDecision({
+      rms,
+      elapsedMs,
+      quietSinceMs: quietSinceRef.current,
+      hasHeardSignal: heardSignalRef.current,
+    });
+    quietSinceRef.current = decision.quietSinceMs;
+    heardSignalRef.current = decision.hasHeardSignal;
+    setInputLevelState(decision.state);
   }, [setInputLevelState]);
 
   const isIdle = recordingState === "idle";
@@ -599,9 +608,7 @@ export function HumScreen() {
                       />
                     </div>
                     <span className="text-[#8C8780] text-[11px] tracking-[0.14em] uppercase">
-                      {levelState === "quiet"
-                        ? t("hum.level.quiet")
-                        : t("hum.level.heard")}
+                      {t(inputLevelLabelKey(levelState))}
                     </span>
                   </div>
                 </motion.div>
@@ -847,25 +854,10 @@ export function HumScreen() {
                 transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                 className="flex items-end gap-4"
               >
-                {balance && (
-                  <span
-                    className="pb-1 text-[#8C8780] text-[11px] tracking-[0.12em] uppercase select-none tabular-nums"
-                    title={
-                      balance.notes <= 0
-                        ? t("hum.balance.zero")
-                        : t("hum.balance.one_take")
-                    }
-                  >
-                    <span
-                      className={
-                        balance.notes <= 0 ? "text-[#FF5924]" : "text-[#1A1A1A]"
-                      }
-                    >
-                      {balance.notes}
-                    </span>{" "}
-                    {t("hum.balance.label")}
-                  </span>
-                )}
+                {/* Balance chip removed — side nav footer is the canonical
+                    surface for "how many notes do I have". Three things at
+                    the bottom right (number + demo + CTA) was visual noise;
+                    two reads quieter and matches the editorial tone. */}
                 <button
                   onClick={() => {
                     startAudioContext();
@@ -945,7 +937,7 @@ export function HumScreen() {
                   onClick={() => {
                     startAudioContext();
                     setHumError(null);
-                    if (humError.variant === "mic") {
+                    if (humError.code !== "billing_unavailable") {
                       startRecording();
                     }
                   }}

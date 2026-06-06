@@ -38,6 +38,7 @@ export function decideHit(
     return {
       result: {
         allowed: true,
+        limit: opts.capacity,
         remaining: Math.floor(tokensAfter),
         retryAt: new Date(nowMs + Math.max(0, Math.ceil(msUntilRefill))),
         retryAfterMs: 0,
@@ -51,6 +52,7 @@ export function decideHit(
   return {
     result: {
       allowed: false,
+      limit: opts.capacity,
       remaining: Math.max(0, Math.floor(startingTokens)),
       retryAt: new Date(nowMs + retryAfterMs),
       retryAfterMs,

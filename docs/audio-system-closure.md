@@ -470,8 +470,8 @@ Current visibility rule:
   `worker_unconfigured` or unexpected `server_error`;
 - hide it for the first transient post-success blip like
   `worker_unavailable` / `network_error` / `billing_unavailable`;
-- show it once those transient failures become persistent, or if the user
-  never had a healthy live hum in the current local history window.
+- also keep the first cold-start transient failure human-first;
+- show it once those transient failures become persistent.
 
 ## 10.1 Fixture rescue rule
 

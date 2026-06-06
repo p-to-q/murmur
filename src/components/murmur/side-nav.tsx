@@ -31,8 +31,9 @@ import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
-import { NAV_ITEMS } from "./nav-items";
+import { NAV_ITEMS, computeTrail, type ComputedStep } from "./nav-items";
 import { MurmurMark } from "./murmur-mark";
+import { Fragment } from "react";
 
 const STORAGE_KEY = "murmur:side-nav-collapsed";
 const ENABLE_NAV_ENTRANCE_MOTION = process.env.NODE_ENV === "production";
@@ -68,6 +69,16 @@ export function SideNav() {
   };
 
   const items = NAV_ITEMS.filter((it) => it.desktopNav !== false);
+  // Nested rows under the active destination — a small outline that accrues
+  // as the user walks through a sub-flow. Vibe -> Studio -> Name stays
+  // additive: each step appears below the previous one, none replace it.
+  // When the user is on a bare destination (/, /gallery, /me), trail is null
+  // and the nav stays at just the three rows.
+  //
+  // Topup + Checkout hang off /me. Settings / billing / privacy will hang
+  // off /me too once they ship. The model is general-purpose; see
+  // TRAIL_ROOTS in ./nav-items for how a new sub-flow opts in.
+  const trail = computeTrail(pathname);
 
   return (
     <aside
@@ -82,7 +93,7 @@ export function SideNav() {
     >
       {/* ── Brand row ────────────────────────────────────────────── */}
       <div
-        className={collapsed ? "flex justify-center px-0 mb-2" : "flex items-center justify-between px-7 pr-5 mb-2"}
+        className={collapsed ? "relative z-10 flex justify-center px-0 mb-2" : "relative z-10 flex items-center justify-between px-7 pr-5 mb-2"}
       >
         <button
           onClick={goHome}
@@ -131,33 +142,52 @@ export function SideNav() {
         <button
           onClick={() => setCollapsed(false)}
           aria-label="Expand navigation"
-          className="mt-3 mx-auto text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
+          className="relative z-10 mt-3 mx-auto text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
         >
           <ChevronsRight className="h-3.5 w-3.5" />
         </button>
       )}
 
       {/* ── Destinations ─────────────────────────────────────────── */}
-      <nav className={collapsed ? "mt-10 px-0 flex flex-col items-center gap-7" : "mt-10 px-7"}>
+      <nav className={collapsed ? "relative z-10 mt-10 px-0 flex flex-col items-center gap-7" : "relative z-10 mt-10 px-7"}>
         {items.map((item, i) => {
           const isActive =
-            item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            trail?.rootHref === item.href
+              ? false
+              : item.href === "/"
+                ? pathname === "/"
+                : pathname.startsWith(item.href);
           const label = t(item.labelKey) || item.fallback;
 
           if (collapsed) {
             return (
-              <CollapsedDot
-                key={item.href}
-                isActive={isActive}
-                onActivate={(e) => {
-                  if (item.href === "/") {
-                    goHome(e);
-                  } else {
-                    router.push(item.href);
-                  }
-                }}
-                label={label}
-              />
+              <Fragment key={item.href}>
+                <CollapsedDot
+                  isActive={isActive}
+                  onActivate={(e) => {
+                    if (item.href === "/") {
+                      goHome(e);
+                    } else {
+                      router.push(item.href);
+                    }
+                  }}
+                  label={label}
+                />
+                {/* Collapsed outline — one tiny coral dot per visible sub-step. */}
+                {trail && trail.rootHref === item.href &&
+                  trail.steps.map((cs) => (
+                    <span
+                      key={cs.step.match}
+                      aria-label={t(cs.step.labelKey) || cs.step.fallback}
+                      title={t(cs.step.labelKey) || cs.step.fallback}
+                      className={
+                        cs.isActive
+                          ? "block h-[5px] w-[5px] rounded-full bg-[#FF5924]"
+                          : "block h-[4px] w-[4px] rounded-full bg-[#FF5924]/45"
+                      }
+                    />
+                  ))}
+              </Fragment>
             );
           }
 
@@ -170,18 +200,21 @@ export function SideNav() {
               meta={item.href === "/topup" ? `${balance?.notes ?? "—"}` : undefined}
             />
           );
-          return item.href === "/" ? (
-            <button
-              key={item.href}
-              onClick={goHome}
-              className="block w-full text-left"
-            >
-              {body}
-            </button>
-          ) : (
-            <Link key={item.href} href={item.href} className="block">
-              {body}
-            </Link>
+          return (
+            <Fragment key={item.href}>
+              {item.href === "/" ? (
+                <button onClick={goHome} className="block w-full text-left">
+                  {body}
+                </button>
+              ) : (
+                <Link href={item.href} className="block">
+                  {body}
+                </Link>
+              )}
+              {trail && trail.rootHref === item.href && trail.steps.length > 0 && (
+                <NestedTrail steps={trail.steps} lang={lang} t={t} />
+              )}
+            </Fragment>
           );
         })}
       </nav>
@@ -189,7 +222,7 @@ export function SideNav() {
       <div className="flex-1" />
 
       {/* ── Footer: balance + language ───────────────────────────── */}
-      <div className={collapsed ? "px-0 flex flex-col items-center gap-3" : "px-7"}>
+      <div className={collapsed ? "relative z-10 px-0 flex flex-col items-center gap-3" : "relative z-10 px-7"}>
         {!collapsed && (
           <Link
             href="/topup"
@@ -262,6 +295,69 @@ function BrandGlyph({ audioActive }: { audioActive: boolean }) {
         className="block h-[6px] w-[6px] rounded-full bg-[#FF5924]"
       />
     </span>
+  );
+}
+
+/* ── Nested trail — document-outline sub-steps ─────────────────────── */
+
+/**
+ * Renders the journey under a destination as an additive outline. Earlier
+ * steps stay visible and clickable; the active step is darker but does not
+ * get an underline. The small arrow and left padding are intentional: this
+ * should read like a document list, not an inline breadcrumb.
+ */
+function NestedTrail({
+  steps,
+  lang,
+  t,
+}: {
+  steps: ComputedStep[];
+  lang: string;
+  t: (key: string) => string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -3 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+      className="mt-1.5 mb-6 ml-5 flex flex-col gap-1.5"
+    >
+      {steps.map((cs) => {
+        const label = t(cs.step.labelKey) || cs.step.fallback;
+        const textCls = cs.isActive
+          ? lang === "zh"
+            ? "font-chinese-title-italic text-[18px] text-[#1A1A1A]"
+            : "font-serif-italic text-[20px] text-[#1A1A1A]"
+          : lang === "zh"
+            ? "font-chinese-title-italic text-[18px] text-[#8C8780] hover:text-[#1A1A1A]"
+            : "font-serif-italic text-[20px] text-[#8C8780] hover:text-[#1A1A1A]";
+        const content = (
+          <span className="group/sub flex items-baseline gap-2.5 leading-none">
+            <span
+              aria-hidden
+              className={`text-[15px] leading-none transition-colors ${
+                cs.isActive
+                  ? "text-[#FF5924]"
+                  : "text-[#FF5924]/75 group-hover/sub:text-[#FF5924]"
+              }`}
+            >
+              ↪
+            </span>
+            <span className={`${textCls} transition-colors`}>{label}</span>
+          </span>
+        );
+
+        return cs.isActive ? (
+          <div key={cs.step.match} aria-current="page">
+            {content}
+          </div>
+        ) : (
+          <Link key={cs.step.match} href={cs.step.match} className="block">
+            {content}
+          </Link>
+        );
+      })}
+    </motion.div>
   );
 }
 

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
-import { getNotesBalance, spendNotes } from "@/lib/db/queries/notes-ledger";
+import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 import { ai } from "@/lib/platform/ai-server";
 import { ALL_EDIT_TOKENS, type EditToken } from "@/modules/strummer/apply-edit";
@@ -16,6 +17,7 @@ import { COST } from "@murmur/core";
 
 const TIMEOUT_MS = 8_000;
 const ROUTE = "/api/strummer/edit";
+const STRUMMER_EDIT_RATE_LIMIT = { capacity: 10, refillWindowMs: 60_000 };
 
 type RequestBody = { prompt?: string };
 
@@ -24,6 +26,17 @@ export async function POST(req: NextRequest) {
   const auth = await resolveRequestAuth(req);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "user",
+    userId,
+    requestId,
+    sessionId: auth.sessionId,
+    options: STRUMMER_EDIT_RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
   let body: RequestBody;
   try {
     body = (await req.json()) as RequestBody;
@@ -100,6 +113,82 @@ export async function POST(req: NextRequest) {
     'If nothing in the allowlist applies, return { "tokens": [], "reason": "no match" }.',
   ].join("\n");
 
+  let spend:
+    | Awaited<ReturnType<typeof spendNotes>>
+    | {
+        ok: true;
+        ledgerId: null;
+        balanceBefore: null;
+        balanceAfter: null;
+        duplicate: false;
+      };
+  if (shouldBypassBillingInDevelopment()) {
+    spend = {
+      ok: true,
+      ledgerId: null,
+      balanceBefore: null,
+      balanceAfter: null,
+      duplicate: false,
+    };
+  } else {
+    try {
+      spend = await spendNotes({
+        userId,
+        cost: COST.llm_edit,
+        reason: "spend:llm_edit",
+        externalRef: requestId,
+        metadata: {
+          promptLength: prompt.length,
+          route: ROUTE,
+          phase: "preflight",
+        },
+      });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: "billing_unavailable",
+          message: error instanceof Error ? error.message : "Could not spend Murmur Notes",
+          requestId,
+        },
+        { status: 503, headers: { "X-Request-Id": requestId } },
+      );
+    }
+
+    if (!spend.ok) {
+      if (spend.reason === "user_not_found") {
+        return NextResponse.json(
+          { error: "billing_unavailable", message: "User balance is unavailable", requestId },
+          { status: 503, headers: { "X-Request-Id": requestId } },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error: "insufficient_notes",
+          message: "Not enough Murmur Notes",
+          currentBalance: spend.currentBalance,
+          cost: COST.llm_edit,
+          requestId,
+        },
+        { status: 402, headers: { "X-Request-Id": requestId } },
+      );
+    }
+
+    if (!spend.duplicate) {
+      log("notes.spent", {
+        reason: "spend:llm_edit",
+        cost: COST.llm_edit,
+        balanceAfter: spend.balanceAfter,
+        ledgerId: spend.ledgerId,
+      }, {
+        route: ROUTE,
+        requestId,
+        userId,
+        sessionId: auth.sessionId,
+      });
+    }
+  }
+
   try {
     const completion = await Promise.race([
       ai.chat({
@@ -118,73 +207,95 @@ export async function POST(req: NextRequest) {
 
     const text = completion.choices[0]?.message?.content ?? "";
     const tokens = extractTokens(text);
-    if (!shouldBypassBillingInDevelopment()) {
-      let spend: Awaited<ReturnType<typeof spendNotes>>;
-      try {
-        spend = await spendNotes({
-          userId,
-          cost: COST.llm_edit,
-          reason: "spend:llm_edit",
-          externalRef: requestId,
-          metadata: {
-            promptLength: prompt.length,
-            tokenCount: tokens.length,
-          },
-        });
-      } catch (error) {
-        return NextResponse.json(
-          {
-            error: "billing_unavailable",
-            message: error instanceof Error ? error.message : "Could not spend Murmur Notes",
-            requestId,
-          },
-          { status: 503, headers: { "X-Request-Id": requestId } },
-        );
-      }
-
-      if (!spend.ok) {
-        if (spend.reason === "user_not_found") {
-          return NextResponse.json(
-            { error: "billing_unavailable", message: "User balance is unavailable", requestId },
-            { status: 503, headers: { "X-Request-Id": requestId } },
-          );
-        }
-
-        return NextResponse.json(
-          {
-            error: "insufficient_notes",
-            message: "Not enough Murmur Notes",
-            currentBalance: spend.currentBalance,
-            cost: COST.llm_edit,
-            requestId,
-          },
-          { status: 402, headers: { "X-Request-Id": requestId } },
-        );
-      }
-
-      log("notes.spent", {
-        reason: "spend:llm_edit",
-        cost: COST.llm_edit,
-        balanceAfter: spend.balanceAfter,
-        ledgerId: spend.ledgerId,
-      }, {
-        route: ROUTE,
-        requestId,
-        userId,
-        sessionId: auth.sessionId,
-      });
-    }
 
     return NextResponse.json(
       { tokens, raw: text.slice(0, 400), requestId },
       { headers: { "X-Request-Id": requestId } },
     );
   } catch (err) {
+    await refundStrummerSpendIfNeeded({
+      spend,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+      promptLength: prompt.length,
+    });
     console.warn("[strummer/edit] llm failed:", err);
     return NextResponse.json(
       { tokens: [], error: err instanceof Error ? err.message : "LLM error", requestId },
       { status: 502, headers: { "X-Request-Id": requestId } },
     );
+  }
+}
+
+async function refundStrummerSpendIfNeeded(options: {
+  spend:
+    | Awaited<ReturnType<typeof spendNotes>>
+    | {
+        ok: true;
+        ledgerId: null;
+        balanceBefore: null;
+        balanceAfter: null;
+        duplicate: false;
+      };
+  requestId: string;
+  userId: string;
+  sessionId: string | null;
+  promptLength: number;
+}): Promise<void> {
+  if (!options.spend.ok) return;
+  if (options.spend.ledgerId === null || options.spend.duplicate) return;
+
+  try {
+    const refund = await refundNotes({
+      originalLedgerId: options.spend.ledgerId,
+      metadata: {
+        requestId: options.requestId,
+        promptLength: options.promptLength,
+        trigger: "strummer_llm_failed",
+      },
+    });
+
+    if (refund.ok) {
+      if (!refund.duplicate) {
+        log("notes.granted", {
+          reason: "refund:spend",
+          delta: refund.amount,
+          balanceAfter: refund.balanceAfter,
+          originalLedgerId: refund.originalLedgerId,
+          refundLedgerId: refund.refundLedgerId,
+        }, {
+          route: ROUTE,
+          requestId: options.requestId,
+          userId: options.userId,
+          sessionId: options.sessionId,
+          level: "warn",
+        });
+      }
+      return;
+    }
+
+    log("notes.refund_failed", {
+      requestLedgerId: options.spend.ledgerId,
+      reason: refund.reason,
+    }, {
+      route: ROUTE,
+      requestId: options.requestId,
+      userId: options.userId,
+      sessionId: options.sessionId,
+      level: "error",
+    });
+  } catch (error) {
+    log("notes.refund_failed", {
+      requestLedgerId: options.spend.ledgerId,
+      reason: error instanceof Error ? error.message : String(error),
+    }, {
+      route: ROUTE,
+      requestId: options.requestId,
+      userId: options.userId,
+      sessionId: options.sessionId,
+      level: "error",
+    });
   }
 }
 

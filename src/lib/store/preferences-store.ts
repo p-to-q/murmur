@@ -7,7 +7,9 @@ export type RepairBias = number;
 
 type PreferencesStore = {
   repairBias: RepairBias;
+  developerMode: boolean;
   setRepairBias: (value: RepairBias) => void;
+  setDeveloperMode: (enabled: boolean) => void;
 };
 
 function clampRepairBias(value: number): RepairBias {
@@ -19,7 +21,9 @@ export const usePreferencesStore = create<PreferencesStore>()(
   persist(
     (set) => ({
       repairBias: 0,
+      developerMode: false,
       setRepairBias: (value) => set({ repairBias: clampRepairBias(value) }),
+      setDeveloperMode: (enabled) => set({ developerMode: enabled }),
     }),
     {
       name: "murmur-preferences",

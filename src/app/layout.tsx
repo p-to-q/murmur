@@ -52,13 +52,17 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
+      suppressHydrationWarning
       className={cn(
         "h-full antialiased font-sans",
         GeistSans.variable,
         instrumentalSerif.variable,
       )}
     >
-      <body className="min-h-svh flex flex-col bg-[#F5F1EB]">
+      <body
+        suppressHydrationWarning
+        className="min-h-svh flex flex-col bg-[#F5F1EB]"
+      >
         <I18nHydrator />
         {/* Desktop sidebar (md+) — mobile hides via internal media query */}
         <SideNav />

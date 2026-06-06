@@ -1,5 +1,9 @@
 # Repo Architecture
 
+Historical note: this document describes the intended multi-app v2 monorepo
+shape. The current repository has adopted some of these ideas incrementally,
+but it has not yet completed the full `apps/*` carve-out described below.
+
 How the Murmur monorepo is laid out for v2: which directories exist,
 what each is for, what each can and cannot import, and how new code is
 placed. This is the file Codex consults whenever the question is "where

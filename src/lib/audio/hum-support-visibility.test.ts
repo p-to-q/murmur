@@ -28,7 +28,7 @@ describe("shouldShowHumSupportCode", () => {
     ).toBe(false);
   });
 
-  it("shows support code when a transient failure happens before any live success", () => {
+  it("keeps the first cold-start transient failure human-first", () => {
     const failed = noteLiveFailure(
       INITIAL_FIXTURE_RESCUE_STATE,
       "network_error",
@@ -40,7 +40,7 @@ describe("shouldShowHumSupportCode", () => {
         code: "network_error",
         state: failed,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("shows support code when transient failures become persistent", () => {
@@ -51,6 +51,22 @@ describe("shouldShowHumSupportCode", () => {
     expect(
       shouldShowHumSupportCode({
         code: "worker_unavailable",
+        state: second,
+      }),
+    ).toBe(true);
+  });
+
+  it("shows support code after repeated cold-start transient failures", () => {
+    const first = noteLiveFailure(
+      INITIAL_FIXTURE_RESCUE_STATE,
+      "network_error",
+      1_000,
+    );
+    const second = noteLiveFailure(first, "network_error", 61_500);
+
+    expect(
+      shouldShowHumSupportCode({
+        code: "network_error",
         state: second,
       }),
     ).toBe(true);

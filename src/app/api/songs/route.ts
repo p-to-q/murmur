@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { getSongsByUser, createSong, createSongWithSpend } from "@/lib/db/queries/songs";
+import {
+  createLocalSongFallback,
+  getLocalSongsByUserFallback,
+} from "@/lib/db/queries/local-song-fallback";
 import { log } from "@/lib/observability/log";
 import { COST } from "@murmur/core";
 import { deriveEditDepth, normalizeEditCount } from "@/modules/music/edit-depth";
 import { normalizeLineageDepth, resolveParentSongId, resolveRootSongId } from "@/modules/music/lineage";
 import type { MelodySelectionKind } from "@/modules/shared/types";
+import type { songs } from "@/lib/db/schema/songs";
 
 const ROUTE = "/api/songs";
+const SONG_CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
 const MELODY_SELECTION_KINDS = new Set<MelodySelectionKind>(["intent", "corrected", "musical"]);
 const trackStateSchema = z.object({
   enabled: z.boolean(),
@@ -58,6 +65,9 @@ const songPayloadSchema = z.object({
   tags: z.array(z.string()),
 }).passthrough();
 
+type SongPayload = z.infer<typeof songPayloadSchema>;
+type SongInput = typeof songs.$inferInsert;
+
 export async function GET(req: NextRequest) {
   const auth = await resolveRequestAuth(req);
   if (!auth.ok) return auth.response;
@@ -66,17 +76,19 @@ export async function GET(req: NextRequest) {
     const rows = await getSongsByUser(userId);
     return NextResponse.json(rows);
   } catch (err) {
-    if (userId === "guest" && isDatabaseUnavailable(err)) {
+    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+      const rows = getLocalSongsByUserFallback(userId);
       log("song.list_failed", {
         reason: "database_unavailable",
-        fallback: "guest_empty_gallery",
+        fallback: "local_guest_song_snapshot",
+        count: rows.length,
       }, {
         route: "/api/songs",
         userId,
         sessionId: auth.sessionId,
         level: "warn",
       });
-      return NextResponse.json([]);
+      return NextResponse.json(rows);
     }
 
     console.error("[songs GET]", err);
@@ -89,37 +101,48 @@ export async function POST(req: NextRequest) {
   const auth = await resolveRequestAuth(req);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "create:user",
+    userId,
+    requestId,
+    sessionId: auth.sessionId,
+    options: SONG_CREATE_RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
+
+  let body: SongPayload;
   try {
-    const body = songPayloadSchema.parse(await req.json());
-    const editCount = normalizeEditCount(body.editCount);
-    const lineageDepth = normalizeLineageDepth(body.lineageDepth);
-    const sourceMelodyKind = isMelodySelectionKind(body.sourceMelodyKind)
-      ? body.sourceMelodyKind
-      : "corrected";
-    const editDepth = deriveEditDepth(editCount);
-    const parentSongId = resolveParentSongId({ id: String(body.id ?? ""), parentSongId: body.parentSongId });
-    const rootSongId = resolveRootSongId({ id: String(body.id ?? ""), rootSongId: body.rootSongId });
-    const songInput = {
-      id: body.id,
-      userId,
-      title: body.title,
-      vibe: body.vibe,
-      vibeEn: body.vibeEn,
-      bpm: body.bpm,
-      keySignature: body.keySignature,
-      scaleType: body.scaleType,
-      duration: body.duration,
-      parentSongId,
-      rootSongId,
-      lineageDepth,
-      sourceMelodyKind,
-      editCount,
-      editDepth,
-      mp3DataUrl: body.mp3DataUrl ?? null,
-      visualConfig: body.visualConfig,
-      arrangementState: body.arrangementState,
-      tags: body.tags,
-    };
+    body = songPayloadSchema.parse(await req.json());
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          error: "validation_error",
+          message: "Invalid song payload",
+          requestId,
+          issues: err.issues.map((issue) => ({
+            path: issue.path.join("."),
+            code: issue.code,
+            message: issue.message,
+          })),
+        },
+        { status: 400, headers: { "X-Request-Id": requestId } },
+      );
+    }
+
+    console.error("[songs POST parse]", err);
+    return NextResponse.json(
+      { error: "Failed to read song payload", requestId },
+      { status: 400, headers: { "X-Request-Id": requestId } },
+    );
+  }
+
+  const songInput = buildSongInput(body, userId);
+
+  try {
     if (shouldBypassBillingInDevelopment()) {
       const song = await createSong(songInput);
 
@@ -189,21 +212,27 @@ export async function POST(req: NextRequest) {
       headers: { "X-Request-Id": requestId },
     });
   } catch (err) {
-    if (err instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          error: "validation_error",
-          message: "Invalid song payload",
-          requestId,
-          issues: err.issues.map((issue) => ({
-            path: issue.path.join("."),
-            code: issue.code,
-            message: issue.message,
-          })),
+    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+      const fallbackSong = createLocalSongFallback(songInput);
+      log("song.create_failed", {
+        reason: "database_unavailable",
+        fallback: "local_guest_song_snapshot",
+        songId: fallbackSong.id,
+      }, {
+        route: ROUTE,
+        requestId,
+        userId,
+        sessionId: auth.sessionId,
+        level: "warn",
+      });
+      return NextResponse.json(fallbackSong, {
+        headers: {
+          "X-Request-Id": requestId,
+          "X-Murmur-Fallback": "local-guest-song",
         },
-        { status: 400, headers: { "X-Request-Id": requestId } },
-      );
+      });
     }
+
     console.error("[songs POST]", err);
     if (isDatabaseUnavailable(err)) {
       return NextResponse.json(
@@ -217,6 +246,39 @@ export async function POST(req: NextRequest) {
       { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
+}
+
+function buildSongInput(body: SongPayload, userId: string): SongInput {
+  const editCount = normalizeEditCount(body.editCount);
+  const lineageDepth = normalizeLineageDepth(body.lineageDepth);
+  const sourceMelodyKind = isMelodySelectionKind(body.sourceMelodyKind)
+    ? body.sourceMelodyKind
+    : "corrected";
+  const editDepth = deriveEditDepth(editCount);
+  const parentSongId = resolveParentSongId({ id: body.id, parentSongId: body.parentSongId });
+  const rootSongId = resolveRootSongId({ id: body.id, rootSongId: body.rootSongId });
+
+  return {
+    id: body.id,
+    userId,
+    title: body.title,
+    vibe: body.vibe,
+    vibeEn: body.vibeEn,
+    bpm: body.bpm,
+    keySignature: body.keySignature,
+    scaleType: body.scaleType,
+    duration: body.duration,
+    parentSongId,
+    rootSongId,
+    lineageDepth,
+    sourceMelodyKind,
+    editCount,
+    editDepth,
+    mp3DataUrl: body.mp3DataUrl ?? null,
+    visualConfig: body.visualConfig,
+    arrangementState: body.arrangementState,
+    tags: body.tags,
+  };
 }
 
 function isDatabaseUnavailable(error: unknown): boolean {
@@ -243,6 +305,24 @@ function isDatabaseUnavailable(error: unknown): boolean {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function shouldUseLocalSongFallback(req: NextRequest, userId: string): boolean {
+  if (userId !== "guest") return false;
+  return shouldBypassBillingInDevelopment({
+    host: getRequestHostname(req),
+  });
+}
+
+function getRequestHostname(req: NextRequest): string | null {
+  const nextUrl = (req as { nextUrl?: { hostname?: string } }).nextUrl;
+  if (nextUrl?.hostname) return nextUrl.hostname;
+
+  try {
+    return new URL(req.url).hostname;
+  } catch {
+    return null;
+  }
 }
 
 function isMelodySelectionKind(value: unknown): value is MelodySelectionKind {

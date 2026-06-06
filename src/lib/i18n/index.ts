@@ -1,7 +1,9 @@
 "use client";
 import { useEffect } from "react";
 import { create } from "zustand";
-import { DICT, type Lang, type TKey } from "./dict";
+import { type Lang, type TKey } from "./dict";
+import { usePreferencesStore } from "@/lib/store/preferences-store";
+import { renderTranslationToken } from "./translate";
 
 const STORAGE_KEY = "murmur.lang";
 
@@ -32,15 +34,14 @@ export const useI18nStore = create<I18nStore>((set) => ({
 
 /**
  * Subscribe a component to the current language and return a translator.
- * Missing keys return the key string itself so the UI never goes blank.
+ * Product mode renders localized copy and hides missing keys so component
+ * fallbacks can render. Developer mode deliberately exposes raw keys as the
+ * pre-render token layer.
  */
 export function useTranslator(): (key: TKey | string) => string {
   const lang = useI18nStore((s) => s.lang);
-  return (key) => {
-    const entry = (DICT as Record<string, { zh: string; en: string }>)[key];
-    if (!entry) return String(key);
-    return entry[lang] ?? entry.zh;
-  };
+  const developerMode = usePreferencesStore((s) => s.developerMode);
+  return (key) => renderTranslationToken(String(key), lang, developerMode ? "developer" : "product");
 }
 
 /**

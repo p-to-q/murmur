@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, RotateCcw, Play, Pause } from "lucide-react";
@@ -17,28 +17,61 @@ import {
 } from "@/modules/strummer/apply-edit";
 import { classifyPromptWithLLM } from "@/lib/api/strummer";
 import { memory } from "@/lib/platform/memory";
+import { buildDemoFlowState } from "@/modules/demo/demo-flow";
 import {
   bumpVersionEditState,
-  getEditDepthLabel,
   resetVersionEditState,
 } from "@/modules/music/edit-depth";
-import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import type {
   ArrangementState,
   TrackState,
   VibeVersion,
 } from "@/modules/shared/types";
 
+import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { MurmurWave } from "@/components/murmur/murmur-wave";
 import { AurisPanel } from "@/components/studio/auris-panel";
 import { TrackMixer } from "@/components/studio/track-mixer";
 import { SceneGrid } from "@/components/studio/scene-grid";
 
-export function StudioScreen() {
+export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const router = useRouter();
   const t = useTranslator();
   const currentVersion = useMurmurStore((state) => state.currentVersion);
+  const setCurrentVersion = useMurmurStore((state) => state.setCurrentVersion);
+  const setVibeVersions = useMurmurStore((state) => state.setVibeVersions);
+  const setCurrentDraftId = useMurmurStore((state) => state.setCurrentDraftId);
+  const setCurrentFlowId = useMurmurStore((state) => state.setCurrentFlowId);
+  const demoSeededRef = useRef(false);
+  const demoEnabled = initialDemo;
+
+  useEffect(() => {
+    if (!demoEnabled || currentVersion || demoSeededRef.current) {
+      return;
+    }
+    demoSeededRef.current = true;
+    const demo = buildDemoFlowState();
+    setVibeVersions(demo.versions);
+    setCurrentDraftId(demo.draftId);
+    setCurrentFlowId(demo.flowId);
+    setCurrentVersion(demo.currentVersion);
+  }, [
+    currentVersion,
+    demoEnabled,
+    setCurrentDraftId,
+    setCurrentFlowId,
+    setCurrentVersion,
+    setVibeVersions,
+  ]);
 
   if (!currentVersion) {
+    if (demoEnabled) {
+      return (
+        <div className="min-h-svh flex flex-col items-center justify-center bg-[#F5F1EB] px-6 text-center">
+          <p className="mb-4 text-base text-[#8C8780]">{t("hum.proc.polishing")}</p>
+        </div>
+      );
+    }
     return (
       <div className="min-h-svh flex flex-col items-center justify-center bg-[#F5F1EB] px-6 text-center">
         <p className="mb-4 text-base text-[#8C8780]">{t("studio.empty")}</p>
@@ -55,6 +88,10 @@ export function StudioScreen() {
   return <StudioContent version={currentVersion} />;
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+   StudioContent — the synthesizer-surface layout.
+   ───────────────────────────────────────────────────────────────────── */
+
 function StudioContent({ version }: { version: VibeVersion }) {
   const router = useRouter();
   const t = useTranslator();
@@ -65,8 +102,8 @@ function StudioContent({ version }: { version: VibeVersion }) {
 
   const currentVersion = version;
   const arrangement = currentVersion.arrangementState;
-  const melodyOrigin = getMelodyOriginCopy(currentVersion.sourceMelodyKind, t);
-  const editDepthLabel = getEditDepthLabel(currentVersion.editDepth, t);
+
+  // ── Business logic (unchanged) ─────────────────────────────────────
 
   const applyTokens = (
     nextVersion: VibeVersion,
@@ -204,7 +241,6 @@ function StudioContent({ version }: { version: VibeVersion }) {
       setIsPlaying(false);
       return;
     }
-
     restartPlayback(currentVersion);
     setIsPlaying(true);
   };
@@ -229,38 +265,20 @@ function StudioContent({ version }: { version: VibeVersion }) {
     router.push("/studio/name");
   };
 
+  // Wave accent color
+  const waveAccent =
+    extractFirstHex(currentVersion.visualConfig.gradient) ?? "#FF8A5C";
+
+  // ── Render ─────────────────────────────────────────────────────────
+
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#EEEDF2]">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-        <div
-          className="aurora-blob-2 absolute rounded-full"
-          style={{
-            width: "min(52vw, 520px)",
-            height: "min(42vw, 420px)",
-            right: "-10%",
-            top: "3%",
-            background:
-              "radial-gradient(ellipse at center, rgba(201,182,228,0.24) 0%, rgba(200,180,240,0.06) 55%, transparent 75%)",
-            filter: "blur(55px)",
-          }}
-        />
-        <div
-          className="aurora-blob-3 absolute rounded-full"
-          style={{
-            width: "min(44vw, 430px)",
-            height: "min(38vw, 360px)",
-            left: "-6%",
-            top: "26%",
-            background:
-              "radial-gradient(ellipse at center, rgba(255,200,140,0.18) 0%, rgba(255,180,100,0.05) 55%, transparent 75%)",
-            filter: "blur(50px)",
-          }}
-        />
-      </div>
+    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+      <PageBackdrop variant="soft" />
 
       <div className="relative z-10 min-h-svh flex flex-col">
+        {/* ── Header ──────────────────────────────────────────────── */}
         <div
-          className="flex items-center justify-between px-5 pb-5 md:px-8"
+          className="flex items-center justify-between px-5 pb-4 md:px-8"
           style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 28px)" }}
         >
           <button
@@ -269,19 +287,19 @@ function StudioContent({ version }: { version: VibeVersion }) {
               router.back();
             }}
             aria-label={t("studio.back")}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/55 bg-white/70"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E5DDD0] bg-white/70 transition-colors hover:bg-white"
           >
             <ArrowLeft className="h-4 w-4 text-[#1A1A1A]" />
           </button>
 
-          <div className="text-center">
+          <div className="text-center min-w-0">
             <p
-              className="font-serif text-[17px] leading-tight text-[#1A1A1A]"
+              className="font-serif text-[17px] leading-tight text-[#1A1A1A] truncate"
               style={{ letterSpacing: "-0.005em" }}
             >
               {currentVersion.title}
             </p>
-            <p className="mt-1 text-[11px] uppercase tracking-[0.14em] text-[#8C8780]">
+            <p className="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-[#8C8780]">
               {currentVersion.vibe} · {currentVersion.melody.bpm} BPM
             </p>
           </div>
@@ -289,44 +307,57 @@ function StudioContent({ version }: { version: VibeVersion }) {
           <button
             onClick={handleRestore}
             aria-label={t("studio.restore")}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/55 bg-white/70"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E5DDD0] bg-white/70 transition-colors hover:bg-white"
           >
             <RotateCcw className="h-4 w-4 text-[#8C8780]" />
           </button>
         </div>
 
-        <div className="px-5 pb-32 md:px-8">
+        {/* ── Main content ────────────────────────────────────────── */}
+        <div className="flex-1 px-5 md:px-8 pb-28">
           <div className="mx-auto max-w-6xl">
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
-              <div
-                className="relative min-h-[220px] cursor-pointer select-none overflow-hidden rounded-[34px] border border-white/55 shadow-[0_22px_60px_rgba(26,26,26,0.10)]"
+            {/* Display + Controls — desktop side by side */}
+            <div className="grid gap-5 md:grid-cols-[1.15fr_1fr]">
+              {/* ── DISPLAY ZONE: gradient cover ─────────────────── */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                className="relative min-h-[280px] md:min-h-[420px] cursor-pointer select-none overflow-hidden rounded-[28px] border border-white/30"
                 style={{ background: currentVersion.visualConfig.gradient }}
                 onClick={togglePlay}
               >
-                <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/40" />
-                <div className="absolute left-6 right-6 top-6 flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.28em] text-white/72">
-                      {currentVersion.vibe}
-                    </p>
-                    <p
-                      className="mt-3 max-w-[24rem] font-serif text-[30px] leading-[0.98] text-white md:text-[42px]"
-                      style={{ letterSpacing: "-0.02em" }}
-                    >
-                      {currentVersion.title}
-                    </p>
-                  </div>
-                  <div className="rounded-full border border-white/50 bg-white/18 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-white/78 backdrop-blur-sm">
-                    {currentVersion.melody.bpm} bpm
-                  </div>
-                </div>
-                <div className="absolute bottom-6 left-6 right-6 flex items-end justify-between gap-5">
-                  <p className="max-w-[22rem] text-[13px] leading-[1.55] text-white/78">
-                    {t("studio.hero.sub")}
+                {/* Top darken for legibility */}
+                <div className="absolute inset-0 bg-gradient-to-b from-black/12 via-transparent to-black/36 pointer-events-none" />
+
+                {/* MurmurWave in bottom half */}
+                <MurmurWave
+                  color={waveAccent}
+                  intensity={0.5}
+                  isPlaying={isPlaying}
+                  waveY={0.55}
+                  className="absolute inset-x-0 bottom-0 h-2/5 w-full pointer-events-none"
+                />
+
+                {/* Text — positioned in lower third */}
+                <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
+                  <p className="text-[10px] uppercase tracking-[0.28em] text-white/65">
+                    {currentVersion.vibe}
                   </p>
-                  <div
-                    className={`flex h-14 w-14 items-center justify-center rounded-full border border-white/60 backdrop-blur-sm ${
-                      isPlaying ? "bg-white/35" : "bg-white/20"
+                  <h1
+                    className="mt-2 hero-serif text-white text-[28px] leading-[1.02] md:text-[42px] max-w-[22rem]"
+                    style={{ letterSpacing: "-0.015em" }}
+                  >
+                    {currentVersion.title}
+                  </h1>
+                </div>
+
+                {/* Play disc — centered */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <motion.div
+                    whileTap={{ scale: 0.92 }}
+                    className={`flex h-14 w-14 items-center justify-center rounded-full border border-white/50 backdrop-blur-sm pointer-events-auto ${
+                      isPlaying ? "bg-white/30" : "bg-white/16"
                     }`}
                   >
                     {isPlaying ? (
@@ -334,68 +365,46 @@ function StudioContent({ version }: { version: VibeVersion }) {
                     ) : (
                       <Play className="ml-0.5 h-5 w-5 text-white" fill="white" />
                     )}
-                  </div>
+                  </motion.div>
                 </div>
-              </div>
+              </motion.div>
 
-              <div className="rounded-[34px] border border-[#E7DDCF] bg-[linear-gradient(180deg,rgba(255,254,251,0.98),rgba(248,243,234,0.98))] p-6 shadow-[0_22px_60px_rgba(26,26,26,0.07)]">
-                <p className="eyebrow mb-1.5 text-[#FF8A5C]">
-                  {t("studio.overview.eyebrow")}
-                </p>
-                <h2 className="font-serif text-[24px] leading-[1.05] text-[#1A1A1A] md:text-[28px]">
-                  {t("studio.overview.title")}
-                </h2>
-                <p className="mt-3 max-w-[28rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
-                  {t("studio.overview.sub")}
-                </p>
+              {/* ── CONTROLS ZONE ────────────────────────────────── */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                className="flex flex-col gap-5"
+              >
+                {/* Auris input */}
+                <AurisPanel
+                  busy={promptBusy}
+                  onApply={handlePrompt}
+                />
 
-                <div className="mt-5 grid grid-cols-2 gap-2.5">
-                  <MetaPill
-                    label={t("song.meta.vibe")}
-                    value={currentVersion.vibe}
-                  />
-                  <MetaPill
-                    label={t("studio.origin.label")}
-                    value={melodyOrigin.label}
-                  />
-                  <MetaPill
-                    label={t("studio.edit_depth.label")}
-                    value={editDepthLabel}
-                  />
-                  <MetaPill
-                    label={t("song.meta.key")}
-                    value={currentVersion.melody.key}
-                  />
-                  <MetaPill
-                    label={t("song.meta.bpm")}
-                    value={String(currentVersion.melody.bpm)}
-                  />
-                  <MetaPill
-                    label={t("track.melody")}
-                    value={currentVersion.arrangementState.melody.instrument}
-                  />
-                </div>
-                <p className="mt-4 text-[12px] leading-[1.6] text-[#6F6A63] md:text-[13px]">
-                  {melodyOrigin.studioBody}
-                </p>
-              </div>
+                {/* Scenes — desktop only */}
+                <SceneGrid
+                  onPick={(scene) => handleScene(scene.tokens)}
+                  className="hidden md:block"
+                />
+              </motion.div>
             </div>
 
-            <div className="mt-5 space-y-5">
-              <AurisPanel
-                busy={promptBusy}
-                onApply={handlePrompt}
-                promptPlaceholder={melodyOrigin.promptPlaceholder}
-                helperText={melodyOrigin.studioBody}
-              />
+            {/* ── FADER ZONE ──────────────────────────────────────── */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-8 rounded-[22px] border border-[#E5DDD0] bg-white/50 p-5 md:p-7 backdrop-blur-sm"
+            >
               <TrackMixer arrangement={arrangement} onTrack={updateTrack} />
-              <SceneGrid onPick={(scene) => handleScene(scene.tokens)} />
-            </div>
+            </motion.div>
           </div>
         </div>
 
+        {/* ── Fixed Save button ────────────────────────────────────── */}
         <div
-          className="fixed left-0 right-0 bg-gradient-to-t from-[#EEEDF2] via-[#EEEDF2] to-transparent px-5 pt-6 pb-5 md:px-8"
+          className="fixed left-0 right-0 bg-gradient-to-t from-[#F5F1EB] via-[#F5F1EB]/95 to-transparent px-5 pt-6 pb-5 md:px-8"
           style={{
             left: "var(--side-nav-w)",
             bottom: "env(safe-area-inset-bottom, 0px)",
@@ -405,7 +414,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleSave}
-              className="h-14 w-full rounded-[22px] bg-[#1A1A1A] text-base font-medium text-white transition-opacity"
+              className="h-14 w-full rounded-full bg-[#1A1A1A] text-[15px] font-medium text-white transition-opacity hover:bg-[#2A2A2A]"
             >
               {t("studio.save")}
             </motion.button>
@@ -416,13 +425,9 @@ function StudioContent({ version }: { version: VibeVersion }) {
   );
 }
 
-function MetaPill({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[20px] border border-[#E8DECF] bg-white/68 px-4 py-3">
-      <p className="text-[10px] uppercase tracking-[0.2em] text-[#B3AA9C]">
-        {label}
-      </p>
-      <p className="mt-1 text-[13px] text-[#1A1A1A]">{value}</p>
-    </div>
-  );
+/* ── Helpers ──────────────────────────────────────────────────────── */
+
+function extractFirstHex(gradient: string): string | null {
+  const m = gradient.match(/#([0-9a-fA-F]{6})/);
+  return m ? `#${m[1]}` : null;
 }

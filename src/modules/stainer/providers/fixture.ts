@@ -59,15 +59,11 @@ const FIXTURE_MELODIES = [
   ],
 ];
 
-export async function transcribeFixture(
-  input: TranscriptionInput
-): Promise<TranscriptionResult> {
-  void input;
-  await new Promise((r) => setTimeout(r, 500));
-
-  // 随机选一段旋律，保证演示有变化
-  const idx = Math.floor(Math.random() * FIXTURE_MELODIES.length);
-  const rawNotes = FIXTURE_MELODIES[idx]!;
+export function buildFixtureTranscriptionResult(
+  index = 0,
+): TranscriptionResult {
+  const safeIndex = ((index % FIXTURE_MELODIES.length) + FIXTURE_MELODIES.length) % FIXTURE_MELODIES.length;
+  const rawNotes = FIXTURE_MELODIES[safeIndex]!;
   const cleanMelody = polishMelody(rawNotes);
   const melodies = buildTranscriptionMelodies(rawNotes, cleanMelody);
   const selectedMelodyKind = chooseGenerationMelodyKind({ melodies });
@@ -86,4 +82,15 @@ export async function transcribeFixture(
       selectedMelodyKind,
     },
   };
+}
+
+export async function transcribeFixture(
+  input: TranscriptionInput
+): Promise<TranscriptionResult> {
+  void input;
+  await new Promise((r) => setTimeout(r, 500));
+
+  // 随机选一段旋律，保证演示有变化
+  const idx = Math.floor(Math.random() * FIXTURE_MELODIES.length);
+  return buildFixtureTranscriptionResult(idx);
 }

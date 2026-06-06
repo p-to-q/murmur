@@ -22,7 +22,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { UserBadge } from "@/components/user-profile/user-badge";
 import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
@@ -30,7 +29,6 @@ import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 
 export function MeScreen() {
-  const searchParams = useSearchParams();
   const [songCount, setSongCount] = useState(0);
   const t = useTranslator();
   const lang = useI18nStore((s) => s.lang);
@@ -38,6 +36,7 @@ export function MeScreen() {
   const { balance, isLoading } = useUserBalance();
   const repairBias = usePreferencesStore((state) => state.repairBias);
   const setRepairBias = usePreferencesStore((state) => state.setRepairBias);
+  const developerMode = usePreferencesStore((state) => state.developerMode);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +65,6 @@ export function MeScreen() {
     songCount > 0
       ? t("me.glance.cta_songs") || "Open gallery"
       : t("me.glance.cta_empty") || "Start a hum";
-  const showDebugLink = searchParams.get("debug") === "1";
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
@@ -250,9 +248,9 @@ export function MeScreen() {
       {/* ── Tertiary footer ─────────────────────────────────────────── */}
       <div className="relative z-10 px-6 md:px-12 max-w-3xl pb-28">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px] tracking-[0.04em] text-[#8C8780]">
-          {showDebugLink ? (
+          {developerMode ? (
             <>
-              <Link href="/me/debug?debug=1" className="hover:text-[#1A1A1A] transition-colors">
+              <Link href="/me/debug" className="hover:text-[#1A1A1A] transition-colors">
                 {t("me.debug") || "Debug"}
               </Link>
               <span className="text-[#D2C9B6]">·</span>

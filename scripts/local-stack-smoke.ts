@@ -17,6 +17,7 @@ async function main() {
     checkUserBalance(),
     checkTranscribeValidation(),
     checkAudioWorkerHealth(),
+    checkQaHealth(),
   ];
 
   const results = await Promise.all(checks);
@@ -110,6 +111,33 @@ async function checkAudioWorkerHealth(): Promise<CheckResult> {
   } catch (error) {
     return {
       name: "audio-worker-health",
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function checkQaHealth(): Promise<CheckResult> {
+  try {
+    const response = await fetch(`${webBase}/api/qa/health`);
+    const body = (await response.json()) as {
+      status?: unknown;
+      worker?: { ok?: unknown };
+      qaRoutes?: unknown;
+    };
+    const validShape =
+      (body.status === "ok" || body.status === "degraded") &&
+      typeof body.worker?.ok === "boolean" &&
+      Array.isArray(body.qaRoutes) &&
+      body.qaRoutes.length >= 3;
+    return {
+      name: "api-qa-health",
+      ok: response.ok && validShape,
+      detail: `status=${response.status} validShape=${validShape}`,
+    };
+  } catch (error) {
+    return {
+      name: "api-qa-health",
       ok: false,
       detail: error instanceof Error ? error.message : String(error),
     };
