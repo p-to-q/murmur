@@ -48,7 +48,7 @@
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
-    "framer-motion": "^12.38.0",
+    "framer-motion": "^12.40.0",
     "geist": "^1.7.2",
     "html2canvas": "^1.4.1",
     "idb": "^8.0.3",
