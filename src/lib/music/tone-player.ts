@@ -11,6 +11,7 @@
 import type { ArrangementState, MelodyNote } from "@/modules/shared/types";
 
 type ToneModule = typeof import("tone");
+type ToneTransport = ReturnType<ToneModule["getTransport"]>;
 let toneCache: ToneModule | null = null;
 
 // 是否已经成功解锁过 AudioContext
@@ -19,6 +20,34 @@ let _audioUnlocked = false;
 async function getTone(): Promise<ToneModule> {
   if (!toneCache) toneCache = await import("tone");
   return toneCache;
+}
+
+function getToneTransport(Tone: ToneModule): ToneTransport {
+  const candidate = Tone as ToneModule & {
+    getTransport?: unknown;
+    Transport?: ToneTransport;
+    default?: {
+      getTransport?: unknown;
+      Transport?: ToneTransport;
+    };
+  };
+
+  if (typeof candidate.getTransport === "function") {
+    return candidate.getTransport();
+  }
+  if (candidate.Transport) {
+    return candidate.Transport;
+  }
+
+  const defaultExport = candidate.default;
+  if (defaultExport && typeof defaultExport.getTransport === "function") {
+    return defaultExport.getTransport();
+  }
+  if (defaultExport?.Transport) {
+    return defaultExport.Transport;
+  }
+
+  throw new Error("Tone transport is unavailable");
 }
 
 /**
@@ -168,7 +197,7 @@ export class TonePlayer {
       _audioUnlocked = true;
     } catch { /* continue */ }
 
-    const transport = Tone.getTransport();
+    const transport = getToneTransport(Tone);
     transport.bpm.value = Math.max(40, Math.min(200, bpm));
     transport.cancel();
 
@@ -273,8 +302,8 @@ export class TonePlayer {
 
   async stop(): Promise<void> {
     if (this._Tone) {
-      try { this._Tone.getTransport().stop(); } catch { }
-      try { this._Tone.getTransport().cancel(); } catch { }
+      try { getToneTransport(this._Tone).stop(); } catch { }
+      try { getToneTransport(this._Tone).cancel(); } catch { }
     }
     this.parts.forEach((p) => { try { p.dispose(); } catch { } });
     this.synths.forEach((s) => { try { s.dispose(); } catch { } });
