@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   dependency-review:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository && vars.ENABLE_DEPENDENCY_REVIEW == 'true'
     timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
