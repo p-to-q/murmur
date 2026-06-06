@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       }),
     );
   } catch (error) {
-    if (shouldUseDevBalanceFallback()) {
+    if (shouldUseDevBalanceFallback({ host: getRequestHostname(request) })) {
       log("auth.me_failed", {
         error: error instanceof Error ? error.message : String(error),
         fallback: "local_demo_snapshot",
@@ -75,5 +75,16 @@ export async function GET(request: NextRequest) {
       },
       { status: 503 },
     );
+  }
+}
+
+function getRequestHostname(request: NextRequest): string | null {
+  const nextUrl = (request as { nextUrl?: { hostname?: string } }).nextUrl;
+  if (nextUrl?.hostname) return nextUrl.hostname;
+
+  try {
+    return new URL(request.url).hostname;
+  } catch {
+    return null;
   }
 }

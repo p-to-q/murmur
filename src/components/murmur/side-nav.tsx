@@ -207,7 +207,11 @@ export function SideNav() {
                   {body}
                 </button>
               ) : (
-                <Link href={item.href} className="block">
+                <Link
+                  href={item.href}
+                  className="block"
+                  suppressHydrationWarning
+                >
                   {body}
                 </Link>
               )}
@@ -227,6 +231,7 @@ export function SideNav() {
           <Link
             href="/topup"
             className="group block mb-4 transition-colors"
+            suppressHydrationWarning
           >
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-[10px] uppercase tracking-[0.22em] text-[#B6B0A4]">
@@ -247,6 +252,7 @@ export function SideNav() {
           <Link
             href="/topup"
             className="block mb-2 text-[#1A1A1A] hover:text-[#FF5924] transition-colors"
+            suppressHydrationWarning
           >
             <span className="font-serif text-[14px] tabular-nums">
               {balance?.notes ?? "—"}
@@ -352,7 +358,12 @@ function NestedTrail({
             {content}
           </div>
         ) : (
-          <Link key={cs.step.match} href={cs.step.match} className="block">
+          <Link
+            key={cs.step.match}
+            href={cs.step.match}
+            className="block"
+            suppressHydrationWarning
+          >
             {content}
           </Link>
         );

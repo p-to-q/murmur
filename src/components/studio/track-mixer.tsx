@@ -22,10 +22,49 @@ export interface TrackMixerProps {
   arrangement: ArrangementState;
   onTrack: (key: keyof ArrangementState, patch: Partial<TrackState>) => void;
   className?: string;
+  /** "compact" = 3×2 grid, glass-dark mode for immersive backgrounds */
+  variant?: "default" | "compact";
 }
 
-export function TrackMixer({ arrangement, onTrack, className = "" }: TrackMixerProps) {
+export function TrackMixer({
+  arrangement,
+  onTrack,
+  className = "",
+  variant = "default",
+}: TrackMixerProps) {
   const t = useTranslator();
+
+  if (variant === "compact") {
+    return (
+      <div className={`grid grid-cols-3 gap-x-4 gap-y-3 ${className}`}>
+        {TRACKS.map(({ key, labelKey, letter, color }) => {
+          const track = arrangement[key];
+          return (
+            <CompactFader
+              key={key}
+              letter={letter}
+              color={color}
+              label={t(labelKey)}
+              track={track}
+              onChange={(v) =>
+                onTrack(key, {
+                  intensity: v,
+                  enabled: v > 0,
+                  versionHistory: [...track.versionHistory, String(track.intensity)],
+                })
+              }
+              onToggle={() =>
+                onTrack(key, {
+                  enabled: !track.enabled,
+                  intensity: !track.enabled ? Math.max(track.intensity, 0.3) : track.intensity,
+                })
+              }
+            />
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div className={`space-y-5 ${className}`}>
@@ -58,6 +97,76 @@ export function TrackMixer({ arrangement, onTrack, className = "" }: TrackMixerP
   );
 }
 
+/* ── Compact fader (3×2 grid, glass-dark) ────────────────────────── */
+
+function CompactFader({
+  track,
+  letter,
+  color,
+  label,
+  onChange,
+  onToggle,
+}: {
+  track: TrackState;
+  letter: string;
+  color: string;
+  label: string;
+  onChange: (v: number) => void;
+  onToggle: () => void;
+}) {
+  const pct = Math.round(track.intensity * 100);
+  const isOff = !track.enabled || track.intensity === 0;
+
+  return (
+    <div className={`flex items-center gap-2 transition-opacity ${isOff ? "opacity-35" : ""}`}>
+      <button
+        onClick={onToggle}
+        className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-semibold transition-colors ${
+          track.enabled
+            ? "bg-white/20 text-white"
+            : "bg-white/8 text-white/40 line-through"
+        }`}
+        aria-label={`Toggle ${label}`}
+      >
+        {letter}
+      </button>
+
+      <div className="flex-1 relative h-5 flex items-center">
+        <div className="relative w-full h-[3px] bg-white/15 rounded-full">
+          <motion.div
+            className="absolute left-0 top-0 h-full rounded-full"
+            style={{ background: track.enabled ? color : "rgba(255,255,255,0.1)" }}
+            animate={{ width: `${pct}%` }}
+            transition={{ duration: 0.1 }}
+          />
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={pct}
+            onChange={(e) => onChange(parseInt(e.target.value, 10) / 100)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            style={{ WebkitAppearance: "none" }}
+            aria-label={label}
+          />
+          <motion.div
+            className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full border border-white/60 shadow-sm pointer-events-none"
+            style={{
+              left: `calc(${pct}% - 7px)`,
+              background: track.enabled ? "white" : "rgba(255,255,255,0.3)",
+            }}
+            animate={{ left: `calc(${pct}% - 7px)` }}
+            transition={{ duration: 0.06 }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Standard fader row (default variant) ────────────────────────── */
+
 function FaderRow({
   track,
   label,
@@ -82,7 +191,6 @@ function FaderRow({
         isOff ? "opacity-40" : ""
       }`}
     >
-      {/* Letter icon — tap to toggle */}
       <button
         onClick={onToggle}
         className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[13px] font-medium transition-colors ${
@@ -95,22 +203,18 @@ function FaderRow({
         {letter}
       </button>
 
-      {/* Track name */}
       <span className="w-16 flex-shrink-0 font-serif-italic text-[13px] text-[#8C8780]">
         {label}
       </span>
 
-      {/* Slider */}
       <div className="flex-1 relative h-6 flex items-center">
         <div className="relative w-full h-1.5 bg-[#E5DDD0] rounded-full">
-          {/* Fill */}
           <motion.div
             className="absolute left-0 top-0 h-full rounded-full"
             style={{ background: track.enabled ? color : "#E5DDD0" }}
             animate={{ width: `${pct}%` }}
             transition={{ duration: 0.12 }}
           />
-          {/* Native range input (invisible, for accessibility + drag) */}
           <input
             type="range"
             min={0}
@@ -122,7 +226,6 @@ function FaderRow({
             style={{ WebkitAppearance: "none" }}
             aria-label={label}
           />
-          {/* Thumb */}
           <motion.div
             className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full border-2 border-white shadow-md pointer-events-none"
             style={{
@@ -135,7 +238,6 @@ function FaderRow({
         </div>
       </div>
 
-      {/* Percentage */}
       <span className="w-10 text-right text-[12px] tabular-nums text-[#B6B0A4]">
         {isOff ? "—" : `${pct}%`}
       </span>

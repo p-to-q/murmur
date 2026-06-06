@@ -24,6 +24,8 @@ interface PlatformState {
 
 const listeners = new Set<() => void>();
 let currentUser = DEFAULT_USER;
+let currentPlatform: DevicePlatform = "web";
+let currentSnapshot = buildSnapshot(currentUser, currentPlatform);
 
 function getPlatform(): DevicePlatform {
   if (typeof navigator === "undefined") return "web";
@@ -44,8 +46,41 @@ function loadUser(): AppUser {
   }
 }
 
+function sameUser(a: AppUser, b: AppUser): boolean {
+  return (
+    a.id === b.id &&
+    (a.email ?? null) === (b.email ?? null) &&
+    (a.name ?? null) === (b.name ?? null) &&
+    (a.avatarUrl ?? null) === (b.avatarUrl ?? null)
+  );
+}
+
+function buildSnapshot(user: AppUser, platform: DevicePlatform): PlatformState {
+  return {
+    auth: {
+      user,
+      loading: false,
+      authenticated: true,
+    },
+    device: {
+      platform,
+    },
+  };
+}
+
+function updateSnapshot(user: AppUser, platform: DevicePlatform): PlatformState {
+  if (sameUser(currentUser, user) && currentPlatform === platform) {
+    return currentSnapshot;
+  }
+
+  currentUser = sameUser(currentUser, user) ? currentUser : user;
+  currentPlatform = platform;
+  currentSnapshot = buildSnapshot(currentUser, currentPlatform);
+  return currentSnapshot;
+}
+
 function saveUser(user: AppUser) {
-  currentUser = user;
+  updateSnapshot(user, getPlatform());
   if (typeof window !== "undefined") {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
   }
@@ -53,19 +88,10 @@ function saveUser(user: AppUser) {
 }
 
 function getSnapshot(): PlatformState {
-  if (typeof window !== "undefined") {
-    currentUser = loadUser();
-  }
-  return {
-    auth: {
-      user: currentUser,
-      loading: false,
-      authenticated: true,
-    },
-    device: {
-      platform: getPlatform(),
-    },
-  };
+  return updateSnapshot(
+    typeof window !== "undefined" ? loadUser() : currentUser,
+    getPlatform(),
+  );
 }
 
 const serverSnapshot: PlatformState = {
@@ -85,11 +111,12 @@ function subscribe(listener: () => void) {
 }
 
 export function usePlatformState<T>(selector: (state: PlatformState) => T): T {
-  return useSyncExternalStore(
+  const state = useSyncExternalStore(
     subscribe,
-    () => selector(getSnapshot()),
-    () => selector(serverSnapshot),
+    getSnapshot,
+    () => serverSnapshot,
   );
+  return selector(state);
 }
 
 export function useCurrentUser(): AppUser {

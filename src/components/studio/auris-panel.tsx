@@ -51,6 +51,8 @@ export interface AurisPanelProps {
   onApply: (prompt: string) => Promise<void> | void;
   promptPlaceholder?: string;
   className?: string;
+  /** "dark" = glass mode for immersive gradient backgrounds */
+  variant?: "default" | "dark";
 }
 
 export function AurisPanel({
@@ -58,6 +60,7 @@ export function AurisPanel({
   onApply,
   promptPlaceholder,
   className = "",
+  variant = "default",
 }: AurisPanelProps) {
   const t = useTranslator();
   const [prompt, setPrompt] = useState("");
@@ -68,6 +71,8 @@ export function AurisPanel({
     setPrompt("");
     await onApply(value);
   };
+
+  const dark = variant === "dark";
 
   return (
     <div className={className}>
@@ -81,12 +86,20 @@ export function AurisPanel({
             if (event.key === "Enter") void submit();
           }}
           placeholder={promptPlaceholder ?? t("studio.prompt.placeholder")}
-          className="min-w-0 flex-1 rounded-full border border-[#E5DDD0] bg-white/80 px-4 py-2.5 text-[13px] text-[#1A1A1A] outline-none transition-colors placeholder:text-[#B6B0A4] focus:border-[#FF5924]"
+          className={
+            dark
+              ? "min-w-0 flex-1 rounded-full border border-white/20 bg-white/8 px-4 py-2.5 text-[13px] text-white outline-none transition-colors placeholder:text-white/45 focus:border-white/40 focus:bg-white/12"
+              : "min-w-0 flex-1 rounded-full border border-[#E5DDD0] bg-white/80 px-4 py-2.5 text-[13px] text-[#1A1A1A] outline-none transition-colors placeholder:text-[#B6B0A4] focus:border-[#FF5924]"
+          }
         />
         <button
           onClick={() => void submit()}
           disabled={!prompt.trim() || busy}
-          className="min-w-[60px] rounded-full bg-[#1A1A1A] px-4 py-2.5 text-[13px] font-medium text-white transition-opacity disabled:opacity-40"
+          className={
+            dark
+              ? "min-w-[60px] rounded-full bg-white/18 px-4 py-2.5 text-[13px] font-medium text-white transition-opacity hover:bg-white/25 disabled:opacity-35"
+              : "min-w-[60px] rounded-full bg-[#1A1A1A] px-4 py-2.5 text-[13px] font-medium text-white transition-opacity disabled:opacity-40"
+          }
         >
           {busy ? "…" : t("studio.prompt.cta")}
         </button>
@@ -100,7 +113,11 @@ export function AurisPanel({
               key={action.id}
               onClick={() => void submit(action.prompt)}
               disabled={busy}
-              className="rounded-full border border-[#E5DDD0] bg-white/60 px-3 py-1 text-[11px] text-[#6F6A63] transition-colors hover:border-[#FF5924] hover:text-[#1A1A1A] disabled:opacity-40"
+              className={
+                dark
+                  ? "rounded-full border border-white/20 bg-white/6 px-3 py-1 text-[11px] text-white/75 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-35"
+                  : "rounded-full border border-[#E5DDD0] bg-white/60 px-3 py-1 text-[11px] text-[#6F6A63] transition-colors hover:border-[#FF5924] hover:text-[#1A1A1A] disabled:opacity-40"
+              }
             >
               {action.label}
             </button>

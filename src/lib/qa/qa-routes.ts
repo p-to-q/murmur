@@ -70,8 +70,8 @@ export const QA_ROUTE_CONTRACTS: QaRouteContract[] = [
     name: "debug-qa-cockpit",
     href: "/me/debug?debug=1",
     label: "QA cockpit",
-    note: "Debug surface with health cards, shortcuts, and recent events.",
-    markers: ["Recent pipeline events", "QA shortcuts"],
+    note: "Hidden debug surface; the fetch smoke checks its SSR fallback before client diagnostics hydrate.",
+    markers: ["Murmur / Debug", "Loading debug surface"],
   },
   {
     name: "settings-developer-mode",

@@ -273,13 +273,13 @@ function StudioContent({ version }: { version: VibeVersion }) {
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
-      <PageBackdrop variant="soft" />
+      <PageBackdrop />
 
       <div className="relative z-10 min-h-svh flex flex-col">
         {/* ── Header ──────────────────────────────────────────────── */}
         <div
-          className="flex items-center justify-between px-5 pb-4 md:px-8"
-          style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 28px)" }}
+          className="flex items-center justify-between px-5 md:px-10 lg:px-16"
+          style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 32px)" }}
         >
           <button
             onClick={() => {
@@ -287,116 +287,124 @@ function StudioContent({ version }: { version: VibeVersion }) {
               router.back();
             }}
             aria-label={t("studio.back")}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E5DDD0] bg-white/70 transition-colors hover:bg-white"
+            className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
           >
-            <ArrowLeft className="h-4 w-4 text-[#1A1A1A]" />
+            ← {t("studio.back")}
           </button>
-
-          <div className="text-center min-w-0">
-            <p
-              className="font-serif text-[17px] leading-tight text-[#1A1A1A] truncate"
-              style={{ letterSpacing: "-0.005em" }}
-            >
-              {currentVersion.title}
-            </p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-[#8C8780]">
-              {currentVersion.vibe} · {currentVersion.melody.bpm} BPM
-            </p>
-          </div>
 
           <button
             onClick={handleRestore}
             aria-label={t("studio.restore")}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E5DDD0] bg-white/70 transition-colors hover:bg-white"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DDD0] bg-white/70 transition-colors hover:bg-white"
           >
-            <RotateCcw className="h-4 w-4 text-[#8C8780]" />
+            <RotateCcw className="h-3.5 w-3.5 text-[#8C8780]" />
           </button>
         </div>
 
+        {/* ── Editorial headline ──────────────────────────────────── */}
+        <div className="px-5 md:px-10 lg:px-16 mt-6 mb-6 md:mb-8">
+          <motion.p
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="eyebrow text-[#FF8A5C]"
+          >
+            STUDIO
+          </motion.p>
+          <motion.h1
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            className="hero-serif mt-3 text-[#1A1A1A] text-[32px] leading-[1.04] md:text-[48px]"
+          >
+            {t("studio.overview.title")}
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.12, duration: 0.5 }}
+            className="font-serif-italic mt-2 text-[13px] text-[#8C8780] md:text-[14px]"
+          >
+            {t("studio.overview.sub")}
+          </motion.p>
+        </div>
+
         {/* ── Main content ────────────────────────────────────────── */}
-        <div className="flex-1 px-5 md:px-8 pb-28">
-          <div className="mx-auto max-w-6xl">
-            {/* Display + Controls — desktop side by side */}
-            <div className="grid gap-5 md:grid-cols-[1.15fr_1fr]">
-              {/* ── DISPLAY ZONE: gradient cover ─────────────────── */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                className="relative min-h-[280px] md:min-h-[420px] cursor-pointer select-none overflow-hidden rounded-[28px] border border-white/30"
-                style={{ background: currentVersion.visualConfig.gradient }}
-                onClick={togglePlay}
-              >
-                {/* Top darken for legibility */}
-                <div className="absolute inset-0 bg-gradient-to-b from-black/12 via-transparent to-black/36 pointer-events-none" />
+        <div className="flex-1 px-5 md:px-10 lg:px-16 pb-28">
+          <div className="mx-auto max-w-4xl">
+            {/* ── Hero Card: gradient cover ────────────────────────── */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="relative min-h-[260px] md:min-h-[340px] cursor-pointer select-none overflow-hidden rounded-[32px]"
+              style={{ background: currentVersion.visualConfig.gradient }}
+              onClick={togglePlay}
+            >
+              {/* Darken for legibility */}
+              <div className="absolute inset-0 bg-gradient-to-b from-black/8 via-transparent to-black/40 pointer-events-none" />
 
-                {/* MurmurWave in bottom half */}
-                <MurmurWave
-                  color={waveAccent}
-                  intensity={0.5}
-                  isPlaying={isPlaying}
-                  waveY={0.55}
-                  className="absolute inset-x-0 bottom-0 h-2/5 w-full pointer-events-none"
-                />
+              {/* MurmurWave at bottom */}
+              <MurmurWave
+                color={waveAccent}
+                intensity={0.5}
+                isPlaying={isPlaying}
+                waveY={0.5}
+                className="absolute inset-x-0 bottom-0 h-2/5 w-full pointer-events-none"
+              />
 
-                {/* Text — positioned in lower third */}
-                <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-white/65">
-                    {currentVersion.vibe}
-                  </p>
-                  <h1
-                    className="mt-2 hero-serif text-white text-[28px] leading-[1.02] md:text-[42px] max-w-[22rem]"
-                    style={{ letterSpacing: "-0.015em" }}
-                  >
-                    {currentVersion.title}
-                  </h1>
-                </div>
+              {/* Play disc — centered */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <motion.div
+                  whileTap={{ scale: 0.9 }}
+                  className={`flex h-14 w-14 items-center justify-center rounded-full border border-white/50 backdrop-blur-sm pointer-events-auto ${
+                    isPlaying ? "bg-white/30" : "bg-white/14"
+                  }`}
+                >
+                  {isPlaying ? (
+                    <Pause className="h-5 w-5 text-white" fill="white" />
+                  ) : (
+                    <Play className="ml-0.5 h-5 w-5 text-white" fill="white" />
+                  )}
+                </motion.div>
+              </div>
 
-                {/* Play disc — centered */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <motion.div
-                    whileTap={{ scale: 0.92 }}
-                    className={`flex h-14 w-14 items-center justify-center rounded-full border border-white/50 backdrop-blur-sm pointer-events-auto ${
-                      isPlaying ? "bg-white/30" : "bg-white/16"
-                    }`}
-                  >
-                    {isPlaying ? (
-                      <Pause className="h-5 w-5 text-white" fill="white" />
-                    ) : (
-                      <Play className="ml-0.5 h-5 w-5 text-white" fill="white" />
-                    )}
-                  </motion.div>
-                </div>
-              </motion.div>
+              {/* Text — lower third */}
+              <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
+                <p className="text-[10px] uppercase tracking-[0.28em] text-white/60">
+                  {currentVersion.vibe}
+                </p>
+                <h2
+                  className="mt-2 hero-serif text-white text-[24px] leading-[1.05] md:text-[36px] max-w-[24rem]"
+                  style={{ letterSpacing: "-0.015em" }}
+                >
+                  {currentVersion.title}
+                </h2>
+                <p className="mt-2 text-[11px] uppercase tracking-[0.16em] text-white/45 tabular-nums">
+                  {currentVersion.melody.bpm} BPM · {currentVersion.melody.key}
+                </p>
+              </div>
+            </motion.div>
 
-              {/* ── CONTROLS ZONE ────────────────────────────────── */}
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                className="flex flex-col gap-5"
-              >
-                {/* Auris input */}
-                <AurisPanel
-                  busy={promptBusy}
-                  onApply={handlePrompt}
-                />
-
-                {/* Scenes — desktop only */}
-                <SceneGrid
-                  onPick={(scene) => handleScene(scene.tokens)}
-                  className="hidden md:block"
-                />
-              </motion.div>
-            </div>
-
-            {/* ── FADER ZONE ──────────────────────────────────────── */}
+            {/* ── Controls on cream surface ────────────────────────── */}
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="mt-8 rounded-[22px] border border-[#E5DDD0] bg-white/50 p-5 md:p-7 backdrop-blur-sm"
+              className="mt-8 space-y-6"
             >
+              {/* Auris input */}
+              <AurisPanel
+                busy={promptBusy}
+                onApply={handlePrompt}
+              />
+
+              {/* Scenes */}
+              <SceneGrid
+                onPick={(scene) => handleScene(scene.tokens)}
+              />
+
+              {/* Faders */}
               <TrackMixer arrangement={arrangement} onTrack={updateTrack} />
             </motion.div>
           </div>
@@ -410,11 +418,11 @@ function StudioContent({ version }: { version: VibeVersion }) {
             bottom: "env(safe-area-inset-bottom, 0px)",
           }}
         >
-          <div className="mx-auto max-w-6xl">
+          <div className="mx-auto max-w-4xl">
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleSave}
-              className="h-14 w-full rounded-full bg-[#1A1A1A] text-[15px] font-medium text-white transition-opacity hover:bg-[#2A2A2A]"
+              className="h-14 w-full rounded-full bg-[#1A1A1A] text-[15px] font-medium text-white transition-colors hover:bg-[#2A2A2A]"
             >
               {t("studio.save")}
             </motion.button>
