@@ -303,19 +303,11 @@ function StudioContent({ version }: { version: VibeVersion }) {
 
         {/* ── Editorial headline ──────────────────────────────────── */}
         <div className="px-5 md:px-10 lg:px-16 mt-6 mb-6 md:mb-8">
-          <motion.p
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="eyebrow text-[#FF8A5C]"
-          >
-            STUDIO
-          </motion.p>
           <motion.h1
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="hero-serif mt-3 text-[#1A1A1A] text-[32px] leading-[1.04] md:text-[48px]"
+            className="hero-serif text-[#1A1A1A] text-[32px] leading-[1.04] md:text-[48px]"
           >
             {t("studio.overview.title")}
           </motion.h1>

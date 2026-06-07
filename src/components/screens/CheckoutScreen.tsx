@@ -105,19 +105,11 @@ export function CheckoutScreen() {
 
         <div className="flex-1 px-6 md:px-8 pb-16 flex flex-col items-center justify-center">
           <div className="w-full max-w-[480px] text-center">
-            <motion.p
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="eyebrow text-[#FF8A5C]"
-            >
-              {t("checkout.eyebrow") || "ALMOST THERE"}
-            </motion.p>
             <motion.h1
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.05, duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
-              className="hero-serif mt-3 text-[#1A1A1A] text-[34px] leading-[1.04] md:text-[44px]"
+              className="hero-serif text-[#1A1A1A] text-[34px] leading-[1.04] md:text-[44px]"
             >
               {phaseHeadline(phase, t)}
             </motion.h1>

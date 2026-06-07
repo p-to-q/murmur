@@ -7,7 +7,7 @@ import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { BottomNav } from "@/components/murmur/bottom-nav";
-import { SideNav } from "@/components/murmur/side-nav";
+import { SideNavWithModal as SideNav } from "@/components/murmur/side-nav";
 import { AudioUnlock } from "@/components/murmur/audio-unlock";
 import { I18nHydrator } from "@/lib/i18n";
 import { cn } from "@/utils/utils";
@@ -28,7 +28,15 @@ export const metadata: Metadata = {
   title: "MURMUR",
   description:
     "把脑海里的哼唱，变成一张可以收藏和分享的音乐卡片 · Turn the hum in your head into a music card you can collect and share.",
-  icons: { icon: "/favicon.svg" },
+  icons: {
+    icon: [
+      { url: "/favicon.png", sizes: "120x120", type: "image/png" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/brand/murmur-app-icon-180.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
   openGraph: {
     type: "website",
     siteName: "MURMUR",

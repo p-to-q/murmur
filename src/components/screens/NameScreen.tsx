@@ -126,7 +126,6 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
         <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
           <PageBackdrop />
           <div className="relative z-10 flex min-h-svh flex-col items-center justify-center px-6 text-center">
-            <p className="eyebrow mb-3 text-[#FF8A5C]">{t("name.eyebrow") || "NAME IT"}</p>
             <p className="text-base text-[#8C8780]">{t("hum.proc.polishing")}</p>
           </div>
         </div>
@@ -136,7 +135,6 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
         <PageBackdrop />
         <div className="relative z-10 flex min-h-svh flex-col items-center justify-center px-6 text-center">
-          <p className="eyebrow mb-3 text-[#FF8A5C]">{t("studio.empty.eyebrow") || "EMPTY"}</p>
           <h1 className="hero-serif text-[28px] text-[#1A1A1A] md:text-[40px]">
             {t("studio.empty")}
           </h1>

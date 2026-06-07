@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import { generateVibeVersions } from "@/modules/strummer/generate-versions";
@@ -35,9 +35,11 @@ import { formatHumSupportCode } from "@/lib/observability/support-code";
 
 const MAX_DURATION = 15;
 // Idle headline rotation interval (ms)
-const IDLE_ROTATE_INTERVAL = 5000;
+const IDLE_ROTATE_INTERVAL = 9000;
 const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
-const ENABLE_HUM_ENTRANCE_MOTION = process.env.NODE_ENV === "production";
+const DEMO_VISIT_KEY = "murmur:hum-visits";
+const DEMO_VISIT_LIMIT = 5;
+const ENABLE_HUM_ENTRANCE_MOTION = true;
 
 /**
  * Surface variants the Hum screen knows how to render. The router below
@@ -103,14 +105,17 @@ export function HumScreen() {
   const [recordingTime, setRecordingTime] = useState(0);
   const [humError, setHumError] = useState<HumErrorState | null>(null);
   const [levelState, setLevelState] = useState<"idle" | "quiet" | "heard">("idle");
+  const [showHeardMessage, setShowHeardMessage] = useState(false);
   const { refresh: refreshBalance } = useUserBalance();
   const [idleIndex, setIdleIndex] = useState(0);
+  const [showDemo, setShowDemo] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const msgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const msgIdxRef = useRef(0);
+  const heardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Audio-reactive aurora — AnalyserNode drives amplitude (0-1)
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -120,19 +125,37 @@ export function HumScreen() {
   const heardSignalRef = useRef(false);
   const recordingStartedAtRef = useRef<number | null>(null);
   const levelStateRef = useRef<"idle" | "quiet" | "heard">("idle");
+  // Adaptive gain — tracks user's voice range and normalizes to 0-1
+  const maxRmsRef = useRef(0.08); // start with a low baseline
   // Raw amplitude motion value → spring-smoothed for silky blob animation
   const amplitudeMv = useMotionValue(0);
-  const amplitudeSpring = useSpring(amplitudeMv, { stiffness: 30, damping: 12 });
+  const amplitudeSpring = useSpring(amplitudeMv, { stiffness: 40, damping: 10 });
   // Derived: scale and opacity intensifiers for the three blobs
   const blob1Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.35]);
   const blob2Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.28]);
   const blob3Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.22]);
   const blobOpacity = useTransform(amplitudeSpring, [0, 1], [1, 2.2]);
+  // Orb conic glow — bigger range, brighter response
+  const glowScale = useTransform(amplitudeSpring, [0, 0.3, 1], [1, 1.15, 1.7]);
+  const glowOpacity = useTransform(amplitudeSpring, [0, 0.2, 1], [0.35, 0.55, 1.0]);
+  const glowBlur = useTransform(amplitudeSpring, [0, 1], [44, 28]);
+  const glowFilter = useMotionTemplate`blur(${glowBlur}px)`;
 
   const setInputLevelState = useCallback((next: "idle" | "quiet" | "heard") => {
     if (levelStateRef.current === next) return;
     levelStateRef.current = next;
     setLevelState(next);
+
+    // When state becomes "heard", show message for 1 second then hide
+    if (next === "heard") {
+      setShowHeardMessage(true);
+      if (heardTimeoutRef.current) {
+        clearTimeout(heardTimeoutRef.current);
+      }
+      heardTimeoutRef.current = setTimeout(() => {
+        setShowHeardMessage(false);
+      }, 1000);
+    }
   }, []);
 
   const IDLE_HEADLINES = useMemo(
@@ -158,6 +181,12 @@ export function HumScreen() {
 
   useEffect(() => {
     resetFlow();
+    // Track visits for "try demo" visibility
+    const visits = parseInt(localStorage.getItem(DEMO_VISIT_KEY) ?? "0", 10);
+    if (visits < DEMO_VISIT_LIMIT) {
+      setShowDemo(true);
+      localStorage.setItem(DEMO_VISIT_KEY, String(visits + 1));
+    }
     return () => {
       // Clean up audio analyser RAF loop on unmount
       cancelAnimationFrame(rafRef.current);
@@ -379,6 +408,7 @@ export function HumScreen() {
     quietSinceRef.current = null;
     heardSignalRef.current = false;
     recordingStartedAtRef.current = null;
+    maxRmsRef.current = 0.08;
     setInputLevelState("idle");
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => {});
@@ -423,7 +453,14 @@ export function HumScreen() {
         let sum = 0;
         for (const v of dataArray) sum += ((v - 128) / 128) ** 2;
         const rms = Math.sqrt(sum / dataArray.length);
-        amplitudeMv.set(Math.min(rms * 5, 1));
+        // Adaptive gain: track user's peak and normalize so even quiet
+        // voices use the full 0→1 range of the glow animation
+        if (rms > maxRmsRef.current) maxRmsRef.current = rms;
+        // Slowly decay the peak so it adapts if the user gets quieter
+        maxRmsRef.current *= 0.9995;
+        maxRmsRef.current = Math.max(maxRmsRef.current, 0.04);
+        const normalized = Math.min(rms / maxRmsRef.current, 1);
+        amplitudeMv.set(normalized);
         updateInputLevel(rms);
         rafRef.current = requestAnimationFrame(tick);
       };
@@ -562,9 +599,9 @@ export function HumScreen() {
       {/* ─── Content layout ──────────────────────────────────────── */}
       <div className="relative z-10 min-h-svh flex flex-col">
         {/* ── Desktop: side-by-side layout / Mobile: stacked ──── */}
-        <div className="flex-1 flex flex-col md:flex-row items-center justify-center px-6 md:px-16 lg:px-24 gap-6 md:gap-16 lg:gap-24">
+        <div className="flex-1 flex flex-col md:flex-row items-center justify-center px-6 md:px-16 lg:px-24 gap-8 md:gap-12">
           {/* ── Left column: headline text ────────────────────── */}
-          <div className="flex-shrink-0 w-full md:w-auto md:max-w-[420px] lg:max-w-[480px] text-center md:text-left pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
+          <div className="min-w-0 w-full md:w-[520px] md:flex-shrink-0 text-center md:text-left pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
             <AnimatePresence mode="wait">
               {isIdle && !humError && (
                 <motion.h1
@@ -600,17 +637,32 @@ export function HumScreen() {
                       {MAX_DURATION}s
                     </span>
                   </div>
-                  <div className="mt-4 flex flex-col items-center md:items-start gap-2">
-                    <div className="h-1 w-28 overflow-hidden rounded-full bg-white/70">
-                      <motion.div
-                        className="h-full origin-left rounded-full bg-[#FF5924]"
-                        style={{ scaleX: amplitudeSpring }}
-                      />
-                    </div>
-                    <span className="text-[#8C8780] text-[11px] tracking-[0.14em] uppercase">
-                      {t(inputLevelLabelKey(levelState))}
-                    </span>
-                  </div>
+                  <AnimatePresence mode="wait">
+                    {(levelState !== "idle" && levelState !== "heard") && (
+                      <motion.p
+                        key={levelState}
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="mt-4 text-[11px] tracking-[0.14em] uppercase text-[#B6B0A4]"
+                      >
+                        {t(inputLevelLabelKey(levelState))}
+                      </motion.p>
+                    )}
+                    {showHeardMessage && (
+                      <motion.p
+                        key="heard-message"
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="mt-4 text-[11px] tracking-[0.14em] uppercase text-[#8C8780]"
+                      >
+                        {t("hum.level.heard")}
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               )}
 
@@ -643,7 +695,7 @@ export function HumScreen() {
           </div>
 
           {/* ── Right column: the orb ─────────────────────────── */}
-          <div className="relative flex items-center justify-center flex-shrink-0">
+          <div className="relative flex flex-col items-center justify-center flex-shrink-0">
             {/* Orb container — responsive sizing */}
             <div
               className="relative"
@@ -653,16 +705,16 @@ export function HumScreen() {
               }}
             >
               {/* Rotating conic glow behind the orb */}
-              <div
+              <motion.div
                 className="glow-spin absolute rounded-full"
                 style={{
                   inset: "-18%",
                   background: isRecording
                     ? "conic-gradient(from 0deg, #FF8A5C, #FF5924, #FF69D2, #FFE040, #FF8A5C)"
                     : "conic-gradient(from 0deg, #FF8A5C88, #FF69D266, #A7B8C844, #FFE04066, #C9B6E444, #FF8A5C88)",
-                  filter: isRecording ? "blur(36px)" : "blur(44px)",
-                  opacity: isRecording ? 0.8 : 0.45,
-                  transition: "opacity 0.8s ease, filter 0.8s ease",
+                  filter: glowFilter,
+                  scale: glowScale,
+                  opacity: glowOpacity,
                 }}
               />
 
@@ -826,15 +878,35 @@ export function HumScreen() {
                   ))}
               </AnimatePresence>
             </div>
+
+            {/* "Try demo" whisper below the orb — first 5 visits only */}
+            <AnimatePresence>
+              {isIdle && !humError && showDemo && (
+                <motion.button
+                  key="demo-whisper"
+                  initial={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : false}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ delay: 0.6, duration: 0.5 }}
+                  onClick={() => {
+                    startAudioContext();
+                    transcribeAndGenerate(undefined);
+                  }}
+                  className="mt-6 font-serif-italic text-[12px] text-[#B6B0A4] hover:text-[#8C8780] transition-colors"
+                >
+                  {t("hum.demo.cta")}
+                </motion.button>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* ── Bottom bar: brand + CTA ─────────────────────────── */}
+        {/* ── Bottom bar: brand (mobile) + recording hint ────────── */}
         <div className="relative z-10 flex items-end justify-between px-6 md:px-16 lg:px-24 pb-6 md:pb-10"
           style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
         >
-          {/* Brand mark — bottom left */}
-          <span className="inline-flex h-[48px] items-end pl-0.5 select-none">
+          {/* Brand mark — mobile only */}
+          <span className="inline-flex h-[48px] items-end pl-0.5 select-none md:hidden">
             <MurmurMark
               size={48}
               yOffset={2}
@@ -843,55 +915,8 @@ export function HumScreen() {
             />
           </span>
 
-          {/* CTA pill — bottom right */}
+          {/* CTA area — bottom right */}
           <AnimatePresence mode="wait">
-            {isIdle && !humError && (
-              <motion.div
-                key="cta"
-                initial={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0, y: 8 } : false}
-                animate={{ opacity: 1, y: 0 }}
-                exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0, y: 8 } : undefined}
-                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                className="flex items-end gap-4"
-              >
-                {/* Balance chip removed — side nav footer is the canonical
-                    surface for "how many notes do I have". Three things at
-                    the bottom right (number + demo + CTA) was visual noise;
-                    two reads quieter and matches the editorial tone. */}
-                <button
-                  onClick={() => {
-                    startAudioContext();
-                    transcribeAndGenerate(undefined);
-                  }}
-                  className="pb-1 text-[#8C8780] text-[12px] tracking-[0.12em] uppercase hover:text-[#1A1A1A] transition-colors"
-                >
-                  {t("hum.demo.cta")}
-                </button>
-                <button
-                  onClick={() => {
-                    startAudioContext();
-                    startRecording();
-                  }}
-                  className="inline-flex h-11 items-center gap-2 px-5 rounded-full bg-[#FF5924] text-white text-[13px] font-medium tracking-[0.04em] hover:bg-[#D9421A] transition-colors duration-200"
-                  style={{
-                    boxShadow: "0 4px 16px rgba(255,89,36,0.25)",
-                  }}
-                >
-                  {t("hum.cta")}
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                  >
-                    <path d="M5 12h14M13 6l6 6-6 6" />
-                  </svg>
-                </button>
-              </motion.div>
-            )}
             {isRecording && (
               <motion.span
                 key="release"

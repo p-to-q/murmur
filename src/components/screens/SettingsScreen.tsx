@@ -105,8 +105,7 @@ export function SettingsScreen() {
         </Link>
 
         <header className="mt-7">
-          <p className="eyebrow text-[#FF8A5C]">{t("settings.eyebrow") || "SETTINGS"}</p>
-          <h1 className="hero-serif-italic mt-3 text-[44px] leading-[1.02] md:text-[72px]">
+          <h1 className="hero-serif-italic text-[44px] leading-[1.02] md:text-[72px]">
             {t("settings.title") || "Settings"}
           </h1>
           <p className="mt-3 max-w-[32rem] font-serif-italic text-[15px] leading-[1.55] text-[#6F6A63] md:text-[16px]">
@@ -133,29 +132,99 @@ export function SettingsScreen() {
             icon={<SlidersHorizontal className="h-4 w-4" />}
             label={t("settings.creative.title") || "Creative bias"}
           >
-            <p className="text-[13px] leading-[1.6] text-[#6F6A63]">
+            <p className="text-[13px] leading-[1.6] text-[#6F6A63] mb-6">
               {t("me.repair_bias.helper") ||
                 "This only nudges Murmur when a take could go more than one sensible way."}
             </p>
-            <input
-              aria-label={t("me.repair_bias.title") || "Creative bias"}
-              type="range"
-              min={-100}
-              max={100}
-              step={1}
-              value={Math.round(repairBias * 100)}
-              onChange={(event) => setRepairBias(Number(event.target.value) / 100)}
-              className="mt-5 h-2 w-full cursor-pointer appearance-none rounded-full bg-[#E7DCCB]"
-              style={{
-                background:
-                  "linear-gradient(90deg, #E6D3BC 0%, #F6E6D2 50%, #FFD2BE 100%)",
-              }}
-            />
-            <div className="mt-3 flex items-center justify-between text-[11px] tracking-[0.04em] text-[#8C8780]">
-              <span>{t("me.repair_bias.live.left") || "Closer"}</span>
-              <span>{t("me.repair_bias.live.center") || "Balanced"}</span>
-              <span>{t("me.repair_bias.live.right") || "Sweeter"}</span>
+
+            <div className="relative">
+              {/* Custom slider track */}
+              <div className="relative h-2 rounded-full overflow-hidden bg-[#E7DCCB]">
+                {/* Filled portion */}
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full transition-all duration-150"
+                  style={{
+                    width: `${((repairBias + 1) / 2) * 100}%`,
+                    background: repairBias < 0
+                      ? "linear-gradient(90deg, #E6D3BC 0%, #F6E6D2 100%)"
+                      : "linear-gradient(90deg, #F6E6D2 0%, #FFD2BE 100%)",
+                  }}
+                />
+              </div>
+
+              {/* Native input (invisible but functional) */}
+              <input
+                aria-label={t("me.repair_bias.title") || "Creative bias"}
+                type="range"
+                min={-100}
+                max={100}
+                step={1}
+                value={Math.round(repairBias * 100)}
+                onChange={(event) => setRepairBias(Number(event.target.value) / 100)}
+                className="absolute inset-0 w-full h-full cursor-pointer appearance-none bg-transparent"
+                style={{
+                  WebkitAppearance: "none",
+                }}
+              />
+
+              {/* Custom thumb */}
+              <div
+                className="absolute top-1/2 -translate-y-1/2 pointer-events-none transition-all duration-150"
+                style={{
+                  left: `calc(${((repairBias + 1) / 2) * 100}% - 12px)`,
+                }}
+              >
+                <div className="w-6 h-6 rounded-full bg-white border-2 border-[#1A1A1A] shadow-[0_2px_8px_rgba(26,26,26,0.12)]" />
+              </div>
             </div>
+
+            {/* Labels */}
+            <div className="mt-5 flex items-start justify-between gap-4">
+              <div className="flex-1 text-left">
+                <p className="text-[13px] font-medium text-[#1A1A1A] leading-tight">
+                  {t("me.repair_bias.live.left") || "偏原唱"}
+                </p>
+                <p className="text-[11px] text-[#8C8780] leading-snug mt-1">
+                  {t("me.repair_bias.left_note") || "少修一点，尽量保留你刚刚哼出来的走向。"}
+                </p>
+              </div>
+              <div className="flex-shrink-0 text-center px-4">
+                <p className="text-[13px] font-medium text-[#1A1A1A] leading-tight">
+                  {t("me.repair_bias.live.center") || "默认"}
+                </p>
+                <p className="text-[11px] text-[#8C8780] leading-snug mt-1">
+                  平衡
+                </p>
+              </div>
+              <div className="flex-1 text-right">
+                <p className="text-[13px] font-medium text-[#1A1A1A] leading-tight">
+                  {t("me.repair_bias.live.right") || "偏好听"}
+                </p>
+                <p className="text-[11px] text-[#8C8780] leading-snug mt-1">
+                  {t("me.repair_bias.right_note") || "更好听"}
+                </p>
+              </div>
+            </div>
+
+            <style jsx>{`
+              input[type="range"]::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                appearance: none;
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                background: transparent;
+                cursor: pointer;
+              }
+              input[type="range"]::-moz-range-thumb {
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                background: transparent;
+                cursor: pointer;
+                border: none;
+              }
+            `}</style>
           </SettingsCard>
 
           <SettingsCard

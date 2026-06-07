@@ -1,7 +1,8 @@
 export type InputLevelState = "idle" | "quiet" | "heard";
 export type InputLevelLabelKey =
   | "hum.level.idle"
-  | "hum.level.quiet"
+  | "hum.level.quiet.1"
+  | "hum.level.quiet.2"
   | "hum.level.heard";
 
 export interface InputLevelDecision {
@@ -71,7 +72,8 @@ export function nextInputLevelDecision({
 export function inputLevelLabelKey(state: InputLevelState): InputLevelLabelKey {
   switch (state) {
     case "quiet":
-      return "hum.level.quiet";
+      // Rotate between two quiet messages
+      return Math.random() < 0.5 ? "hum.level.quiet.1" : "hum.level.quiet.2";
     case "heard":
       return "hum.level.heard";
     case "idle":
