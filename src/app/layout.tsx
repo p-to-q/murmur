@@ -25,18 +25,27 @@ const instrumentalSerif = Instrument_Serif({
 
 export const metadata: Metadata = {
   ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
-  title: "MURMUR",
+  title: {
+    default: "MURMUR",
+    template: "%s | MURMUR",
+  },
   description:
     "把脑海里的哼唱，变成一张可以收藏和分享的音乐卡片 · Turn the hum in your head into a music card you can collect and share.",
+  keywords: ["音乐创作", "哼唱", "AI音乐", "旋律", "music creation", "humming", "melody"],
+  authors: [{ name: "P to Q" }],
+  creator: "P to Q",
+  publisher: "P to Q",
+  applicationName: "MURMUR",
   icons: {
     icon: [
       { url: "/favicon.png", sizes: "120x120", type: "image/png" },
       { url: "/favicon.svg", type: "image/svg+xml" },
     ],
     apple: [
-      { url: "/brand/murmur-app-icon-180.png", sizes: "180x180", type: "image/png" },
+      { url: "/brand/murmur-app-icon-180-rounded.png", sizes: "180x180", type: "image/png" },
     ],
   },
+  manifest: "/manifest.json",
   openGraph: {
     type: "website",
     siteName: "MURMUR",
@@ -44,6 +53,34 @@ export const metadata: Metadata = {
     description: "哼一句脑海里的旋律，MURMUR 帮它长成一首小歌。",
     url: "/",
     locale: "zh_CN",
+    images: [
+      {
+        url: "/brand/murmur-app-icon-1024-rounded.png",
+        width: 1024,
+        height: 1024,
+        alt: "MURMUR",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "MURMUR",
+    description: "哼一句脑海里的旋律，MURMUR 帮它长成一首小歌。",
+    images: ["/brand/murmur-app-icon-512-rounded.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  alternates: {
+    canonical: "/",
   },
 };
 
