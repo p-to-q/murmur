@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { useTranslator } from "@/lib/i18n";
+import { signIn, useSession } from "next-auth/react";
 
 interface ShareCardModalProps {
   open: boolean;
@@ -11,6 +12,14 @@ interface ShareCardModalProps {
 
 export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
   const t = useTranslator();
+  const { data: session } = useSession();
+
+  // Auto-close if user signs in
+  useEffect(() => {
+    if (session?.user) {
+      onClose();
+    }
+  }, [session, onClose]);
 
   // Escape key closes modal
   useEffect(() => {
@@ -82,8 +91,7 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
                   {/* Google sign-in button */}
                   <button
                     onClick={() => {
-                      // TODO: implement Google OAuth flow
-                      console.log("Google sign-in clicked");
+                      signIn("google", { callbackUrl: "/" });
                     }}
                     className="flex w-full items-center justify-center gap-3 rounded-full bg-[#EBEBEB] px-6 py-4 text-[16px] font-medium text-[#1A1A1A] transition-colors hover:bg-[#DCDCDC]"
                   >

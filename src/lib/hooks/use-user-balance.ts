@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { request } from "@/lib/api/request";
+import { useSession } from "next-auth/react";
+import { getLocalBalance } from "@/lib/balance/balance-manager";
 
 /**
  * Snapshot of the authenticated user's notes balance, as returned by
@@ -113,22 +115,57 @@ export function __resetUserBalanceCacheForTesting(): void {
  * another consumer publishes a fresh snapshot. The hook never blocks
  * rendering — `isLoading` is true only while the very first fetch is in
  * flight.
+ *
+ * For Local Creator: returns local balance from localStorage
+ * For Google users: fetches from API
  */
 export function useUserBalance(): UseUserBalanceResult {
+  const { data: session } = useSession();
+  const isGoogleUser = !!session?.user;
+
   const [snapshot, setSnapshot] = useState<UserBalance | null>(cachedBalance);
   const [error, setError] = useState<UserBalanceFetchError | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(cachedBalance === null);
 
   const refresh = useCallback(async () => {
+    if (!isGoogleUser) {
+      // Local Creator: get from localStorage
+      const localBalance = getLocalBalance();
+      setSnapshot({
+        notes: localBalance.notes,
+        planTier: "free",
+        nextRefillAt: localBalance.nextRefillAt,
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    // Google user: fetch from API
     setIsLoading((prev) => prev || cachedBalance === null);
     const result = await fetchUserBalance({ force: true });
     setSnapshot(result.balance);
     setError(result.error);
     setIsLoading(false);
-  }, []);
+  }, [isGoogleUser]);
 
   useEffect(() => {
     let cancelled = false;
+
+    if (!isGoogleUser) {
+      // Local Creator: immediate local balance
+      const localBalance = getLocalBalance();
+      if (!cancelled) {
+        setSnapshot({
+          notes: localBalance.notes,
+          planTier: "free",
+          nextRefillAt: localBalance.nextRefillAt,
+        });
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Google user: fetch from API
     const notify = () => {
       if (cancelled) return;
       setSnapshot(cachedBalance);
@@ -147,7 +184,7 @@ export function useUserBalance(): UseUserBalanceResult {
       cancelled = true;
       subscribers.delete(notify);
     };
-  }, []);
+  }, [isGoogleUser]);
 
   return { balance: snapshot, isLoading, error, refresh };
 }
