@@ -37,13 +37,13 @@ const MAX_DURATION = 15;
 // Idle headline rotation interval (ms)
 const IDLE_ROTATE_INTERVAL = 9000;
 const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
-const DEMO_VISIT_KEY = "murmur:hum-visits";
-const DEMO_VISIT_LIMIT = 5;
 const ENABLE_HUM_ENTRANCE_MOTION = true;
 
-// Allow persistent demo button in production for demos/testing
-// Set NEXT_PUBLIC_ALWAYS_SHOW_DEMO=1 in Vercel environment variables
-const ALWAYS_SHOW_DEMO = process.env.NEXT_PUBLIC_ALWAYS_SHOW_DEMO === "1";
+// TODO: 以后改回访问次数限制（前5次）
+// 原来的逻辑：
+// const DEMO_VISIT_KEY = "murmur:hum-visits";
+// const DEMO_VISIT_LIMIT = 5;
+// 在 useEffect 中检查 localStorage.getItem(DEMO_VISIT_KEY) < DEMO_VISIT_LIMIT
 
 /**
  * Surface variants the Hum screen knows how to render. The router below
@@ -186,21 +186,12 @@ export function HumScreen() {
   useEffect(() => {
     resetFlow();
 
-    // If ALWAYS_SHOW_DEMO is enabled (production), always show the demo button
-    if (ALWAYS_SHOW_DEMO) {
-      const timer = setTimeout(() => setShowDemo(true), 0);
-      return () => clearTimeout(timer);
-    }
-
-    // Otherwise, track visits and show only for first 5 visits
-    const visits = parseInt(localStorage.getItem(DEMO_VISIT_KEY) ?? "0", 10);
-    if (visits < DEMO_VISIT_LIMIT) {
-      const timer = setTimeout(() => setShowDemo(true), 0);
-      localStorage.setItem(DEMO_VISIT_KEY, String(visits + 1));
-      return () => clearTimeout(timer);
-    }
+    // TODO: 临时改成永远显示，以后改回前5次访问限制
+    // 原来的逻辑在上面常量定义处有注释
+    const timer = setTimeout(() => setShowDemo(true), 0);
 
     return () => {
+      clearTimeout(timer);
       // Clean up audio analyser RAF loop on unmount
       cancelAnimationFrame(rafRef.current);
       if (audioCtxRef.current) {
