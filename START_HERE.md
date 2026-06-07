@@ -67,10 +67,13 @@
 
 ## 📂 其他文档（参考）
 
-如果需要更多信息：
+如果需要更多细节：
+- `FOR_YOUR_FRIEND.md` - 简要说明和文档索引
 - `FRONTEND_DEPLOY_GUIDE.md` - 前端详细指南
-- `RAILWAY_ADD_AUDIO_ENGINE.md` - Railway 操作步骤
-- `DEPLOYMENT_STATUS.md` - 当前状态
+- `DEPLOY_CLOUDFLARE.md` - Cloudflare Pages 专用指南
+- `RAILWAY_ADD_AUDIO_ENGINE.md` - Railway Audio Engine 设置
+- `RAILWAY_DEPLOY.md` - Railway 部署指南
+- `AI_PROMPT_FOR_FRIEND.md` - AI 助手提示词
 
 ---
 

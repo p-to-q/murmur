@@ -46,6 +46,21 @@
 - name: slice/research
   color: 0075ca
   description: Research that should feed a durable product or engineering change
+- name: size/XS
+  color: 0e8a16
+  description: Extra small PR (< 50 lines)
+- name: size/S
+  color: 1d76db
+  description: Small PR (50-200 lines)
+- name: size/M
+  color: fbca04
+  description: Medium PR (200-500 lines)
+- name: size/L
+  color: d93f0b
+  description: Large PR (500-1000 lines)
+- name: size/XL
+  color: b60205
+  description: Extra large PR (> 1000 lines)
 - name: dependencies
   color: 0366d6
   description: Dependency updates
