@@ -1,6 +1,18 @@
 # 🚀 开始部署 Murmur
 
-嗨！这是 Murmur 项目的部署文档。你需要部署前端和后端。
+嗨！这是 Murmur 项目的部署文档。
+
+---
+
+## 📌 重要说明
+
+**当前生产环境使用: Vercel + Neon PostgreSQL**
+
+如果你想了解实际的部署架构，请阅读：
+- **`DEPLOYMENT_ACTUAL.md`** - 当前生产环境的实际配置 (Vercel + Neon)
+
+如果你想了解其他部署方案（如 Cloudflare + Railway），请阅读：
+- **`COMPLETE_DEPLOYMENT_GUIDE.md`** - 完整的部署指南和替代方案对比
 
 ---
 

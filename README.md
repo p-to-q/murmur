@@ -284,6 +284,17 @@ cp .env.example .env
 - OpenAI-compatible AI gateway
 - Web Audio / Tone-based render pipeline
 
+## Deployment
+
+**Production**: https://murmur.ptoq.io
+
+**Current Architecture**: Vercel + Neon PostgreSQL
+
+For deployment information, see:
+- **[DEPLOYMENT_ACTUAL.md](./DEPLOYMENT_ACTUAL.md)** - Current production setup (Vercel + Neon)
+- **[COMPLETE_DEPLOYMENT_GUIDE.md](./COMPLETE_DEPLOYMENT_GUIDE.md)** - Alternative deployment options
+- **[START_HERE.md](./START_HERE.md)** - Deployment entry point
+
 ## Learn More
 
 - [Next.js Documentation](https://nextjs.org/docs)
