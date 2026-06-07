@@ -11,6 +11,7 @@ import { SideNavWithModal as SideNav } from "@/components/murmur/side-nav";
 import { AudioUnlock } from "@/components/murmur/audio-unlock";
 import { I18nHydrator } from "@/lib/i18n";
 import { cn } from "@/utils/utils";
+import { AuthProvider } from "@/components/auth/auth-provider";
 
 const SITE_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -108,26 +109,28 @@ export default function RootLayout({
         suppressHydrationWarning
         className="min-h-svh flex flex-col bg-[#F5F1EB]"
       >
-        <I18nHydrator />
-        {/* Desktop sidebar (md+) — mobile hides via internal media query */}
-        <SideNav />
-        {/* Main content area:
-            - mobile  → reserves bottom for nav (with safe-area)
-            - desktop → reserves left 232px for sidebar */}
-        <main
-          className="flex-1"
-          style={{
-            paddingLeft: "var(--side-nav-w)",
-            paddingBottom: "var(--main-pb)",
-            transition: "padding-left 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
-          }}
-        >
-          {children}
-        </main>
-        {/* Mobile bottom nav */}
-        <BottomNav />
-        <AudioUnlock />
-        <Toaster />
+        <AuthProvider>
+          <I18nHydrator />
+          {/* Desktop sidebar (md+) — mobile hides via internal media query */}
+          <SideNav />
+          {/* Main content area:
+              - mobile  → reserves bottom for nav (with safe-area)
+              - desktop → reserves left 232px for sidebar */}
+          <main
+            className="flex-1"
+            style={{
+              paddingLeft: "var(--side-nav-w)",
+              paddingBottom: "var(--main-pb)",
+              transition: "padding-left 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
+            }}
+          >
+            {children}
+          </main>
+          {/* Mobile bottom nav */}
+          <BottomNav />
+          <AudioUnlock />
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );

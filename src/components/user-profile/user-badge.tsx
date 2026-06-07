@@ -5,12 +5,25 @@ import Image from "next/image";
 import { LogOut, UserRound, X } from "lucide-react";
 import { authClient, usePlatformState } from "@/lib/platform/auth-client";
 import type { AppUser } from "@/lib/platform/types";
+import { useSession, signIn, signOut } from "next-auth/react";
+import { GoogleSignInButton } from "@/components/auth/google-auth-buttons";
 
 export function UserBadge() {
-  const user = usePlatformState((s) => s.auth.user);
+  const platformUser = usePlatformState((s) => s.auth.user);
   const loading = usePlatformState((s) => s.auth.loading);
+  const { data: session } = useSession();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Use Google session if available, otherwise fall back to platform user
+  const user = session?.user ? {
+    id: (session.user as any).id || "google-user",
+    email: session.user.email || null,
+    name: session.user.name || null,
+    avatarUrl: session.user.image || null,
+  } as AppUser : platformUser;
+
+  const isGoogleUser = !!session?.user;
 
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -30,15 +43,18 @@ export function UserBadge() {
 
   if (!user) {
     return (
-      <button
-        onClick={() => {
-          authClient.login().catch(() => undefined);
-        }}
-        className="flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-medium shadow-sm transition-shadow hover:shadow-md"
-      >
-        <UserRound className="h-4 w-4 text-muted-foreground" />
-        Sign in
-      </button>
+      <div className="flex items-center gap-2">
+        <GoogleSignInButton className="flex items-center gap-2 rounded-full border border-[#E0DDD5] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] shadow-sm transition-all hover:shadow-md" />
+        <button
+          onClick={() => {
+            authClient.login().catch(() => undefined);
+          }}
+          className="flex items-center gap-2 rounded-full border border-[#E0DDD5] bg-[#F5F1EB] px-3 py-1.5 text-sm font-medium text-[#8C8780] shadow-sm transition-shadow hover:shadow-md"
+        >
+          <UserRound className="h-4 w-4" />
+          Local Creator
+        </button>
+      </div>
     );
   }
 
@@ -46,13 +62,17 @@ export function UserBadge() {
     <div ref={ref} className="relative z-50">
       <BadgeTrigger user={user} onClick={() => setOpen((v) => !v)} />
       {open && (
-        <DropdownPanel user={user} onClose={() => setOpen(false)}>
+        <DropdownPanel user={user} isGoogleUser={isGoogleUser} onClose={() => setOpen(false)}>
           <button
             onClick={() => {
-              authClient.logout();
+              if (isGoogleUser) {
+                signOut({ callbackUrl: "/" });
+              } else {
+                authClient.logout();
+              }
               setOpen(false);
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[#8C8780] hover:bg-[#F5F1EB] hover:text-[#1A1A1A]"
           >
             <LogOut className="h-3.5 w-3.5" />
             Sign out
@@ -79,10 +99,12 @@ function BadgeTrigger({ user, onClick }: { user: AppUser; onClick: () => void })
 
 function DropdownPanel({
   user,
+  isGoogleUser,
   onClose,
   children,
 }: {
   user: AppUser;
+  isGoogleUser?: boolean;
   onClose: () => void;
   children?: React.ReactNode;
 }) {
@@ -147,6 +169,7 @@ function DropdownPanel({
         {joinedDate && (
           <Row label="Joined" value={joinedDate} />
         )}
+        <Row label="Account" value={isGoogleUser ? "Google" : "Local Creator"} />
         <Row label="User ID" value={user.id} mono />
       </div>
 
