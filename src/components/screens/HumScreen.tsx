@@ -965,13 +965,13 @@ export function HumScreen() {
 
                 {/* 如果是 billing_unavailable，显示两个按钮 */}
                 {humError.code === "billing_unavailable" ? (
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center justify-center gap-6">
                     <button
                       onClick={() => {
                         startAudioContext();
                         setHumError(null);
                       }}
-                      className="flex-1 text-[#8C8780] text-[13px] underline-mm"
+                      className="text-[#8C8780] text-[13px] underline-mm"
                     >
                       {errorCopy.retry}
                     </button>
@@ -982,7 +982,7 @@ export function HumScreen() {
                         // 使用示例旋律继续流程（跳过计费）
                         transcribeAndGenerate(undefined);
                       }}
-                      className="flex-1 mm-btn-secondary justify-center text-[13px] py-2"
+                      className="text-[#8C8780] text-[13px] underline-mm"
                     >
                       {errorCopy.demo || "测试使用"}
                     </button>
