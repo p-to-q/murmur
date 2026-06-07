@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, RotateCcw, Play, Pause } from "lucide-react";
+import { RotateCcw, Play, Pause } from "lucide-react";
 import { toast } from "sonner";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";

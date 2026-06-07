@@ -292,22 +292,6 @@ export function MeScreen() {
 
 /* ── Helpers ────────────────────────────────────────────────────────── */
 
-function useStatsCopy(songCount: number): string {
-  const t = useTranslator();
-  if (songCount === 0) {
-    return (
-      t("me.stats.none") || "Nothing on your shelf yet — start with one hum."
-    );
-  }
-  if (songCount === 1) {
-    return t("me.stats.one") || "One little song so far. A whole shelf to fill.";
-  }
-  const template =
-    t("me.stats.many") ||
-    "{count} little songs so far — and infinite melodies still to hum.";
-  return template.replace("{count}", String(songCount));
-}
-
 /**
  * Calculate user milestone/stage based on song count
  */

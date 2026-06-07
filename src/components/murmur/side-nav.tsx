@@ -619,10 +619,13 @@ function PopoverButton({
   const [position, setPosition] = useState({ left: 0, top: 0, isCollapsed: false, width: 240 });
 
   // Track mount status for portal rendering (client-only)
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
+    // Using setTimeout to avoid setState during render
+    const timer = setTimeout(() => setMounted(true), 0);
+    return () => {
+      clearTimeout(timer);
+      setMounted(false);
+    };
   }, []);
 
   // 计算弹窗位置

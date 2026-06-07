@@ -7,7 +7,7 @@
  * 基于 generate-app-icon.py 的逻辑
  */
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 export interface RandomCoverArtProps {
   /** Song ID - 用于生成唯一但随机的封面 */
@@ -23,26 +23,30 @@ export function RandomCoverArt({ songId, className, size = 400 }: RandomCoverArt
     [songId, size]
   );
 
-  const [isLoading, setIsLoading] = useState(true);
-  const currentUrlRef = useRef(imageUrl);
+  return <RandomCoverArtInner key={imageUrl} imageUrl={imageUrl} className={className} />;
+}
 
-  // Reset loading state when URL changes
-  if (currentUrlRef.current !== imageUrl) {
-    currentUrlRef.current = imageUrl;
-    setIsLoading(true);
-  }
+function RandomCoverArtInner({ imageUrl, className }: { imageUrl: string; className?: string }) {
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Preload image
+    let isCancelled = false;
+
+    // Start loading
     const img = new Image();
-    const handleLoad = () => setIsLoading(false);
-    const handleError = () => setIsLoading(false);
+    const handleLoad = () => {
+      if (!isCancelled) setIsLoading(false);
+    };
+    const handleError = () => {
+      if (!isCancelled) setIsLoading(false);
+    };
 
     img.addEventListener('load', handleLoad);
     img.addEventListener('error', handleError);
     img.src = imageUrl;
 
     return () => {
+      isCancelled = true;
       img.removeEventListener('load', handleLoad);
       img.removeEventListener('error', handleError);
     };

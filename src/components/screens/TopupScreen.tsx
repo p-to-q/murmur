@@ -114,7 +114,7 @@ function generateChartData(range: typeof TIME_RANGES[number]) {
 export function TopupScreen() {
   const router = useRouter();
   const t = useTranslator();
-  const { balance, isLoading } = useUserBalance();
+  const { balance } = useUserBalance();
 
   const [selectedId, setSelectedId] = useState<string>(
     TOPUP_SKUS.find((s) => s.highlight === "popular")?.id ?? TOPUP_SKUS[0]!.id,
@@ -426,7 +426,7 @@ export function TopupScreen() {
                       }}
                       labelStyle={{ color: "#8C8780", fontSize: "11px", marginBottom: "3px" }}
                       itemStyle={{ color: "#1A1A1A", fontWeight: 600, fontFamily: "var(--font-serif)" }}
-                      formatter={(value: any) => {
+                      formatter={(value: number | string) => {
                         if (typeof value === 'number') {
                           return [`${value.toFixed(0)} notes`, ""];
                         }

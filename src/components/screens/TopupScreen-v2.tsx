@@ -251,7 +251,6 @@ function SkuCardV2({
   t: (k: string) => string;
 }) {
   const badge = sku.highlight;
-  const totalNotes = sku.notes + (sku.bonusNotes || 0);
 
   return (
     <motion.button

@@ -184,8 +184,10 @@ export function HumScreen() {
     // Track visits for "try demo" visibility
     const visits = parseInt(localStorage.getItem(DEMO_VISIT_KEY) ?? "0", 10);
     if (visits < DEMO_VISIT_LIMIT) {
-      setShowDemo(true);
+      // Use setTimeout to avoid setState during effect setup
+      const timer = setTimeout(() => setShowDemo(true), 0);
       localStorage.setItem(DEMO_VISIT_KEY, String(visits + 1));
+      return () => clearTimeout(timer);
     }
     return () => {
       // Clean up audio analyser RAF loop on unmount
