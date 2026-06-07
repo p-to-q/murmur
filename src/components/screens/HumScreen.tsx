@@ -41,6 +41,10 @@ const DEMO_VISIT_KEY = "murmur:hum-visits";
 const DEMO_VISIT_LIMIT = 5;
 const ENABLE_HUM_ENTRANCE_MOTION = true;
 
+// Allow persistent demo button in production for demos/testing
+// Set NEXT_PUBLIC_ALWAYS_SHOW_DEMO=1 in Vercel environment variables
+const ALWAYS_SHOW_DEMO = process.env.NEXT_PUBLIC_ALWAYS_SHOW_DEMO === "1";
+
 /**
  * Surface variants the Hum screen knows how to render. The router below
  * maps every `TranscribeRequestErrorCode` to exactly one variant — keep
@@ -181,14 +185,21 @@ export function HumScreen() {
 
   useEffect(() => {
     resetFlow();
-    // Track visits for "try demo" visibility
+
+    // If ALWAYS_SHOW_DEMO is enabled (production), always show the demo button
+    if (ALWAYS_SHOW_DEMO) {
+      const timer = setTimeout(() => setShowDemo(true), 0);
+      return () => clearTimeout(timer);
+    }
+
+    // Otherwise, track visits and show only for first 5 visits
     const visits = parseInt(localStorage.getItem(DEMO_VISIT_KEY) ?? "0", 10);
     if (visits < DEMO_VISIT_LIMIT) {
-      // Use setTimeout to avoid setState during effect setup
       const timer = setTimeout(() => setShowDemo(true), 0);
       localStorage.setItem(DEMO_VISIT_KEY, String(visits + 1));
       return () => clearTimeout(timer);
     }
+
     return () => {
       // Clean up audio analyser RAF loop on unmount
       cancelAnimationFrame(rafRef.current);
