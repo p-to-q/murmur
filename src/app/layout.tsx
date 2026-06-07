@@ -39,6 +39,7 @@ export const metadata: Metadata = {
   applicationName: "MURMUR",
   icons: {
     icon: [
+      { url: "/favicon.ico", sizes: "any" },
       { url: "/favicon.png", sizes: "120x120", type: "image/png" },
       { url: "/favicon.svg", type: "image/svg+xml" },
     ],
