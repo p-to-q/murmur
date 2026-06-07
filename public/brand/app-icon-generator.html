@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Murmur App Icon Generator</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 40px;
+      background: #F5F1EB;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+    .preview-container {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .icon-preview {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .icon-preview span {
+      font-size: 12px;
+      color: #8C8780;
+    }
+    canvas {
+      border-radius: 22.37%;
+      box-shadow: 0 8px 24px rgba(26, 26, 26, 0.12);
+    }
+    button {
+      background: #FF5924;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: #FF8A5C;
+      transform: translateY(-1px);
+    }
+    .controls {
+      display: flex;
+      gap: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1 style="color: #1A1A1A; font-size: 24px; margin: 0;">Murmur App Icon</h1>
+
+  <div class="preview-container">
+    <div class="icon-preview">
+      <canvas id="icon1024" width="1024" height="1024"></canvas>
+      <span>1024×1024 (App Store)</span>
+    </div>
+    <div class="icon-preview">
+      <canvas id="icon512" width="512" height="512"></canvas>
+      <span>512×512</span>
+    </div>
+    <div class="icon-preview">
+      <canvas id="icon256" width="256" height="256"></canvas>
+      <span>256×256</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button onclick="downloadIcon(1024)">Download 1024×1024</button>
+    <button onclick="downloadIcon(512)">Download 512×512</button>
+    <button onclick="downloadIcon(256)">Download 256×256</button>
+  </div>
+
+  <script>
+    // Aurora-inspired compressed background with Murmur wordmark
+    function drawIcon(canvas, size) {
+      const ctx = canvas.getContext('2d');
+      const scale = size / 1024;
+
+      // Clear canvas
+      ctx.clearRect(0, 0, size, size);
+
+      // Base cream background
+      ctx.fillStyle = '#F5F1EB';
+      ctx.fillRect(0, 0, size, size);
+
+      // Compressed aurora blobs - tighter, more concentrated
+      const blobs = [
+        // Pink/magenta blob - bottom left
+        {
+          x: size * 0.2,
+          y: size * 0.75,
+          rx: size * 0.35,
+          ry: size * 0.28,
+          colors: [
+            { stop: 0, color: 'rgba(255, 105, 210, 0.32)' },
+            { stop: 0.5, color: 'rgba(255, 80, 180, 0.10)' },
+            { stop: 0.85, color: 'rgba(255, 105, 210, 0)' }
+          ]
+        },
+        // Yellow/gold blob - top right
+        {
+          x: size * 0.82,
+          y: size * 0.22,
+          rx: size * 0.32,
+          ry: size * 0.26,
+          colors: [
+            { stop: 0, color: 'rgba(255, 224, 64, 0.28)' },
+            { stop: 0.5, color: 'rgba(255, 200, 40, 0.08)' },
+            { stop: 0.85, color: 'rgba(255, 224, 64, 0)' }
+          ]
+        },
+        // Lavender/blue blob - top center-left
+        {
+          x: size * 0.35,
+          y: size * 0.18,
+          rx: size * 0.28,
+          ry: size * 0.24,
+          colors: [
+            { stop: 0, color: 'rgba(170, 190, 255, 0.18)' },
+            { stop: 0.5, color: 'rgba(200, 180, 240, 0.06)' },
+            { stop: 0.85, color: 'rgba(170, 190, 255, 0)' }
+          ]
+        },
+        // Green iridescence - bottom right
+        {
+          x: size * 0.7,
+          y: size * 0.68,
+          rx: size * 0.22,
+          ry: size * 0.18,
+          colors: [
+            { stop: 0, color: 'rgba(140, 230, 200, 0.12)' },
+            { stop: 0.65, color: 'rgba(140, 230, 200, 0)' }
+          ]
+        },
+        // Coral accent - center-right for warmth
+        {
+          x: size * 0.75,
+          y: size * 0.45,
+          rx: size * 0.20,
+          ry: size * 0.16,
+          colors: [
+            { stop: 0, color: 'rgba(255, 89, 36, 0.08)' },
+            { stop: 0.7, color: 'rgba(255, 138, 92, 0)' }
+          ]
+        }
+      ];
+
+      // Draw blobs with radial gradients
+      blobs.forEach(blob => {
+        const gradient = ctx.createRadialGradient(
+          blob.x, blob.y, 0,
+          blob.x, blob.y, Math.max(blob.rx, blob.ry)
+        );
+
+        blob.colors.forEach(c => {
+          gradient.addColorStop(c.stop, c.color);
+        });
+
+        ctx.save();
+        ctx.translate(blob.x, blob.y);
+        ctx.scale(blob.rx / 100, blob.ry / 100);
+        ctx.beginPath();
+        ctx.arc(0, 0, 100, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.filter = `blur(${Math.max(size * 0.08, 30)}px)`;
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Draw wordmark text
+      ctx.filter = 'none';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Murmur in custom handwritten style (approximated with italic serif)
+      const fontSize = size * 0.18;
+      ctx.font = `italic ${fontSize}px Georgia, "Times New Roman", serif`;
+      ctx.fillStyle = '#1A1A1A';
+
+      // Draw with subtle shadow for depth
+      ctx.shadowColor = 'rgba(26, 26, 26, 0.12)';
+      ctx.shadowBlur = size * 0.015;
+      ctx.shadowOffsetY = size * 0.008;
+
+      ctx.fillText('murmur', size / 2, size / 2);
+
+      // Add subtle underline flourish
+      ctx.shadowColor = 'transparent';
+      ctx.strokeStyle = '#FF5924';
+      ctx.lineWidth = size * 0.003;
+      ctx.lineCap = 'round';
+      const textWidth = ctx.measureText('murmur').width;
+      ctx.beginPath();
+      ctx.moveTo(size / 2 - textWidth * 0.42, size / 2 + fontSize * 0.38);
+      ctx.quadraticCurveTo(
+        size / 2,
+        size / 2 + fontSize * 0.35,
+        size / 2 + textWidth * 0.42,
+        size / 2 + fontSize * 0.38
+      );
+      ctx.stroke();
+    }
+
+    function downloadIcon(size) {
+      const canvas = document.getElementById(`icon${size}`);
+      const link = document.createElement('a');
+      link.download = `murmur-app-icon-${size}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    // Draw all sizes on load
+    window.onload = () => {
+      [1024, 512, 256].forEach(size => {
+        const canvas = document.getElementById(`icon${size}`);
+        drawIcon(canvas, size);
+      });
+    };
+  </script>
+</body>
+</html>

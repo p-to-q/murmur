@@ -49,6 +49,8 @@ MIN_NOTE_DUR = 0.08
 MIN_CONF = 0.4
 MAX_AUDIO_BYTES = 2 * 1024 * 1024
 MAX_AUDIO_SECONDS = 30
+TRIM_HEAD_GUARD_SECONDS = 0.18
+TRIM_TAIL_GUARD_SECONDS = 0.12
 NOTE_HYPOTHESES = (
     {
         "id": "balanced",
@@ -173,8 +175,16 @@ def trim_silence(y: np.ndarray) -> np.ndarray:
     """Trim head/tail silence defensively before pitch detection."""
     if y.size == 0:
         return y
-    trimmed, _ = librosa.effects.trim(y, top_db=35)
-    return trimmed.astype(np.float32)
+    trimmed, intervals = librosa.effects.trim(y, top_db=38)
+    if trimmed.size == 0:
+        return y.astype(np.float32)
+
+    start, end = (int(intervals[0]), int(intervals[1])) if len(intervals) == 2 else (0, len(y))
+    start = max(0, start - int(TRIM_HEAD_GUARD_SECONDS * SR))
+    end = min(len(y), end + int(TRIM_TAIL_GUARD_SECONDS * SR))
+    if end <= start:
+        return y.astype(np.float32)
+    return y[start:end].astype(np.float32)
 
 
 def estimate_snr(y: np.ndarray) -> float | None:

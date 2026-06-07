@@ -332,7 +332,7 @@ export function generateVibeVersions(
       editDepth: "fresh",
       versionSeed: id,
       title: preset.titleGenerator(),
-      vibe: preset.label,
+      vibe: preset.id,
       tags: [...preset.tags],
       melody: melodyFit.melody,
       arrangementState: arr,

@@ -21,6 +21,7 @@ export type LogEvent =
   | "notes.spent"
   | "notes.granted"
   | "notes.refund_failed"
+  | "rate_limit.tripped"
   | "user.balance_failed"
   | "arrangement.generated"
   | "song.list_failed"

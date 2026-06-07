@@ -2,11 +2,12 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource/lxgw-wenkai-tc/300.css";
 import "@fontsource/lxgw-wenkai-tc/400.css";
 import "@fontsource/lxgw-wenkai-tc/700.css";
+import { Instrument_Serif } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { BottomNav } from "@/components/murmur/bottom-nav";
-import { SideNav } from "@/components/murmur/side-nav";
+import { SideNavWithModal as SideNav } from "@/components/murmur/side-nav";
 import { AudioUnlock } from "@/components/murmur/audio-unlock";
 import { I18nHydrator } from "@/lib/i18n";
 import { cn } from "@/utils/utils";
@@ -15,12 +16,27 @@ const SITE_URL = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
   : undefined;
 
+const instrumentalSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-instrument-serif",
+});
+
 export const metadata: Metadata = {
   ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
   title: "MURMUR",
   description:
     "把脑海里的哼唱，变成一张可以收藏和分享的音乐卡片 · Turn the hum in your head into a music card you can collect and share.",
-  icons: { icon: "/favicon.svg" },
+  icons: {
+    icon: [
+      { url: "/favicon.png", sizes: "120x120", type: "image/png" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/brand/murmur-app-icon-180.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
   openGraph: {
     type: "website",
     siteName: "MURMUR",
@@ -44,9 +60,17 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={cn("h-full antialiased font-sans", GeistSans.variable)}
+      suppressHydrationWarning
+      className={cn(
+        "h-full antialiased font-sans",
+        GeistSans.variable,
+        instrumentalSerif.variable,
+      )}
     >
-      <body className="min-h-svh flex flex-col bg-[#F5F1EB]">
+      <body
+        suppressHydrationWarning
+        className="min-h-svh flex flex-col bg-[#F5F1EB]"
+      >
         <I18nHydrator />
         {/* Desktop sidebar (md+) — mobile hides via internal media query */}
         <SideNav />

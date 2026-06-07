@@ -27,10 +27,6 @@ export function shouldShowHumSupportCode(args: {
     return false;
   }
 
-  if (state.liveSuccessCount < 1) {
-    return true;
-  }
-
   if (state.transientFailureStreak >= 2) {
     return true;
   }

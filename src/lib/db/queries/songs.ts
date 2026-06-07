@@ -1,6 +1,6 @@
 import { db } from "../client";
 import { songs } from "../schema/songs";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   ensureBillingAccount,
   spendNotesInTransaction,
@@ -13,6 +13,15 @@ export async function getSongsByUser(userId: string) {
 
 export async function getSongById(songId: string) {
   const rows = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getSongByIdForUser(songId: string, userId: string) {
+  const rows = await db
+    .select()
+    .from(songs)
+    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+    .limit(1);
   return rows[0] ?? null;
 }
 
@@ -77,7 +86,28 @@ export async function updateSong(
   return rows[0];
 }
 
+export async function updateSongForUser(
+  songId: string,
+  userId: string,
+  data: Partial<typeof songs.$inferInsert>,
+) {
+  const rows = await db
+    .update(songs)
+    .set({ ...data, updatedAt: new Date() })
+    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+    .returning();
+  return rows[0] ?? null;
+}
+
 export async function deleteSong(songId: string) {
   const rows = await db.delete(songs).where(eq(songs.id, songId)).returning({ id: songs.id });
+  return rows.length > 0;
+}
+
+export async function deleteSongForUser(songId: string, userId: string) {
+  const rows = await db
+    .delete(songs)
+    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+    .returning({ id: songs.id });
   return rows.length > 0;
 }

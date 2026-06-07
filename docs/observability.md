@@ -279,8 +279,13 @@ gets extra treatment:
   primary debugging affordance.
 - **Debug route access**: `/api/observability/recent-events` and
   `/me/debug` stay dev-only / flag-gated, and they additionally require
-  a signed-in non-guest session so the ring buffer does not become an
-  anonymous local probe surface.
+  a signed-in non-guest session except for localhost / loopback previews,
+  where guest access is allowed so the demo stack remains debuggable.
+- **Developer mode**: `/me/settings` owns the user-controlled debug toggle.
+  Normal product mode renders localized copy and keeps diagnostics quiet;
+  developer mode exposes raw i18n tokens, one-shot browser performance
+  snapshots, `/api/qa/health`, `/api/qa/i18n`, and the `/me/debug` cockpit.
+  The settings page only fetches those diagnostics after the toggle is enabled.
 
 ---
 

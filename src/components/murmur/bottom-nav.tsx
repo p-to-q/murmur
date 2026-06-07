@@ -112,6 +112,7 @@ export function BottomNav() {
                       href={item.href}
                       aria-label={label}
                       className="block px-1 py-1 transition-transform active:scale-95"
+                      suppressHydrationWarning
                     >
                       {inner}
                     </Link>

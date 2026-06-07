@@ -18,9 +18,9 @@ interface TrimOptions {
 }
 
 const DEFAULT_TRIM_OPTIONS: TrimOptions = {
-  thresholdRms: 0.012,
+  thresholdRms: 0.01,
   windowMs: 20,
-  paddingMs: 250,
+  paddingMs: 420,
   minDurationMs: 300,
 };
 

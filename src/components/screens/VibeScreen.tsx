@@ -19,7 +19,7 @@
  *   - Title in serif italic — a vibe is a poem, not a setting.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Play, Pause } from "lucide-react";
@@ -27,12 +27,14 @@ import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
-import { useTranslator } from "@/lib/i18n";
+import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { synth } from "@/lib/music/simple-synth";
 import { generateVibeVersions } from "@/modules/strummer/generate-versions";
+import { buildDemoFlowState } from "@/modules/demo/demo-flow";
 import type { VibeVersion } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { MurmurWave } from "@/components/murmur/murmur-wave";
+import { VIBE_PRESETS } from "@/presets/vibes";
 
 /** Visual phases of the route arrival. */
 type Phase = "closing" | "opening" | "cards";
@@ -64,13 +66,15 @@ function playShutterClick() {
   }
 }
 
-export function VibeScreen() {
+export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const router = useRouter();
   const t = useTranslator();
   const {
     vibeVersions,
     setVibeVersions,
     setCurrentVersion,
+    setCurrentDraftId,
+    setCurrentFlowId,
     currentDraftId,
     currentFlowId,
     auditioningVersionId,
@@ -80,8 +84,10 @@ export function VibeScreen() {
 
   const [phase, setPhase] = useState<Phase>("closing");
   const [pickingId, setPickingId] = useState<string | null>(null);
+  const demoSeededRef = useRef(false);
   const sourceVersion = vibeVersions[0] ?? null;
   const fromSavedSong = sourceVersion?.sourceType === "library";
+  const demoEnabled = initialDemo;
 
   /* ── Arrival sequence ─────────────────────────────────────────── */
   useEffect(() => {
@@ -98,10 +104,27 @@ export function VibeScreen() {
 
   /* ── Hard-refresh guard: no versions → bounce to / ───────────── */
   useEffect(() => {
-    if (phase === "cards" && vibeVersions.length === 0) {
+    if (!demoEnabled || vibeVersions.length > 0 || demoSeededRef.current) {
+      return;
+    }
+    demoSeededRef.current = true;
+    const demo = buildDemoFlowState();
+    setVibeVersions(demo.versions);
+    setCurrentDraftId(demo.draftId);
+    setCurrentFlowId(demo.flowId);
+  }, [
+    demoEnabled,
+    setCurrentDraftId,
+    setCurrentFlowId,
+    setVibeVersions,
+    vibeVersions.length,
+  ]);
+
+  useEffect(() => {
+    if (phase === "cards" && vibeVersions.length === 0 && !demoEnabled) {
       router.replace("/");
     }
-  }, [phase, vibeVersions.length, router]);
+  }, [demoEnabled, phase, vibeVersions.length, router]);
 
   /* ── Stop synth on unmount ────────────────────────────────────── */
   useEffect(() => {
@@ -181,7 +204,7 @@ export function VibeScreen() {
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       {/* ── Phase 1: iris-close + rainbow ring ───────────────────── */}
       {phase === "closing" && (
-        <div className="fixed inset-0 z-[60]">
+        <div className="pointer-events-none fixed inset-0 z-[60]">
           <div className="absolute inset-0 iris-close bg-[#1A1A1A]" />
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div
@@ -230,32 +253,33 @@ export function VibeScreen() {
             >
               {/* ── Header ───────────────────────────────────── */}
               <div className="mb-8 md:mb-10">
-                <motion.button
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.5 }}
-                  onClick={handleBack}
-                  className="mb-5 text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
-                >
-                  ← {fromSavedSong
-                    ? t("vibe.back.saved") || "Back to your song"
-                    : t("vibe.back") || "Try a different hum"}
-                </motion.button>
-                <motion.p
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-                  className="eyebrow text-[#FF8A5C]"
-                >
-                  {fromSavedSong
-                    ? t("vibe.saved.eyebrow") || "THREE MORE"
-                    : t("vibe.eyebrow") || "THREE WAYS"}
-                </motion.p>
+                <div className="flex items-center justify-between mb-5">
+                  <motion.button
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.5 }}
+                    onClick={handleBack}
+                    className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
+                  >
+                    ← {fromSavedSong
+                      ? t("vibe.back.saved") || "Back to your song"
+                      : t("vibe.back") || "Try a different hum"}
+                  </motion.button>
+                  <motion.button
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3, duration: 0.5 }}
+                    onClick={handleReroll}
+                    className="font-serif-italic text-[13px] text-[#FF5924] hover:text-[#D9421A] transition-colors"
+                  >
+                    ↻ {t("vibe.reroll") || "Try a different set"}
+                  </motion.button>
+                </div>
                 <motion.h1
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.05, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                  className="hero-serif mt-3 text-[#1A1A1A] text-[32px] leading-[1.04] md:text-[52px]"
+                  className="hero-serif text-[#1A1A1A] text-[32px] leading-[1.04] md:text-[52px]"
                 >
                   {fromSavedSong
                     ? t("vibe.saved.headline") || "Pick the next shape this song wants to take."
@@ -287,9 +311,10 @@ export function VibeScreen() {
                       key={version.id}
                       initial={{ opacity: 0, y: 22, scale: 0.97 }}
                       animate={{
-                        opacity: dimmed ? 0.5 : 1,
-                        y: 0,
-                        scale: isAuditioning ? 1.012 : 1,
+                        opacity: dimmed ? 0.45 : 1,
+                        y: isAuditioning ? -4 : 0,
+                        scale: isAuditioning ? 1.015 : 1,
+                        filter: dimmed ? "blur(2px)" : "blur(0px)",
                       }}
                       transition={{
                         delay: 0.08 + i * 0.1,
@@ -322,13 +347,7 @@ export function VibeScreen() {
                   paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)",
                 }}
               >
-                <button
-                  onClick={handleReroll}
-                  className="font-serif-italic text-[15px] text-[#FF5924] hover:text-[#D9421A] underline-mm transition-colors"
-                >
-                  ↻ {t("vibe.reroll") || "Try a different set"}
-                </button>
-                <p className="mt-3 font-serif-italic text-[12px] text-[#B6B0A4] leading-[1.7] max-w-md">
+                <p className="font-serif-italic text-[12px] text-[#B6B0A4] leading-[1.7] max-w-md">
                   {t("vibe.howit") ||
                     "Three takes on the same hum — same melody, different rooms. No notes spent."}
                 </p>
@@ -362,13 +381,18 @@ function VibeCard({
   onPlayToggle: (v: VibeVersion) => void;
   pickLabel: string;
 }) {
+  const lang = useI18nStore((state) => state.lang);
   // Accent color for the wave layer — derived from the vibe's first hex stop
   // in its CSS gradient. Falls back to coral if parsing fails.
   const accent = extractFirstHex(version.visualConfig.gradient) ?? "#FF8A5C";
 
+  // Find the vibe preset to get the localized label
+  const vibePreset = VIBE_PRESETS.find((p) => p.id === version.vibe);
+  const vibeLabel = vibePreset?.label[lang] || version.vibe;
+
   return (
     <motion.div
-      className="relative overflow-hidden rounded-[32px] cursor-pointer select-none border border-white/40 h-full min-h-[220px]"
+      className="relative overflow-hidden rounded-[32px] cursor-pointer select-none border border-white/40 h-full min-h-[180px] md:min-h-[220px]"
       style={{ background: version.visualConfig.gradient }}
       onClick={() => onPick(version)}
       whileHover={!isPicking ? { y: -3 } : undefined}
@@ -399,19 +423,16 @@ function VibeCard({
 
       {/* Text block */}
       <div className="relative z-10 p-6 md:p-7">
-        <p className="text-[10px] uppercase tracking-[0.28em] text-white/72">
-          {tagSnippet(version.tags)}
-        </p>
         <h3
-          className={`font-serif-italic mt-3 text-white leading-[1.02] ${
+          className={`font-serif-italic text-white leading-[1.02] ${
             isLarge ? "text-[40px] md:text-[60px]" : "text-[28px] md:text-[36px]"
           }`}
           style={{ letterSpacing: "-0.01em" }}
         >
-          {version.vibe}
+          {vibeLabel}
         </h3>
-        <p className="mt-2 text-[12px] text-white/76 md:text-[13px]">
-          {version.tags.slice(0, 2).join(" · ")}
+        <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-white/55">
+          {version.tags.slice(0, 3).join(" · ")}
         </p>
       </div>
 
@@ -482,10 +503,6 @@ function VibeCard({
 }
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
-
-function tagSnippet(tags: readonly string[] | string[]): string {
-  return tags.slice(0, 2).join(" · ");
-}
 
 function extractFirstHex(gradient: string): string | null {
   const m = gradient.match(/#([0-9a-fA-F]{6})/);

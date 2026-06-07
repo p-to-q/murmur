@@ -22,7 +22,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { UserBadge } from "@/components/user-profile/user-badge";
 import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
@@ -30,7 +29,6 @@ import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 
 export function MeScreen() {
-  const searchParams = useSearchParams();
   const [songCount, setSongCount] = useState(0);
   const t = useTranslator();
   const lang = useI18nStore((s) => s.lang);
@@ -38,6 +36,7 @@ export function MeScreen() {
   const { balance, isLoading } = useUserBalance();
   const repairBias = usePreferencesStore((state) => state.repairBias);
   const setRepairBias = usePreferencesStore((state) => state.setRepairBias);
+  const developerMode = usePreferencesStore((state) => state.developerMode);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,14 +58,14 @@ export function MeScreen() {
     };
   }, []);
 
-  const statsCopy = useStatsCopy(songCount);
   const refillCopy = useRefillCopy(balance?.nextRefillAt);
   const shelfCtaHref = songCount > 0 ? "/gallery" : "/";
   const shelfCtaLabel =
     songCount > 0
       ? t("me.glance.cta_songs") || "Open gallery"
       : t("me.glance.cta_empty") || "Start a hum";
-  const showDebugLink = searchParams.get("debug") === "1";
+
+  const milestone = getUserMilestone(songCount);
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
@@ -77,10 +76,7 @@ export function MeScreen() {
         className="relative z-10 px-6 md:px-12 pb-6 max-w-3xl"
         style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 56px)" }}
       >
-        <p className="eyebrow text-[#FF8A5C]">
-          {t("me.eyebrow") || "YOURS"}
-        </p>
-        <h1 className="hero-serif-italic mt-3 text-[#1A1A1A] text-[44px] leading-[1.02] md:text-[72px]">
+        <h1 className="hero-serif-italic text-[#1A1A1A] text-[44px] leading-[1.02] md:text-[72px]">
           {t("me.title")}
         </h1>
         <p className="font-serif-italic mt-3 max-w-[28rem] text-[15px] leading-[1.55] text-[#6F6A63] md:text-[16px]">
@@ -90,7 +86,7 @@ export function MeScreen() {
 
       {/* ── Body cards ─────────────────────────────────────────────── */}
       <div className="relative z-10 px-6 md:px-12 max-w-3xl space-y-5 pb-6">
-        <Card>
+        <Card className="relative z-20 overflow-visible">
           <SectionLabel>{t("me.profile.title") || "Profile"}</SectionLabel>
           <div className="space-y-4">
             <UserBadge />
@@ -104,93 +100,109 @@ export function MeScreen() {
         {/* Notes balance + Top up */}
         <Card>
           <SectionLabel>{t("me.notes.title") || "MURMUR NOTES"}</SectionLabel>
-          <div className="flex items-end justify-between gap-6">
-            <div>
-              <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px]">
-                {isLoading ? "—" : balance?.notes ?? 0}
-              </p>
-              <p className="mt-3 max-w-[18rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
-                {refillCopy}
-              </p>
+          <div className="space-y-5">
+            <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px]">
+              {isLoading ? "—" : balance?.notes ?? 0}
+            </p>
+            <p className="max-w-[28rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
+              {refillCopy}
+            </p>
+            <div className="flex justify-end">
+              <Link href="/topup" className="mm-btn-primary inline-flex">
+                {t("me.notes.cta") || "Top up"}
+              </Link>
             </div>
-            <Link href="/topup" className="mm-btn-primary">
-              {t("me.notes.cta") || "Top up"}
-            </Link>
           </div>
         </Card>
 
-        {/* At a glance — single editorial sentence */}
+        {/* Milestone & Next move — achievement-driven guidance */}
         <Card>
           <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-            <div className="max-w-[28rem]">
-              <SectionLabel>{t("me.glance.title") || "AT A GLANCE"}</SectionLabel>
-              <p className="mb-3 text-[13px] leading-[1.55] text-[#8C8780] md:text-[14px]">
-                {t("me.glance.helper") || "A quick read before your next move."}
+            <div className="flex-1 space-y-3">
+              <SectionLabel>{lang === "zh" ? milestone.stageZh : milestone.stage}</SectionLabel>
+              <p className="text-[13px] leading-[1.55] text-[#8C8780] md:text-[14px]">
+                {lang === "zh" ? milestone.insightZh : milestone.insight}
               </p>
-              <p className="font-serif-italic text-[#1A1A1A] text-[20px] leading-[1.4] md:text-[22px]">
-                {statsCopy}
+              <p className="font-serif-italic text-[#6F6A63] text-[16px] leading-[1.4]">
+                {lang === "zh" ? milestone.actionZh : milestone.action}
               </p>
             </div>
-            <Link
-              href={shelfCtaHref}
-              className="inline-flex h-10 items-center rounded-full border border-[#E7DCCB] px-4 text-[12px] tracking-[0.08em] text-[#6F6A63] transition-colors hover:border-[#D6C7B0] hover:text-[#1A1A1A]"
-            >
+            <Link href={shelfCtaHref} className="mm-btn-primary inline-flex shrink-0">
               {shelfCtaLabel}
             </Link>
           </div>
         </Card>
 
         <Card>
-          <SectionLabel>{t("me.repair_bias.title") || "CREATIVE BIAS"}</SectionLabel>
-          <div className="space-y-4">
+          <SectionLabel>{t("me.repair_bias.title") || "创作偏好"}</SectionLabel>
+          <div className="space-y-7">
             <p className="max-w-[30rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
               {t("me.repair_bias.helper") ||
-                "This only nudges Murmur when a take could go more than one sensible way."}
+                "当 Murmur 拿不准该怎么理解你哼的那一段时，这个设置会影响它的判断。"}
             </p>
-            <div className="rounded-[18px] border border-[#E7DCCB] bg-[#FFFCF7] px-4 py-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-[12px] tracking-[0.06em] text-[#A56A3A]">
-                    {t("me.repair_bias.left") || "Closer to your hum"}
-                  </p>
-                  <p className="mt-1 text-[12px] leading-[1.5] text-[#8C8780]">
-                    {t("me.repair_bias.left_note") ||
-                      "Keep closer to the line you just hummed."}
-                  </p>
-                </div>
-                <div className="min-w-0 text-right">
-                  <p className="text-[12px] tracking-[0.06em] text-[#A56A3A]">
-                    {t("me.repair_bias.right") || "More songlike"}
-                  </p>
-                  <p className="mt-1 text-[12px] leading-[1.5] text-[#8C8780]">
-                    {t("me.repair_bias.right_note") ||
-                      "Hey, this is not us saying you sang badly."}
-                  </p>
-                </div>
-              </div>
 
-              <div className="mt-5">
-                <input
-                  aria-label={t("me.repair_bias.title") || "Creative bias"}
-                  type="range"
-                  min={-100}
-                  max={100}
-                  step={1}
-                  value={Math.round(repairBias * 100)}
-                  onChange={(event) => {
-                    setRepairBias(Number(event.target.value) / 100);
-                  }}
-                  className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[#E7DCCB]"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, #E6D3BC 0%, #F6E6D2 50%, #FFD2BE 100%)",
-                  }}
-                />
-                <div className="mt-3 flex items-center justify-between text-[11px] tracking-[0.04em] text-[#8C8780]">
-                  <span>{t("me.repair_bias.live.left") || "Closer"}</span>
-                  <span>{t("me.repair_bias.live.center") || "Balanced"}</span>
-                  <span>{t("me.repair_bias.live.right") || "Sweeter"}</span>
-                </div>
+            <div className="space-y-3">
+              {/* Three choice buttons */}
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  onClick={() => setRepairBias(-1)}
+                  className={`relative flex flex-col items-start gap-1.5 rounded-[16px] border px-4 py-4 text-left transition-all ${
+                    repairBias <= -0.4
+                      ? "border-[#1A1A1A] bg-[#FFFCF7]"
+                      : "border-[#E7DCCB] bg-white/60 hover:border-[#D6C7B0]"
+                  }`}
+                >
+                  <span className="text-[14px] font-medium text-[#1A1A1A]">
+                    {lang === "zh" ? "偏原唱" : "Closer"}
+                  </span>
+                  {repairBias <= -0.4 && (
+                    <span className="text-[11px] leading-[1.45] text-[#B7AEA1]">
+                      {lang === "zh"
+                        ? "保留你哼出来的走向"
+                        : "Keep your hum as-is"}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setRepairBias(0)}
+                  className={`relative flex flex-col items-start gap-1.5 rounded-[16px] border px-4 py-4 text-left transition-all ${
+                    repairBias > -0.4 && repairBias < 0.4
+                      ? "border-[#1A1A1A] bg-[#FFFCF7]"
+                      : "border-[#E7DCCB] bg-white/60 hover:border-[#D6C7B0]"
+                  }`}
+                >
+                  <span className="text-[14px] font-medium text-[#1A1A1A]">
+                    {lang === "zh" ? "平衡" : "Balanced"}
+                  </span>
+                  {repairBias > -0.4 && repairBias < 0.4 && (
+                    <span className="text-[11px] leading-[1.45] text-[#B7AEA1]">
+                      {lang === "zh"
+                        ? "大部分时候刚刚好"
+                        : "Usually just right"}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setRepairBias(1)}
+                  className={`relative flex flex-col items-end gap-1.5 rounded-[16px] border px-4 py-4 text-right transition-all ${
+                    repairBias >= 0.4
+                      ? "border-[#1A1A1A] bg-[#FFFCF7]"
+                      : "border-[#E7DCCB] bg-white/60 hover:border-[#D6C7B0]"
+                  }`}
+                >
+                  <span className="text-[14px] font-medium text-[#1A1A1A]">
+                    {lang === "zh" ? "偏好听" : "Sweeter"}
+                  </span>
+                  {repairBias >= 0.4 && (
+                    <span className="text-[11px] leading-[1.45] text-[#B7AEA1]">
+                      {lang === "zh"
+                        ? "让它更像首完整的歌"
+                        : "More like a finished song"}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
           </div>
@@ -250,9 +262,9 @@ export function MeScreen() {
       {/* ── Tertiary footer ─────────────────────────────────────────── */}
       <div className="relative z-10 px-6 md:px-12 max-w-3xl pb-28">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px] tracking-[0.04em] text-[#8C8780]">
-          {showDebugLink ? (
+          {developerMode ? (
             <>
-              <Link href="/me/debug?debug=1" className="hover:text-[#1A1A1A] transition-colors">
+              <Link href="/me/debug" className="hover:text-[#1A1A1A] transition-colors">
                 {t("me.debug") || "Debug"}
               </Link>
               <span className="text-[#D2C9B6]">·</span>
@@ -296,6 +308,83 @@ function useStatsCopy(songCount: number): string {
   return template.replace("{count}", String(songCount));
 }
 
+/**
+ * Calculate user milestone/stage based on song count
+ */
+function getUserMilestone(songCount: number): {
+  stage: string;
+  stageZh: string;
+  insight: string;
+  insightZh: string;
+  action: string;
+  actionZh: string;
+} {
+  if (songCount === 0) {
+    return {
+      stage: "STARTING POINT",
+      stageZh: "起点",
+      insight: "Your shelf is empty and ready.",
+      insightZh: "空白的歌架正在等你。",
+      action: "Start with one hum",
+      actionZh: "从一句哼唱开始"
+    };
+  }
+
+  if (songCount === 1) {
+    return {
+      stage: "FIRST SONG",
+      stageZh: "第一首",
+      insight: "One song down, infinite to go.",
+      insightZh: "有了第一首，后面就是无限。",
+      action: "Keep going",
+      actionZh: "继续"
+    };
+  }
+
+  if (songCount <= 3) {
+    return {
+      stage: "EXPLORING",
+      stageZh: "探索中",
+      insight: `${songCount} songs. Finding your voice.`,
+      insightZh: `${songCount} 首歌。正在找到你的声音。`,
+      action: "Try more vibes",
+      actionZh: "试试更多氛围"
+    };
+  }
+
+  if (songCount <= 10) {
+    return {
+      stage: "BUILDING",
+      stageZh: "成长中",
+      insight: `${songCount} songs. Your shelf is taking shape.`,
+      insightZh: `${songCount} 首歌。歌架开始有样子了。`,
+      action: "Fill the shelf",
+      actionZh: "把歌架填满"
+    };
+  }
+
+  if (songCount <= 20) {
+    return {
+      stage: "ACTIVE CREATOR",
+      stageZh: "活跃创作者",
+      insight: `${songCount} songs collected.`,
+      insightZh: `收了 ${songCount} 首歌。`,
+      action: "Keep creating",
+      actionZh: "继续创作"
+    };
+  }
+
+  // 21+
+  return {
+    stage: "PROLIFIC",
+    stageZh: "高产",
+    insight: `${songCount} songs and counting.`,
+    insightZh: `已经 ${songCount} 首，还在继续。`,
+    action: "You're on a roll",
+    actionZh: "停不下来了"
+  };
+}
+
 function useRefillCopy(nextRefillAtIso?: string): string {
   const t = useTranslator();
   if (!nextRefillAtIso) {
@@ -326,8 +415,8 @@ function useRefillCopy(nextRefillAtIso?: string): string {
   ).replace("{minutes}", String(Math.max(minutes, 1)));
 }
 
-function Card({ children }: { children: React.ReactNode }) {
-  return <div className="mm-card p-6">{children}</div>;
+function Card({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={`mm-card p-6 ${className || ""}`}>{children}</div>;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {

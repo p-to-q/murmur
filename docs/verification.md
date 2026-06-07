@@ -6,7 +6,30 @@
 - [x] `bun install` — passes (684 packages, +1 lamejs)
 - [x] `bunx tsc --noEmit` — 0 errors
 - [x] `bunx next build` — 14 routes compile cleanly (Turbopack)
+- [x] `bun run build:audit` — build succeeds and only the currently allowed
+  Turbopack NFT warning is present
 - [x] `bun run lint` — 0 errors, 1 pre-existing warning
+- [x] `bun run smoke:local` — web app, user balance API, transcribe validation,
+  and audio worker health all pass against the running local stack
+- [x] `bun run smoke:pages` — primary page shells mount and expose their
+  expected route markers on a running local stack, including deep QA entry
+  routes for `/vibe?demo=1`, `/studio?demo=1`, and `/studio/name?demo=1`
+- [x] `bun run verify:local` — compact local operator gate passes
+- [x] `bash scripts/ci-local-stack-smoke.sh` — boots the built app plus a live
+  worker on isolated ports, then runs the shared smoke contract (API + page
+  shell checks)
+- [x] Browser-verified deep-link QA surfaces: `/vibe?demo=1` and
+  `/studio?demo=1` and `/studio/name?demo=1` hydrate a deterministic demo flow
+  without requiring a prior hum in the same tab
+- [x] `/me/debug?debug=1` now acts as a hidden QA cockpit with shortcut links
+  into the mainline and demo-route checkpoints
+- [x] `/api/qa/health` aggregates web / worker / QA-route health, and the
+  debug cockpit still renders that summary even when event-stream access is
+  denied
+- [x] `bun run qa:report` emits a single local QA snapshot spanning aggregated
+  health plus every shared QA route contract
+- [x] First transient hum worker failure now stays human-first; support code is
+  reserved for hard faults or repeated transient failures
 - [x] Music engine v2: rhythm-engine + chord-engine + bass-engine + drum-engine + assemble-song wired through both live preview and offline render
 - [x] Hum demo → Stainer facade → fixture → 3 VibeVersions
 - [ ] Live hum → `/api/transcribe` → audio worker → 3 VibeVersions
@@ -33,6 +56,10 @@
 - [ ] Native push notifications — local adapter is stubbed until a real gateway is configured
 
 ### Known limitations
+- `next build` still emits one non-blocking Turbopack NFT warning for the
+  dev-only `/api/storage/local/[...key]` route because the local filesystem
+  adapter is loaded inside that route. The build still succeeds and the warning
+  is currently treated as a tooling edge, not a broken product path.
 - Mobile Safari may reject `audio.play()` if invoked outside the gesture frame
   after route navigation — SongDetail falls back to Tone player automatically.
 - MP3 encoding uses `@breezystack/lamejs`; it dynamically imports so render

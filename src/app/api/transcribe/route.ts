@@ -5,6 +5,7 @@ import {
   isMelodyCarrier,
   transcribeWithAudioWorker,
 } from "@/lib/platform/audio-worker";
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
@@ -15,6 +16,7 @@ export const runtime = "nodejs";
 
 const MAX_AUDIO_BYTES = 2 * 1024 * 1024;
 const ROUTE = "/api/transcribe";
+const TRANSCRIBE_RATE_LIMIT = { capacity: 10, refillWindowMs: 60_000 };
 
 type TranscribeRouteError =
   | "audio_required"
@@ -43,6 +45,17 @@ export async function POST(request: NextRequest) {
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "user",
+    userId,
+    requestId,
+    sessionId: auth.sessionId,
+    options: TRANSCRIBE_RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
 
   try {
     const formData = await request.formData();
@@ -92,7 +105,7 @@ export async function POST(request: NextRequest) {
     try {
       balance = await getNotesBalance(userId);
     } catch (error) {
-      if (shouldBypassBillingForLocalDemo()) {
+      if (shouldBypassBillingForLocalDemo(request)) {
         billingMode = "dev_fallback";
         log("user.balance_failed", {
           phase: "billing",
@@ -124,7 +137,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!balance.ok) {
-      if (shouldBypassBillingForLocalDemo()) {
+      if (shouldBypassBillingForLocalDemo(request)) {
         billingMode = "dev_fallback";
         log("user.balance_failed", {
           phase: "billing",
@@ -153,7 +166,7 @@ export async function POST(request: NextRequest) {
         });
       }
     }
-    if (billingMode === "ledger" && shouldBypassBillingForLocalDemo()) {
+    if (billingMode === "ledger" && shouldBypassBillingForLocalDemo(request)) {
       billingMode = "dev_fallback";
       balance = {
         ok: true,
@@ -321,8 +334,21 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function shouldBypassBillingForLocalDemo(): boolean {
-  return shouldBypassBillingInDevelopment();
+function shouldBypassBillingForLocalDemo(request: NextRequest): boolean {
+  const host =
+    request.nextUrl?.hostname ||
+    safeHostnameFromUrl(request.url);
+  return shouldBypassBillingInDevelopment({
+    host,
+  });
+}
+
+function safeHostnameFromUrl(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
 }
 
 async function refundSpendIfNeeded(options: {

@@ -32,7 +32,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       { status: 401 },
     );
   }
-  if (auth.source === "guest") {
+  if (auth.source === "guest" && !allowsGuestDebugInLocalPreview(request)) {
     return NextResponse.json(
       { error: "forbidden", message: "Debug surface requires a signed-in session" },
       { status: 403 },
@@ -49,4 +49,21 @@ function isDebugSurfaceEnabled(): boolean {
   if (process.env.NODE_ENV !== "production") return true;
   const flag = process.env.MURMUR_ENABLE_DEBUG_SURFACE?.trim().toLowerCase();
   return flag === "1" || flag === "true";
+}
+
+function allowsGuestDebugInLocalPreview(request: NextRequest): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+  const host = getRequestHostname(request);
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+function getRequestHostname(request: NextRequest): string | null {
+  const nextUrl = (request as { nextUrl?: { hostname?: string } }).nextUrl;
+  if (nextUrl?.hostname) return nextUrl.hostname;
+
+  try {
+    return new URL(request.url).hostname;
+  } catch {
+    return null;
+  }
 }

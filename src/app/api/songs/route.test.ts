@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
+import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
 let nextAuth: ResolvedRequestAuth = {
@@ -10,7 +11,9 @@ let nextAuth: ResolvedRequestAuth = {
 };
 
 const createdSongs: Array<Record<string, unknown>> = [];
+let createSongError: unknown = null;
 const createSongMock = mock(async (data: Record<string, unknown>) => {
+  if (createSongError) throw createSongError;
   createdSongs.push(data);
   return {
     ...data,
@@ -18,7 +21,9 @@ const createSongMock = mock(async (data: Record<string, unknown>) => {
     updatedAt: new Date("2026-06-05T12:00:00.000Z"),
   };
 });
+let createSongWithSpendError: unknown = null;
 const createSongWithSpendMock = mock(async (data: Record<string, unknown>) => {
+  if (createSongWithSpendError) throw createSongWithSpendError;
   createdSongs.push(data);
   return {
     ok: true as const,
@@ -43,14 +48,22 @@ mock.module("@/lib/auth", () => ({
 
 mock.module("@/lib/db/queries/songs", () => ({
   getSongsByUser: mock(async () => []),
+  getSongByIdForUser: mock(async () => null),
   createSong: createSongMock,
   createSongWithSpend: createSongWithSpendMock,
+  updateSongForUser: mock(async () => null),
+  deleteSongForUser: mock(async () => false),
 }));
 
 const { POST } = await import("./route");
+const { resetLocalSongFallbackForTests } = await import("@/lib/db/queries/local-song-fallback");
 
-function buildRequest(body: Record<string, unknown>, requestId = "req_song"): NextRequest {
-  return new Request("http://test.local/api/songs", {
+function buildRequest(
+  body: Record<string, unknown>,
+  requestId = "req_song",
+  url = "http://test.local/api/songs",
+): NextRequest {
+  return new Request(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -61,6 +74,9 @@ function buildRequest(body: Record<string, unknown>, requestId = "req_song"): Ne
 }
 
 beforeEach(() => {
+  delete process.env.MURMUR_RATE_LIMIT_DRIVER;
+  resetCachedRateLimitStore();
+  getRateLimitStore().resetAll();
   nextAuth = {
     ok: true,
     user: { id: "usr_song", email: null, name: "Song Tester", avatarUrl: null },
@@ -70,6 +86,9 @@ beforeEach(() => {
   createdSongs.length = 0;
   createSongMock.mockClear();
   createSongWithSpendMock.mockClear();
+  createSongError = null;
+  createSongWithSpendError = null;
+  resetLocalSongFallbackForTests();
 });
 
 describe("POST /api/songs", () => {
@@ -196,5 +215,52 @@ describe("POST /api/songs", () => {
     const body = await response.json() as { error: string; issues: Array<{ path: string }> };
     expect(body.error).toBe("validation_error");
     expect(body.issues.some((issue) => issue.path === "bpm")).toBe(true);
+  });
+
+  it("uses a local guest song fallback when the dev database is unavailable", async () => {
+    nextAuth = {
+      ok: true,
+      user: { id: "guest", email: null, name: "Guest", avatarUrl: null },
+      source: "guest",
+      sessionId: "sess_guest",
+    };
+    const dbUnavailableError = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:5432"), {
+      code: "ECONNREFUSED",
+    });
+    createSongError = dbUnavailableError;
+    createSongWithSpendError = dbUnavailableError;
+
+    const response = await POST(buildRequest({
+      id: "song_guest_fallback",
+      title: "Local Draft",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    }, "req_guest_fallback", "http://localhost/api/songs"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Murmur-Fallback")).toBe("local-guest-song");
+    expect(createdSongs).toHaveLength(0);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.id).toBe("song_guest_fallback");
+    expect(body.userId).toBe("guest");
   });
 });

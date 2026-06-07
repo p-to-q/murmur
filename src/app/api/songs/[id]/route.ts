@@ -1,51 +1,215 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveUserId } from "@/lib/auth";
-import { getSongById, updateSong, deleteSong } from "@/lib/db/queries/songs";
+import { z } from "zod";
+import { resolveRequestAuth } from "@/lib/auth";
+import {
+  deleteSongForUser,
+  getSongByIdForUser,
+  updateSongForUser,
+} from "@/lib/db/queries/songs";
+import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
+import {
+  deleteLocalSongForUserFallback,
+  getLocalSongByIdForUserFallback,
+  updateLocalSongForUserFallback,
+} from "@/lib/db/queries/local-song-fallback";
+
+const trackStateSchema = z.object({
+  enabled: z.boolean(),
+  intensity: z.number(),
+  originalPattern: z.string(),
+  currentPattern: z.string(),
+  instrument: z.string(),
+  versionHistory: z.array(z.string()),
+  melodyPitchSequence: z.array(z.number()).optional(),
+  chordsTag: z.string().optional(),
+  bassPattern: z.string().optional(),
+  drumsPattern: z.string().optional(),
+  texturePreset: z.string().optional(),
+}).strict();
+
+const arrangementStateSchema = z.object({
+  melody: trackStateSchema,
+  chords: trackStateSchema,
+  strings: trackStateSchema,
+  drums: trackStateSchema,
+  bass: trackStateSchema,
+  texture: trackStateSchema,
+}).strict();
+
+const visualConfigSchema = z.object({
+  preset: z.string().min(1),
+  gradient: z.string().min(1),
+  particleDensity: z.number(),
+  pulseSource: z.enum(["drums", "melody", "energy"]),
+  posterBg: z.string().optional(),
+}).strict();
+
+const updateSongSchema = z.object({
+  title: z.string().min(1).optional(),
+  vibe: z.string().min(1).optional(),
+  vibeEn: z.string().min(1).optional(),
+  bpm: z.number().int().optional(),
+  keySignature: z.string().min(1).optional(),
+  scaleType: z.string().min(1).optional(),
+  duration: z.number().int().nonnegative().optional(),
+  parentSongId: z.string().min(1).nullable().optional(),
+  rootSongId: z.string().min(1).nullable().optional(),
+  lineageDepth: z.number().int().nonnegative().optional(),
+  sourceMelodyKind: z.enum(["intent", "corrected", "musical"]).optional(),
+  editCount: z.number().int().nonnegative().optional(),
+  editDepth: z.enum(["fresh", "shaped", "reworked"]).optional(),
+  mp3DataUrl: z.string().nullable().optional(),
+  visualConfig: visualConfigSchema.optional(),
+  arrangementState: arrangementStateSchema.optional(),
+  tags: z.array(z.string()).optional(),
+}).strict();
+
+type SongUpdatePayload = z.infer<typeof updateSongSchema>;
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const userId = resolveUserId(req);
+  const auth = await resolveRequestAuth(req);
+  if (!auth.ok) return auth.response;
+  const userId = auth.user.id;
   const { id } = await params;
   try {
-    const song = await getSongById(id);
-    if (!song || (song.userId !== userId && song.userId !== "guest")) {
+    const song = await getSongByIdForUser(id, userId);
+    if (!song) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     return NextResponse.json(song);
   } catch (err) {
+    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+      const fallbackSong = getLocalSongByIdForUserFallback(id, userId);
+      if (!fallbackSong) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      return NextResponse.json(fallbackSong, {
+        headers: { "X-Murmur-Fallback": "local-guest-song" },
+      });
+    }
     console.error("[song GET]", err);
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const userId = resolveUserId(req);
+  const auth = await resolveRequestAuth(req);
+  if (!auth.ok) return auth.response;
+  const userId = auth.user.id;
   const { id } = await params;
+
+  let body: SongUpdatePayload;
   try {
-    const body = await req.json();
-    const existing = await getSongById(id);
-    if (!existing || (existing.userId !== userId && existing.userId !== "guest")) {
+    body = updateSongSchema.parse(await req.json());
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json(
+        {
+          error: "validation_error",
+          message: "Invalid song update payload",
+          issues: err.issues.map((issue) => ({
+            path: issue.path.join("."),
+            code: issue.code,
+            message: issue.message,
+          })),
+        },
+        { status: 400 },
+      );
+    }
+
+    console.error("[song PATCH parse]", err);
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+  }
+
+  try {
+    const updated = await updateSongForUser(id, userId, body);
+    if (!updated) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    const updated = await updateSong(id, body);
     return NextResponse.json(updated);
   } catch (err) {
+    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+      const updated = updateLocalSongForUserFallback(id, userId, body);
+      if (!updated) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      return NextResponse.json(updated, {
+        headers: { "X-Murmur-Fallback": "local-guest-song" },
+      });
+    }
+
     console.error("[song PATCH]", err);
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const userId = resolveUserId(req);
+  const auth = await resolveRequestAuth(req);
+  if (!auth.ok) return auth.response;
+  const userId = auth.user.id;
   const { id } = await params;
   try {
-    const existing = await getSongById(id);
-    if (!existing || (existing.userId !== userId && existing.userId !== "guest")) {
+    const deleted = await deleteSongForUser(id, userId);
+    if (!deleted) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    await deleteSong(id);
     return NextResponse.json({ success: true });
   } catch (err) {
+    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+      const deleted = deleteLocalSongForUserFallback(id, userId);
+      if (!deleted) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      return NextResponse.json(
+        { success: true },
+        { headers: { "X-Murmur-Fallback": "local-guest-song" } },
+      );
+    }
     console.error("[song DELETE]", err);
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
+}
+
+function shouldUseLocalSongFallback(req: NextRequest, userId: string): boolean {
+  if (userId !== "guest") return false;
+  return shouldBypassBillingInDevelopment({
+    host: getRequestHostname(req),
+  });
+}
+
+function getRequestHostname(req: NextRequest): string | null {
+  const nextUrl = (req as { nextUrl?: { hostname?: string } }).nextUrl;
+  if (nextUrl?.hostname) return nextUrl.hostname;
+
+  try {
+    return new URL(req.url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function isDatabaseUnavailable(error: unknown): boolean {
+  if (!isObject(error)) return false;
+
+  const code = "code" in error ? error.code : null;
+  if (code === "ECONNREFUSED") return true;
+
+  const message = "message" in error ? String(error.message) : "";
+  if (message.includes("ECONNREFUSED") || message.includes("connection refused")) {
+    return true;
+  }
+
+  const cause = "cause" in error ? error.cause : null;
+  if (cause && isDatabaseUnavailable(cause)) return true;
+
+  const nestedErrors = "errors" in error ? error.errors : null;
+  if (Array.isArray(nestedErrors)) {
+    return nestedErrors.some((nestedError) => isDatabaseUnavailable(nestedError));
+  }
+
+  return false;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

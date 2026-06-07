@@ -4,6 +4,9 @@ import Image from "next/image";
 import { useState } from "react";
 import { motion } from "framer-motion";
 
+const WORDMARK_SOURCE_WIDTH = 1320;
+const WORDMARK_SOURCE_HEIGHT = 300;
+
 export function MurmurMark({
   as = "span",
   size = 39,
@@ -64,10 +67,11 @@ export function MurmurMark({
           <Image
             src="/brand/murmur-wordmark-source-cropped.png"
             alt=""
-            fill
+            width={WORDMARK_SOURCE_WIDTH}
+            height={WORDMARK_SOURCE_HEIGHT}
             sizes={`${width}px`}
-            className={`object-contain drop-shadow-[0_8px_18px_rgba(26,26,26,0.1)] ${imageClassName}`.trim()}
-            style={{ transform: `translateY(${yOffset}px)` }}
+            className={`h-full w-full object-contain drop-shadow-[0_8px_18px_rgba(26,26,26,0.1)] ${imageClassName}`.trim()}
+            style={{ transform: `translateY(${yOffset}px)`, width: "100%", height: "100%" }}
             priority
           />
         </motion.span>

@@ -31,8 +31,8 @@ mock.module("@/lib/observability/recent-events", () => ({
 
 const { GET } = await import("./route");
 
-function buildRequest(): NextRequest {
-  return new Request("http://test.local/api/observability/recent-events") as unknown as NextRequest;
+function buildRequest(url = "http://test.local/api/observability/recent-events"): NextRequest {
+  return new Request(url) as unknown as NextRequest;
 }
 
 beforeEach(() => {
@@ -57,6 +57,22 @@ describe("GET /api/observability/recent-events", () => {
     expect(response.status).toBe(403);
     const body = await response.json() as { error: string };
     expect(body.error).toBe("forbidden");
+  });
+
+  it("allows guest debug access on localhost in non-production previews", async () => {
+    nextAuth = {
+      ok: true,
+      user: { id: "guest", email: null, name: "Guest", avatarUrl: null },
+      source: "guest",
+      sessionId: null,
+    };
+
+    const response = await GET(buildRequest("http://localhost/api/observability/recent-events"));
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      events: Array<{ event: string; requestId: string }>;
+    };
+    expect(body.events[0]?.requestId).toBe("req_debug");
   });
 
   it("returns the recent event buffer for authenticated sessions", async () => {

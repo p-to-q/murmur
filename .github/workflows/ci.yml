@@ -6,8 +6,16 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   verify:
+    timeout-minutes: 25
     runs-on: ubuntu-latest
 
     steps:
@@ -23,12 +31,22 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: workers/audio-engine/requirements*.txt
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install audio worker dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r workers/audio-engine/requirements.txt
+
       - name: Lint
         run: bun run lint
+
+      - name: Check local markdown links
+        run: bun run check:links
 
       - name: Test
         run: bun test
@@ -36,13 +54,8 @@ jobs:
       - name: Audio worker tests
         run: bun run test:audio
 
-      - name: Install audio worker dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r workers/audio-engine/requirements.txt
+      - name: Build audit
+        run: bun run build:audit
 
-      - name: Full audio worker tests
-        run: bun run test:audio:full
-
-      - name: Build
-        run: bun run build
+      - name: Local stack smoke
+        run: bash scripts/ci-local-stack-smoke.sh

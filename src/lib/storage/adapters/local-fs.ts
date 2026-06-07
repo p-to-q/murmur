@@ -52,7 +52,7 @@ export function createLocalFsStore(opts: LocalFsStoreOptions = {}): ObjectStore 
   const root = path.resolve(
     opts.root ??
       process.env.MURMUR_STORAGE_LOCAL_DIR ??
-      path.join(process.cwd(), ".murmur", "storage"),
+      path.join(/* turbopackIgnore: true */ process.cwd(), ".murmur", "storage"),
   );
   const urlPrefix = opts.urlPrefix ?? "/api/storage/local";
 

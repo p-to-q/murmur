@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getSongById } from "@/lib/db/queries/songs";
+import { getSongByIdForUser } from "@/lib/db/queries/songs";
 
 export function registerGetSong(server: McpServer, userId: string) {
   server.registerTool(
@@ -12,8 +12,8 @@ export function registerGetSong(server: McpServer, userId: string) {
       },
     },
     async ({ id }) => {
-      const song = await getSongById(id);
-      if (!song || song.userId !== userId) {
+      const song = await getSongByIdForUser(id, userId);
+      if (!song) {
         return {
           isError: true,
           content: [{ type: "text", text: `Song ${id} not found.` }],

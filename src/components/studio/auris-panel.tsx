@@ -50,14 +50,17 @@ export interface AurisPanelProps {
   busy: boolean;
   onApply: (prompt: string) => Promise<void> | void;
   promptPlaceholder?: string;
-  helperText?: string;
+  className?: string;
+  /** "dark" = glass mode for immersive gradient backgrounds */
+  variant?: "default" | "dark";
 }
 
 export function AurisPanel({
   busy,
   onApply,
   promptPlaceholder,
-  helperText,
+  className = "",
+  variant = "default",
 }: AurisPanelProps) {
   const t = useTranslator();
   const [prompt, setPrompt] = useState("");
@@ -69,20 +72,12 @@ export function AurisPanel({
     await onApply(value);
   };
 
-  return (
-    <section className="rounded-[28px] border border-[#E9E1D4] bg-[linear-gradient(180deg,rgba(255,254,251,0.98),rgba(249,244,236,0.98))] p-5 shadow-[0_16px_42px_rgba(26,26,26,0.05)] md:p-6">
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="min-w-0">
-          <p className="eyebrow mb-1.5 text-[#FF8A5C]">
-            AURIS · {t("studio.auris.badge")}
-          </p>
-          <h3 className="font-serif text-[22px] leading-[1.05] text-[#1A1A1A] md:text-[26px]">
-            {t("studio.auris.title")}
-          </h3>
-        </div>
-      </div>
+  const dark = variant === "dark";
 
-      <div className="mt-4 flex gap-2">
+  return (
+    <div className={className}>
+      {/* Input row */}
+      <div className="flex gap-2">
         <input
           type="text"
           value={prompt}
@@ -91,42 +86,44 @@ export function AurisPanel({
             if (event.key === "Enter") void submit();
           }}
           placeholder={promptPlaceholder ?? t("studio.prompt.placeholder")}
-          className="min-w-0 flex-1 rounded-[18px] border border-[#E6DDCF] bg-white/85 px-4 py-2.5 text-[13px] text-[#1A1A1A] outline-none transition-colors placeholder:text-[#9B9488] focus:border-[#FF8A5C]"
+          className={
+            dark
+              ? "min-w-0 flex-1 rounded-full border border-white/20 bg-white/8 px-4 py-2.5 text-[13px] text-white outline-none transition-colors placeholder:text-white/45 focus:border-white/40 focus:bg-white/12"
+              : "min-w-0 flex-1 rounded-full border border-[#E5DDD0] bg-white/80 px-4 py-2.5 text-[13px] text-[#1A1A1A] outline-none transition-colors placeholder:text-[#B6B0A4] focus:border-[#FF5924]"
+          }
         />
         <button
           onClick={() => void submit()}
           disabled={!prompt.trim() || busy}
-          className="min-w-[68px] rounded-[18px] bg-[#1A1A1A] px-4 py-2.5 text-[13px] font-medium text-white transition-opacity disabled:opacity-45"
+          className={
+            dark
+              ? "min-w-[60px] rounded-full bg-white/18 px-4 py-2.5 text-[13px] font-medium text-white transition-opacity hover:bg-white/25 disabled:opacity-35"
+              : "min-w-[60px] rounded-full bg-[#1A1A1A] px-4 py-2.5 text-[13px] font-medium text-white transition-opacity disabled:opacity-40"
+          }
         >
           {busy ? "…" : t("studio.prompt.cta")}
         </button>
       </div>
 
-      <p className="mt-4 text-[11px] text-[#8C8780]">
-        {helperText ?? t("studio.auris.sub")}
-      </p>
-
-      <div className="mt-2.5 space-y-2">
-        {QUICK_GROUPS.map((group) => (
-          <div key={group.id} className="flex items-center gap-2 flex-wrap">
-            <span className="w-12 shrink-0 text-[10px] uppercase tracking-[0.2em] text-[#B1A89A]">
-              {t(group.labelKey)}
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {group.actions.map((action) => (
-                <button
-                  key={action.id}
-                  onClick={() => void submit(action.prompt)}
-                  disabled={busy}
-                  className="rounded-full border border-[#E8DECF] bg-white/70 px-3 py-1 text-[12px] text-[#574F46] transition-colors hover:border-[#FF8A5C] hover:text-[#1A1A1A] disabled:opacity-45"
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
+      {/* Quick chips */}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {QUICK_GROUPS.flatMap((group) =>
+          group.actions.map((action) => (
+            <button
+              key={action.id}
+              onClick={() => void submit(action.prompt)}
+              disabled={busy}
+              className={
+                dark
+                  ? "rounded-full border border-white/20 bg-white/6 px-3 py-1 text-[11px] text-white/75 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-35"
+                  : "rounded-full border border-[#E5DDD0] bg-white/60 px-3 py-1 text-[11px] text-[#6F6A63] transition-colors hover:border-[#FF5924] hover:text-[#1A1A1A] disabled:opacity-40"
+              }
+            >
+              {action.label}
+            </button>
+          )),
+        )}
       </div>
-    </section>
+    </div>
   );
 }

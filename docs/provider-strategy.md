@@ -63,9 +63,6 @@ AUDIO_WORKER_URL=http://localhost:8001
 AUDIO_WORKER_TOKEN=
 AUDIO_ENGINE_PITCH_PROVIDER=auto
 AUDIO_ENGINE_DENOISE_PROVIDER=auto
-
-# Optional legacy alias for older local PYIN worker setups.
-BASIC_PITCH_WORKER_URL=
 ```
 
 No transcription URL is exposed as `NEXT_PUBLIC_*`. The browser does not pick

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatHumSupportCode } from "@/lib/observability/support-code";
 import type { RecentEvent } from "@/lib/observability/recent-events";
+import { QA_ROUTE_LINKS } from "@/lib/qa/qa-routes";
+import { usePreferencesStore } from "@/lib/store/preferences-store";
 
 const REFRESH_INTERVAL_MS = 2_000;
 const EVENT_FILTERS = [
@@ -23,6 +25,20 @@ interface RecentEventsResponse {
   events?: RecentEvent[];
   captured_at?: string;
   error?: string;
+}
+
+interface QaHealthResponse {
+  status?: string;
+  capturedAt?: string;
+  web?: { status?: string; runtime?: string };
+  worker?: {
+    configured?: boolean;
+    ok?: boolean;
+    status?: string;
+    service?: string | null;
+    url?: string | null;
+  };
+  qaRoutes?: string[];
 }
 
 const LEVEL_COLOR: Record<string, string> = {
@@ -53,24 +69,38 @@ function DebugPageContent() {
   const [events, setEvents] = useState<RecentEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [qaHealth, setQaHealth] = useState<QaHealthResponse | null>(null);
   const [filter, setFilter] = useState<EventFilter>("all");
   const [paused, setPaused] = useState(false);
-  const debugEnabled = searchParams.get("debug") === "1";
+  const developerMode = usePreferencesStore((state) => state.developerMode);
+  const debugEnabled = developerMode || searchParams.get("debug") === "1";
 
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch("/api/observability/recent-events", {
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        setError(`HTTP ${response.status}`);
+      const [eventsResponse, healthResponse] = await Promise.all([
+        fetch("/api/observability/recent-events", {
+          cache: "no-store",
+        }),
+        fetch("/api/qa/health", {
+          cache: "no-store",
+        }),
+      ]);
+
+      if (healthResponse.ok) {
+        setQaHealth((await healthResponse.json()) as QaHealthResponse);
+      }
+
+      if (!eventsResponse.ok) {
+        setError(`HTTP ${eventsResponse.status}`);
         return;
       }
-      const data = (await response.json()) as RecentEventsResponse;
+
+      const data = (await eventsResponse.json()) as RecentEventsResponse;
       if (data.error) {
         setError(data.error);
         return;
       }
+
       setEvents(data.events ?? []);
       setUpdatedAt(data.captured_at ?? new Date().toISOString());
       setError(null);
@@ -128,13 +158,13 @@ function DebugPageContent() {
             <span className="mx-1 font-mono text-[13px] text-[#1A1A1A]">
               ?debug=1
             </span>
-            when you need the live event stream.
+            or enable Developer mode in Settings when you need the live event stream.
           </p>
           <Link
-            href="/me"
+            href="/me/settings"
             className="mt-5 inline-flex rounded-full border border-[#E7DCCB] px-4 py-2 text-[12px] tracking-[0.06em] text-[#6F6A63] transition-colors hover:border-[#D6C7B0] hover:text-[#1A1A1A]"
           >
-            Back to Me
+            Open Settings
           </Link>
         </div>
       </div>
@@ -194,6 +224,62 @@ function DebugPageContent() {
       </header>
 
       <main className="px-6 py-6 max-w-5xl mx-auto">
+        <section className="mb-6 rounded-md border border-[#1A1A1A]/10 bg-white px-4 py-4">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[#8C8780]">
+            Stack health
+          </p>
+          <div className="mt-3 grid gap-2 md:grid-cols-3">
+            <HealthCard
+              label="Web"
+              status={qaHealth?.web?.status ?? "loading"}
+              detail={qaHealth?.web?.runtime ?? "loading"}
+            />
+            <HealthCard
+              label="Worker"
+              status={
+                qaHealth?.worker?.configured
+                  ? qaHealth?.worker?.ok
+                    ? "ok"
+                    : qaHealth?.worker?.status ?? "degraded"
+                  : "unconfigured"
+              }
+              detail={qaHealth?.worker?.service ?? qaHealth?.worker?.url ?? "not configured"}
+            />
+            <HealthCard
+              label="QA routes"
+              status={qaHealth?.qaRoutes?.length ? "ok" : "loading"}
+              detail={qaHealth?.qaRoutes ? `${qaHealth.qaRoutes.length} routes` : "loading"}
+            />
+          </div>
+        </section>
+
+        <section className="mb-6 rounded-md border border-[#1A1A1A]/10 bg-white px-4 py-4">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[#8C8780]">
+            QA shortcuts
+          </p>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {QA_ROUTE_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="rounded-md border border-[#E7DCCB] bg-[#FFFCF7] px-3 py-3 transition-colors hover:border-[#D6C7B0] hover:bg-white"
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-[13px] font-medium text-[#1A1A1A]">
+                    {link.label}
+                  </span>
+                  <span className="text-[11px] text-[#8C8780]">
+                    {link.href}
+                  </span>
+                </div>
+                <p className="mt-1 text-[12px] leading-[1.5] text-[#6F6A63]">
+                  {link.note}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
         {error && (
           <div className="mb-4 rounded-md border border-[#FF5924]/40 bg-[#FFE9DD] px-3 py-2 text-[12px] text-[#7A1F00]">
             Failed to load events: {error}
@@ -255,6 +341,38 @@ function DebugPageContent() {
           ))}
         </ol>
       </main>
+    </div>
+  );
+}
+
+function HealthCard({
+  label,
+  status,
+  detail,
+}: {
+  label: string;
+  status: string;
+  detail: string;
+}) {
+  const tone =
+    status === "ok"
+      ? { border: "#D6E8D6", bg: "#F7FBF7", fg: "#215A21" }
+      : status === "loading"
+        ? { border: "#E7DCCB", bg: "#FFFCF7", fg: "#6F6A63" }
+        : { border: "#FFD6C8", bg: "#FFF5F0", fg: "#9A3F1B" };
+
+  return (
+    <div
+      className="rounded-md border px-3 py-3"
+      style={{ borderColor: tone.border, background: tone.bg }}
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[12px] font-medium text-[#1A1A1A]">{label}</span>
+        <span className="text-[11px] uppercase tracking-[0.12em]" style={{ color: tone.fg }}>
+          {status}
+        </span>
+      </div>
+      <p className="mt-1 text-[12px] leading-[1.5] text-[#6F6A63]">{detail}</p>
     </div>
   );
 }

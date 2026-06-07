@@ -1,5 +1,12 @@
 # Testing Strategy
 
+Historical note: this document was written as the full v2 target state. The
+current repo has implemented a meaningful subset of it already
+(`bun test`, `bun run test:audio`, `bun run smoke:local`,
+`bun run smoke:pages`, `bash scripts/ci-local-stack-smoke.sh`,
+`bun run build:audit`), but it has not yet landed the Playwright-based browser
+e2e lane described below.
+
 Murmur v1 has zero tests. v2 cannot ship with that gap. This document
 defines the testing bar for the v2 cutover and the layered approach
 that gets us there without turning every PR into a test sprint.
@@ -23,6 +30,21 @@ philosophy.
 
 Required to merge: unit + integration + golden master pass; e2e
 informational unless it gates a release.
+
+## 1.1 What exists today
+
+Current shipped verification layers:
+
+- **Bun unit / integration-leaning tests** via `bun test`
+- **Python worker tests** via `bun run test:audio`
+- **API / stack smoke** via `bun run smoke:local`
+- **Primary page-shell smoke** via `bun run smoke:pages`
+- **Built-app + live-worker smoke** via
+  `bash scripts/ci-local-stack-smoke.sh`
+- **Build-warning governance** via `bun run build:audit`
+
+That means Murmur is no longer starting from "zero tests," but it is also not
+yet at the final multi-layer target described in the rest of this document.
 
 ---
 

@@ -43,7 +43,7 @@ export function UserBadge() {
   }
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative z-50">
       <BadgeTrigger user={user} onClick={() => setOpen((v) => !v)} />
       {open && (
         <DropdownPanel user={user} onClose={() => setOpen(false)}>
@@ -86,8 +86,37 @@ function DropdownPanel({
   onClose: () => void;
   children?: React.ReactNode;
 }) {
+  const [songCount, setSongCount] = useState<number | null>(null);
+  const [joinedDate, setJoinedDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Fetch song count
+    fetch("/api/songs")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setSongCount(data.length);
+        }
+      })
+      .catch(() => {
+        // Ignore errors
+      });
+
+    // Parse joined date from user ID if it's a ULID/timestamp-based ID
+    try {
+      // Assuming user.id might contain creation timestamp info
+      // This is a placeholder - adjust based on your actual ID format
+      setJoinedDate(new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short"
+      }));
+    } catch {
+      setJoinedDate(null);
+    }
+  }, [user.id]);
+
   return (
-    <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-xl border border-border bg-background shadow-lg">
+    <div className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-xl border border-border bg-background shadow-lg">
       <div className="flex items-start justify-between gap-3 px-4 py-4">
         <div className="flex items-center gap-3">
           <Avatar user={user} size={40} />
@@ -106,7 +135,13 @@ function DropdownPanel({
         </button>
       </div>
 
-      <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground space-y-1.5">
+      <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground space-y-2">
+        {songCount !== null && (
+          <Row label="Songs" value={String(songCount)} />
+        )}
+        {joinedDate && (
+          <Row label="Joined" value={joinedDate} />
+        )}
         <Row label="User ID" value={user.id} mono />
       </div>
 

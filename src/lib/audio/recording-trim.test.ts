@@ -8,13 +8,24 @@ describe("recording trim helpers", () => {
     samples.fill(0.05, 1000, 1800);
 
     const range = findVoicedSampleRange(samples, sampleRate, {
-      thresholdRms: 0.012,
+      thresholdRms: 0.01,
       windowMs: 20,
-      paddingMs: 250,
+      paddingMs: 420,
       minDurationMs: 300,
     });
 
-    expect(range).toEqual({ start: 750, end: 2050 });
+    expect(range).toEqual({ start: 580, end: 2220 });
+  });
+
+  it("captures softer openings that would otherwise be clipped away", () => {
+    const sampleRate = 1000;
+    const samples = new Float32Array(2200);
+    samples.fill(0.0105, 820, 960);
+    samples.fill(0.032, 960, 1500);
+
+    const range = findVoicedSampleRange(samples, sampleRate);
+
+    expect(range).toEqual({ start: 400, end: 1920 });
   });
 
   it("returns null when the recording has no stable voiced window", () => {

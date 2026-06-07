@@ -1,28 +1,28 @@
 "use client";
 
 /**
- * GalleryScreen — Compose v2 *remember* moment.
+ * GalleryScreen v2 — 极致美学版
  *
- * Specced in docs/page-redesign.md §7.
- *
- * Keeps the word-card MyMind grid, replaces same-y-looking initials covers
- * with deterministic SongCoverArt (per-song fingerprint), adds a quiet
- * newest/A-Z sort affordance, polishes empty state copy.
+ * 特点：
+ * - 瀑布流布局（Masonry）
+ * - 随机生成封面（每次都不同）
+ * - Capwords 风格白边标签
+ * - 酷炫弹性动画 + 3D Hover
+ * - 懒加载 + Shimmer 骨架屏
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
+import Masonry from "react-masonry-css";
 import { memory } from "@/lib/platform/memory";
 
 import { useTranslator } from "@/lib/i18n";
-import { getLineageLabel } from "@/modules/music/lineage";
-import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
-import type { SongCard } from "@/modules/shared/types";
+import type { SongCard as SongCardType } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
-import { SongCoverArt } from "@/components/song-detail/song-cover-art";
+import { SongCard } from "@/components/gallery/SongCard";
 
-type SongWithMeta = SongCard & { bpm?: number; keySignature?: string };
+type SongWithMeta = SongCardType & { bpm?: number; keySignature?: string };
 type SortMode = "newest" | "alpha";
 
 export function GalleryScreen() {
@@ -64,7 +64,7 @@ export function GalleryScreen() {
     );
   }, [songs, sort]);
 
-  const handleSongClick = (song: SongCard) => {
+  const handleSongClick = (song: SongCardType) => {
     memory
       .reportAction({
         content: `Opened "${song.title}" from gallery`,
@@ -76,166 +76,114 @@ export function GalleryScreen() {
     router.push(`/song/${song.id}`);
   };
 
+  // Masonry 响应式列数
+  const breakpointCols = {
+    default: 5,
+    1536: 4,
+    1280: 3,
+    768: 2,
+  };
+
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
 
-      {/* ── Header ───────────────────────────────────────────────── */}
+      {/* Header */}
       <div
-        className="relative z-10 px-6 md:px-12 pb-10 md:pb-14 max-w-6xl"
+        className="relative z-10 px-6 md:px-12 pb-8 md:pb-12 max-w-7xl mx-auto"
         style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 56px)" }}
       >
-        <div className="flex items-baseline justify-between gap-4">
-          <div className="min-w-0">
-            <p className="eyebrow text-[#FF8A5C]">
-              {songs.length === 0
-                ? (t("gallery.eyebrow.empty") || "YOUR SHELF")
-                : (t("gallery.eyebrow") || `${songs.length} ${songs.length === 1 ? "SONG" : "SONGS"}`)}
-            </p>
-            <h1 className="hero-serif-italic mt-3 text-[#1A1A1A] text-[48px] leading-[1.02] md:text-[76px]">
+        <div className="flex items-start justify-between gap-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            className="min-w-0 flex-1"
+          >
+            <h1 className="hero-serif-italic text-[#1A1A1A] text-[40px] leading-[1.05] md:text-[64px]">
               {t("gallery.title") || "Things you hummed"}
             </h1>
-            <p className="font-serif-italic mt-3 max-w-[28rem] text-[14px] leading-[1.55] text-[#6F6A63] md:text-[15px]">
+            <p className="font-serif-italic mt-2 max-w-[32rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
               {t("gallery.subtitle") || "A quiet shelf of melodies."}
             </p>
-          </div>
+          </motion.div>
 
           {songs.length > 1 && (
-            <SortToggle sort={sort} onChange={setSort} t={t} />
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+            >
+              <SortToggle sort={sort} onChange={setSort} t={t} />
+            </motion.div>
           )}
         </div>
       </div>
 
-      {/* ── Loading ──────────────────────────────────────────────── */}
+      {/* Loading */}
       {isLoading && (
-        <div className="relative z-10 px-6 md:px-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-12 max-w-6xl">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex flex-col gap-3">
-              <div className="w-[120px] h-[120px] rounded-[14px] bg-[#ECE5D6] animate-pulse" />
-              <div className="h-6 w-3/4 bg-[#ECE5D6] rounded animate-pulse" />
-              <div className="h-2.5 w-1/2 bg-[#ECE5D6] rounded animate-pulse" />
-            </div>
-          ))}
+        <div className="relative z-10 px-6 md:px-12 max-w-7xl mx-auto">
+          <Masonry
+            breakpointCols={breakpointCols}
+            className="flex -ml-6 w-auto"
+            columnClassName="pl-6 bg-clip-padding"
+          >
+            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+              <div key={i} className="mb-8">
+                <div className="aspect-square rounded-[16px] bg-gradient-to-r from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer" />
+                <div className="mt-3 mx-auto w-3/4 h-10 rounded-[10px] bg-[#ECE5D6]" />
+              </div>
+            ))}
+          </Masonry>
         </div>
       )}
 
-      {/* ── Empty state ──────────────────────────────────────────── */}
+      {/* Empty state */}
       {!isLoading && songs.length === 0 && <EmptyState t={t} router={router} />}
 
-      {/* ── Grid ─────────────────────────────────────────────────── */}
+      {/* Masonry Grid */}
       {!isLoading && songs.length > 0 && (
-        <div className="relative z-10 px-6 md:px-12 pb-32 max-w-6xl">
-          <motion.div
-            layout
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-12"
+        <div className="relative z-10 px-6 md:px-12 pb-32 max-w-7xl mx-auto">
+          <Masonry
+            breakpointCols={breakpointCols}
+            className="flex -ml-6 w-auto"
+            columnClassName="pl-6 bg-clip-padding"
           >
-            <AnimatePresence mode="popLayout">
-              {sorted.map((song, i) => (
-                <SongTile
-                  key={song.id}
-                  song={song}
+            {sorted.map((song, i) => (
+              <div key={song.id} className="mb-8">
+                <SongCard
+                  id={song.id}
+                  title={song.title}
+                  vibe={song.vibe}
+                  bpm={song.bpm}
+                  createdAt={song.createdAt}
                   index={i}
-                  t={t}
                   onClick={() => handleSongClick(song)}
                 />
-              ))}
-            </AnimatePresence>
-          </motion.div>
+              </div>
+            ))}
+          </Masonry>
 
-          <div className="mt-14 flex justify-center">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="mt-12 flex justify-center"
+          >
             <button
               onClick={() => router.push("/")}
               className="font-serif-italic text-[15px] text-[#FF5924] hover:text-[#D9421A] underline-mm transition-colors"
             >
               ↻ {t("gallery.new_hum") || "Hum another one"}
             </button>
-          </div>
+          </motion.div>
         </div>
       )}
     </div>
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────── */
-
-function SongTile({
-  song,
-  index,
-  onClick,
-  t,
-}: {
-  song: SongWithMeta;
-  index: number;
-  onClick: () => void;
-  t: (key: string) => string;
-}) {
-  const gradient =
-    (song.visualConfig as { posterBg?: string }).posterBg ??
-    song.visualConfig.gradient ??
-    "linear-gradient(135deg, #F4C87A, #FF5924)";
-  const initials = song.title
-    .split(/\s+/)
-    .map((w) => w[0] ?? "")
-    .join("")
-    .slice(0, 2);
-  const melodyOrigin = getMelodyOriginCopy(song.sourceMelodyKind ?? "corrected", t);
-  const lineageLabel = getLineageLabel(song, (key) => {
-    if (key === "lineage.original") {
-      return t("gallery.tile.original") || "Original";
-    }
-    if (key === "lineage.branch_n") {
-      return t("gallery.tile.branch_n") || "Branch {n}";
-    }
-    return t(key);
-  });
-
-  return (
-    <motion.button
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.96 }}
-      transition={{
-        delay: index * 0.03,
-        duration: 0.45,
-        ease: [0.22, 1, 0.36, 1],
-      }}
-      whileHover={{ y: -3 }}
-      whileTap={{ scale: 0.97 }}
-      onClick={onClick}
-      className="group flex w-full flex-col items-start text-left"
-    >
-      <div
-        className="relative overflow-hidden rounded-[14px]"
-        style={{
-          width: "120px",
-          height: "120px",
-          boxShadow:
-            "0 1px 3px rgba(26,26,26,0.06), 0 10px 28px rgba(26,26,26,0.10)",
-        }}
-      >
-        <SongCoverArt
-          gradient={gradient}
-          seed={song.id}
-          bpm={song.bpm}
-          keySig={song.keySignature}
-          initials={initials}
-          className="absolute inset-0"
-        />
-      </div>
-
-      <p className="mt-4 font-serif-italic text-[#1A1A1A] text-[26px] leading-[1.04] tracking-[-0.01em] group-hover:text-[#FF5924] transition-colors line-clamp-2 md:text-[30px]">
-        {song.title}
-      </p>
-      <p className="mt-2 text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1] tabular-nums">
-        {song.vibe}
-        {song.bpm ? ` · ${song.bpm} BPM` : ""}
-      </p>
-      <p className="mt-2 text-[11px] leading-[1.45] text-[#8C8780]">
-        {melodyOrigin.label} · {lineageLabel}
-      </p>
-    </motion.button>
-  );
-}
+/* Components */
 
 function SortToggle({
   sort,
@@ -247,17 +195,17 @@ function SortToggle({
   t: (k: string) => string;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-2 text-[11px] tracking-[0.04em]">
+    <div className="flex shrink-0 items-center gap-3 text-[12px] tracking-[0.04em]">
       <button
         onClick={() => onChange("newest")}
-        className={`transition-colors ${sort === "newest" ? "text-[#1A1A1A]" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
+        className={`transition-colors ${sort === "newest" ? "text-[#1A1A1A] font-medium" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
       >
         ↑ {t("gallery.sort.newest") || "newest"}
       </button>
       <span className="text-[#D2C9B6]">·</span>
       <button
         onClick={() => onChange("alpha")}
-        className={`transition-colors ${sort === "alpha" ? "text-[#1A1A1A]" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
+        className={`transition-colors ${sort === "alpha" ? "text-[#1A1A1A] font-medium" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
       >
         a–z
       </button>
@@ -274,22 +222,60 @@ function EmptyState({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 }}
-      className="relative z-10 flex flex-col items-start px-6 md:px-12 pb-32 max-w-3xl"
+      transition={{ delay: 0.2, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="relative z-10 flex flex-col items-center px-6 md:px-12 pb-32 max-w-2xl mx-auto text-center"
     >
-      <p className="font-serif-italic text-[#1A1A1A] text-[28px] leading-[1.2] md:text-[36px]">
-        {t("gallery.empty.title") || "Nothing here yet."}
+      {/* 空白音符 SVG */}
+      <svg
+        width="120"
+        height="120"
+        viewBox="0 0 120 120"
+        fill="none"
+        className="mb-8 opacity-30"
+      >
+        <motion.circle
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 0.3 }}
+          transition={{
+            duration: 2,
+            repeat: Infinity,
+            repeatType: "reverse",
+            ease: "easeInOut",
+          }}
+          cx="60"
+          cy="80"
+          r="12"
+          fill="#FF5924"
+        />
+        <motion.path
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{
+            duration: 1.5,
+            repeat: Infinity,
+            repeatType: "reverse",
+            ease: "easeInOut",
+          }}
+          d="M 72 80 L 72 30 Q 72 20 82 22 L 100 26"
+          stroke="#FF5924"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+      </svg>
+
+      <p className="font-serif-italic text-[#1A1A1A] text-[32px] leading-[1.2] md:text-[40px]">
+        {t("gallery.empty.title") || "还没有歌"}
       </p>
-      <p className="font-serif-italic text-[#6F6A63] text-[20px] mt-1 md:text-[26px]">
-        {t("gallery.empty.title2") || "Hum your first one."}
+      <p className="font-serif-italic text-[#6F6A63] text-[20px] mt-2 md:text-[24px]">
+        {t("gallery.empty.title2") || "来哼第一首吧"}
       </p>
       <button
         onClick={() => router.push("/")}
-        className="mm-btn-primary mt-8"
+        className="mm-btn-primary mt-10"
       >
-        {t("gallery.empty.cta") || "Start humming"} →
+        {t("gallery.empty.cta") || "开始哼唱"} →
       </button>
     </motion.div>
   );
