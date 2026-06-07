@@ -962,18 +962,43 @@ export function HumScreen() {
                 >
                   {t("hum.mic.cta_example")}
                 </button>
-                <button
-                  onClick={() => {
-                    startAudioContext();
-                    setHumError(null);
-                    if (humError.code !== "billing_unavailable") {
+
+                {/* 如果是 billing_unavailable，显示两个按钮 */}
+                {humError.code === "billing_unavailable" ? (
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => {
+                        startAudioContext();
+                        setHumError(null);
+                      }}
+                      className="flex-1 text-[#8C8780] text-[13px] underline-mm"
+                    >
+                      {errorCopy.retry}
+                    </button>
+                    <button
+                      onClick={() => {
+                        startAudioContext();
+                        setHumError(null);
+                        // 使用示例旋律继续流程（跳过计费）
+                        transcribeAndGenerate(undefined);
+                      }}
+                      className="flex-1 mm-btn-secondary justify-center text-[13px] py-2"
+                    >
+                      {errorCopy.demo || "测试使用"}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      startAudioContext();
+                      setHumError(null);
                       startRecording();
-                    }
-                  }}
-                  className="text-[#8C8780] text-[13px] underline-mm"
-                >
-                  {errorCopy.retry}
-                </button>
+                    }}
+                    className="text-[#8C8780] text-[13px] underline-mm"
+                  >
+                    {errorCopy.retry}
+                  </button>
+                )}
                 {humError.requestId && humError.showSupportCode && (
                   <p className="mt-4 text-[10px] tracking-[0.18em] uppercase text-[#B6B0A4]">
                     code · {formatHumSupportCode({
@@ -1011,7 +1036,7 @@ function writeFixtureRescueState(
 function copyForState(
   error: HumErrorState,
   t: (key: Parameters<ReturnType<typeof useTranslator>>[0]) => string,
-): { title: string; detail: string; retry: string } {
+): { title: string; detail: string; retry: string; demo?: string } {
   if (error.code === "worker_unconfigured") {
     return {
       title: t("hum.err.worker_unconfigured.title"),
@@ -1024,6 +1049,7 @@ function copyForState(
       title: t("hum.err.billing_unavailable.title"),
       detail: t("hum.err.billing_unavailable.detail"),
       retry: t("hum.err.unavailable.cta_retry"),
+      demo: t("hum.cta_demo") || "测试使用", // 添加测试使用按钮
     };
   }
 
