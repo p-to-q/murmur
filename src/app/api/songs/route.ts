@@ -144,11 +144,36 @@ export async function POST(req: NextRequest) {
 
   try {
     if (shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname })) {
-      const song = await createSong(songInput);
+      try {
+        const song = await createSong(songInput);
 
-      return NextResponse.json(song, {
-        headers: { "X-Request-Id": requestId },
-      });
+        return NextResponse.json(song, {
+          headers: { "X-Request-Id": requestId },
+        });
+      } catch (dbError) {
+        // 如果数据库失败，使用本地 fallback
+        if (isDatabaseUnavailable(dbError)) {
+          const fallbackSong = createLocalSongFallback(songInput);
+          log("song.create_failed", {
+            reason: "database_unavailable",
+            fallback: "local_bypass_song_snapshot",
+            songId: fallbackSong.id,
+          }, {
+            route: ROUTE,
+            requestId,
+            userId,
+            sessionId: auth.sessionId,
+            level: "warn",
+          });
+          return NextResponse.json(fallbackSong, {
+            headers: {
+              "X-Request-Id": requestId,
+              "X-Murmur-Fallback": "local-bypass-song",
+            },
+          });
+        }
+        throw dbError;
+      }
     }
 
     const result = await createSongWithSpend(
