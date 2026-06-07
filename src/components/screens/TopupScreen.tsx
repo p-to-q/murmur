@@ -426,7 +426,12 @@ export function TopupScreen() {
                       }}
                       labelStyle={{ color: "#8C8780", fontSize: "11px", marginBottom: "3px" }}
                       itemStyle={{ color: "#1A1A1A", fontWeight: 600, fontFamily: "var(--font-serif)" }}
-                      formatter={(value: number | string) => typeof value === 'number' ? [`${value.toFixed(0)} notes`, ""] : ["", ""]}
+                      formatter={(value: number | string | undefined) => {
+                        if (typeof value === 'number') {
+                          return [`${value.toFixed(0)} notes`, ""];
+                        }
+                        return ["", ""];
+                      }}
                       cursor={{ stroke: "#B7AEA1", strokeWidth: 1.5 }}
                     />
                     <Line
