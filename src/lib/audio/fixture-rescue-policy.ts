@@ -19,6 +19,7 @@ export const INITIAL_FIXTURE_RESCUE_STATE: FixtureRescueState = {
 const TRANSIENT_CODES = new Set<TranscribeRequestErrorCode>([
   "network_error",
   "worker_unavailable",
+  "worker_unconfigured",  // 添加：当音频引擎未配置时，自动使用示例旋律
   "billing_unavailable",
 ]);
 
