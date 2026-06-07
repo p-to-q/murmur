@@ -103,16 +103,21 @@ function DropdownPanel({
       });
 
     // Parse joined date from user ID if it's a ULID/timestamp-based ID
-    try {
-      // Assuming user.id might contain creation timestamp info
-      // This is a placeholder - adjust based on your actual ID format
-      setJoinedDate(new Date().toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short"
-      }));
-    } catch {
-      setJoinedDate(null);
-    }
+    // Use setTimeout to avoid setState during render
+    const timer = setTimeout(() => {
+      try {
+        // Assuming user.id might contain creation timestamp info
+        // This is a placeholder - adjust based on your actual ID format
+        setJoinedDate(new Date().toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short"
+        }));
+      } catch {
+        setJoinedDate(null);
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [user.id]);
 
   return (

@@ -1,0 +1,85 @@
+name: Repository Maintenance
+
+on:
+  schedule:
+    # Run every Sunday at 2:00 AM Beijing time
+    - cron: '0 18 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close stale issues
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: '此 issue 已经 60 天没有活动，将在 7 天后自动关闭。如仍需处理，请回复此消息。'
+          stale-pr-message: '此 PR 已经 30 天没有活动，将在 7 天后自动关闭。如仍需合并，请更新 PR。'
+          close-issue-message: '此 issue 因长期无活动已自动关闭。'
+          close-pr-message: '此 PR 因长期无活动已自动关闭。'
+          days-before-issue-stale: 60
+          days-before-pr-stale: 30
+          days-before-issue-close: 7
+          days-before-pr-close: 7
+          stale-issue-label: 'stale'
+          stale-pr-label: 'stale'
+          exempt-issue-labels: 'pinned,security,roadmap'
+          exempt-pr-labels: 'work-in-progress'
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Audit dependencies
+        run: |
+          echo "## 🔍 Dependency Audit Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          bun audit || echo "Found vulnerabilities - check output"
+
+      - name: Check outdated packages
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📦 Outdated Packages" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          bun outdated || true
+
+  check-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check for broken links in docs
+        run: |
+          echo "## 📚 Documentation Health" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check for TODO/FIXME in docs
+          if grep -r "TODO\|FIXME" docs/ --color=never; then
+            echo "⚠️ Found TODOs in documentation" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ No TODOs in documentation" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check README freshness
+        run: |
+          # Check if README was updated in last 90 days
+          LAST_UPDATE=$(git log -1 --format=%ct README.md)
+          NOW=$(date +%s)
+          DAYS_OLD=$(( ($NOW - $LAST_UPDATE) / 86400 ))
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "README.md last updated: $DAYS_OLD days ago" >> $GITHUB_STEP_SUMMARY
+
+          if [ $DAYS_OLD -gt 90 ]; then
+            echo "⚠️ README might need updating" >> $GITHUB_STEP_SUMMARY
+          fi
