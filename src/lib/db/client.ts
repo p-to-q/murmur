@@ -4,8 +4,12 @@ import postgres from "postgres";
 
 config({ path: ".env" });
 
-const client = postgres(
-  process.env.DATABASE_URL ?? "postgresql://postgres:password@localhost:5432/myapp"
-);
+// Vercel provides POSTGRES_URL, others might use DATABASE_URL
+const connectionString =
+  process.env.DATABASE_URL ??
+  process.env.POSTGRES_URL ??
+  "postgresql://postgres:password@localhost:5432/myapp";
+
+const client = postgres(connectionString);
 
 export const db = drizzle(client);
