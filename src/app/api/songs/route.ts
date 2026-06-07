@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
   const songInput = buildSongInput(body, userId);
 
   try {
-    if (shouldBypassBillingInDevelopment()) {
+    if (shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname })) {
       const song = await createSong(songInput);
 
       return NextResponse.json(song, {
@@ -308,6 +308,13 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function shouldUseLocalSongFallback(req: NextRequest, userId: string): boolean {
+  // TODO: 临时允许所有用户使用本地 fallback（当数据库不可用时）
+  // 配置好数据库后，可以恢复只允许 guest 用户
+  if (shouldBypassBillingInDevelopment({ host: getRequestHostname(req) })) {
+    return true;
+  }
+
+  // 原逻辑：只允许 guest 用户
   if (userId !== "guest") return false;
   return shouldBypassBillingInDevelopment({
     host: getRequestHostname(req),

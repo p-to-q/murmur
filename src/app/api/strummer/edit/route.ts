@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
-  if (!shouldBypassBillingInDevelopment() && balance.notes < COST.llm_edit) {
+  if (!shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname }) && balance.notes < COST.llm_edit) {
     return NextResponse.json(
       {
         error: "insufficient_notes",
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
         balanceAfter: null;
         duplicate: false;
       };
-  if (shouldBypassBillingInDevelopment()) {
+  if (shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname })) {
     spend = {
       ok: true,
       ledgerId: null,
