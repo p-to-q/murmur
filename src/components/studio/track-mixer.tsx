@@ -1,5 +1,6 @@
 "use client";
 import { motion } from "framer-motion";
+import { Music, Piano, Waves, Music2, Drum, Sparkles } from "lucide-react";
 import type { ArrangementState, TrackState } from "@/modules/shared/types";
 import { useTranslator } from "@/lib/i18n";
 import type { TKey } from "@/lib/i18n/dict";
@@ -16,68 +17,42 @@ const TRACKS: Array<{
     key: "melody",
     labelKey: "track.melody",
     letter: "M",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-      </svg>
-    ),
+    icon: <Music className="w-4 h-4" />,
     color: "#E8855A"
   },
   {
     key: "chords",
     labelKey: "track.chords",
     letter: "C",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-        <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
-      </svg>
-    ),
+    icon: <Piano className="w-4 h-4" />,
     color: "#B8C4CE"
   },
   {
     key: "strings",
     labelKey: "track.strings",
     letter: "S",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-        <path d="M12 3v18M9 6v12M15 6v12M6 9v6M18 9v6"/>
-      </svg>
-    ),
+    icon: <Waves className="w-4 h-4" />,
     color: "#C4B4D8"
   },
   {
     key: "bass",
     labelKey: "track.bass",
     letter: "B",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-        <path d="M21 3H3v18h18V3zM8 18H6V6h2v12zm4 0h-2V6h2v12zm4 0h-2V6h2v12z"/>
-      </svg>
-    ),
+    icon: <Music2 className="w-4 h-4" />,
     color: "#A09880"
   },
   {
     key: "drums",
     labelKey: "track.drums",
     letter: "D",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-        <circle cx="12" cy="12" r="8"/>
-        <circle cx="12" cy="12" r="3" fill="white" fillOpacity="0.3"/>
-      </svg>
-    ),
+    icon: <Drum className="w-4 h-4" />,
     color: "#D4784A"
   },
   {
     key: "texture",
     labelKey: "track.texture",
     letter: "T",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-        <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" opacity="0.6"/>
-        <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12V2z" opacity="0.3"/>
-      </svg>
-    ),
+    icon: <Sparkles className="w-4 h-4" />,
     color: "#9AAFBA"
   },
 ];
@@ -298,6 +273,16 @@ function StringFader({
 
   return (
     <div className={`transition-opacity ${isOff ? "opacity-35" : ""}`}>
+      {/* Secondary label — above the track, larger */}
+      <div className="flex items-baseline justify-start pl-11 mb-1">
+        <span
+          className="text-[11px] font-serif-italic tracking-wide"
+          style={{ color: "rgba(255,255,255,0.35)" }}
+        >
+          {label}
+        </span>
+      </div>
+
       {/* Main row: icon + groove, vertically centered */}
       <div className="flex items-center gap-3">
         {/* Icon badge */}
@@ -313,68 +298,61 @@ function StringFader({
           {icon}
         </button>
 
-        {/* Fader groove */}
-        <div className="flex-1 relative h-9 flex items-center pr-14">
-          {/* Groove channel — inset, tactile */}
-          <div
-            className="absolute left-0 right-14 h-[5px] rounded-full"
-            style={{
-              background: "rgba(255,255,255,0.05)",
-              boxShadow: "inset 0 1px 2px rgba(0,0,0,0.25), 0 0.5px 0 rgba(255,255,255,0.04)",
-            }}
-          />
-          {/* Colored fill */}
-          <motion.div
-            className="absolute left-0 h-[5px] rounded-full"
-            style={{ background: activeColor }}
-            animate={{ width: `${pct}%` }}
-            transition={{ duration: 0.12 }}
-          />
-          {/* Thumb knob */}
-          <motion.div
-            className="absolute w-[18px] h-[18px] rounded-full pointer-events-none"
-            style={{
-              background: track.enabled
-                ? "radial-gradient(circle at 40% 35%, #FFFFFF 0%, #E8E4DF 60%, #D0CBC4 100%)"
-                : "rgba(255,255,255,0.14)",
-              boxShadow: track.enabled
-                ? `0 1px 3px rgba(0,0,0,0.35), 0 0 10px 2px ${color}30`
-                : "none",
-            }}
-            animate={{ left: `calc(${pct}% - 9px)` }}
-            transition={{ duration: 0.06 }}
-          />
-          {/* Invisible range input */}
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={pct}
-            onChange={(e) => onChange(parseInt(e.target.value, 10) / 100)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            style={{ WebkitAppearance: "none" }}
-            aria-label={label}
-          />
+        {/* Fader groove container with percentage */}
+        <div className="flex-1 relative h-9 flex items-center gap-3">
+          {/* Groove wrapper - limited width */}
+          <div className="flex-1 relative h-9 flex items-center" style={{ maxWidth: 'calc(100% - 48px)' }}>
+            {/* Groove channel — inset, tactile */}
+            <div
+              className="absolute inset-x-0 h-[5px] rounded-full"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                boxShadow: "inset 0 1px 2px rgba(0,0,0,0.25), 0 0.5px 0 rgba(255,255,255,0.04)",
+              }}
+            />
+            {/* Colored fill */}
+            <motion.div
+              className="absolute left-0 h-[5px] rounded-full"
+              style={{ background: activeColor }}
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: 0.12 }}
+            />
+            {/* Thumb knob */}
+            <motion.div
+              className="absolute w-[18px] h-[18px] rounded-full pointer-events-none"
+              style={{
+                background: track.enabled
+                  ? "radial-gradient(circle at 40% 35%, #FFFFFF 0%, #E8E4DF 60%, #D0CBC4 100%)"
+                  : "rgba(255,255,255,0.14)",
+                boxShadow: track.enabled
+                  ? `0 1px 3px rgba(0,0,0,0.35), 0 0 10px 2px ${color}30`
+                  : "none",
+              }}
+              animate={{ left: `calc(${pct}% - 9px)` }}
+              transition={{ duration: 0.06 }}
+            />
+            {/* Invisible range input */}
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={pct}
+              onChange={(e) => onChange(parseInt(e.target.value, 10) / 100)}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              style={{ WebkitAppearance: "none" }}
+              aria-label={label}
+            />
+          </div>
 
-          {/* Percentage at the end of track */}
+          {/* Percentage - fixed position on the right */}
           <span
-            className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] tabular-nums font-medium"
-            style={{ color: "rgba(255,255,255,0.35)" }}
+            className="text-[13px] tabular-nums font-semibold flex-shrink-0"
+            style={{ color: "rgba(255,255,255,0.4)", minWidth: "42px" }}
           >
             {isOff ? "—" : `${pct}%`}
           </span>
         </div>
-      </div>
-
-      {/* Secondary label — larger, closer to groove */}
-      <div className="flex items-baseline justify-start pl-11 mt-0.5">
-        <span
-          className="text-[10px] font-serif-italic tracking-wide"
-          style={{ color: "rgba(255,255,255,0.32)" }}
-        >
-          {label}
-        </span>
       </div>
     </div>
   );
