@@ -289,9 +289,9 @@ function StringFader({
         </button>
 
         {/* Fader groove container with percentage */}
-        <div className="flex-1 relative h-6 flex items-center gap-3">
+        <div className="flex-1 relative h-[22px] flex items-center gap-3">
           {/* Groove wrapper - limited width */}
-          <div className="flex-1 relative h-6 flex items-center" style={{ maxWidth: 'calc(100% - 48px)' }}>
+          <div className="flex-1 relative h-[22px] flex items-center" style={{ maxWidth: 'calc(100% - 48px)' }}>
             {/* Groove channel — inset, tactile */}
             <div
               className="absolute inset-x-0 h-[5px] rounded-full"
@@ -345,8 +345,8 @@ function StringFader({
         </div>
       </div>
 
-      {/* Label below the track - much closer */}
-      <div className="pl-11 -mt-2">
+      {/* Label below the track - very close */}
+      <div className="pl-11 -mt-3">
         <span
           className="text-[11px] font-serif-italic tracking-wide"
           style={{ color: "rgba(255,255,255,0.35)" }}
