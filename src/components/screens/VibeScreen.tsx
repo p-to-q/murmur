@@ -259,7 +259,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.4 }}
                   onClick={handleBack}
-                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors whitespace-nowrap pb-1"
+                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors whitespace-nowrap"
                 >
                   ← {fromSavedSong
                     ? t("vibe.back.saved") || "Back to your song"
@@ -269,7 +269,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.1, duration: 0.4 }}
-                  className="font-serif-italic text-[36px] md:text-[42px] font-semibold text-[#1A1A1A] text-center flex-1 pb-3"
+                  className="font-serif-italic text-[22px] md:text-[26px] text-[#8C8780] text-center flex-1"
                 >
                   {t("cards.sub.short") || "Listen, then pick the one that feels right."}
                 </motion.h2>
@@ -278,7 +278,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.15, duration: 0.4 }}
                   onClick={handleReroll}
-                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors whitespace-nowrap pb-1"
+                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors whitespace-nowrap"
                 >
                   {t("vibe.reroll") || "New set"} →
                 </motion.button>

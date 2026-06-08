@@ -526,7 +526,7 @@ export function TopupScreen() {
                           className="absolute -top-2 left-1/2 -translate-x-1/2 text-white px-3 py-1 rounded-full text-[9px] font-semibold uppercase tracking-wider whitespace-nowrap"
                           style={paperTextureStyle}
                         >
-                          Most loved
+                          {sku.highlight === "popular" ? "Most loved" : "Best value"}
                         </div>
                       )}
 
