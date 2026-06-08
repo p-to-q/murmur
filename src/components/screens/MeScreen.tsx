@@ -100,7 +100,7 @@ export function MeScreen() {
         {/* Notes balance + Top up */}
         <Card>
           <SectionLabel>{t("me.notes.title") || "MURMUR NOTES"}</SectionLabel>
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px]">
               {isLoading ? "—" : balance?.notes ?? 0}
             </p>
