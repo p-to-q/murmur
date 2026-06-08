@@ -79,7 +79,7 @@ export function TrackMixer({
   if (variant === "strings") {
     return (
       <div className={`${className}`}>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-3">
           {TRACKS.map(({ key, labelKey, letter, icon, color }) => {
             const track = arrangement[key];
             const label = t(labelKey);
