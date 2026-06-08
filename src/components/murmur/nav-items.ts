@@ -76,6 +76,7 @@ export const TRAIL_ROOTS: TrailRoot[] = [
   {
     href: "/me",
     steps: [
+      { match: "/me/settings",    labelKey: "nav.flow.settings", fallback: "Settings" },
       { match: "/topup",          labelKey: "nav.flow.topup",    fallback: "Top up"   },
       { match: "/topup/checkout", labelKey: "nav.flow.checkout", fallback: "Checkout" },
     ],

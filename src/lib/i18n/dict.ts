@@ -396,6 +396,7 @@ export const DICT = {
   "nav.flow.vibe":               { zh: "风物",     en: "Vibe" },
   "nav.flow.studio":             { zh: "谱室",     en: "Studio" },
   "nav.flow.name":               { zh: "命名",     en: "Name it" },
+  "nav.flow.settings":           { zh: "设置",     en: "Settings" },
   "nav.flow.topup":              { zh: "补给",     en: "Top up" },
   "nav.flow.checkout":           { zh: "结账",     en: "Checkout" },
 
