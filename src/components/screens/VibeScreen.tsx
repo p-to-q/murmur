@@ -67,6 +67,7 @@ function playShutterClick() {
 }
 
 export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
+  const auditionStartTimerRef = useRef<number | null>(null);
   const router = useRouter();
   const t = useTranslator();
   const {
@@ -84,6 +85,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
   const [phase, setPhase] = useState<Phase>("closing");
   const [pickingId, setPickingId] = useState<string | null>(null);
+  const [dissolvingVersionId, setDissolvingVersionId] = useState<string | null>(null);
   const demoSeededRef = useRef(false);
   const sourceVersion = vibeVersions[0] ?? null;
   const fromSavedSong = sourceVersion?.sourceType === "library";
@@ -129,6 +131,9 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   /* ── Stop synth on unmount ────────────────────────────────────── */
   useEffect(() => {
     return () => {
+      if (auditionStartTimerRef.current !== null) {
+        window.clearTimeout(auditionStartTimerRef.current);
+      }
       synth.stop();
       setAuditioning(null);
     };
@@ -157,19 +162,33 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
   const handleAudition = useCallback(
     (version: VibeVersion) => {
+      if (auditionStartTimerRef.current !== null) {
+        window.clearTimeout(auditionStartTimerRef.current);
+        auditionStartTimerRef.current = null;
+      }
+
       if (auditioningVersionId === version.id) {
         synth.stop();
         setAuditioning(null);
+        setDissolvingVersionId(null);
         return;
       }
+
       try {
         synth.stop();
-        setAuditioning(version.id);
-        synth.play(version);
+        setAuditioning(null);
+        setDissolvingVersionId(version.id);
+        auditionStartTimerRef.current = window.setTimeout(() => {
+          auditionStartTimerRef.current = null;
+          setAuditioning(version.id);
+          setDissolvingVersionId(null);
+          synth.play(version);
+        }, 320);
       } catch (err) {
         console.error("[Vibe] audition error:", err);
         toast.error(t("cards.play_error") || "Couldn't play that preview.");
         setAuditioning(null);
+        setDissolvingVersionId(null);
       }
     },
     [auditioningVersionId, setAuditioning, t],
@@ -289,6 +308,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                 {vibeVersions.map((version, i) => {
                   const isLarge = i === 0;
                   const isAuditioning = auditioningVersionId === version.id;
+                  const isDissolving = dissolvingVersionId === version.id;
                   const isPicking = pickingId === version.id;
                   const someoneIsAuditioning = auditioningVersionId !== null;
                   return (
@@ -307,6 +327,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                         version={version}
                         isLarge={isLarge}
                         isAuditioning={isAuditioning}
+                        isDissolving={isDissolving}
                         someoneIsAuditioning={someoneIsAuditioning}
                         isPicking={isPicking}
                         onPick={handlePick}
@@ -339,6 +360,7 @@ function VibeCard({
   version,
   isLarge,
   isAuditioning,
+  isDissolving,
   someoneIsAuditioning,
   isPicking,
   onPick,
@@ -348,6 +370,7 @@ function VibeCard({
   version: VibeVersion;
   isLarge: boolean;
   isAuditioning: boolean;
+  isDissolving: boolean;
   someoneIsAuditioning: boolean;
   isPicking: boolean;
   onPick: (v: VibeVersion) => void;
@@ -358,10 +381,11 @@ function VibeCard({
   const accent = extractFirstHex(version.visualConfig.gradient) ?? "#FF8A5C";
   const vibePreset = VIBE_PRESETS.find((p) => p.id === version.vibe);
   const vibeLabel = vibePreset?.label[lang] || version.vibe;
+  const isClearing = isAuditioning || isDissolving;
 
   // Background layer blur: idle = slight soft focus, auditioning = clear, others = blurred
-  const bgBlur = isAuditioning ? 0 : someoneIsAuditioning ? 4.5 : 1.5;
-  const bgBrightness = isAuditioning ? 1.05 : someoneIsAuditioning ? 0.82 : 1;
+  const bgBlur = isClearing ? 0 : someoneIsAuditioning ? 4.5 : 1.5;
+  const bgBrightness = isClearing ? 1.05 : someoneIsAuditioning ? 0.82 : 1;
 
   return (
     <motion.div
@@ -403,7 +427,7 @@ function VibeCard({
         {/* Wave — bottom 55% */}
         <MurmurWave
           color={accent}
-          intensity={isAuditioning ? 0.85 : 0.52}
+          intensity={isClearing ? 0.85 : 0.52}
           isPlaying={isAuditioning}
           waveY={0.48}
           className="absolute inset-x-0 bottom-0 h-[58%] w-full pointer-events-none"

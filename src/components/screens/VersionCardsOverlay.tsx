@@ -106,7 +106,9 @@ export function VersionCardsOverlay() {
   const isVisible = recordingState === "done" && vibeVersions.length > 0;
   const [phase, setPhase] = useState<TransitionPhase>("idle");
   const [pickingId, setPickingId] = useState<string | null>(null);
+  const [dissolvingVersionId, setDissolvingVersionId] = useState<string | null>(null);
   const prevVisible = useRef(false);
+  const auditionStartTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (isVisible && !prevVisible.current) {
@@ -124,9 +126,18 @@ export function VersionCardsOverlay() {
     if (!isVisible && prevVisible.current) {
       setPhase("idle");
       setPickingId(null);
+      setDissolvingVersionId(null);
     }
     prevVisible.current = isVisible;
   }, [isVisible]);
+
+  useEffect(() => {
+    return () => {
+      if (auditionStartTimerRef.current !== null) {
+        window.clearTimeout(auditionStartTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleSelect = useCallback(
     (version: VibeVersion) => {
@@ -148,19 +159,32 @@ export function VersionCardsOverlay() {
 
   const handlePlay = useCallback(
     (version: VibeVersion) => {
+      if (auditionStartTimerRef.current !== null) {
+        window.clearTimeout(auditionStartTimerRef.current);
+        auditionStartTimerRef.current = null;
+      }
+
       if (auditioningVersionId === version.id) {
         synth.stop();
         setAuditioning(null);
+        setDissolvingVersionId(null);
         return;
       }
       try {
         synth.stop();
-        setAuditioning(version.id);
-        synth.play(version);
+        setAuditioning(null);
+        setDissolvingVersionId(version.id);
+        auditionStartTimerRef.current = window.setTimeout(() => {
+          auditionStartTimerRef.current = null;
+          setAuditioning(version.id);
+          setDissolvingVersionId(null);
+          synth.play(version);
+        }, 320);
       } catch (err) {
         console.error("[VersionCards] play error:", err);
         toast.error(t("cards.play_error"));
         setAuditioning(null);
+        setDissolvingVersionId(null);
       }
     },
     [auditioningVersionId, setAuditioning, t],
@@ -255,6 +279,7 @@ export function VersionCardsOverlay() {
                       version={version}
                       index={i}
                       isPlaying={auditioningVersionId === version.id}
+                      isDissolving={dissolvingVersionId === version.id}
                       isPicking={pickingId === version.id}
                       onPlay={handlePlay}
                       onSelect={handleSelect}
@@ -297,6 +322,7 @@ function VibeCard({
   version,
   index,
   isPlaying,
+  isDissolving,
   isPicking,
   onPlay,
   onSelect,
@@ -305,6 +331,7 @@ function VibeCard({
   version: VibeVersion;
   index: number;
   isPlaying: boolean;
+  isDissolving: boolean;
   isPicking: boolean;
   onPlay: (v: VibeVersion) => void;
   onSelect: (v: VibeVersion) => void;
@@ -313,6 +340,7 @@ function VibeCard({
   const isLarge = index === 0;
   const particles = PARTICLES[index] ?? PARTICLES[0];
   const waveClip = WAVE_CLIPS[index] ?? WAVE_CLIPS[0];
+  const isClearing = isPlaying || isDissolving;
 
   // Differentiated hover per card
   const hoverVariant = isLarge
@@ -339,9 +367,13 @@ function VibeCard({
       transition={{ type: "spring", stiffness: 200, damping: 22 }}
     >
       {/* ── Frosted white wave overlay (top portion) ─────────────── */}
-      <div
+      <motion.div
         className="absolute inset-0 bg-white/88 backdrop-blur-[2px] z-[1]"
         style={{ clipPath: waveClip }}
+        animate={{
+          opacity: isClearing ? 0 : 1,
+        }}
+        transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
       />
 
       {/* ── Text content (on frosted area) ───────────────────────── */}
