@@ -603,7 +603,7 @@ export function HumScreen() {
       {/* ─── Content layout ──────────────────────────────────────── */}
       <div className="relative z-10 min-h-svh flex flex-col">
         {/* ── Desktop: side-by-side layout / Mobile: stacked ──── */}
-        <div className="flex-1 flex flex-col md:flex-row items-center justify-center px-6 md:px-16 lg:px-24 gap-8 md:gap-12">
+        <div className="flex-1 flex flex-col md:flex-row items-center justify-center px-6 md:px-16 lg:px-24 gap-4 md:gap-3">
           {/* ── Left column: headline text ────────────────────── */}
           <div className="min-w-0 w-full md:w-[520px] md:flex-shrink-0 text-center md:text-left pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
             <AnimatePresence mode="wait">

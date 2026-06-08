@@ -252,34 +252,35 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
               style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 36px)" }}
             >
               {/* ── Compact header — nav only, no headline ───── */}
-              <div className="flex items-center justify-between mb-4">
+              {/* Header row - title and action buttons aligned at baseline */}
+              <div className="flex items-end justify-between gap-4 mb-4" style={{ paddingTop: '20px' }}>
                 <motion.button
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.4 }}
                   onClick={handleBack}
-                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
+                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors whitespace-nowrap pb-1"
                 >
                   ← {fromSavedSong
                     ? t("vibe.back.saved") || "Back to your song"
                     : t("vibe.back") || "Try a different hum"}
                 </motion.button>
-                <motion.span
+                <motion.h2
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.15, duration: 0.4 }}
-                  className="font-serif-italic text-[12px] text-[#B6B0A4]"
+                  transition={{ delay: 0.1, duration: 0.4 }}
+                  className="font-serif-italic text-[36px] md:text-[42px] font-semibold text-[#1A1A1A] text-center flex-1 pb-3"
                 >
-                  {t("cards.sub.short") || "Listen, then pick one."}
-                </motion.span>
+                  {t("cards.sub.short") || "Listen, then pick the one that feels right."}
+                </motion.h2>
                 <motion.button
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.25, duration: 0.4 }}
+                  transition={{ delay: 0.15, duration: 0.4 }}
                   onClick={handleReroll}
-                  className="font-serif-italic text-[12px] text-[#FF5924] hover:text-[#D9421A] transition-colors"
+                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors whitespace-nowrap pb-1"
                 >
-                  ↻ {t("vibe.reroll") || "New set"}
+                  {t("vibe.reroll") || "New set"} →
                 </motion.button>
               </div>
 

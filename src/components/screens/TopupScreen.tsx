@@ -56,7 +56,7 @@ const TOPUP_SKUS: TopupSku[] = [
   },
 ];
 
-const TIME_RANGES = ["1D", "7D", "1M", "3M", "All"] as const;
+const TIME_RANGES = ["1H", "1D", "7D", "1M", "All"] as const;
 
 // Paper texture style for all black elements
 const paperTextureStyle = {
@@ -85,12 +85,32 @@ const paperTextureStyle = {
 
 // Generate mock usage data based on time range
 function generateChartData(range: typeof TIME_RANGES[number]) {
-  const dataPoints = range === "1D" ? 24 : range === "7D" ? 7 : range === "1M" ? 30 : range === "3M" ? 90 : 365;
+  const dataPoints = range === "1H" ? 12 : range === "1D" ? 24 : range === "7D" ? 7 : range === "1M" ? 30 : 365;
   const data = [];
   const now = Date.now();
 
   for (let i = 0; i < dataPoints; i++) {
-    const date = new Date(now - (dataPoints - i) * (range === "1D" ? 3600000 : 86400000));
+    let dateLabel: string;
+
+    if (range === "1H") {
+      // 1H: 每5分钟一个点，显示小时:分钟（24小时制）
+      const date = new Date(now - (dataPoints - i) * 5 * 60000); // 5分钟间隔
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      dateLabel = `${hours}:${minutes}`;
+    } else if (range === "1D") {
+      // 1D: 每小时一个点，显示小时:00（24小时制）
+      const date = new Date(now - (dataPoints - i) * 3600000); // 1小时间隔
+      const hours = String(date.getHours()).padStart(2, '0');
+      dateLabel = `${hours}:00`;
+    } else {
+      // 7D, 1M, All: 显示日期 M/D
+      const date = new Date(now - (dataPoints - i) * 86400000);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      dateLabel = `${month}/${day}`;
+    }
+
     // More organic growth curve with smoother fluctuations
     const baseValue = 100;
     const trend = i * 0.8; // Gradual upward trend
@@ -98,12 +118,8 @@ function generateChartData(range: typeof TIME_RANGES[number]) {
     const noise = (Math.random() - 0.5) * 4; // Reduced noise for smoother curve
     const value = baseValue + trend + wave + noise;
 
-    // Format date as M/D
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-
     data.push({
-      date: `${month}/${day}`,
+      date: dateLabel,
       value: Math.max(50, Math.round(value * 100) / 100), // Keep values positive
     });
   }
@@ -402,7 +418,7 @@ export function TopupScreen() {
                       style={{ fontSize: "10px", fontFamily: "system-ui", fill: "#B7AEA1", fontWeight: 500 }}
                       tickLine={false}
                       axisLine={false}
-                      interval={Math.floor(chartData.length / 6)}
+                      interval={timeRange === "1H" ? 2 : timeRange === "1D" ? 5 : Math.floor(chartData.length / 6)}
                       tickMargin={10}
                     />
                     <YAxis
