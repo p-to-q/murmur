@@ -72,7 +72,6 @@ export function TrackMixer({
   onTrack,
   className = "",
   variant = "default",
-  isPlaying = false,
 }: TrackMixerProps) {
   const t = useTranslator();
 
@@ -80,14 +79,13 @@ export function TrackMixer({
     return (
       <div className={`${className}`}>
         <div className="flex flex-col gap-3">
-          {TRACKS.map(({ key, labelKey, letter, icon, color }) => {
+          {TRACKS.map(({ key, labelKey, icon, color }) => {
             const track = arrangement[key];
             const label = t(labelKey);
             return (
               <StringFader
                 key={key}
                 color={color}
-                letter={letter}
                 icon={icon}
                 label={label}
                 track={track}
@@ -115,12 +113,11 @@ export function TrackMixer({
   if (variant === "compact") {
     return (
       <div className={`grid grid-cols-3 gap-x-4 gap-y-3 ${className}`}>
-        {TRACKS.map(({ key, labelKey, letter, icon, color }) => {
+        {TRACKS.map(({ key, labelKey, icon, color }) => {
           const track = arrangement[key];
           return (
             <CompactFader
               key={key}
-              letter={letter}
               icon={icon}
               color={color}
               label={t(labelKey)}
@@ -147,12 +144,11 @@ export function TrackMixer({
 
   return (
     <div className={`space-y-5 ${className}`}>
-      {TRACKS.map(({ key, labelKey, letter, icon, color }) => {
+      {TRACKS.map(({ key, labelKey, icon, color }) => {
         const track = arrangement[key];
         return (
           <FaderRow
             key={key}
-            letter={letter}
             icon={icon}
             color={color}
             label={t(labelKey)}
@@ -181,7 +177,6 @@ export function TrackMixer({
 
 function CompactFader({
   track,
-  letter,
   icon,
   color,
   label,
@@ -189,7 +184,6 @@ function CompactFader({
   onToggle,
 }: {
   track: TrackState;
-  letter: string;
   icon: React.ReactNode;
   color: string;
   label: string;
@@ -253,7 +247,6 @@ function CompactFader({
 function StringFader({
   track,
   color,
-  letter,
   icon,
   label,
   onChange,
@@ -261,7 +254,6 @@ function StringFader({
 }: {
   track: TrackState;
   color: string;
-  letter: string;
   icon: React.ReactNode;
   label: string;
   onChange: (v: number) => void;
@@ -363,7 +355,6 @@ function StringFader({
 function FaderRow({
   track,
   label,
-  letter,
   icon,
   color,
   onChange,
@@ -371,7 +362,6 @@ function FaderRow({
 }: {
   track: TrackState;
   label: string;
-  letter: string;
   icon: React.ReactNode;
   color: string;
   onChange: (v: number) => void;
