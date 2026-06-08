@@ -329,7 +329,7 @@ function FaderRow({
 
   return (
     <div
-      className={`flex items-center gap-4 h-14 transition-opacity ${
+      className={`flex items-center gap-3 h-14 transition-opacity ${
         isOff ? "opacity-40" : ""
       }`}
     >
@@ -349,7 +349,7 @@ function FaderRow({
         {label}
       </span>
 
-      <div className="flex-1 relative h-6 flex items-center">
+      <div className="flex-1 relative h-6 flex items-center pr-12">
         <div className="relative w-full h-1.5 bg-[#E5DDD0] rounded-full">
           <motion.div
             className="absolute left-0 top-0 h-full rounded-full"
@@ -378,11 +378,12 @@ function FaderRow({
             transition={{ duration: 0.08 }}
           />
         </div>
-      </div>
 
-      <span className="w-10 text-right text-[12px] tabular-nums text-[#B6B0A4]">
-        {isOff ? "—" : `${pct}%`}
-      </span>
+        {/* Percentage at the end of track */}
+        <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[11px] font-serif-italic tabular-nums text-[#B6B0A4]">
+          {isOff ? "—" : `${pct}%`}
+        </span>
+      </div>
     </div>
   );
 }
