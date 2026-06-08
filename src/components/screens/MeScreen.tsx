@@ -404,7 +404,7 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="eyebrow mb-4 text-[#8C8780]">{children}</p>;
+  return <p className="eyebrow mb-2 text-[#8C8780]">{children}</p>;
 }
 
 function LangPill({
