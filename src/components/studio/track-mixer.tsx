@@ -243,7 +243,7 @@ function StringFader({
         </button>
 
         {/* Fader groove */}
-        <div className="flex-1 relative h-9 flex items-center">
+        <div className="flex-1 relative h-9 flex items-center pr-12">
           {/* Groove channel — inset, tactile */}
           <div
             className="absolute inset-x-0 h-[5px] rounded-full"
@@ -285,22 +285,24 @@ function StringFader({
             style={{ WebkitAppearance: "none" }}
             aria-label={label}
           />
+
+          {/* Percentage at the end of track */}
+          <span
+            className="absolute right-0 top-1/2 -translate-y-1/2 text-[9px] font-serif-italic tabular-nums"
+            style={{ color: "rgba(255,255,255,0.3)" }}
+          >
+            {isOff ? "—" : `${pct}%`}
+          </span>
         </div>
       </div>
 
-      {/* Secondary label — subtle, offset to align with groove */}
-      <div className="flex items-baseline justify-between pl-11 pr-0.5 -mt-1">
+      {/* Secondary label — subtle, closer to groove */}
+      <div className="flex items-baseline justify-start pl-11 -mt-0.5">
         <span
-          className="text-[8px] uppercase tracking-[0.16em]"
-          style={{ color: "rgba(255,255,255,0.22)" }}
+          className="text-[9px] font-serif-italic tracking-wide"
+          style={{ color: "rgba(255,255,255,0.28)" }}
         >
           {label}
-        </span>
-        <span
-          className="text-[8px] tabular-nums"
-          style={{ color: "rgba(255,255,255,0.18)" }}
-        >
-          {isOff ? "—" : `${pct}`}
         </span>
       </div>
     </div>
