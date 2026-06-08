@@ -269,7 +269,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.1, duration: 0.4 }}
-                  className="font-serif-italic text-[22px] md:text-[26px] text-[#8C8780] text-center flex-1"
+                  className="font-serif-italic text-[22px] md:text-[26px] text-[#6F6A63] text-center flex-1"
                 >
                   {t("cards.sub.short") || "Listen, then pick the one that feels right."}
                 </motion.h2>
