@@ -193,7 +193,7 @@ export function SettingsScreen() {
                   {t("me.repair_bias.live.center") || "默认"}
                 </p>
                 <p className="text-[11px] text-[#8C8780] leading-snug mt-1">
-                  平衡
+                  {t("me.repair_bias.center_note") || "平衡原味与听感"}
                 </p>
               </div>
               <div className="flex-1 text-right">

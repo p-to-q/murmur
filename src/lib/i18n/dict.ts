@@ -318,6 +318,7 @@ export const DICT = {
   "me.repair_bias.right_note": { zh: "喂，不是说你唱得难听。", en: "Hey, this is not us saying you sang badly." },
   "me.repair_bias.live.left": { zh: "偏原唱", en: "Closer" },
   "me.repair_bias.live.center": { zh: "默认", en: "Balanced" },
+  "me.repair_bias.center_note":  { zh: "平衡原味与听感", en: "Balance fidelity and listenability" },
   "me.repair_bias.live.right": { zh: "偏好听", en: "Sweeter" },
 
   // ── Settings ───────────────────────────────────────────────────────
