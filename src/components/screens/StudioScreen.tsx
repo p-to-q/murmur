@@ -272,154 +272,151 @@ function StudioContent({ version }: { version: VibeVersion }) {
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div className="relative min-h-svh bg-[#F5F1EB]">
       <PageBackdrop />
 
       <div className="relative z-10 min-h-svh flex flex-col">
-        {/* ── Header ──────────────────────────────────────────────── */}
+        {/* ── Minimal header ──────────────────────────────────────── */}
         <div
-          className="flex items-center justify-between px-5 md:px-10 lg:px-16"
-          style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 32px)" }}
+          className="flex items-center justify-between px-5 md:px-8 py-3"
+          style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 24px)" }}
         >
           <button
-            onClick={() => {
-              synth.stop();
-              router.back();
-            }}
-            aria-label={t("studio.back")}
+            onClick={() => { synth.stop(); router.back(); }}
             className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
           >
             ← {t("studio.back")}
           </button>
-
           <button
             onClick={handleRestore}
-            aria-label={t("studio.restore")}
             className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DDD0] bg-white/70 transition-colors hover:bg-white"
           >
             <RotateCcw className="h-3.5 w-3.5 text-[#8C8780]" />
           </button>
         </div>
 
-        {/* ── Editorial headline ──────────────────────────────────── */}
-        <div className="px-5 md:px-10 lg:px-16 mt-6 mb-6 md:mb-8">
-          <motion.h1
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="hero-serif text-[#1A1A1A] text-[32px] leading-[1.04] md:text-[48px]"
+        {/* ── Hero Card — dominates top ~62% of viewport ─────────── */}
+        <div className="px-4 md:px-8 flex-shrink-0">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.06, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            className="relative cursor-pointer select-none overflow-hidden rounded-[28px] md:rounded-[36px]"
+            style={{
+              background: currentVersion.visualConfig.gradient,
+              height: "clamp(300px, 60vh, 560px)",
+            }}
+            onClick={togglePlay}
           >
-            {t("studio.overview.title")}
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.12, duration: 0.5 }}
-            className="font-serif-italic mt-2 text-[13px] text-[#8C8780] md:text-[14px]"
-          >
-            {t("studio.overview.sub")}
-          </motion.p>
+            {/* Darken overlays */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/12 via-transparent to-black/48 pointer-events-none" />
+
+            {/* Wave */}
+            <MurmurWave
+              color={waveAccent}
+              intensity={0.62}
+              isPlaying={isPlaying}
+              waveY={0.46}
+              className="absolute inset-x-0 bottom-0 h-[55%] w-full pointer-events-none"
+            />
+
+            {/* Play disc — center */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <motion.div
+                whileTap={{ scale: 0.88 }}
+                animate={isPlaying ? { scale: [1, 1.06, 1] } : { scale: 1 }}
+                transition={isPlaying ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" } : {}}
+                className={`flex h-16 w-16 items-center justify-center rounded-full border border-white/50 backdrop-blur-sm pointer-events-auto transition-colors ${
+                  isPlaying ? "bg-white/28" : "bg-white/12 hover:bg-white/20"
+                }`}
+              >
+                {isPlaying ? (
+                  <Pause className="h-6 w-6 text-white" fill="white" />
+                ) : (
+                  <Play className="ml-1 h-6 w-6 text-white" fill="white" />
+                )}
+              </motion.div>
+            </div>
+
+            {/* Song info — lower left */}
+            <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-white/55 mb-1.5">
+                {currentVersion.vibe}
+              </p>
+              <h2
+                className="hero-serif text-white leading-[1.0] md:text-[40px] lg:text-[48px]"
+                style={{ fontSize: "clamp(24px, 4vw, 48px)", letterSpacing: "-0.015em" }}
+              >
+                {currentVersion.title}
+              </h2>
+              <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-white/40 tabular-nums">
+                {currentVersion.melody.bpm} BPM · {currentVersion.melody.key}
+              </p>
+            </div>
+          </motion.div>
         </div>
 
-        {/* ── Main content ────────────────────────────────────────── */}
-        <div className="flex-1 px-5 md:px-10 lg:px-16 pb-28">
-          <div className="mx-auto max-w-4xl">
-            {/* ── Hero Card: gradient cover ────────────────────────── */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.97 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.1, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-              className="relative min-h-[260px] md:min-h-[340px] cursor-pointer select-none overflow-hidden rounded-[32px]"
-              style={{ background: currentVersion.visualConfig.gradient }}
-              onClick={togglePlay}
-            >
-              {/* Darken for legibility */}
-              <div className="absolute inset-0 bg-gradient-to-b from-black/8 via-transparent to-black/40 pointer-events-none" />
-
-              {/* MurmurWave at bottom */}
-              <MurmurWave
-                color={waveAccent}
-                intensity={0.5}
-                isPlaying={isPlaying}
-                waveY={0.5}
-                className="absolute inset-x-0 bottom-0 h-2/5 w-full pointer-events-none"
-              />
-
-              {/* Play disc — centered */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <motion.div
-                  whileTap={{ scale: 0.9 }}
-                  className={`flex h-14 w-14 items-center justify-center rounded-full border border-white/50 backdrop-blur-sm pointer-events-auto ${
-                    isPlaying ? "bg-white/30" : "bg-white/14"
-                  }`}
-                >
-                  {isPlaying ? (
-                    <Pause className="h-5 w-5 text-white" fill="white" />
-                  ) : (
-                    <Play className="ml-0.5 h-5 w-5 text-white" fill="white" />
-                  )}
-                </motion.div>
-              </div>
-
-              {/* Text — lower third */}
-              <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
-                <p className="text-[10px] uppercase tracking-[0.28em] text-white/60">
-                  {currentVersion.vibe}
-                </p>
-                <h2
-                  className="mt-2 hero-serif text-white text-[24px] leading-[1.05] md:text-[36px] max-w-[24rem]"
-                  style={{ letterSpacing: "-0.015em" }}
-                >
-                  {currentVersion.title}
-                </h2>
-                <p className="mt-2 text-[11px] uppercase tracking-[0.16em] text-white/45 tabular-nums">
-                  {currentVersion.melody.bpm} BPM · {currentVersion.melody.key}
-                </p>
-              </div>
-            </motion.div>
-
-            {/* ── Controls on cream surface ────────────────────────── */}
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="mt-8 space-y-6"
-            >
-              {/* Auris input */}
-              <AurisPanel
-                busy={promptBusy}
-                onApply={handlePrompt}
-              />
-
-              {/* Scenes */}
-              <SceneGrid
-                onPick={(scene) => handleScene(scene.tokens)}
-              />
-
-              {/* Faders */}
-              <TrackMixer arrangement={arrangement} onTrack={updateTrack} />
-            </motion.div>
-          </div>
-        </div>
-
-        {/* ── Fixed Save button ────────────────────────────────────── */}
-        <div
-          className="fixed left-0 right-0 bg-gradient-to-t from-[#F5F1EB] via-[#F5F1EB]/95 to-transparent px-5 pt-6 pb-5 md:px-8"
+        {/* ── Synth control panel — warm hardware texture ─────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="mx-4 md:mx-8 mt-3 rounded-[22px] overflow-hidden"
           style={{
-            left: "var(--side-nav-w)",
-            bottom: "env(safe-area-inset-bottom, 0px)",
+            background: [
+              "repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 8px)",
+              "repeating-linear-gradient(0deg, rgba(0,0,0,0.08) 0px, rgba(0,0,0,0.08) 1px, transparent 1px, transparent 24px)",
+              "linear-gradient(160deg, #2A2118 0%, #1E1A12 45%, #241D14 100%)",
+            ].join(", "),
+            paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
           }}
         >
-          <div className="mx-auto max-w-4xl">
+          {/* Prompt bar */}
+          <div className="px-5 pt-5 pb-3">
+            <AurisPanel
+              busy={promptBusy}
+              onApply={handlePrompt}
+              variant="dark"
+              showQuickActions={false}
+            />
+          </div>
+
+          {/* Scene quick-picks */}
+          <div className="px-5 pb-4">
+            <SceneGrid
+              variant="dark"
+              onPick={(scene) => handleScene(scene.tokens)}
+            />
+          </div>
+
+          {/* Divider — intent layer ↑ / granular control ↓ */}
+          <div className="mx-5 h-px bg-white/8" />
+
+          {/* Guitar string faders */}
+          <div className="px-5 pt-4 pb-2">
+            <TrackMixer
+              variant="strings"
+              arrangement={arrangement}
+              onTrack={updateTrack}
+              isPlaying={isPlaying}
+            />
+          </div>
+
+          {/* Save button inside the panel */}
+          <div className="px-5 pt-3">
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleSave}
-              className="h-14 w-full rounded-full bg-[#1A1A1A] text-[15px] font-medium text-white transition-colors hover:bg-[#2A2A2A]"
+              className="w-full rounded-full bg-white text-[14px] font-medium text-[#1A1A1A] transition-colors hover:bg-[#F5F1EB]"
+              style={{ height: "52px" }}
             >
-              {t("studio.save")}
+              {t("studio.save")} →
             </motion.button>
           </div>
-        </div>
+        </motion.div>
+
+        {/* Bottom breathing room */}
+        <div className="h-8" />
       </div>
     </div>
   );

@@ -249,75 +249,54 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
           >
             <div
               className="relative z-10 min-h-svh flex flex-col px-5 md:px-10 lg:px-16"
-              style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 48px)" }}
+              style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 36px)" }}
             >
-              {/* ── Header ───────────────────────────────────── */}
-              <div className="mb-8 md:mb-10">
-                <div className="flex items-center justify-between mb-5">
-                  <motion.button
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.5 }}
-                    onClick={handleBack}
-                    className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
-                  >
-                    ← {fromSavedSong
-                      ? t("vibe.back.saved") || "Back to your song"
-                      : t("vibe.back") || "Try a different hum"}
-                  </motion.button>
-                  <motion.button
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.3, duration: 0.5 }}
-                    onClick={handleReroll}
-                    className="font-serif-italic text-[13px] text-[#FF5924] hover:text-[#D9421A] transition-colors"
-                  >
-                    ↻ {t("vibe.reroll") || "Try a different set"}
-                  </motion.button>
-                </div>
-                <motion.h1
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                  className="hero-serif text-[#1A1A1A] text-[32px] leading-[1.04] md:text-[52px]"
-                >
-                  {fromSavedSong
-                    ? t("vibe.saved.headline") || "Pick the next shape this song wants to take."
-                    : t("vibe.headline") || "Pick the one your hum is asking to become."}
-                </motion.h1>
-                <motion.p
+              {/* ── Compact header — nav only, no headline ───── */}
+              <div className="flex items-center justify-between mb-4">
+                <motion.button
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.15, duration: 0.5 }}
-                  className="font-serif-italic mt-3 text-[13px] text-[#8C8780] md:text-[14px]"
+                  transition={{ duration: 0.4 }}
+                  onClick={handleBack}
+                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
                 >
-                  {fromSavedSong
-                    ? t("vibe.saved.sub") || "Same melody spine, three fresh readings."
-                    : t("cards.sub.short") || "Listen, then pick the one that feels right."}
-                </motion.p>
+                  ← {fromSavedSong
+                    ? t("vibe.back.saved") || "Back to your song"
+                    : t("vibe.back") || "Try a different hum"}
+                </motion.button>
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.15, duration: 0.4 }}
+                  className="font-serif-italic text-[12px] text-[#B6B0A4]"
+                >
+                  {t("cards.sub.short") || "Listen, then pick one."}
+                </motion.span>
+                <motion.button
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.25, duration: 0.4 }}
+                  onClick={handleReroll}
+                  className="font-serif-italic text-[12px] text-[#FF5924] hover:text-[#D9421A] transition-colors"
+                >
+                  ↻ {t("vibe.reroll") || "New set"}
+                </motion.button>
               </div>
 
-              {/* ── Bento grid ───────────────────────────────── */}
-              <div className="grid grid-cols-1 md:grid-cols-[1.18fr_1fr] md:auto-rows-[1fr] gap-4 md:gap-5 flex-1 min-h-0 md:min-h-[560px] lg:min-h-[620px]">
+              {/* ── Card grid — dominates the viewport ───────── */}
+              <div className="grid grid-cols-1 md:grid-cols-[1.18fr_1fr] gap-4 md:gap-5 flex-1 min-h-0 md:min-h-[68vh] lg:min-h-[72vh]">
                 {vibeVersions.map((version, i) => {
                   const isLarge = i === 0;
                   const isAuditioning = auditioningVersionId === version.id;
                   const isPicking = pickingId === version.id;
-                  const dimmed =
-                    (auditioningVersionId && !isAuditioning) ||
-                    (pickingId && !isPicking);
+                  const someoneIsAuditioning = auditioningVersionId !== null;
                   return (
                     <motion.div
                       key={version.id}
                       initial={{ opacity: 0, y: 22, scale: 0.97 }}
-                      animate={{
-                        opacity: dimmed ? 0.45 : 1,
-                        y: isAuditioning ? -4 : 0,
-                        scale: isAuditioning ? 1.015 : 1,
-                        filter: dimmed ? "blur(2px)" : "blur(0px)",
-                      }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
                       transition={{
-                        delay: 0.08 + i * 0.1,
+                        delay: 0.06 + i * 0.09,
                         duration: 0.6,
                         ease: [0.22, 1, 0.36, 1],
                       }}
@@ -327,6 +306,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                         version={version}
                         isLarge={isLarge}
                         isAuditioning={isAuditioning}
+                        someoneIsAuditioning={someoneIsAuditioning}
                         isPicking={isPicking}
                         onPick={handlePick}
                         onPlayToggle={handleAudition}
@@ -337,21 +317,11 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                 })}
               </div>
 
-              {/* ── Footer ───────────────────────────────────── */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.5, duration: 0.5 }}
-                className="mt-8 md:mt-10 pb-6"
-                style={{
-                  paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)",
-                }}
-              >
-                <p className="font-serif-italic text-[12px] text-[#B6B0A4] leading-[1.7] max-w-md">
-                  {t("vibe.howit") ||
-                    "Three takes on the same hum — same melody, different rooms. No notes spent."}
-                </p>
-              </motion.div>
+              {/* ── Minimal footer ───────────────────────────── */}
+              <div
+                className="mt-4"
+                style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 88px)" }}
+              />
             </div>
           </motion.div>
         )}
@@ -368,6 +338,7 @@ function VibeCard({
   version,
   isLarge,
   isAuditioning,
+  someoneIsAuditioning,
   isPicking,
   onPick,
   onPlayToggle,
@@ -376,86 +347,122 @@ function VibeCard({
   version: VibeVersion;
   isLarge: boolean;
   isAuditioning: boolean;
+  someoneIsAuditioning: boolean;
   isPicking: boolean;
   onPick: (v: VibeVersion) => void;
   onPlayToggle: (v: VibeVersion) => void;
   pickLabel: string;
 }) {
   const lang = useI18nStore((state) => state.lang);
-  // Accent color for the wave layer — derived from the vibe's first hex stop
-  // in its CSS gradient. Falls back to coral if parsing fails.
   const accent = extractFirstHex(version.visualConfig.gradient) ?? "#FF8A5C";
-
-  // Find the vibe preset to get the localized label
   const vibePreset = VIBE_PRESETS.find((p) => p.id === version.vibe);
   const vibeLabel = vibePreset?.label[lang] || version.vibe;
 
+  // Background layer blur: idle = slight soft focus, auditioning = clear, others = blurred
+  const bgBlur = isAuditioning ? 0 : someoneIsAuditioning ? 4.5 : 1.5;
+  const bgBrightness = isAuditioning ? 1.05 : someoneIsAuditioning ? 0.82 : 1;
+
   return (
     <motion.div
-      className="relative overflow-hidden rounded-[32px] cursor-pointer select-none border border-white/40 h-full min-h-[180px] md:min-h-[220px]"
-      style={{ background: version.visualConfig.gradient }}
+      className="relative overflow-hidden rounded-[32px] cursor-pointer select-none h-full min-h-[200px] md:min-h-[240px]"
       onClick={() => onPick(version)}
-      whileHover={!isPicking ? { y: -3 } : undefined}
-      animate={
-        isPicking
-          ? { scale: 0.95, opacity: 0.7, filter: "brightness(1.15)" }
-          : { scale: 1, opacity: 1, filter: "brightness(1)" }
-      }
-      transition={{ type: "spring", stiffness: 220, damping: 24 }}
+      whileHover={!isPicking && !someoneIsAuditioning ? { y: -3 } : undefined}
+      animate={isPicking ? { scale: 0.95 } : { scale: 1 }}
+      transition={{ type: "spring", stiffness: 240, damping: 26 }}
     >
-      {/* Soft darken at top for white text legibility */}
-      <div
-        className="absolute inset-x-0 top-0 h-1/3 pointer-events-none"
-        style={{
-          background:
-            "linear-gradient(to bottom, rgba(0,0,0,0.16) 0%, rgba(0,0,0,0) 100%)",
+      {/* ── Visual background layer — this blurs, text does not ── */}
+      <motion.div
+        className="absolute inset-0 rounded-[32px] overflow-hidden"
+        animate={{
+          filter: `blur(${bgBlur}px) brightness(${bgBrightness})`,
         }}
-      />
+        transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+      >
+        {/* Gradient fill */}
+        <div
+          className="absolute inset-0"
+          style={{ background: version.visualConfig.gradient }}
+        />
+        {/* Top darken for legibility */}
+        <div
+          className="absolute inset-x-0 top-0 h-2/5 pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(to bottom, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0) 100%)",
+          }}
+        />
+        {/* Bottom fade */}
+        <div
+          className="absolute inset-x-0 bottom-0 h-1/2 pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0) 100%)",
+          }}
+        />
+        {/* Wave — bottom 55% */}
+        <MurmurWave
+          color={accent}
+          intensity={isAuditioning ? 0.85 : 0.52}
+          isPlaying={isAuditioning}
+          waveY={0.48}
+          className="absolute inset-x-0 bottom-0 h-[58%] w-full pointer-events-none"
+        />
+      </motion.div>
 
-      {/* Wave + particles in the bottom half */}
-      <MurmurWave
-        color={accent}
-        intensity={0.6}
-        isPlaying={isAuditioning}
-        waveY={0.5}
-        className="absolute inset-x-0 bottom-0 h-1/2 w-full pointer-events-none"
-      />
+      {/* ── Active glow ring (not blurred) ── */}
+      <AnimatePresence>
+        {isAuditioning && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="absolute inset-0 z-10 rounded-[32px] pointer-events-none"
+            style={{
+              boxShadow:
+                "inset 0 0 0 2px rgba(255,255,255,0.65), 0 0 36px rgba(255,255,255,0.14)",
+            }}
+          />
+        )}
+      </AnimatePresence>
 
-      {/* Text block */}
-      <div className="relative z-10 p-6 md:p-7">
+      {/* ── Text — always sharp ── */}
+      <div className="relative z-20 p-6 md:p-8">
         <h3
-          className={`font-serif-italic text-white leading-[1.02] ${
-            isLarge ? "text-[40px] md:text-[60px]" : "text-[28px] md:text-[36px]"
+          className={`font-serif-italic text-white leading-[1.0] ${
+            isLarge
+              ? "text-[44px] md:text-[64px] lg:text-[72px]"
+              : "text-[30px] md:text-[40px]"
           }`}
-          style={{ letterSpacing: "-0.01em" }}
+          style={{ letterSpacing: "-0.015em" }}
         >
           {vibeLabel}
         </h3>
-        <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-white/55">
+        <p className="mt-2 text-[11px] uppercase tracking-[0.2em] text-white/50">
           {version.tags.slice(0, 3).join(" · ")}
         </p>
       </div>
 
-      {/* Bottom-right actions — old explicit preview + pick pattern */}
-      <div className="absolute bottom-5 right-5 z-10 flex items-center gap-3">
+      {/* ── Buttons — always sharp ── */}
+      <div className="absolute bottom-5 right-5 z-20 flex items-center gap-2.5">
         <motion.button
-          whileTap={{ scale: 0.9 }}
+          whileTap={{ scale: 0.88 }}
           onClick={(e) => {
             e.stopPropagation();
             onPlayToggle(version);
           }}
           aria-label={isAuditioning ? "Pause preview" : "Play preview"}
           className={[
-            "flex h-12 w-12 items-center justify-center rounded-full border backdrop-blur-md transition-all duration-200",
+            "flex h-11 w-11 items-center justify-center rounded-full border backdrop-blur-sm transition-all duration-200",
             isAuditioning
-              ? "border-white/50 bg-white/88 text-[#1A1A1A] shadow-[0_6px_18px_rgba(0,0,0,0.12)]"
-              : "border-white/38 bg-white/18 text-white hover:bg-white/26",
+              ? "border-white/55 bg-white/90 text-[#1A1A1A] shadow-[0_4px_16px_rgba(0,0,0,0.14)]"
+              : "border-white/35 bg-white/16 text-white hover:bg-white/24",
           ].join(" ")}
         >
           {isAuditioning ? (
-            <Pause className="h-4 w-4" fill="currentColor" />
+            <Pause className="h-3.5 w-3.5" fill="currentColor" />
           ) : (
-            <Play className="ml-0.5 h-4 w-4" fill="currentColor" />
+            <Play className="ml-0.5 h-3.5 w-3.5" fill="currentColor" />
           )}
         </motion.button>
 
@@ -465,36 +472,20 @@ function VibeCard({
             e.stopPropagation();
             onPick(version);
           }}
-          className="inline-flex h-12 items-center rounded-full bg-white/92 px-6 text-[14px] font-medium text-[#1A1A1A] shadow-[0_6px_18px_rgba(0,0,0,0.1)] transition-colors hover:bg-white"
+          className="inline-flex h-11 items-center rounded-full bg-white/90 px-5 text-[13px] font-medium text-[#1A1A1A] shadow-[0_4px_16px_rgba(0,0,0,0.1)] transition-colors hover:bg-white"
         >
           {pickLabel} →
         </motion.button>
       </div>
 
-      {/* Active border glow */}
-      <AnimatePresence>
-        {isAuditioning && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-10 rounded-[32px] pointer-events-none"
-            style={{
-              boxShadow:
-                "inset 0 0 0 1.5px rgba(255,255,255,0.55), 0 0 28px rgba(255,255,255,0.16)",
-            }}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Pick burst — expanding white disc */}
+      {/* Pick burst */}
       <AnimatePresence>
         {isPicking && (
           <motion.div
-            initial={{ scale: 0, opacity: 0.85 }}
-            animate={{ scale: 4, opacity: 0 }}
-            transition={{ duration: 0.55, ease: "easeOut" }}
-            className="absolute left-1/2 top-1/2 z-20 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white pointer-events-none"
+            initial={{ scale: 0, opacity: 0.9 }}
+            animate={{ scale: 5, opacity: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="absolute left-1/2 top-1/2 z-30 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white pointer-events-none"
           />
         )}
       </AnimatePresence>

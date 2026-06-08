@@ -53,6 +53,8 @@ export interface AurisPanelProps {
   className?: string;
   /** "dark" = glass mode for immersive gradient backgrounds */
   variant?: "default" | "dark";
+  /** Hide the quick-action chips (default true) */
+  showQuickActions?: boolean;
 }
 
 export function AurisPanel({
@@ -61,6 +63,7 @@ export function AurisPanel({
   promptPlaceholder,
   className = "",
   variant = "default",
+  showQuickActions = true,
 }: AurisPanelProps) {
   const t = useTranslator();
   const [prompt, setPrompt] = useState("");
@@ -106,24 +109,26 @@ export function AurisPanel({
       </div>
 
       {/* Quick chips */}
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {QUICK_GROUPS.flatMap((group) =>
-          group.actions.map((action) => (
-            <button
-              key={action.id}
-              onClick={() => void submit(action.prompt)}
-              disabled={busy}
-              className={
-                dark
-                  ? "rounded-full border border-white/20 bg-white/6 px-3 py-1 text-[11px] text-white/75 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-35"
-                  : "rounded-full border border-[#E5DDD0] bg-white/60 px-3 py-1 text-[11px] text-[#6F6A63] transition-colors hover:border-[#FF5924] hover:text-[#1A1A1A] disabled:opacity-40"
-              }
-            >
-              {action.label}
-            </button>
-          )),
-        )}
-      </div>
+      {showQuickActions && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {QUICK_GROUPS.flatMap((group) =>
+            group.actions.map((action) => (
+              <button
+                key={action.id}
+                onClick={() => void submit(action.prompt)}
+                disabled={busy}
+                className={
+                  dark
+                    ? "rounded-full border border-white/20 bg-white/6 px-3 py-1 text-[11px] text-white/75 transition-colors hover:bg-white/14 hover:text-white disabled:opacity-35"
+                    : "rounded-full border border-[#E5DDD0] bg-white/60 px-3 py-1 text-[11px] text-[#6F6A63] transition-colors hover:border-[#FF5924] hover:text-[#1A1A1A] disabled:opacity-40"
+                }
+              >
+                {action.label}
+              </button>
+            )),
+          )}
+        </div>
+      )}
     </div>
   );
 }
