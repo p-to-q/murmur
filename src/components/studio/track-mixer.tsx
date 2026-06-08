@@ -346,7 +346,7 @@ function StringFader({
       </div>
 
       {/* Label below the track - closer */}
-      <div className="pl-11 mt-1">
+      <div className="pl-11 -mt-0.5">
         <span
           className="text-[11px] font-serif-italic tracking-wide"
           style={{ color: "rgba(255,255,255,0.35)" }}
