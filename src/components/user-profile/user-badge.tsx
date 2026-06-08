@@ -17,7 +17,7 @@ export function UserBadge() {
 
   // Use Google session if available, otherwise fall back to platform user
   const user = session?.user ? {
-    id: (session.user as any).id || "google-user",
+    id: (session.user as { id?: string }).id || "google-user",
     email: session.user.email || null,
     name: session.user.name || null,
     avatarUrl: session.user.image || null,
