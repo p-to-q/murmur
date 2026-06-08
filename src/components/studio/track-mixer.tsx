@@ -273,17 +273,7 @@ function StringFader({
 
   return (
     <div className={`transition-opacity ${isOff ? "opacity-35" : ""}`}>
-      {/* Secondary label — above the track, larger */}
-      <div className="flex items-baseline justify-start pl-11 mb-1">
-        <span
-          className="text-[11px] font-serif-italic tracking-wide"
-          style={{ color: "rgba(255,255,255,0.35)" }}
-        >
-          {label}
-        </span>
-      </div>
-
-      {/* Main row: icon + groove, vertically centered */}
+      {/* Main row: icon + groove + percentage */}
       <div className="flex items-center gap-3">
         {/* Icon badge */}
         <button
@@ -353,6 +343,16 @@ function StringFader({
             {isOff ? "—" : `${pct}%`}
           </span>
         </div>
+      </div>
+
+      {/* Label below the track - closer */}
+      <div className="pl-11 mt-1">
+        <span
+          className="text-[11px] font-serif-italic tracking-wide"
+          style={{ color: "rgba(255,255,255,0.35)" }}
+        >
+          {label}
+        </span>
       </div>
     </div>
   );
