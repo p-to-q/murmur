@@ -100,18 +100,16 @@ export function MeScreen() {
         {/* Notes balance + Top up */}
         <Card>
           <SectionLabel>{t("me.notes.title") || "MURMUR NOTES"}</SectionLabel>
-          <div className="space-y-1.5">
-            <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px]">
-              {isLoading ? "—" : balance?.notes ?? 0}
+          <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px] mb-2">
+            {isLoading ? "—" : balance?.notes ?? 0}
+          </p>
+          <div className="flex items-end justify-between gap-4">
+            <p className="flex-1 text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
+              {refillCopy}
             </p>
-            <div className="flex items-end justify-between gap-4">
-              <p className="flex-1 text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
-                {refillCopy}
-              </p>
-              <Link href="/topup" className="mm-btn-primary inline-flex shrink-0">
-                {t("me.notes.cta") || "Top up"}
-              </Link>
-            </div>
+            <Link href="/topup" className="mm-btn-primary inline-flex shrink-0">
+              {t("me.notes.cta") || "Top up"}
+            </Link>
           </div>
         </Card>
 
