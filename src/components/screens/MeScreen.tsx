@@ -104,11 +104,11 @@ export function MeScreen() {
             <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px]">
               {isLoading ? "—" : balance?.notes ?? 0}
             </p>
-            <p className="max-w-[28rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
-              {refillCopy}
-            </p>
-            <div className="flex justify-end">
-              <Link href="/topup" className="mm-btn-primary inline-flex">
+            <div className="flex items-end justify-between gap-4">
+              <p className="flex-1 text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
+                {refillCopy}
+              </p>
+              <Link href="/topup" className="mm-btn-primary inline-flex shrink-0">
                 {t("me.notes.cta") || "Top up"}
               </Link>
             </div>
