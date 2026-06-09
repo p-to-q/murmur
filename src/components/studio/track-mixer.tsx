@@ -10,20 +10,22 @@ const TRACKS: Array<{
   letter: string;
   color: string;
 }> = [
-  { key: "melody",  labelKey: "track.melody",  letter: "M", color: "#FF5924" },
-  { key: "chords",  labelKey: "track.chords",  letter: "C", color: "#A7B8C8" },
-  { key: "strings", labelKey: "track.strings", letter: "S", color: "#C9B6E4" },
-  { key: "bass",    labelKey: "track.bass",    letter: "B", color: "#8C8780" },
-  { key: "drums",   labelKey: "track.drums",   letter: "D", color: "#FF5924" },
-  { key: "texture", labelKey: "track.texture", letter: "T", color: "#A7B8C8" },
+  { key: "melody",  labelKey: "track.melody",  letter: "M", color: "#E8855A" },
+  { key: "chords",  labelKey: "track.chords",  letter: "C", color: "#B8C4CE" },
+  { key: "strings", labelKey: "track.strings", letter: "S", color: "#C4B4D8" },
+  { key: "bass",    labelKey: "track.bass",    letter: "B", color: "#A09880" },
+  { key: "drums",   labelKey: "track.drums",   letter: "D", color: "#D4784A" },
+  { key: "texture", labelKey: "track.texture", letter: "T", color: "#9AAFBA" },
 ];
 
 export interface TrackMixerProps {
   arrangement: ArrangementState;
   onTrack: (key: keyof ArrangementState, patch: Partial<TrackState>) => void;
   className?: string;
-  /** "compact" = 3×2 grid, glass-dark mode for immersive backgrounds */
-  variant?: "default" | "compact";
+  /** "compact" = 3×2 grid | "strings" = 6 guitar-string faders full-width */
+  variant?: "default" | "compact" | "strings";
+  /** Show stylus needle overlay (strings variant only) */
+  isPlaying?: boolean;
 }
 
 export function TrackMixer({
@@ -31,8 +33,44 @@ export function TrackMixer({
   onTrack,
   className = "",
   variant = "default",
+  isPlaying = false,
 }: TrackMixerProps) {
   const t = useTranslator();
+
+  if (variant === "strings") {
+    return (
+      <div className={`${className}`}>
+        <div className="flex flex-col gap-1">
+          {TRACKS.map(({ key, labelKey, letter, color }) => {
+            const track = arrangement[key];
+            const label = t(labelKey);
+            return (
+              <StringFader
+                key={key}
+                color={color}
+                letter={letter}
+                label={label}
+                track={track}
+                onChange={(v) =>
+                  onTrack(key, {
+                    intensity: v,
+                    enabled: v > 0,
+                    versionHistory: [...track.versionHistory, String(track.intensity)],
+                  })
+                }
+                onToggle={() =>
+                  onTrack(key, {
+                    enabled: !track.enabled,
+                    intensity: !track.enabled ? Math.max(track.intensity, 0.3) : track.intensity,
+                  })
+                }
+              />
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   if (variant === "compact") {
     return (
@@ -160,6 +198,110 @@ function CompactFader({
             transition={{ duration: 0.06 }}
           />
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Guitar string fader (strings variant) ───────────────────────── */
+
+function StringFader({
+  track,
+  color,
+  letter,
+  label,
+  onChange,
+  onToggle,
+}: {
+  track: TrackState;
+  color: string;
+  letter: string;
+  label: string;
+  onChange: (v: number) => void;
+  onToggle: () => void;
+}) {
+  const pct = Math.round(track.intensity * 100);
+  const isOff = !track.enabled || track.intensity === 0;
+  const activeColor = isOff ? "rgba(255,255,255,0.06)" : color;
+
+  return (
+    <div className={`transition-opacity ${isOff ? "opacity-35" : ""}`}>
+      {/* Main row: letter + groove, vertically centered */}
+      <div className="flex items-center gap-3">
+        {/* Letter badge */}
+        <button
+          onClick={onToggle}
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[12px] font-semibold transition-colors"
+          style={{
+            background: track.enabled ? `${color}25` : "rgba(255,255,255,0.05)",
+            color: track.enabled ? color : "rgba(255,255,255,0.25)",
+            textDecoration: track.enabled ? "none" : "line-through",
+          }}
+          aria-label={`Toggle ${label}`}
+        >
+          {letter}
+        </button>
+
+        {/* Fader groove */}
+        <div className="flex-1 relative h-9 flex items-center">
+          {/* Groove channel — inset, tactile */}
+          <div
+            className="absolute inset-x-0 h-[5px] rounded-full"
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              boxShadow: "inset 0 1px 2px rgba(0,0,0,0.25), 0 0.5px 0 rgba(255,255,255,0.04)",
+            }}
+          />
+          {/* Colored fill */}
+          <motion.div
+            className="absolute left-0 h-[5px] rounded-full"
+            style={{ background: activeColor }}
+            animate={{ width: `${pct}%` }}
+            transition={{ duration: 0.12 }}
+          />
+          {/* Thumb knob */}
+          <motion.div
+            className="absolute w-[18px] h-[18px] rounded-full pointer-events-none"
+            style={{
+              background: track.enabled
+                ? "radial-gradient(circle at 40% 35%, #FFFFFF 0%, #E8E4DF 60%, #D0CBC4 100%)"
+                : "rgba(255,255,255,0.14)",
+              boxShadow: track.enabled
+                ? `0 1px 3px rgba(0,0,0,0.35), 0 0 10px 2px ${color}30`
+                : "none",
+            }}
+            animate={{ left: `calc(${pct}% - 9px)` }}
+            transition={{ duration: 0.06 }}
+          />
+          {/* Invisible range input */}
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={pct}
+            onChange={(e) => onChange(parseInt(e.target.value, 10) / 100)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            style={{ WebkitAppearance: "none" }}
+            aria-label={label}
+          />
+        </div>
+      </div>
+
+      {/* Secondary label — subtle, offset to align with groove */}
+      <div className="flex items-baseline justify-between pl-11 pr-0.5 -mt-1">
+        <span
+          className="text-[8px] uppercase tracking-[0.16em]"
+          style={{ color: "rgba(255,255,255,0.22)" }}
+        >
+          {label}
+        </span>
+        <span
+          className="text-[8px] tabular-nums"
+          style={{ color: "rgba(255,255,255,0.18)" }}
+        >
+          {isOff ? "—" : `${pct}`}
+        </span>
       </div>
     </div>
   );

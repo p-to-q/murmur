@@ -98,8 +98,8 @@ export function MurmurWaveCanvas({
     /** Terrain height: right side is higher (lower y) than left.
      *  Creates a gentle slope + wave undulation. */
     const terrainY = (x: number, baseY: number, amp: number, phase: number): number => {
-      // Slope: right side ~20% higher
-      const slope = (x / w) * h * 0.12;
+      // Slope: right side noticeably higher than left
+      const slope = (x / w) * h * 0.22;
       return (
         baseY -
         slope +
