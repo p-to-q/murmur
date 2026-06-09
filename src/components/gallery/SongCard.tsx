@@ -1,19 +1,10 @@
 "use client";
 
-/**
- * SongCard — 带酷炫动效的歌曲卡片（Capwords 风格）
- *
- * 特点：
- * - 大封面 + 白边标签
- * - 3D Hover 效果
- * - 弹性入场动画
- * - 懒加载支持
- */
-
 import { useState } from "react";
 import { useInView } from "react-intersection-observer";
-import { useSpring, animated } from "@react-spring/web";
-import { RandomCoverArt } from "./RandomCoverArt";
+import { motion } from "framer-motion";
+import { CanvasCoverArt } from "./CanvasCoverArt";
+import { mulberry32, hashString } from "@/lib/utils/seeded-random";
 
 export interface SongCardProps {
   id: string;
@@ -25,152 +16,114 @@ export interface SongCardProps {
   onClick: () => void;
 }
 
-export function SongCard({ id, title, vibe, bpm, createdAt, index, onClick }: SongCardProps) {
+const entryVariants = {
+  hidden: { opacity: 0, scale: 0.82, y: 18 },
+  visible: (i: number) => ({
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: {
+      type: "spring" as const,
+      stiffness: 380,
+      damping: 28,
+      delay: i * 0.06,
+    },
+  }),
+};
+
+const labelVariants = {
+  hidden: { opacity: 0, scale: 0, y: 8 },
+  visible: (i: number) => ({
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: {
+      type: "spring" as const,
+      stiffness: 420,
+      damping: 22,
+      delay: i * 0.06 + 0.15,
+    },
+  }),
+};
+
+export function SongCard({
+  id,
+  title,
+  vibe,
+  bpm,
+  index,
+  onClick,
+}: SongCardProps) {
   const [isHovered, setIsHovered] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
 
-  // 懒加载
-  const { ref, inView } = useInView({
-    threshold: 0.1,
-    triggerOnce: true,
-  });
+  const { ref, inView } = useInView({ threshold: 0.1, triggerOnce: true });
 
-  // 入场动画（弹性）
-  const entrySpring = useSpring({
-    from: {
-      opacity: 0,
-      y: 30,
-      rotateX: 15,
-      scale: 0.9,
-    },
-    to: {
-      opacity: inView ? 1 : 0,
-      y: inView ? 0 : 30,
-      rotateX: inView ? 0 : 15,
-      scale: inView ? 1 : 0.9,
-    },
-    delay: index * 50, // 错开入场
-    config: {
-      tension: 280,
-      friction: 60,
-      mass: 0.8,
-    },
-  });
-
-  // Hover 动画（3D 效果）
-  const hoverSpring = useSpring({
-    scale: isHovered ? 1.08 : 1,
-    rotateX: isHovered ? -2 : 0,
-    rotateY: isHovered ? 4 : 0,
-    y: isHovered ? -8 : 0,
-    shadowBlur: isHovered ? 32 : 12,
-    shadowOpacity: isHovered ? 0.25 : 0.12,
-    config: {
-      tension: 300,
-      friction: 25,
-    },
-  });
-
-  // 标签动画
-  const labelSpring = useSpring({
-    y: isHovered ? -6 : 0,
-    borderColor: isHovered ? "#FF5924" : "#E5DDD0",
-    backgroundColor: isHovered ? "#FFF9F5" : "#FFFFFF",
-    config: { tension: 400, friction: 30 },
-  });
-
-  // 格式化日期
-  const timeAgo = formatTimeAgo(createdAt);
+  // Seeded rotation for sticker feel
+  const seed = hashString(id);
+  const rand = mulberry32(seed);
+  const labelRotation = (rand() - 0.5) * 4; // -2 to 2 degrees
 
   return (
-    <animated.div
+    <motion.div
       ref={ref}
-      style={{
-        opacity: entrySpring.opacity,
-        transform: entrySpring.y.to(y => `translateY(${y}px) perspective(1000px) rotateX(${entrySpring.rotateX.get()}deg) scale(${entrySpring.scale.get()})`),
-      }}
-      className="relative"
+      custom={index}
+      variants={entryVariants}
+      initial="hidden"
+      animate={inView ? "visible" : "hidden"}
     >
-      <animated.button
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+      <motion.button
+        onHoverStart={() => setIsHovered(true)}
+        onHoverEnd={() => setIsHovered(false)}
         onClick={onClick}
-        style={{
-          transform: hoverSpring.scale.to((s) =>
-            `scale(${s}) perspective(1000px) rotateX(${hoverSpring.rotateX.get()}deg) rotateY(${hoverSpring.rotateY.get()}deg) translateY(${hoverSpring.y.get()}px)`
-          ),
-          filter: hoverSpring.shadowBlur.to(blur =>
-            `drop-shadow(0 ${blur / 2}px ${blur}px rgba(26, 26, 26, ${hoverSpring.shadowOpacity.get()}))`
-          ),
-        }}
+        whileHover={{ y: -6, transition: { type: "spring", stiffness: 400, damping: 25 } }}
+        whileTap={{ scale: 0.97, transition: { duration: 0.1 } }}
         className="group relative block w-full text-left"
       >
-        {/* 封面 */}
-        <div className="relative overflow-hidden rounded-[16px] bg-[#F5F1EB]" style={{ aspectRatio: "1" }}>
+        {/* Cover — 1:1 square */}
+        <div className="relative overflow-hidden rounded-[20px] aspect-square bg-[#F5F1EB]">
           {inView ? (
-            <div
-              className="absolute inset-0"
-              style={{
-                transform: isLoaded ? "rotate(0deg)" : "rotate(360deg)",
-                transition: "transform 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
-              }}
-              onTransitionEnd={() => setIsLoaded(true)}
-            >
-              <RandomCoverArt songId={id} className="w-full h-full" />
-            </div>
+            <CanvasCoverArt songId={id} vibe={vibe} className="w-full h-full" />
           ) : (
-            // 骨架屏（shimmer 效果）
             <div className="absolute inset-0 bg-gradient-to-r from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer" />
           )}
-        </div>
 
-        {/* Capwords 风格白边标签 */}
-        <animated.div
-          style={{
-            transform: labelSpring.y.to(y => `translateY(${y}px)`),
-            borderColor: labelSpring.borderColor,
-            backgroundColor: labelSpring.backgroundColor,
-          }}
-          className="mt-3 mx-auto w-fit max-w-[90%] rounded-[10px] border-[1.5px] px-3 py-2 shadow-sm"
-        >
-          <p className="font-serif-italic text-[#1A1A1A] text-[18px] leading-tight truncate">
-            {title}
-          </p>
-        </animated.div>
+          {/* Cover zoom on hover */}
+          <motion.div
+            className="absolute inset-0 pointer-events-none"
+            animate={{ scale: isHovered ? 1.04 : 1 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+          />
 
-        {/* 元信息（Hover 时显示更多） */}
-        <div className="mt-2 text-center">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-[#B7AEA1]">
-            {vibe}
-            {bpm && ` · ${bpm} BPM`}
-          </p>
-          <animated.p
-            style={{
-              opacity: hoverSpring.scale.to(s => (s > 1.02 ? 1 : 0)),
-              height: hoverSpring.scale.to(s => (s > 1.02 ? "auto" : 0)),
-            }}
-            className="mt-1 text-[10px] text-[#8C8780]"
+          {/* Sticker label — text-contour white outline, overlapping bottom of cover */}
+          <motion.div
+            custom={index}
+            variants={labelVariants}
+            initial="hidden"
+            animate={inView ? "visible" : "hidden"}
+            className="absolute bottom-2.5 left-2.5 right-2.5"
+            style={{ transform: `rotate(${labelRotation}deg)` }}
           >
-            {timeAgo}
-          </animated.p>
+            <span
+              className="font-serif-italic text-[#1A1A1A] text-[15px] md:text-[17px] leading-tight line-clamp-2 break-words"
+              style={{
+                WebkitTextStroke: "4px white",
+                paintOrder: "stroke fill",
+                filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.10))",
+              } as React.CSSProperties}
+            >
+              {title}
+            </span>
+          </motion.div>
         </div>
-      </animated.button>
-    </animated.div>
+
+        {/* Meta — below card */}
+        <div className="mt-2 px-0.5">
+          <p className="text-[10px] uppercase tracking-[0.16em] text-[#B7AEA1] truncate">
+            {vibe}
+            {bpm ? ` · ${bpm} BPM` : ""}
+          </p>
+        </div>
+      </motion.button>
+    </motion.div>
   );
-}
-
-/* ── Utilities ───────────────────────────────────────────────────────── */
-
-function formatTimeAgo(dateStr: string): string {
-  const now = new Date();
-  const date = new Date(dateStr);
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-  return `${Math.floor(diffDays / 365)} years ago`;
 }

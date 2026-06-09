@@ -1,26 +1,15 @@
 "use client";
 
-/**
- * GalleryScreen v2 — 极致美学版
- *
- * 特点：
- * - 瀑布流布局（Masonry）
- * - 随机生成封面（每次都不同）
- * - Capwords 风格白边标签
- * - 酷炫弹性动画 + 3D Hover
- * - 懒加载 + Shimmer 骨架屏
- */
-
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import Masonry from "react-masonry-css";
 import { memory } from "@/lib/platform/memory";
 
 import { useTranslator } from "@/lib/i18n";
 import type { SongCard as SongCardType } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
+import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
 
 type SongWithMeta = SongCardType & { bpm?: number; keySignature?: string };
 type SortMode = "newest" | "alpha";
@@ -76,93 +65,80 @@ export function GalleryScreen() {
     router.push(`/song/${song.id}`);
   };
 
-  // Masonry 响应式列数
-  const breakpointCols = {
-    default: 5,
-    1536: 4,
-    1280: 3,
-    768: 2,
-  };
-
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
 
-      {/* Header */}
+      {/* Activity heatmap — fills the top */}
       <div
-        className="relative z-10 px-6 md:px-12 pb-8 md:pb-12 max-w-7xl mx-auto"
-        style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 56px)" }}
+        className="relative z-10 px-6 md:px-12 max-w-7xl mx-auto"
+        style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 48px)" }}
       >
-        <div className="flex items-start justify-between gap-6">
+        {!isLoading && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="min-w-0 flex-1"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1, duration: 0.5 }}
           >
-            <h1 className="hero-serif-italic text-[#1A1A1A] text-[40px] leading-[1.05] md:text-[64px]">
-              {t("gallery.title") || "Things you hummed"}
-            </h1>
-            <p className="font-serif-italic mt-2 max-w-[32rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
-              {t("gallery.subtitle") || "A quiet shelf of melodies."}
-            </p>
+            <ActivityHeatmap
+              dates={songs.map((s) => s.createdAt)}
+              songCount={songs.length}
+              title={t("gallery.title")}
+            />
           </motion.div>
-
-          {songs.length > 1 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              <SortToggle sort={sort} onChange={setSort} t={t} />
-            </motion.div>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* Loading */}
+      {/* Sort toggle — only visible when there are songs */}
+      {!isLoading && songs.length > 1 && (
+        <div className="relative z-10 px-6 md:px-12 max-w-7xl mx-auto flex justify-end -mt-1 pb-6 md:pb-8">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.25 }}
+          >
+            <SortToggle sort={sort} onChange={setSort} t={t} />
+          </motion.div>
+        </div>
+      )}
+
+      {/* Spacer when no songs / no sort toggle shown */}
+      {!isLoading && songs.length <= 1 && <div className="pb-4" />}
+
+      {/* Loading skeletons — grid layout */}
       {isLoading && (
         <div className="relative z-10 px-6 md:px-12 max-w-7xl mx-auto">
-          <Masonry
-            breakpointCols={breakpointCols}
-            className="flex -ml-6 w-auto"
-            columnClassName="pl-6 bg-clip-padding"
-          >
-            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-              <div key={i} className="mb-8">
-                <div className="aspect-square rounded-[16px] bg-gradient-to-r from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer" />
-                <div className="mt-3 mx-auto w-3/4 h-10 rounded-[10px] bg-[#ECE5D6]" />
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="aspect-square rounded-[20px] bg-gradient-to-br from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer" />
+                <div className="mt-2 h-3 w-2/3 rounded-full bg-[#ECE5D6]" />
               </div>
             ))}
-          </Masonry>
+          </div>
         </div>
       )}
 
       {/* Empty state */}
       {!isLoading && songs.length === 0 && <EmptyState t={t} router={router} />}
 
-      {/* Masonry Grid */}
+      {/* Song grid — 2-col mobile / 3-col tablet / 4-col desktop */}
       {!isLoading && songs.length > 0 && (
         <div className="relative z-10 px-6 md:px-12 pb-32 max-w-7xl mx-auto">
-          <Masonry
-            breakpointCols={breakpointCols}
-            className="flex -ml-6 w-auto"
-            columnClassName="pl-6 bg-clip-padding"
-          >
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
             {sorted.map((song, i) => (
-              <div key={song.id} className="mb-8">
-                <SongCard
-                  id={song.id}
-                  title={song.title}
-                  vibe={song.vibe}
-                  bpm={song.bpm}
-                  createdAt={song.createdAt}
-                  index={i}
-                  onClick={() => handleSongClick(song)}
-                />
-              </div>
+              <SongCard
+                key={song.id}
+                id={song.id}
+                title={song.title}
+                vibe={song.vibe}
+                bpm={song.bpm}
+                createdAt={song.createdAt}
+                index={i}
+                onClick={() => handleSongClick(song)}
+              />
             ))}
-          </Masonry>
+          </div>
 
           <motion.div
             initial={{ opacity: 0 }}
@@ -183,7 +159,7 @@ export function GalleryScreen() {
   );
 }
 
-/* Components */
+/* ── Sub-components ──────────────────────────────────────────────────── */
 
 function SortToggle({
   sort,
@@ -227,7 +203,6 @@ function EmptyState({
       transition={{ delay: 0.2, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       className="relative z-10 flex flex-col items-center px-6 md:px-12 pb-32 max-w-2xl mx-auto text-center"
     >
-      {/* 空白音符 SVG */}
       <svg
         width="120"
         height="120"
@@ -236,10 +211,10 @@ function EmptyState({
         className="mb-8 opacity-30"
       >
         <motion.circle
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 0.3 }}
+          initial={{ scale: 0.75, opacity: 0.05 }}
+          animate={{ scale: 1, opacity: 0.35 }}
           transition={{
-            duration: 2,
+            duration: 1.6,
             repeat: Infinity,
             repeatType: "reverse",
             ease: "easeInOut",
@@ -253,7 +228,7 @@ function EmptyState({
           initial={{ pathLength: 0 }}
           animate={{ pathLength: 1 }}
           transition={{
-            duration: 1.5,
+            duration: 1.6,
             repeat: Infinity,
             repeatType: "reverse",
             ease: "easeInOut",

@@ -149,9 +149,9 @@ export const DICT = {
   "studio.prompt.cta":     { zh: "改",          en: "Apply" },
   "studio.prompt.unknown": { zh: "没识别这条指令，试试下面的旋钮", en: "Didn't catch that — try the knobs below" },
   "studio.prompt.applied": { zh: "已应用",      en: "Applied" },
-  "studio.save":           { zh: "存入灵感集",  en: "Save to Gallery" },
+  "studio.save":           { zh: "存入藏歌",    en: "Save to Gallery" },
   "studio.saving":         { zh: "保存中…",     en: "Saving…" },
-  "studio.save_ok":        { zh: "已保存到灵感集", en: "Saved to your Gallery" },
+  "studio.save_ok":        { zh: "已保存到藏歌",   en: "Saved to your Gallery" },
   "studio.save_err":       { zh: "保存失败，请重试", en: "Save failed — please retry" },
   "studio.empty.eyebrow":   { zh: "还没开始", en: "EMPTY" },
   "studio.empty":          { zh: "还没有选定版本", en: "No version selected yet" },
@@ -162,7 +162,7 @@ export const DICT = {
   "name.sub":              { zh: "之后还能在这首歌的卡片里随时改。", en: "You can change it any time later on the song card." },
   "name.placeholder":      { zh: "比如：午后木地板上的光", en: "e.g. light on the afternoon floor" },
   "name.cancel":           { zh: "再调一调",     en: "Keep editing" },
-  "name.save":             { zh: "收进灵感集",   en: "Save into Gallery" },
+  "name.save":             { zh: "收进藏歌",     en: "Save into Gallery" },
   "name.required":         { zh: "得有个名字才能存哦", en: "Needs a name first" },
 
   // ── Track labels ───────────────────────────────────────────────────
@@ -193,7 +193,7 @@ export const DICT = {
 
   // ── Gallery ────────────────────────────────────────────────────────
   "gallery.eyebrow":  { zh: "MY RECORDS",      en: "MY RECORDS" },
-  "gallery.title":    { zh: "灵感集",          en: "Gallery" },
+  "gallery.title":    { zh: "藏歌",            en: "Gallery" },
   "gallery.subtitle": { zh: "你哼过的小歌，像贴纸一样存在这里。", en: "Every hum you've turned into a song, kept here like stickers in a notebook." },
   "gallery.empty.title": { zh: "还没有小歌", en: "No little songs yet" },
   "gallery.empty.title2":{ zh: "先哼出第一首吧。", en: "Hum your first one." },
@@ -209,7 +209,7 @@ export const DICT = {
   // ── SongDetail ─────────────────────────────────────────────────────
   "song.not_found.eyebrow": { zh: "空白唱片", en: "EMPTY RECORD" },
   "song.not_found":      { zh: "找不到这首歌",       en: "Song not found" },
-  "song.back_to_gallery":{ zh: "返回灵感集",         en: "Back to Gallery" },
+  "song.back_to_gallery":{ zh: "返回藏歌",           en: "Back to Gallery" },
   "song.remix_again":    { zh: "再生三版",           en: "Try new versions" },
   "song.meta.vibe":      { zh: "Vibe",               en: "Vibe" },
   "song.meta.bpm":       { zh: "BPM",                en: "BPM" },
