@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { SongCard } from "./SongCard";
 
 const CELL_COLORS = [
   "#E8E2D8",
@@ -11,10 +12,15 @@ const CELL_COLORS = [
   "#FF5924",
 ];
 
-const CELL_SIZE = 11;
-const CELL_GAP = 3;
-const CELL_RADIUS = 3;
-const STRIDE = CELL_SIZE + CELL_GAP;
+// Mobile: smaller cells
+const CELL_SIZE_MOBILE = 11;
+const CELL_GAP_MOBILE = 3;
+const CELL_RADIUS_MOBILE = 3;
+
+// Desktop: larger cells
+const CELL_SIZE_DESKTOP = 18;
+const CELL_GAP_DESKTOP = 5;
+const CELL_RADIUS_DESKTOP = 4;
 
 interface DayCell {
   date: Date;
@@ -26,6 +32,14 @@ export interface ActivityHeatmapProps {
   songCount?: number;
   title?: string;
   className?: string;
+  recentSongs?: Array<{
+    id: string;
+    title: string;
+    vibe: string;
+    bpm?: number;
+    createdAt: string;
+  }>;
+  onSongClick?: (id: string) => void;
 }
 
 export function ActivityHeatmap({
@@ -33,15 +47,32 @@ export function ActivityHeatmap({
   songCount = 0,
   title,
   className = "",
+  recentSongs = [],
+  onSongClick,
 }: ActivityHeatmapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [numWeeks, setNumWeeks] = useState(20);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  // Responsive cell sizing
+  const CELL_SIZE = isDesktop ? CELL_SIZE_DESKTOP : CELL_SIZE_MOBILE;
+  const CELL_GAP = isDesktop ? CELL_GAP_DESKTOP : CELL_GAP_MOBILE;
+  const CELL_RADIUS = isDesktop ? CELL_RADIUS_DESKTOP : CELL_RADIUS_MOBILE;
+  const STRIDE = CELL_SIZE + CELL_GAP;
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const measure = () => {
-      const cols = Math.floor((el.offsetWidth + CELL_GAP) / STRIDE);
+      const containerWidth = el.offsetWidth;
+      const desktop = containerWidth >= 768; // md breakpoint
+      setIsDesktop(desktop);
+
+      const stride = desktop
+        ? CELL_SIZE_DESKTOP + CELL_GAP_DESKTOP
+        : CELL_SIZE_MOBILE + CELL_GAP_MOBILE;
+
+      const cols = Math.floor((containerWidth + (desktop ? CELL_GAP_DESKTOP : CELL_GAP_MOBILE)) / stride);
       setNumWeeks(Math.max(8, Math.min(52, cols)));
     };
     measure();
@@ -108,9 +139,13 @@ export function ActivityHeatmap({
 
   const gridHeight = 7 * CELL_SIZE + 6 * CELL_GAP;
 
+  // Pick top 2-3 recent songs
+  const displaySongs = recentSongs.slice(0, isDesktop ? 3 : 2);
+
   return (
     <div className={className}>
       <div ref={containerRef}>
+        {/* ── Heatmap grid ───────────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -131,7 +166,7 @@ export function ActivityHeatmap({
                       day.level < 0 ? "transparent" : CELL_COLORS[day.level],
                     boxShadow:
                       day.level >= 3
-                        ? `0 0 5px ${CELL_COLORS[day.level]}35`
+                        ? `0 0 ${isDesktop ? 6 : 5}px ${CELL_COLORS[day.level]}35`
                         : undefined,
                     transition: "background 0.2s ease",
                   }}
@@ -141,12 +176,12 @@ export function ActivityHeatmap({
           ))}
         </motion.div>
 
-        {/* Month labels */}
-        <div className="relative mt-1.5" style={{ height: 16 }}>
+        {/* ── Month labels ───────────────────────────────────────────────── */}
+        <div className="relative mt-2 md:mt-2.5" style={{ height: isDesktop ? 18 : 16 }}>
           {months.map(({ label, col }) => (
             <span
               key={`${label}-${col}`}
-              className="absolute text-[10px] tracking-[0.04em] text-[#B7AEA1]"
+              className="absolute text-[10px] md:text-[11px] tracking-[0.04em] text-[#B7AEA1]"
               style={{ left: col * STRIDE }}
             >
               {label}
@@ -154,35 +189,64 @@ export function ActivityHeatmap({
           ))}
         </div>
 
-        {/* Summary row — title left, legend right, top-aligned */}
-        <div className="flex items-start justify-between mt-1.5">
+        {/* ── Title + Legend row ─────────────────────────────────────────── */}
+        <div className="flex items-start justify-between mt-3 md:mt-4 mb-6 md:mb-8">
           {title ? (
-            <h1 className="hero-serif-italic text-[#1A1A1A] text-[40px] leading-[1.0] md:text-[64px] -mb-1">
+            <h1 className="hero-serif-italic text-[#1A1A1A] text-[40px] leading-[1.0] md:text-[72px] lg:text-[84px] -mb-1">
               {title}
             </h1>
           ) : (
-            <span className="font-serif-italic text-[11px] text-[#8C8780]">
+            <span className="font-serif-italic text-[11px] md:text-[13px] text-[#8C8780]">
               {songCount > 0 ? `${songCount} song${songCount === 1 ? "" : "s"}` : ""}
             </span>
           )}
 
           {/* Legend */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-[#B7AEA1] mr-0.5">Less</span>
+          <div className="flex items-center gap-1.5 md:gap-2.5 shrink-0">
+            <span className="text-[10px] md:text-[12px] text-[#B7AEA1] mr-0.5 md:mr-1">Less</span>
             {CELL_COLORS.map((color, i) => (
               <div
                 key={i}
                 style={{
-                  width: 9,
-                  height: 9,
-                  borderRadius: 2,
+                  width: isDesktop ? 14 : 9,
+                  height: isDesktop ? 14 : 9,
+                  borderRadius: isDesktop ? 3 : 2,
                   background: color,
                 }}
               />
             ))}
-            <span className="text-[10px] text-[#B7AEA1] ml-0.5">More</span>
+            <span className="text-[10px] md:text-[12px] text-[#B7AEA1] ml-0.5 md:ml-1">More</span>
           </div>
         </div>
+
+        {/* ── Recent songs showcase ──────────────────────────────────────── */}
+        {displaySongs.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="mb-4 md:mb-5">
+              <p className="text-[11px] md:text-[12px] uppercase tracking-[0.16em] text-[#B7AEA1]">
+                Recent
+              </p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-5">
+              {displaySongs.map((song, i) => (
+                <SongCard
+                  key={song.id}
+                  id={song.id}
+                  title={song.title}
+                  vibe={song.vibe}
+                  bpm={song.bpm}
+                  createdAt={song.createdAt}
+                  index={i}
+                  onClick={() => onSongClick?.(song.id)}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
       </div>
     </div>
   );

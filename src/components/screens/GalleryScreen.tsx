@@ -14,12 +14,41 @@ import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
 type SongWithMeta = SongCardType & { bpm?: number; keySignature?: string };
 type SortMode = "newest" | "alpha";
 
+// Demo songs for empty state
+const DEMO_SONGS: SongWithMeta[] = [
+  {
+    id: "demo-1",
+    title: "Velvet Nocturne",
+    vibe: "Melancholic",
+    bpm: 72,
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "demo-2",
+    title: "Tokyo Rain",
+    vibe: "Lo-fi",
+    bpm: 88,
+    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "demo-3",
+    title: "Wilderness Dream",
+    vibe: "Ethereal",
+    bpm: 105,
+    createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
 export function GalleryScreen() {
   const router = useRouter();
   const t = useTranslator();
   const [songs, setSongs] = useState<SongWithMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sort, setSort] = useState<SortMode>("newest");
+
+  // Use demo songs when user has no real songs
+  const displaySongs = songs.length > 0 ? songs : DEMO_SONGS;
+  const isShowingDemo = songs.length === 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +72,7 @@ export function GalleryScreen() {
   }, []);
 
   const sorted = useMemo(() => {
-    const list = [...songs];
+    const list = [...displaySongs];
     if (sort === "alpha") {
       return list.sort((a, b) => a.title.localeCompare(b.title));
     }
@@ -51,9 +80,15 @@ export function GalleryScreen() {
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }, [songs, sort]);
+  }, [displaySongs, sort]);
 
   const handleSongClick = (song: SongCardType) => {
+    // If demo song, go to home to start humming
+    if (song.id.startsWith("demo-")) {
+      router.push("/");
+      return;
+    }
+
     memory
       .reportAction({
         content: `Opened "${song.title}" from gallery`,
@@ -81,16 +116,21 @@ export function GalleryScreen() {
             transition={{ delay: 0.1, duration: 0.5 }}
           >
             <ActivityHeatmap
-              dates={songs.map((s) => s.createdAt)}
+              dates={displaySongs.map((s) => s.createdAt)}
               songCount={songs.length}
               title={t("gallery.title")}
+              recentSongs={sorted.slice(0, 3)}
+              onSongClick={(id) => {
+                const song = displaySongs.find((s) => s.id === id);
+                if (song) handleSongClick(song);
+              }}
             />
           </motion.div>
         )}
       </div>
 
       {/* Sort toggle — only visible when there are songs */}
-      {!isLoading && songs.length > 1 && (
+      {!isLoading && displaySongs.length > 1 && (
         <div className="relative z-10 px-6 md:px-12 max-w-7xl mx-auto flex justify-end -mt-1 pb-6 md:pb-8">
           <motion.div
             initial={{ opacity: 0 }}
@@ -103,7 +143,7 @@ export function GalleryScreen() {
       )}
 
       {/* Spacer when no songs / no sort toggle shown */}
-      {!isLoading && songs.length <= 1 && <div className="pb-4" />}
+      {!isLoading && displaySongs.length <= 1 && <div className="pb-4" />}
 
       {/* Loading skeletons — grid layout */}
       {isLoading && (
@@ -119,12 +159,26 @@ export function GalleryScreen() {
         </div>
       )}
 
-      {/* Empty state */}
-      {!isLoading && songs.length === 0 && <EmptyState t={t} router={router} />}
+      {/* Empty state — no longer shown, we show demo songs instead */}
+      {/* {!isLoading && songs.length === 0 && <EmptyState t={t} router={router} />} */}
 
       {/* Song grid — 2-col mobile / 3-col tablet / 4-col desktop */}
-      {!isLoading && songs.length > 0 && (
+      {!isLoading && displaySongs.length > 0 && (
         <div className="relative z-10 px-6 md:px-12 pb-32 max-w-7xl mx-auto">
+          {/* Demo banner when showing demo songs */}
+          {isShowingDemo && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.5 }}
+              className="mb-6 md:mb-8 text-center"
+            >
+              <p className="font-serif-italic text-[#8C8780] text-[14px] md:text-[16px] mb-3">
+                {t("gallery.demo.hint") || "这些是示例歌曲，点击开始创作你的第一首 ↓"}
+              </p>
+            </motion.div>
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
             {sorted.map((song, i) => (
               <SongCard
@@ -150,7 +204,9 @@ export function GalleryScreen() {
               onClick={() => router.push("/")}
               className="font-serif-italic text-[15px] text-[#FF5924] hover:text-[#D9421A] underline-mm transition-colors"
             >
-              ↻ {t("gallery.new_hum") || "Hum another one"}
+              ↻ {isShowingDemo
+                ? (t("gallery.start_hum") || "开始哼唱")
+                : (t("gallery.new_hum") || "Hum another one")}
             </button>
           </motion.div>
         </div>

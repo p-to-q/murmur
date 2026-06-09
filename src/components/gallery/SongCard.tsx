@@ -100,15 +100,15 @@ export function SongCard({
             variants={labelVariants}
             initial="hidden"
             animate={inView ? "visible" : "hidden"}
-            className="absolute bottom-2.5 left-2.5 right-2.5"
+            className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-center"
             style={{ transform: `rotate(${labelRotation}deg)` }}
           >
             <span
-              className="font-serif-italic text-[#1A1A1A] text-[15px] md:text-[17px] leading-tight line-clamp-2 break-words"
+              className="font-serif-italic text-[#1A1A1A] text-[15px] md:text-[17px] leading-tight line-clamp-2 break-words text-center px-2"
               style={{
-                WebkitTextStroke: "4px white",
+                WebkitTextStroke: "6px white",
                 paintOrder: "stroke fill",
-                filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.10))",
+                filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.10)) blur(0.3px)",
               } as React.CSSProperties}
             >
               {title}
