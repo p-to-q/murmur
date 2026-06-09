@@ -9,9 +9,6 @@
  *   3. Forensic replay when a webhook causes a ledger anomaly.
  *
  * Retention: 90 days (job-driven).
- *
- * NOT YET registered in schema/index.ts — Codex registers + migrates
- * in Phase 4 of docs/execution-roadmap.md.
  */
 
 import { pgTable, text, varchar, timestamp, jsonb, boolean, index, uniqueIndex } from "drizzle-orm/pg-core";

@@ -1,4 +1,4 @@
-import { TopupScreen } from "@/components/screens/TopupScreen";
+import { TopupScreenV2 } from "@/components/screens/TopupScreen-v2";
 
 /**
  * /topup — the *renew* moment.
@@ -8,5 +8,5 @@ import { TopupScreen } from "@/components/screens/TopupScreen";
  * navigates to /topup/checkout?sku=… on confirm.
  */
 export default function TopupPage() {
-  return <TopupScreen />;
+  return <TopupScreenV2 />;
 }
