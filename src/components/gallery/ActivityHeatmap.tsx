@@ -150,7 +150,7 @@ export function ActivityHeatmap({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.12, duration: 0.5 }}
-          className="flex"
+          className="flex justify-between w-full"
           style={{ gap: CELL_GAP, height: gridHeight }}
         >
           {weeks.map((week, wi) => (
