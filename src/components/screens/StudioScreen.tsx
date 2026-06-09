@@ -33,6 +33,7 @@ import { MurmurWave } from "@/components/murmur/murmur-wave";
 import { AurisPanel } from "@/components/studio/auris-panel";
 import { TrackMixer } from "@/components/studio/track-mixer";
 import { SceneGrid } from "@/components/studio/scene-grid";
+import { VinylDisc } from "@/components/studio/vinyl-disc";
 
 export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const router = useRouter();
@@ -276,38 +277,38 @@ function StudioContent({ version }: { version: VibeVersion }) {
       <PageBackdrop />
 
       <div className="relative z-10 min-h-svh flex flex-col">
-        {/* ── Minimal header ──────────────────────────────────────── */}
-        <div
-          className="flex items-center justify-between px-5 md:px-8 py-3"
-          style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 24px)" }}
+        {/* ── Hero Card — full-width, squared top corners, rounded bottom ─────────── */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.06, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          className="relative cursor-pointer select-none overflow-hidden flex-shrink-0"
+          style={{
+            background: currentVersion.visualConfig.gradient,
+            height: "clamp(320px, 62vh, 600px)",
+            borderBottomLeftRadius: "24px",
+            borderBottomRightRadius: "24px",
+          }}
+          onClick={togglePlay}
         >
-          <button
-            onClick={() => { synth.stop(); router.back(); }}
-            className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
+          {/* ── Header controls — positioned absolutely inside hero ──────────────────────── */}
+          <div
+            className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 md:px-8 py-3 z-20"
+            style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 24px)" }}
           >
-            ← {t("studio.back")}
-          </button>
-          <button
-            onClick={handleRestore}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DDD0] bg-white/70 transition-colors hover:bg-white"
-          >
-            <RotateCcw className="h-3.5 w-3.5 text-[#8C8780]" />
-          </button>
-        </div>
-
-        {/* ── Hero Card — dominates top ~62% of viewport ─────────── */}
-        <div className="px-4 md:px-8 flex-shrink-0">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.97 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.06, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-            className="relative cursor-pointer select-none overflow-hidden rounded-[28px] md:rounded-[36px]"
-            style={{
-              background: currentVersion.visualConfig.gradient,
-              height: "clamp(300px, 60vh, 560px)",
-            }}
-            onClick={togglePlay}
-          >
+            <button
+              onClick={(e) => { e.stopPropagation(); synth.stop(); router.back(); }}
+              className="text-[12px] tracking-[0.04em] text-white hover:text-white/70 active:text-[#E5DDD0] transition-colors"
+            >
+              ← {t("studio.back")}
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleRestore(); }}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DDD0] bg-white/70 transition-colors hover:bg-white"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-[#8C8780]" />
+            </button>
+          </div>
             {/* Darken overlays */}
             <div className="absolute inset-0 bg-gradient-to-b from-black/12 via-transparent to-black/48 pointer-events-none" />
 
@@ -338,6 +339,25 @@ function StudioContent({ version }: { version: VibeVersion }) {
               </motion.div>
             </div>
 
+            {/* Tonearm — pivots at bottom-right corner */}
+            <div className="absolute bottom-6 right-6 md:bottom-8 md:right-8 pointer-events-none z-10">
+              <motion.svg
+                className="w-28 h-28 md:w-40 md:h-40"
+                viewBox="0 0 100 100" fill="none"
+                style={{ transformOrigin: "82% 82%" }}
+                initial={false}
+                animate={{ rotate: isPlaying ? -26 : 0 }}
+                transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <line x1="82" y1="82" x2="24" y2="28" stroke="rgba(255,255,255,0.55)" strokeWidth="2" strokeLinecap="round" />
+                <rect x="16" y="22" width="14" height="5" rx="1.5" fill="rgba(255,255,255,0.5)" transform="rotate(-42, 23, 24.5)" />
+                <circle cx="18" cy="24" r="1.5" fill="rgba(255,255,255,0.7)" />
+                <circle cx="82" cy="82" r="6" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.3)" strokeWidth="1" />
+                <circle cx="82" cy="82" r="2.5" fill="rgba(255,255,255,0.4)" />
+                <circle cx="72" cy="73" r="4" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" />
+              </motion.svg>
+            </div>
+
             {/* Song info — lower left */}
             <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
               <p className="text-[10px] uppercase tracking-[0.3em] text-white/55 mb-1.5">
@@ -353,26 +373,58 @@ function StudioContent({ version }: { version: VibeVersion }) {
                 {currentVersion.melody.bpm} BPM · {currentVersion.melody.key}
               </p>
             </div>
-          </motion.div>
-        </div>
+        </motion.div>
 
-        {/* ── Synth control panel — warm hardware texture ─────────── */}
+        {/* ── Panel wrapper — disc protrudes above the frame ─────── */}
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.18, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="mx-4 md:mx-8 mt-3 rounded-[22px] overflow-hidden"
-          style={{
-            background: [
-              "repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 8px)",
-              "repeating-linear-gradient(0deg, rgba(0,0,0,0.08) 0px, rgba(0,0,0,0.08) 1px, transparent 1px, transparent 24px)",
-              "linear-gradient(160deg, #2A2118 0%, #1E1A12 45%, #241D14 100%)",
-            ].join(", "),
-            paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
-          }}
+          className="mx-4 md:mx-8 mt-3 relative"
+          style={{ paddingTop: "40px" }}
         >
+          {/* ── Vinyl disc — floats above panel, drops into slot ──── */}
+          <div
+            className="absolute pointer-events-none"
+            style={{ left: "28px", top: "0" }}
+          >
+            <VinylDisc
+              isPlaying={isPlaying}
+              accent={waveAccent}
+              size={92}
+            />
+          </div>
+
+          {/* ── Panel body — z-[1] so it covers the disc's lower half ── */}
+          <div
+            className="overflow-hidden relative z-[1]"
+            style={{
+              background: [
+                "repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 8px)",
+                "repeating-linear-gradient(0deg, rgba(0,0,0,0.08) 0px, rgba(0,0,0,0.08) 1px, transparent 1px, transparent 24px)",
+                "linear-gradient(160deg, #2A2118 0%, #1E1A12 45%, #241D14 100%)",
+              ].join(", "),
+              paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+              borderBottomLeftRadius: "22px",
+              borderBottomRightRadius: "22px",
+            }}
+          >
+            {/* ── Disc slot groove — the slit the disc inserts into ── */}
+            <div className="relative pointer-events-none" style={{ height: "28px" }}>
+              {/* Slot opening — recessed channel */}
+              <div
+                className="absolute left-0 right-0"
+                style={{
+                  top: "12px",
+                  height: "4px",
+                  background: "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.18) 100%)",
+                  boxShadow: "0 1px 0 rgba(255,255,255,0.04), inset 0 1.5px 3px rgba(0,0,0,0.45)",
+                }}
+              />
+            </div>
+
           {/* Prompt bar */}
-          <div className="px-5 pt-5 pb-3">
+          <div className="px-5 pt-2 pb-3">
             <AurisPanel
               busy={promptBusy}
               onApply={handlePrompt}
@@ -412,6 +464,8 @@ function StudioContent({ version }: { version: VibeVersion }) {
             >
               {t("studio.save")} →
             </motion.button>
+          </div>
+          {/* close panel body */}
           </div>
         </motion.div>
 
