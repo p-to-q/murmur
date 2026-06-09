@@ -26,7 +26,7 @@ If something here contradicts those, this file wins for "what currently is."
   shell at [src/app/page.tsx](../src/app/page.tsx).
 - **Live screens:**
   [HumScreen](../src/components/screens/HumScreen.tsx),
-  [VersionCardsOverlay](../src/components/screens/VersionCardsOverlay.tsx),
+  VersionCardsOverlay（已随死代码清理移除，f856cdb）,
   [StudioScreen](../src/components/screens/StudioScreen.tsx),
   [NameScreen](../src/components/screens/NameScreen.tsx),
   [GalleryScreen](../src/components/screens/GalleryScreen.tsx),
