@@ -341,8 +341,8 @@ function StudioContent({ version }: { version: VibeVersion }) {
             {/* Tonearm — pivots at bottom-right corner */}
             <div className="absolute bottom-6 right-6 md:bottom-8 md:right-8 pointer-events-none z-10">
               <motion.svg
-                width="100" height="100" viewBox="0 0 100 100" fill="none"
-                style={{ transformOrigin: "82px 82px" }}
+                width="160" height="160" viewBox="0 0 100 100" fill="none"
+                style={{ transformOrigin: "131px 131px" }}
                 initial={false}
                 animate={{ rotate: isPlaying ? -26 : 0 }}
                 transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
@@ -431,7 +431,6 @@ function StudioContent({ version }: { version: VibeVersion }) {
               {t("studio.save")} →
             </motion.button>
           </div>
-
         </motion.div>
 
         {/* Bottom breathing room */}

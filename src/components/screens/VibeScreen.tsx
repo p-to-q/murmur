@@ -67,6 +67,7 @@ function playShutterClick() {
 }
 
 export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
+  const auditionStartTimerRef = useRef<number | null>(null);
   const router = useRouter();
   const t = useTranslator();
   const {
@@ -129,6 +130,9 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   /* ── Stop synth on unmount ────────────────────────────────────── */
   useEffect(() => {
     return () => {
+      if (auditionStartTimerRef.current !== null) {
+        window.clearTimeout(auditionStartTimerRef.current);
+      }
       synth.stop();
       setAuditioning(null);
     };
@@ -157,15 +161,21 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
   const handleAudition = useCallback(
     (version: VibeVersion) => {
+      if (auditionStartTimerRef.current !== null) {
+        window.clearTimeout(auditionStartTimerRef.current);
+        auditionStartTimerRef.current = null;
+      }
+
       if (auditioningVersionId === version.id) {
         synth.stop();
         setAuditioning(null);
         return;
       }
+
       try {
         synth.stop();
-        setAuditioning(version.id);
-        synth.play(version);
+        setAuditioning(version.id); // Immediately set as auditioning
+        synth.play(version); // Immediately start playing
       } catch (err) {
         console.error("[Vibe] audition error:", err);
         toast.error(t("cards.play_error") || "Couldn't play that preview.");
@@ -252,34 +262,35 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
               style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 36px)" }}
             >
               {/* ── Compact header — nav only, no headline ───── */}
-              <div className="flex items-center justify-between mb-4">
+              {/* Header row - title and action buttons aligned at baseline */}
+              <div className="flex items-end justify-between gap-4 mb-4" style={{ paddingTop: '20px' }}>
                 <motion.button
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.4 }}
                   onClick={handleBack}
-                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
+                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors whitespace-nowrap"
                 >
                   ← {fromSavedSong
                     ? t("vibe.back.saved") || "Back to your song"
                     : t("vibe.back") || "Try a different hum"}
                 </motion.button>
-                <motion.span
+                <motion.h2
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.15, duration: 0.4 }}
-                  className="font-serif-italic text-[12px] text-[#B6B0A4]"
+                  transition={{ delay: 0.1, duration: 0.4 }}
+                  className="font-serif-italic text-[22px] md:text-[26px] text-[#8B8781] text-center flex-1"
                 >
-                  {t("cards.sub.short") || "Listen, then pick one."}
-                </motion.span>
+                  {t("cards.sub.short") || "Listen, then pick the one that feels right."}
+                </motion.h2>
                 <motion.button
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.25, duration: 0.4 }}
+                  transition={{ delay: 0.15, duration: 0.4 }}
                   onClick={handleReroll}
-                  className="font-serif-italic text-[12px] text-[#FF5924] hover:text-[#D9421A] transition-colors"
+                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors whitespace-nowrap"
                 >
-                  ↻ {t("vibe.reroll") || "New set"}
+                  {t("vibe.reroll") || "New set"} →
                 </motion.button>
               </div>
 

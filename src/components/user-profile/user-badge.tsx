@@ -17,7 +17,7 @@ export function UserBadge() {
 
   // Use Google session if available, otherwise fall back to platform user
   const user = session?.user ? {
-    id: (session.user as any).id || "google-user",
+    id: (session.user as { id?: string }).id || "google-user",
     email: session.user.email || null,
     name: session.user.name || null,
     avatarUrl: session.user.image || null,
@@ -69,7 +69,7 @@ export function UserBadge() {
                 signIn("google", { callbackUrl: "/" });
                 setOpen(false);
               }}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-[#1A1A1A] bg-[#F5F1EB] hover:bg-[#E0DDD5] mb-2"
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-[#1A1A1A] bg-[#F5F1EB] hover:bg-[#E0DDD5] mb-1"
             >
               <svg className="h-3.5 w-3.5" viewBox="0 0 24 24">
                 <path
@@ -101,7 +101,7 @@ export function UserBadge() {
               }
               setOpen(false);
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[#8C8780] hover:bg-[#F5F1EB] hover:text-[#1A1A1A]"
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-[#8C8780] hover:bg-[#F5F1EB] hover:text-[#1A1A1A]"
           >
             <LogOut className="h-3.5 w-3.5" />
             Sign out

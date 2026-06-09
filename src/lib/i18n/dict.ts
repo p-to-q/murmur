@@ -318,6 +318,7 @@ export const DICT = {
   "me.repair_bias.right_note": { zh: "喂，不是说你唱得难听。", en: "Hey, this is not us saying you sang badly." },
   "me.repair_bias.live.left": { zh: "偏原唱", en: "Closer" },
   "me.repair_bias.live.center": { zh: "默认", en: "Balanced" },
+  "me.repair_bias.center_note":  { zh: "平衡原味与听感", en: "Balance fidelity and listenability" },
   "me.repair_bias.live.right": { zh: "偏好听", en: "Sweeter" },
 
   // ── Settings ───────────────────────────────────────────────────────
@@ -395,6 +396,7 @@ export const DICT = {
   "nav.flow.vibe":               { zh: "风物",     en: "Vibe" },
   "nav.flow.studio":             { zh: "谱室",     en: "Studio" },
   "nav.flow.name":               { zh: "命名",     en: "Name it" },
+  "nav.flow.settings":           { zh: "设置",     en: "Settings" },
   "nav.flow.topup":              { zh: "补给",     en: "Top up" },
   "nav.flow.checkout":           { zh: "结账",     en: "Checkout" },
 
