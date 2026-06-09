@@ -30,6 +30,7 @@ import { resolveRequestAuth } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { purchases } from "@/lib/db/schema/purchases";
 import { eq, and, desc } from "drizzle-orm";
+import { log } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
@@ -107,7 +108,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error("[restore-purchases] Error:", error);
+    log("purchases.restore_failed", {
+      error: error instanceof Error ? error.message : String(error),
+    }, {
+      route: "/api/purchases/restore",
+      userId,
+      sessionId: auth.sessionId,
+      level: "error",
+    });
 
     return NextResponse.json(
       {

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { upsertUser } from "@/lib/db/queries";
+import { log } from "@/lib/observability/log";
 
 /**
  * GET /api/user/profile
@@ -20,7 +21,14 @@ export async function GET(request: NextRequest) {
     name: user.name,
     avatarUrl: user.avatarUrl,
   }).catch((err) => {
-    console.error("[profile] upsertUser failed", err);
+    log("user.profile_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      stage: "upsert_user",
+    }, {
+      route: "/api/user/profile",
+      userId: user.id,
+      level: "error",
+    });
   });
 
   return NextResponse.json({ ok: true, user });

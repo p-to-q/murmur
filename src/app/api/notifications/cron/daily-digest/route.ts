@@ -3,6 +3,7 @@ import {
   NotificationPublishError,
   notifications,
 } from "@/lib/platform/notifications-server";
+import { log } from "@/lib/observability/log";
 
 /** Scheduled by `vercel.json#crons`. Authenticated via `CRON_SECRET`. */
 export async function GET(request: NextRequest) {
@@ -32,7 +33,13 @@ export async function GET(request: NextRequest) {
         { status: err.code >= 400 && err.code < 600 ? err.code : 500 },
       );
     }
-    console.error("[notifications/cron] unexpected error", err);
+    log("notifications.publish_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      source: "cron_daily_digest",
+    }, {
+      route: "/api/notifications/cron/daily-digest",
+      level: "error",
+    });
     return NextResponse.json({ error: "publish failed" }, { status: 500 });
   }
 }

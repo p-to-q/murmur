@@ -91,7 +91,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(rows);
     }
 
-    console.error("[songs GET]", err);
+    log("song.list_failed", {
+      error: err instanceof Error ? err.message : String(err),
+    }, {
+      route: ROUTE,
+      userId,
+      sessionId: auth.sessionId,
+      level: "error",
+    });
     return NextResponse.json({ error: "Failed to fetch songs" }, { status: 500 });
   }
 }
@@ -133,7 +140,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.error("[songs POST parse]", err);
+    log("song.payload_invalid", {
+      error: err instanceof Error ? err.message : String(err),
+    }, {
+      route: ROUTE,
+      userId,
+      sessionId: auth.sessionId,
+      requestId,
+      level: "warn",
+    });
     return NextResponse.json(
       { error: "Failed to read song payload", requestId },
       { status: 400, headers: { "X-Request-Id": requestId } },
@@ -258,7 +273,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    console.error("[songs POST]", err);
+    log("song.create_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      databaseUnavailable: isDatabaseUnavailable(err),
+    }, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+      level: "error",
+    });
     if (isDatabaseUnavailable(err)) {
       return NextResponse.json(
         { error: "billing_unavailable", message: "Database unavailable", requestId },

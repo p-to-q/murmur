@@ -27,6 +27,16 @@ export type LogEvent =
   | "song.list_failed"
   | "song.created"
   | "song.create_failed"
+  | "song.get_failed"
+  | "song.update_failed"
+  | "song.delete_failed"
+  | "song.payload_invalid"
+  | "purchases.restore_failed"
+  | "user.profile_failed"
+  | "notifications.publish_failed"
+  | "billing.checkout_failed"
+  | "billing.webhook_received"
+  | "billing.webhook_failed"
   | "storage.local_serve_failed";
 
 export interface LogContext {

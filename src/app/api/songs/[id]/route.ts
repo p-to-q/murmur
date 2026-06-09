@@ -12,6 +12,9 @@ import {
   getLocalSongByIdForUserFallback,
   updateLocalSongForUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
+import { log } from "@/lib/observability/log";
+
+const ROUTE = "/api/songs/[id]";
 
 const trackStateSchema = z.object({
   enabled: z.boolean(),
@@ -87,7 +90,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         headers: { "X-Murmur-Fallback": "local-guest-song" },
       });
     }
-    console.error("[song GET]", err);
+    log("song.get_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      songId: id,
+    }, {
+      route: ROUTE,
+      userId,
+      sessionId: auth.sessionId,
+      level: "error",
+    });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }
@@ -117,7 +128,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       );
     }
 
-    console.error("[song PATCH parse]", err);
+    log("song.payload_invalid", {
+      error: err instanceof Error ? err.message : String(err),
+      songId: id,
+    }, {
+      route: ROUTE,
+      userId,
+      sessionId: auth.sessionId,
+      level: "warn",
+    });
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
@@ -138,7 +157,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       });
     }
 
-    console.error("[song PATCH]", err);
+    log("song.update_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      songId: id,
+    }, {
+      route: ROUTE,
+      userId,
+      sessionId: auth.sessionId,
+      level: "error",
+    });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }
@@ -165,7 +192,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         { headers: { "X-Murmur-Fallback": "local-guest-song" } },
       );
     }
-    console.error("[song DELETE]", err);
+    log("song.delete_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      songId: id,
+    }, {
+      route: ROUTE,
+      userId,
+      sessionId: auth.sessionId,
+      level: "error",
+    });
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }
 }

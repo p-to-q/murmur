@@ -4,6 +4,7 @@ import {
   NotificationPublishError,
   notifications,
 } from "@/lib/platform/notifications-server";
+import { log } from "@/lib/observability/log";
 
 /**
  * Sends a test notification through the local platform adapter.
@@ -34,7 +35,14 @@ export async function POST(request: NextRequest) {
         { status: err.code >= 400 && err.code < 600 ? err.code : 500 },
       );
     }
-    console.error("[notifications/test] unexpected error", err);
+    log("notifications.publish_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      source: "test_button",
+    }, {
+      route: "/api/notifications/test",
+      userId: auth.user.id,
+      level: "error",
+    });
     return NextResponse.json({ error: "publish failed" }, { status: 500 });
   }
 }
