@@ -138,8 +138,8 @@ export function GalleryScreen() {
           className="relative z-10 flex flex-col items-center px-6 md:px-12 py-8 md:py-12 max-w-2xl mx-auto text-center"
         >
           <svg
-            width="80"
-            height="80"
+            width="160"
+            height="160"
             viewBox="0 0 120 120"
             fill="none"
             className="opacity-20"
