@@ -1,18 +1,38 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { db } from "@/lib/db/client";
-import { users, sessions, externalIdentities } from "@/lib/db/schema";
+import { users, externalIdentities } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { createHash } from "crypto";
 import { ulid } from "ulid";
 
+/**
+ * Google OAuth is optional: without credentials the provider list is empty,
+ * /api/auth/session answers "no session", and the app stays on the Local
+ * Creator path. Registering Google with undefined credentials (the old `!`
+ * casts) made authjs 500 on every request, which SessionProvider then
+ * surfaced as a ClientFetchError on every page.
+ */
+const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim();
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-  ],
+  // authjs hard-requires a secret even for anonymous session reads.
+  // Production must provide AUTH_SECRET (fail loudly if not); local dev
+  // falls back to a fixed value so keyless setups boot cleanly.
+  secret:
+    process.env.AUTH_SECRET ??
+    (process.env.NODE_ENV === "production"
+      ? undefined
+      : "murmur-dev-insecure-secret"),
+  providers:
+    googleClientId && googleClientSecret
+      ? [
+          Google({
+            clientId: googleClientId,
+            clientSecret: googleClientSecret,
+          }),
+        ]
+      : [],
   pages: {
     signIn: "/",
   },
@@ -28,12 +48,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           .where(eq(externalIdentities.externalId, account.providerAccountId))
           .limit(1);
 
-        let userId: string;
-
-        if (existingIdentity) {
-          // Existing user - use their ID
-          userId = existingIdentity.userId;
-        } else {
+        if (!existingIdentity) {
           // New user - create account
           const newUserId = ulid();
           await db.insert(users).values({
@@ -57,11 +72,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               name: user.name,
             },
           });
-
-          userId = newUserId;
         }
 
-        // Create session (will be handled by session callback)
+        // Session lookup happens in the session callback
         return true;
       } catch (error) {
         console.error("Sign in error:", error);
