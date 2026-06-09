@@ -4,9 +4,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
-  images: {
-    unoptimized: true,
-  },
   // RFC1918 LAN ranges + localhost for `next dev` HMR over Wi-Fi.
   allowedDevOrigins: [
     "localhost",

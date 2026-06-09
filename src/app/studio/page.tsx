@@ -1,4 +1,8 @@
-import { StudioScreen } from "@/components/screens/StudioScreen";
+import dynamic from "next/dynamic";
+
+const StudioScreen = dynamic(() =>
+  import("@/components/screens/StudioScreen").then((m) => m.StudioScreen),
+);
 
 export default async function StudioPage({
   searchParams,

@@ -1,4 +1,8 @@
-import { VibeScreen } from "@/components/screens/VibeScreen";
+import dynamic from "next/dynamic";
+
+const VibeScreen = dynamic(() =>
+  import("@/components/screens/VibeScreen").then((m) => m.VibeScreen),
+);
 
 /**
  * /vibe — the *discover* moment in the journey.

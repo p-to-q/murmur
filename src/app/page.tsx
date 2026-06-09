@@ -1,4 +1,8 @@
-import { HumScreen } from "@/components/screens/HumScreen";
+import dynamic from "next/dynamic";
+
+const HumScreen = dynamic(() =>
+  import("@/components/screens/HumScreen").then((m) => m.HumScreen),
+);
 
 /**
  * Home route — `/`.

@@ -1,4 +1,10 @@
-import { SongDetailScreen } from "@/components/screens/SongDetailScreen";
+import dynamic from "next/dynamic";
+
+const SongDetailScreen = dynamic(() =>
+  import("@/components/screens/SongDetailScreen").then(
+    (m) => m.SongDetailScreen,
+  ),
+);
 
 interface Props { params: Promise<{ id: string }> }
 
