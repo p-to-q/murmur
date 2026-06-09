@@ -220,7 +220,7 @@ export function ActivityHeatmap({
         </div>
 
         {/* ── Recent songs showcase ──────────────────────────────────────── */}
-        {displaySongs.length > 0 && (
+        {displaySongs.length > 0 && !displaySongs[0]?.id.startsWith("demo-") && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
