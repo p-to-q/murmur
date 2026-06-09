@@ -5,20 +5,25 @@
  *
  * Specced in docs/page-redesign.md §10 + docs/page-contracts.md §9.
  *
- * Just a state machine: idle → requesting → succeeded | canceled | failed.
- * The user blinks past this on a real provider integration. v2 v0 stub: we
- * read `?sku=…`, show the rotating copy + spinner for 1.4s, then route
- * back to "/" with a "+N notes added" toast.
+ * State machine: idle → requesting → succeeded | canceled | failed.
  *
- * When Codex wires the real Stripe / WeChat / RevenueCat paths (Phase 4),
- * replace the stub timer with the provider call, keep the state machine.
+ * Real flow (Stripe):
+ *   1. Land here with `?sku=…` → POST /api/billing/checkout → redirect to
+ *      the Stripe-hosted page.
+ *   2. Stripe sends the user back with `?status=success|canceled`; the
+ *      ledger grant itself happens server-side via /api/billing/webhook.
+ *
+ * Dev without STRIPE_SECRET_KEY: the API answers 503 stripe_not_configured
+ * and we simulate the post-payment return leg so the routing UX stays
+ * exercisable end-to-end.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { getTopupSku, topupNotesGranted, TOPUP_SKUS } from "@murmur/core";
 
 import { useTranslator } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
@@ -26,25 +31,31 @@ import { PageBackdrop } from "@/components/murmur/page-backdrop";
 type Phase = "requesting" | "succeeded" | "canceled" | "failed";
 
 const PROCESSING_INTERVAL_MS = 900;
-
-// Mirrors TopupScreen's SKU table — kept tiny so this page renders without
-// network even when /api/billing/skus isn't reachable.
-const SKU_DISPLAY: Record<string, { notes: number; price: string }> = {
-  topup_30_notes:  { notes: 30,  price: "$1.99" },
-  topup_120_notes: { notes: 120, price: "$5.99" },
-  topup_400_notes: { notes: 400, price: "$14.99" },
-};
+const DEFAULT_SKU_ID = "topup_120_notes";
 
 export function CheckoutScreen() {
   const router = useRouter();
   const params = useSearchParams();
   const t = useTranslator();
 
-  const skuId = params?.get("sku") ?? "topup_120_notes";
-  const sku = SKU_DISPLAY[skuId] ?? SKU_DISPLAY.topup_120_notes!;
+  const skuId = params?.get("sku") ?? DEFAULT_SKU_ID;
+  const returnStatus = params?.get("status");
+  const sku = useMemo(
+    () => getTopupSku(skuId) ?? getTopupSku(DEFAULT_SKU_ID) ?? TOPUP_SKUS[0]!,
+    [skuId],
+  );
+  const skuNotes = topupNotesGranted(sku);
 
-  const [phase, setPhase] = useState<Phase>("requesting");
+  const [phase, setPhase] = useState<Phase>(() =>
+    returnStatus === "success"
+      ? "succeeded"
+      : returnStatus === "canceled"
+        ? "canceled"
+        : "requesting",
+  );
+  const [failureMessage, setFailureMessage] = useState<string | null>(null);
   const [copyIdx, setCopyIdx] = useState(0);
+  const checkoutStartedRef = useRef(false);
 
   const PROCESSING_COPY = useMemo(
     () => [
@@ -56,22 +67,90 @@ export function CheckoutScreen() {
     [t],
   );
 
-  /* ── Stub flow ────────────────────────────────────────────────── */
+  const celebrate = useCallback(() => {
+    setPhase("succeeded");
+    toast.success(
+      (t("checkout.toast.success") || "+{notes} notes added.").replace(
+        "{notes}",
+        String(skuNotes),
+      ),
+    );
+    window.setTimeout(() => router.push("/me"), 1600);
+  }, [router, skuNotes, t]);
+
+  const beginCheckout = useCallback(async () => {
+    try {
+      const response = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sku: sku.id }),
+      });
+
+      if (response.ok) {
+        const data = (await response.json()) as { checkoutUrl?: string };
+        if (data.checkoutUrl) {
+          window.location.assign(data.checkoutUrl);
+          return;
+        }
+        throw new Error("missing checkoutUrl");
+      }
+
+      const errorBody = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+
+      // No Stripe keys in local dev — simulate the post-payment return leg
+      // so the routing UX stays exercisable.
+      if (
+        errorBody.error === "stripe_not_configured" &&
+        process.env.NODE_ENV === "development"
+      ) {
+        window.setTimeout(celebrate, 1400);
+        return;
+      }
+
+      if (errorBody.error === "sign_in_required") {
+        setFailureMessage(
+          t("checkout.sign_in_required") || "请先登录再购买灵感币。",
+        );
+        setPhase("failed");
+        return;
+      }
+
+      setFailureMessage(errorBody.message ?? null);
+      setPhase("failed");
+    } catch {
+      setFailureMessage(null);
+      setPhase("failed");
+    }
+  }, [celebrate, sku.id, t]);
+
+  const retryCheckout = () => {
+    setFailureMessage(null);
+    setPhase("requesting");
+    void beginCheckout();
+  };
+
+  /* ── Kick off side effects for the landing state. Phase itself is
+        initialized from the URL, so this never calls setState directly. ── */
   useEffect(() => {
-    // Until Phase 4 lands, simulate a fast successful checkout so the
-    // routing + state-machine UX can be exercised end-to-end.
-    const id = window.setTimeout(() => {
-      setPhase("succeeded");
+    if (returnStatus === "success") {
       toast.success(
         (t("checkout.toast.success") || "+{notes} notes added.").replace(
           "{notes}",
-          String(sku.notes),
+          String(skuNotes),
         ),
       );
-      window.setTimeout(() => router.push("/me"), 900);
-    }, 1400);
-    return () => window.clearTimeout(id);
-  }, [router, sku.notes, t]);
+      const id = window.setTimeout(() => router.push("/me"), 1600);
+      return () => window.clearTimeout(id);
+    }
+    if (returnStatus === "canceled") return;
+    if (checkoutStartedRef.current) return;
+    checkoutStartedRef.current = true;
+    void beginCheckout();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [returnStatus]);
 
   useEffect(() => {
     if (phase !== "requesting") return;
@@ -122,14 +201,14 @@ export function CheckoutScreen() {
               className="mx-auto mt-7 inline-flex items-baseline gap-3 rounded-full border border-[#E5DDD0] bg-[#FFFEFB]/80 px-5 py-2.5"
             >
               <span className="font-serif text-[#1A1A1A] text-[22px] tabular-nums">
-                {sku.notes}
+                {skuNotes}
               </span>
               <span className="text-[11px] uppercase tracking-[0.22em] text-[#8C8780]">
                 {t("checkout.notes") || "notes"}
               </span>
               <span className="text-[#D2C9B6]">·</span>
               <span className="font-serif-italic text-[16px] text-[#6F6A63]">
-                {sku.price}
+                {sku.display}
               </span>
             </motion.div>
 
@@ -207,11 +286,13 @@ export function CheckoutScreen() {
                     className="flex flex-col items-center gap-4"
                   >
                     <p className="font-serif-italic text-[16px] text-[#6F6A63]">
-                      {t("checkout.failed") || "Something tripped on our end."}
+                      {failureMessage ||
+                        t("checkout.failed") ||
+                        "Something tripped on our end."}
                     </p>
                     <div className="flex gap-3">
                       <button
-                        onClick={() => setPhase("requesting")}
+                        onClick={retryCheckout}
                         className="mm-btn-primary"
                       >
                         {t("checkout.try_again") || "Try again"}

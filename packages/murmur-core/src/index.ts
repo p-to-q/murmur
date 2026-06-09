@@ -9,6 +9,9 @@
 export {
   COST,
   TOPUP_SKUS,
+  getTopupSku,
+  topupNotesGranted,
+  type TopupSku,
   type NotesReason,
   type CostKey,
 } from "./payments/cost-table";

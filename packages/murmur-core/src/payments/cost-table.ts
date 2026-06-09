@@ -88,6 +88,8 @@ export const GRANTS = Object.freeze({
 export interface TopupSku {
   id: string;
   notes: number;
+  /** Extra notes granted on top of `notes` (top-tier incentive). */
+  bonusNotes?: number;
   defaultPriceCents: number;
   defaultCurrency: "USD" | "CNY";
   display: string;
@@ -105,6 +107,7 @@ export const TOPUP_SKUS: ReadonlyArray<TopupSku> = Object.freeze([
   {
     id: "topup_120_notes",
     notes: 120,
+    bonusNotes: 10,
     defaultPriceCents: 599,
     defaultCurrency: "USD",
     display: "$5.99",
@@ -113,12 +116,23 @@ export const TOPUP_SKUS: ReadonlyArray<TopupSku> = Object.freeze([
   {
     id: "topup_400_notes",
     notes: 400,
+    bonusNotes: 50,
     defaultPriceCents: 1499,
     defaultCurrency: "USD",
     display: "$14.99",
     highlight: "best_value",
   },
 ]);
+
+/** Look up a SKU by id; null lets route handlers map to a 400 cleanly. */
+export function getTopupSku(id: string): TopupSku | null {
+  return TOPUP_SKUS.find((sku) => sku.id === id) ?? null;
+}
+
+/** Notes actually granted for a SKU purchase (base + bonus). */
+export function topupNotesGranted(sku: TopupSku): number {
+  return sku.notes + (sku.bonusNotes ?? 0);
+}
 
 /**
  * Convenience guard for callers that have a string and want a CostKey.

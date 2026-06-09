@@ -15,49 +15,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Star, Sparkles, Check } from "lucide-react";
+import { toast } from "sonner";
+import { TOPUP_SKUS, topupNotesGranted, type TopupSku } from "@murmur/core";
 
 import { useTranslator } from "@/lib/i18n";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { MurmurWave } from "@/components/murmur/murmur-wave";
-
-interface TopupSku {
-  id: string;
-  notes: number;
-  bonusNotes?: number; // Extra notes as incentive
-  defaultPriceCents: number;
-  defaultCurrency: "USD" | "CNY";
-  display: string;
-  highlight?: "popular" | "best_value";
-}
-
-const TOPUP_SKUS: TopupSku[] = [
-  {
-    id: "topup_30_notes",
-    notes: 30,
-    defaultPriceCents: 199,
-    defaultCurrency: "USD",
-    display: "$1.99"
-  },
-  {
-    id: "topup_120_notes",
-    notes: 120,
-    bonusNotes: 10,
-    defaultPriceCents: 599,
-    defaultCurrency: "USD",
-    display: "$5.99",
-    highlight: "popular"
-  },
-  {
-    id: "topup_400_notes",
-    notes: 400,
-    bonusNotes: 50,
-    defaultPriceCents: 1499,
-    defaultCurrency: "USD",
-    display: "$14.99",
-    highlight: "best_value"
-  },
-];
 
 export function TopupScreenV2() {
   const router = useRouter();
@@ -67,6 +31,7 @@ export function TopupScreenV2() {
   const [selectedId, setSelectedId] = useState<string>(
     TOPUP_SKUS.find((s) => s.highlight === "popular")?.id ?? TOPUP_SKUS[0]!.id,
   );
+  const [isRestoring, setIsRestoring] = useState(false);
 
   const selected = TOPUP_SKUS.find((s) => s.id === selectedId) ?? TOPUP_SKUS[0]!;
 
@@ -74,12 +39,46 @@ export function TopupScreenV2() {
     router.push(`/topup/checkout?sku=${encodeURIComponent(selected.id)}`);
   };
 
+  const handleRestorePurchases = async () => {
+    setIsRestoring(true);
+
+    try {
+      const response = await fetch("/api/purchases/restore", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to restore purchases");
+      }
+
+      const data = await response.json();
+
+      if (data.restored && data.restored.length > 0) {
+        if (data.newPurchases > 0) {
+          toast.success(`已恢复 ${data.newPurchases} 笔新购买，共 ${data.totalNotes} 颗音磅`);
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        } else {
+          toast.info(`找到 ${data.restored.length} 笔购买记录，共 ${data.totalNotes} 颗音磅`);
+        }
+      } else {
+        toast.info("没有找到可恢复的购买记录");
+      }
+    } catch (error) {
+      console.error("[restore-purchases] Error:", error);
+      toast.error(error instanceof Error ? error.message : "恢复购买失败，请稍后重试");
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
   const provider = t("topup.provider.stripe") || "用 Stripe 支付";
 
   // Calculate unit price for each SKU
   const getUnitPrice = (sku: TopupSku) => {
-    const totalNotes = sku.notes + (sku.bonusNotes || 0);
-    return (sku.defaultPriceCents / totalNotes / 100).toFixed(3);
+    return (sku.defaultPriceCents / topupNotesGranted(sku) / 100).toFixed(3);
   };
 
   return (
@@ -210,14 +209,18 @@ export function TopupScreenV2() {
               className="h-14 w-full rounded-[22px] bg-[#FF5924] text-base font-medium text-white transition-colors hover:bg-[#D9421A]"
             >
               {(t("topup.cta") || "买 {notes} 颗 — {price}")
-                .replace("{notes}", String(selected.notes + (selected.bonusNotes || 0)))
+                .replace("{notes}", String(topupNotesGranted(selected)))
                 .replace("{price}", selected.display)}
             </motion.button>
 
             {/* Footer */}
             <div className="mt-3 flex items-center justify-center gap-4 text-[11px] tracking-[0.04em] text-[#8C8780]">
-              <button className="hover:text-[#1A1A1A] transition-colors">
-                ↻ {t("topup.restore") || "恢复已购买"}
+              <button
+                onClick={handleRestorePurchases}
+                disabled={isRestoring}
+                className="hover:text-[#1A1A1A] transition-colors disabled:opacity-50"
+              >
+                {isRestoring ? "恢复中..." : `↻ ${t("topup.restore") || "恢复已购买"}`}
               </button>
               <span className="text-[#D2C9B6]">·</span>
               <a href="/terms" className="hover:text-[#1A1A1A] transition-colors">

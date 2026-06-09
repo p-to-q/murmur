@@ -61,6 +61,15 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
       duplicate: false,
     };
   },
+  // Unused here, but every mock of this module must declare the full export
+  // surface — bun can't add new export names to an already-created record.
+  grantNotes: async () => ({
+    ok: true as const,
+    ledgerId: "nle_grant",
+    balanceBefore: 0,
+    balanceAfter: 0,
+    duplicate: false,
+  }),
 }));
 
 mock.module("@/lib/platform/ai-server", () => ({

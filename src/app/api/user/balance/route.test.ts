@@ -26,6 +26,17 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
       freeNotesGrantedAt: new Date("2026-06-05T00:00:00.000Z"),
     };
   },
+  // Unused here, but every mock of this module must declare the full export
+  // surface — bun can't add new export names to an already-created record.
+  spendNotes: async () => ({ ok: false as const, reason: "user_not_found" as const, currentBalance: 0 }),
+  refundNotes: async () => ({ ok: false as const, reason: "original_not_found" as const }),
+  grantNotes: async () => ({
+    ok: true as const,
+    ledgerId: "nle_grant",
+    balanceBefore: 0,
+    balanceAfter: 0,
+    duplicate: false,
+  }),
 }));
 
 const { GET } = await import("./route");
