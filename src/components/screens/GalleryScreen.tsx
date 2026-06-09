@@ -145,8 +145,8 @@ export function GalleryScreen() {
             className="opacity-20"
           >
             <motion.circle
-              initial={{ scale: 0.75, opacity: 0.05 }}
-              animate={{ scale: 1, opacity: 0.25 }}
+              initial={{ scale: 0.75, opacity: 0.15 }}
+              animate={{ scale: 1, opacity: 0.5 }}
               transition={{
                 duration: 1.6,
                 repeat: Infinity,
