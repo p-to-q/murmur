@@ -129,70 +129,72 @@ export function GalleryScreen() {
         )}
       </div>
 
+      {/* Music note animation — always visible between heatmap and sort toggle */}
+      {!isLoading && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="relative z-10 flex flex-col items-center px-6 md:px-12 py-8 md:py-12 max-w-2xl mx-auto text-center"
+        >
+          <svg
+            width="80"
+            height="80"
+            viewBox="0 0 120 120"
+            fill="none"
+            className="opacity-20"
+          >
+            <motion.circle
+              initial={{ scale: 0.75, opacity: 0.05 }}
+              animate={{ scale: 1, opacity: 0.25 }}
+              transition={{
+                duration: 1.6,
+                repeat: Infinity,
+                repeatType: "reverse",
+                ease: "easeInOut",
+              }}
+              cx="60"
+              cy="80"
+              r="12"
+              fill="#FF5924"
+            />
+            <motion.path
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{
+                duration: 1.6,
+                repeat: Infinity,
+                repeatType: "reverse",
+                ease: "easeInOut",
+              }}
+              d="M 72 80 L 72 30 Q 72 20 82 22 L 100 26"
+              stroke="#FF5924"
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+          </svg>
+        </motion.div>
+      )}
+
       {/* Sort toggle — only visible when there are songs */}
       {!isLoading && displaySongs.length > 1 && (
-        <div className="relative z-10 px-6 md:px-12 max-w-7xl mx-auto flex justify-end -mt-1 pb-6 md:pb-8">
+        <div className="relative z-10 px-6 md:px-12 max-w-7xl mx-auto flex justify-end pb-6 md:pb-8">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.25 }}
+            transition={{ delay: 0.45 }}
           >
             <SortToggle sort={sort} onChange={setSort} t={t} />
           </motion.div>
         </div>
       )}
 
-      {/* Spacer when no songs / no sort toggle shown */}
+      {/* Spacer when no sort toggle shown */}
       {!isLoading && displaySongs.length <= 1 && <div className="pb-4" />}
 
       {/* Loading skeletons — grid layout */}
       {isLoading && (
         <div className="relative z-10 px-6 md:px-12 max-w-7xl mx-auto">
-          {/* Music note animation */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="flex flex-col items-center px-6 md:px-12 pb-12 max-w-2xl mx-auto text-center"
-          >
-            <svg
-              width="120"
-              height="120"
-              viewBox="0 0 120 120"
-              fill="none"
-              className="mb-8 opacity-30"
-            >
-              <motion.circle
-                initial={{ scale: 0.75, opacity: 0.05 }}
-                animate={{ scale: 1, opacity: 0.35 }}
-                transition={{
-                  duration: 1.6,
-                  repeat: Infinity,
-                  repeatType: "reverse",
-                  ease: "easeInOut",
-                }}
-                cx="60"
-                cy="80"
-                r="12"
-                fill="#FF5924"
-              />
-              <motion.path
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                transition={{
-                  duration: 1.6,
-                  repeat: Infinity,
-                  repeatType: "reverse",
-                  ease: "easeInOut",
-                }}
-                d="M 72 80 L 72 30 Q 72 20 82 22 L 100 26"
-                stroke="#FF5924"
-                strokeWidth="3"
-                strokeLinecap="round"
-              />
-            </svg>
-          </motion.div>
-
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
             {Array.from({ length: 6 }, (_, i) => (
               <div key={i} className="animate-pulse">
