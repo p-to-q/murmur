@@ -317,6 +317,8 @@ describe("hydrateSavedSongToVersion", () => {
 
     expect(versions).toHaveLength(3);
     expect(versions[0]?.arrangementState.chords.chordsTag).toBe("rain");
-    expect(versions[0]?.vibe).toBe("雨天");
+    // Versions carry the vibe preset id (916e950); display labels come
+    // from VIBE_PRESETS at render time.
+    expect(versions[0]?.vibe).toBe("rain");
   });
 });

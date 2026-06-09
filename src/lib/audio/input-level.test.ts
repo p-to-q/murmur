@@ -66,7 +66,10 @@ describe("nextInputLevelDecision", () => {
 
   it("maps every meter state to explicit product copy", () => {
     expect(inputLevelLabelKey("idle")).toBe("hum.level.idle");
-    expect(inputLevelLabelKey("quiet")).toBe("hum.level.quiet");
+    // Quiet copy rotates between two variants to feel less naggy.
+    expect(["hum.level.quiet.1", "hum.level.quiet.2"]).toContain(
+      inputLevelLabelKey("quiet"),
+    );
     expect(inputLevelLabelKey("heard")).toBe("hum.level.heard");
   });
 });

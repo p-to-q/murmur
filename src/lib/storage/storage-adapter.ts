@@ -9,8 +9,9 @@ export interface Song {
   id: string;
   userId: string;
   title: string;
-  melody: any;
-  arrangement: any;
+  // Opaque payloads at this layer — adapters persist them without reading.
+  melody: unknown;
+  arrangement: unknown;
   createdAt: string;
   updatedAt: string;
   // ... other song fields

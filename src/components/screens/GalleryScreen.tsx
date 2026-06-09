@@ -11,7 +11,14 @@ import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
 
-type SongWithMeta = SongCardType & { bpm?: number; keySignature?: string };
+// The gallery only renders light metadata; the heavy SongCard fields
+// (visualConfig, duration, arrangementState) stay optional so demo
+// placeholders don't have to fabricate them.
+type SongWithMeta = Omit<SongCardType, "visualConfig" | "duration" | "arrangementState"> &
+  Partial<Pick<SongCardType, "visualConfig" | "duration" | "arrangementState">> & {
+    bpm?: number;
+    keySignature?: string;
+  };
 type SortMode = "newest" | "alpha";
 
 // Demo songs for empty state
@@ -82,7 +89,7 @@ export function GalleryScreen() {
     );
   }, [displaySongs, sort]);
 
-  const handleSongClick = (song: SongCardType) => {
+  const handleSongClick = (song: SongWithMeta) => {
     // If demo song, go to home to start humming
     if (song.id.startsWith("demo-")) {
       router.push("/");

@@ -152,9 +152,12 @@ export function useUserBalance(): UseUserBalanceResult {
     let cancelled = false;
 
     if (!isGoogleUser) {
-      // Local Creator: immediate local balance
+      // Local Creator: immediate local balance. localStorage can only be
+      // read after mount (SSR has none), so this one post-mount render is
+      // the hydration-safe pattern, not a cascading-update bug.
       const localBalance = getLocalBalance();
       if (!cancelled) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSnapshot({
           notes: localBalance.notes,
           planTier: "free",
