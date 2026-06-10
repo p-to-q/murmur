@@ -31,6 +31,7 @@ import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
 import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import {
+  checkMusicEngineAvailable,
   createMagentaVersions,
   regenerateVersionAudio,
 } from "@/modules/magenta/generate-magenta-versions";
@@ -203,7 +204,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     [auditioningVersionId, setAuditioning, t],
   );
 
-  const handleReroll = useCallback(() => {
+  const handleReroll = useCallback(async () => {
     if (vibeVersions.length === 0) return;
     const first = vibeVersions[0]!;
     versionPreview.stop();
@@ -215,10 +216,14 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       sourceMelodyKind: first.sourceMelodyKind,
     };
     // Magenta flow: advance to the *next* batch of three randomized vibes.
-    const fresh = first.generation
+    // A legacy batch gets a second chance to upgrade — its first health
+    // probe may have lost a race against a cold start.
+    const useMagenta =
+      first.generation !== undefined || (await checkMusicEngineAvailable());
+    const fresh = useMagenta
       ? createMagentaVersions(first.melody, {
           ...common,
-          batchIndex: first.generation.batchIndex + 1,
+          batchIndex: (first.generation?.batchIndex ?? -1) + 1,
           humBlob: humStyleBlob,
         })
       : generateVibeVersions(first.melody, common);

@@ -146,7 +146,22 @@ export async function getNotesBalance(userId: string): Promise<BalanceResult> {
   };
 }
 
+/**
+ * Free-era no-op for zero-cost spends (see @murmur/core cost-table): no
+ * row, no balance change, no DB round-trip. `duplicate: true` keeps the
+ * routes' "notes.spent" logging and refund-on-failure paths quiet, which
+ * is accurate — nothing was written, so there is nothing to undo.
+ */
+const ZERO_COST_SPEND: SpendNotesResult = Object.freeze({
+  ok: true,
+  ledgerId: "",
+  balanceBefore: 0,
+  balanceAfter: 0,
+  duplicate: true,
+});
+
 export async function spendNotes(input: SpendNotesInput): Promise<SpendNotesResult> {
+  if (input.cost === 0) return ZERO_COST_SPEND;
   await ensureBillingAccount(input.userId);
 
   return db.transaction((tx) => spendNotesInTransaction(tx, input));
@@ -156,6 +171,7 @@ export async function spendNotesInTransaction(
   tx: DbTransaction,
   input: SpendNotesInput,
 ): Promise<SpendNotesResult> {
+  if (input.cost === 0) return ZERO_COST_SPEND;
   const cost = normalizePositiveNotes(input.cost, "cost");
 
   const user = await lockUserRow(tx, input.userId);

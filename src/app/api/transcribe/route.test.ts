@@ -255,7 +255,9 @@ describe("POST /api/transcribe", () => {
     expect(lastSpendInputs).toHaveLength(1);
     expect(lastRefundInputs).toHaveLength(0);
     expect(lastSpendInputs[0]?.reason).toBe("spend:hum");
-    expect(lastSpendInputs[0]?.cost).toBe(1);
+    // Free era: the route still routes the spend through the ledger API,
+    // but at the zero cost from @murmur/core's cost table.
+    expect(lastSpendInputs[0]?.cost).toBe(0);
   });
 
   it("rejects missing audio with audio_required", async () => {
@@ -289,7 +291,7 @@ describe("POST /api/transcribe", () => {
     expect(body.error).toBe("validation_error");
   });
 
-  it("returns 402 with balance details when notes are insufficient", async () => {
+  it("free era: a zero balance no longer blocks humming", async () => {
     nextBalance = {
       ok: true,
       userId: "usr_test",
@@ -300,16 +302,9 @@ describe("POST /api/transcribe", () => {
     const form = new FormData();
     form.append("audio", audioFile());
     const response = await POST(buildRequest(form));
-    expect(response.status).toBe(402);
-    const body = (await response.json()) as {
-      error: string;
-      currentBalance: number;
-      cost: number;
-    };
-    expect(body.error).toBe("insufficient_notes");
-    expect(body.currentBalance).toBe(0);
-    expect(body.cost).toBe(1);
-    expect(lastSpendInputs).toHaveLength(0);
+    // With every cost at 0 the 402 wall is unreachable; restoring real
+    // prices in @murmur/core's cost table re-arms it (see cost-table.ts).
+    expect(response.status).toBe(200);
   });
 
   it("returns 429 before billing or worker work when rate-limited", async () => {

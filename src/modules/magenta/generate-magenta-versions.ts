@@ -22,21 +22,30 @@ import { log } from "@/lib/observability/log";
 export const MAGENTA_CLIP_SECONDS = 10;
 export const DEFAULT_HUM_STYLE_MIX = 0.35;
 
-const HEALTH_TTL_MS = 60_000;
+// Negative results expire fast: one cold-start hiccup must not pin users
+// to the legacy engine for a whole minute.
+const HEALTH_TTL_AVAILABLE_MS = 60_000;
+const HEALTH_TTL_UNAVAILABLE_MS = 10_000;
 
 let healthCache: { at: number; available: boolean } | null = null;
 let activeAbort: AbortController | null = null;
 let liveObjectUrls: string[] = [];
 
-/** Is the Magenta worker reachable? Cached for a minute; cheap to call. */
+/** Is the Magenta worker reachable? Cached; cheap to call. */
 export async function checkMusicEngineAvailable(): Promise<boolean> {
-  if (healthCache && Date.now() - healthCache.at < HEALTH_TTL_MS) {
-    return healthCache.available;
+  if (healthCache) {
+    const ttl = healthCache.available
+      ? HEALTH_TTL_AVAILABLE_MS
+      : HEALTH_TTL_UNAVAILABLE_MS;
+    if (Date.now() - healthCache.at < ttl) return healthCache.available;
   }
   let available = false;
   try {
+    // Generous budget: in production this fetch traverses a cold Vercel
+    // function plus the Cloudflare tunnel to the worker. Callers overlap
+    // it with transcription, so the wait is usually free.
     const res = await fetch("/api/music/health", {
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(10_000),
     });
     if (res.ok) {
       const data = (await res.json()) as { available?: boolean };

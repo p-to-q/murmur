@@ -290,6 +290,7 @@ export const DICT = {
   "me.profile.title":      { zh: "当前身份", en: "Profile" },
   "me.profile.helper":     { zh: "这是你在 Murmur 里留下旋律的名字。", en: "This is the name your songs live under in Murmur." },
   "me.notes.title":        { zh: "音磅", en: "MURMUR NOTES" },
+  "me.notes.unlimited":    { zh: "不限量——想哼多少哼多少。", en: "Unlimited — hum as much as you like." },
   "me.notes.cta":          { zh: "去补给", en: "Top up" },
   "me.notes.refill_default": { zh: "每天午夜补回 5 枚音磅。", en: "5 notes refill every day at midnight." },
   "me.notes.refill_due":   { zh: "免费音磅已经到了，刷新即可领取。", en: "Free notes are ready — refresh to claim." },

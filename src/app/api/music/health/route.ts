@@ -17,8 +17,11 @@ export async function GET() {
   }
 
   try {
+    // Tunnel round-trips from a cold Vercel function can take a few
+    // seconds; clients budget 10s for the whole probe, so 8s here keeps
+    // a real answer ahead of their deadline.
     const res = await fetch(`${workerBase.replace(/\/+$/, "")}/health`, {
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(8000),
       cache: "no-store",
     });
     if (!res.ok) {
