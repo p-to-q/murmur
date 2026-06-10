@@ -36,6 +36,7 @@ export interface ActivityHeatmapProps {
     id: string;
     title: string;
     vibe: string;
+    gradient?: string;
     bpm?: number;
     createdAt: string;
   }>;
@@ -238,6 +239,7 @@ export function ActivityHeatmap({
                   id={song.id}
                   title={song.title}
                   vibe={song.vibe}
+                  gradient={song.gradient}
                   bpm={song.bpm}
                   createdAt={song.createdAt}
                   index={i}

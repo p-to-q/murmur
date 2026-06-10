@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 
 import { useTranslator } from "@/lib/i18n";
+import { displayVibeLabel } from "@/lib/music/display-vibe";
 import type { SongCard as SongCardType } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
@@ -18,10 +20,12 @@ type SongWithMeta = Omit<SongCardType, "visualConfig" | "duration" | "arrangemen
   Partial<Pick<SongCardType, "visualConfig" | "duration" | "arrangementState">> & {
     bpm?: number;
     keySignature?: string;
+    tags?: string[];
   };
 type SortMode = "newest" | "alpha";
 
-// Demo songs for empty state
+// Demo songs for empty state — gradients keep their covers on the same
+// rendering path as real songs.
 const DEMO_SONGS: SongWithMeta[] = [
   {
     id: "demo-1",
@@ -29,6 +33,12 @@ const DEMO_SONGS: SongWithMeta[] = [
     vibe: "Melancholic",
     bpm: 72,
     createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    visualConfig: {
+      preset: "end_credits",
+      gradient: "linear-gradient(148deg, #4E5D6E 0%, #8B96A6 48%, #D8D0C4 100%)",
+      particleDensity: 0.4,
+      pulseSource: "melody",
+    },
   },
   {
     id: "demo-2",
@@ -36,6 +46,12 @@ const DEMO_SONGS: SongWithMeta[] = [
     vibe: "Lo-fi",
     bpm: 88,
     createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    visualConfig: {
+      preset: "rain_glass",
+      gradient: "linear-gradient(148deg, #5A8EAA 0%, #9DB8C0 48%, #DFE0DA 100%)",
+      particleDensity: 0.35,
+      pulseSource: "melody",
+    },
   },
   {
     id: "demo-3",
@@ -43,8 +59,18 @@ const DEMO_SONGS: SongWithMeta[] = [
     vibe: "Ethereal",
     bpm: 105,
     createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+    visualConfig: {
+      preset: "warm_particles",
+      gradient: "linear-gradient(148deg, #A8C8E8 0%, #E8E2F4 48%, #7FA6CC 100%)",
+      particleDensity: 0.45,
+      pulseSource: "melody",
+    },
   },
 ];
+
+function displayVibe(song: SongWithMeta): string {
+  return displayVibeLabel(song.vibe, song.tags);
+}
 
 export function GalleryScreen() {
   const router = useRouter();
@@ -52,6 +78,8 @@ export function GalleryScreen() {
   const [songs, setSongs] = useState<SongWithMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sort, setSort] = useState<SortMode>("newest");
+  const [deleteTarget, setDeleteTarget] = useState<SongWithMeta | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Use demo songs when user has no real songs
   const displaySongs = songs.length > 0 ? songs : DEMO_SONGS;
@@ -107,13 +135,38 @@ export function GalleryScreen() {
     router.push(`/song/${song.id}`);
   };
 
+  const handleConfirmDelete = async () => {
+    const target = deleteTarget;
+    if (!target || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/songs/${target.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`delete HTTP ${res.status}`);
+      setSongs((prev) => prev.filter((s) => s.id !== target.id));
+      setDeleteTarget(null);
+      memory
+        .reportAction({
+          content: `Deleted "${target.title}" from gallery`,
+          event_type: "delete",
+          page: "gallery",
+          metadata: { type: "song_delete", song_id: target.id },
+        })
+        .catch(() => {});
+      toast.success(t("gallery.delete.done") || "Deleted.");
+    } catch {
+      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
 
       {/* Activity heatmap — fills the top */}
       <div
-        className="relative z-10 px-6 md:px-12 max-w-7xl mx-auto"
+        className="relative z-10 px-5 md:px-12 max-w-7xl mx-auto"
         style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 48px)" }}
       >
         {!isLoading && (
@@ -126,7 +179,14 @@ export function GalleryScreen() {
               dates={displaySongs.map((s) => s.createdAt)}
               songCount={songs.length}
               title={t("gallery.title")}
-              recentSongs={sorted.slice(0, 3)}
+              recentSongs={sorted.slice(0, 3).map((s) => ({
+                id: s.id,
+                title: s.title,
+                vibe: displayVibe(s),
+                gradient: s.visualConfig?.gradient,
+                bpm: s.bpm,
+                createdAt: s.createdAt,
+              }))}
               onSongClick={(id) => {
                 const song = displaySongs.find((s) => s.id === id);
                 if (song) handleSongClick(song);
@@ -136,13 +196,14 @@ export function GalleryScreen() {
         )}
       </div>
 
-      {/* Music note animation — always visible between heatmap and sort toggle */}
-      {!isLoading && (
+      {/* Music note animation — empty-state filler only; with real songs it
+          pushed the grid below the fold for nothing */}
+      {!isLoading && isShowingDemo && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.35, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="relative z-10 flex flex-col items-center px-6 md:px-12 py-8 md:py-12 max-w-2xl mx-auto text-center"
+          className="relative z-10 flex flex-col items-center px-5 md:px-12 py-8 md:py-12 max-w-2xl mx-auto text-center"
         >
           <svg
             width="160"
@@ -185,7 +246,7 @@ export function GalleryScreen() {
 
       {/* Sort toggle — only visible when there are songs */}
       {!isLoading && displaySongs.length > 1 && (
-        <div className="relative z-10 px-6 md:px-12 max-w-7xl mx-auto flex justify-end pb-6 md:pb-8">
+        <div className="relative z-10 px-5 md:px-12 max-w-7xl mx-auto flex justify-end pt-2 pb-6 md:pt-0 md:pb-8">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -201,7 +262,7 @@ export function GalleryScreen() {
 
       {/* Loading skeletons — grid layout */}
       {isLoading && (
-        <div className="relative z-10 px-6 md:px-12 max-w-7xl mx-auto">
+        <div className="relative z-10 px-5 md:px-12 max-w-7xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
             {Array.from({ length: 6 }, (_, i) => (
               <div key={i} className="animate-pulse">
@@ -213,12 +274,9 @@ export function GalleryScreen() {
         </div>
       )}
 
-      {/* Empty state — no longer shown, we show demo songs instead */}
-      {/* {!isLoading && songs.length === 0 && <EmptyState t={t} router={router} />} */}
-
       {/* Song grid — 2-col mobile / 3-col tablet / 4-col desktop */}
       {!isLoading && displaySongs.length > 0 && (
-        <div className="relative z-10 px-6 md:px-12 pb-32 max-w-7xl mx-auto">
+        <div className="relative z-10 px-5 md:px-12 pb-32 max-w-7xl mx-auto">
           {/* Demo banner when showing demo songs */}
           {isShowingDemo && (
             <motion.div
@@ -239,11 +297,15 @@ export function GalleryScreen() {
                 key={song.id}
                 id={song.id}
                 title={song.title}
-                vibe={song.vibe}
+                vibe={displayVibe(song)}
+                gradient={song.visualConfig?.gradient}
                 bpm={song.bpm}
                 createdAt={song.createdAt}
                 index={i}
                 onClick={() => handleSongClick(song)}
+                onDelete={
+                  isShowingDemo ? undefined : () => setDeleteTarget(song)
+                }
               />
             ))}
           </div>
@@ -265,6 +327,53 @@ export function GalleryScreen() {
           </motion.div>
         </div>
       )}
+
+      {/* Delete confirm — same dialog language as SongDetail */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-[#1A1A1A]/45 backdrop-blur-sm px-5"
+            onClick={() => setDeleteTarget(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.96 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              className="mm-card w-full max-w-sm px-6 py-7 text-center"
+            >
+              <p className="eyebrow text-[#FF8A5C] mb-3">{t("song.delete.eyebrow") || "REMOVE"}</p>
+              <h3 className="font-serif text-[24px] text-[#1A1A1A] leading-tight">
+                {t("song.delete.title") || "Delete this little song?"}
+              </h3>
+              <p className="mt-2 text-[13px] text-[#8C8780] leading-relaxed">
+                “{deleteTarget.title}” —{" "}
+                {t("song.delete.body") ||
+                  "It will be gone from your gallery. You can hum it again later."}
+              </p>
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  className="flex-1 h-11 rounded-[18px] border border-[#E5DDD0] text-[#1A1A1A] text-[14px] hover:bg-white transition-colors"
+                >
+                  {t("common.cancel") || "Keep"}
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                  className="flex-1 h-11 rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors disabled:opacity-60"
+                >
+                  {isDeleting ? "…" : t("song.delete.confirm") || "Delete"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -296,72 +405,5 @@ function SortToggle({
         a–z
       </button>
     </div>
-  );
-}
-
-function EmptyState({
-  t,
-  router,
-}: {
-  t: (k: string) => string;
-  router: ReturnType<typeof useRouter>;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.2, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      className="relative z-10 flex flex-col items-center px-6 md:px-12 pb-32 max-w-2xl mx-auto text-center"
-    >
-      <svg
-        width="120"
-        height="120"
-        viewBox="0 0 120 120"
-        fill="none"
-        className="mb-8 opacity-30"
-      >
-        <motion.circle
-          initial={{ scale: 0.75, opacity: 0.05 }}
-          animate={{ scale: 1, opacity: 0.35 }}
-          transition={{
-            duration: 1.6,
-            repeat: Infinity,
-            repeatType: "reverse",
-            ease: "easeInOut",
-          }}
-          cx="60"
-          cy="80"
-          r="12"
-          fill="#FF5924"
-        />
-        <motion.path
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{
-            duration: 1.6,
-            repeat: Infinity,
-            repeatType: "reverse",
-            ease: "easeInOut",
-          }}
-          d="M 72 80 L 72 30 Q 72 20 82 22 L 100 26"
-          stroke="#FF5924"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-      </svg>
-
-      <p className="font-serif-italic text-[#1A1A1A] text-[32px] leading-[1.2] md:text-[40px]">
-        {t("gallery.empty.title") || "还没有歌"}
-      </p>
-      <p className="font-serif-italic text-[#6F6A63] text-[20px] mt-2 md:text-[24px]">
-        {t("gallery.empty.title2") || "来哼第一首吧"}
-      </p>
-      <button
-        onClick={() => router.push("/")}
-        className="mm-btn-primary mt-10"
-      >
-        {t("gallery.empty.cta") || "开始哼唱"} →
-      </button>
-    </motion.div>
   );
 }

@@ -10,10 +10,15 @@ export interface SongCardProps {
   id: string;
   title: string;
   vibe: string;
+  /** The song's stored visualConfig gradient — keeps the cover in sync
+   *  with the detail page this card opens. */
+  gradient?: string;
   bpm?: number;
   createdAt: string;
   index: number;
   onClick: () => void;
+  /** When provided, shows a corner delete affordance on the cover. */
+  onDelete?: () => void;
 }
 
 const entryVariants = {
@@ -50,9 +55,11 @@ export function SongCard({
   id,
   title,
   vibe,
+  gradient,
   bpm,
   index,
   onClick,
+  onDelete,
 }: SongCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -70,6 +77,7 @@ export function SongCard({
       variants={entryVariants}
       initial="hidden"
       animate={inView ? "visible" : "hidden"}
+      className="relative group"
     >
       <motion.button
         onHoverStart={() => setIsHovered(true)}
@@ -82,7 +90,7 @@ export function SongCard({
         {/* Cover — 1:1 square */}
         <div className="relative overflow-hidden rounded-[20px] aspect-square bg-[#F5F1EB]">
           {inView ? (
-            <CanvasCoverArt songId={id} vibe={vibe} className="w-full h-full" />
+            <CanvasCoverArt songId={id} gradient={gradient} vibe={vibe} className="w-full h-full" />
           ) : (
             <div className="absolute inset-0 bg-gradient-to-r from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer" />
           )}
@@ -124,6 +132,24 @@ export function SongCard({
           </p>
         </div>
       </motion.button>
+
+      {/* Delete — sibling of the card button (buttons can't nest), floated
+          over the cover corner. Hover-revealed on pointer devices, softly
+          visible on touch. */}
+      {onDelete && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          aria-label={`Delete ${title}`}
+          className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A]/35 text-white/90 backdrop-blur-sm transition-all hover:bg-[#1A1A1A]/60 opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+        >
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
+            <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
     </motion.div>
   );
 }

@@ -13,6 +13,8 @@ import { log } from "@/lib/observability/log";
 import { COST } from "@murmur/core";
 
 export const runtime = "nodejs";
+// Pitch detection on the worker can take tens of seconds for long hums.
+export const maxDuration = 60;
 
 const MAX_AUDIO_BYTES = 2 * 1024 * 1024;
 const ROUTE = "/api/transcribe";

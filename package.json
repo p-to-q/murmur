@@ -7,6 +7,9 @@
   "scripts": {
     "dev": "next dev --webpack",
     "dev:audio": "cd workers/audio-engine && ./.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001",
+    "dev:music": "cd workers/music-engine && ./.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8002",
+    "setup:music": "bash workers/music-engine/setup.sh",
+    "test:music": "cd workers/music-engine && MUSIC_ENGINE_MOCK=1 ./.venv/bin/python -m unittest discover -s tests",
     "smoke:local": "bun run scripts/local-stack-smoke.ts",
     "smoke:pages": "bun run scripts/page-contract-smoke.ts",
     "qa:report": "bun run scripts/qa-report.ts",

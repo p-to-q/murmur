@@ -38,22 +38,24 @@ import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { buildShareHtml, downloadHtml } from "@/modules/export/render-share-html";
 import { downloadBlob, renderPoster } from "@/modules/export/render-poster";
 import {
-  exportSongAsWebM,
-  getWebMExportSupport,
-  WebMExportError,
-} from "@/modules/export/export-webm";
+  exportSongAsVideo,
+  getVideoExportSupport,
+  VideoExportError,
+} from "@/modules/export/export-video";
 import {
   buildSavedSongVibeVersions,
   hydrateSavedSongToVersion,
 } from "@/modules/music/saved-song-version";
 import { buildLineageTrail } from "@/modules/music/lineage";
 import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
+import { displayVibeLabel } from "@/lib/music/display-vibe";
 import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
   mp3DataUrl?: string | null;
   bpm?: number;
   keySignature?: string;
+  tags?: string[];
 };
 
 type ExportKey = "audio" | "html" | "poster" | "video";
@@ -76,7 +78,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const videoSupport = useMemo(() => getWebMExportSupport(), []);
+  const videoSupport = useMemo(() => getVideoExportSupport(), []);
 
   /* ── Load ──────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -331,7 +333,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     setBusy("video");
     try {
       toast(t("song.export.video_preparing"));
-      await exportSongAsWebM(song);
+      await exportSongAsVideo(song);
       toast.success(t("song.export.video_ready"));
       memory
         .reportAction({
@@ -343,7 +345,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         .catch(() => {});
     } catch (e) {
       console.error(e);
-      if (e instanceof WebMExportError && e.code === "browser_unsupported") {
+      if (e instanceof VideoExportError && e.code === "browser_unsupported") {
         toast(t("song.export.video_unsupported"));
       } else {
         toast.error(t("song.export.video_failed"));
@@ -565,7 +567,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
               <div className="absolute left-6 top-6 right-6">
                 <p className="text-[10px] uppercase tracking-[0.32em] text-white/72">
-                  {song.vibe}
+                  {displayVibeLabel(song.vibe, song.tags)}
                 </p>
                 <h1
                   className="hero-serif-italic mt-3 text-[34px] leading-[0.98] text-white md:text-[52px]"
@@ -1041,7 +1043,9 @@ function LineageTrailCard({
       <p className="text-[10px] uppercase tracking-[0.18em] text-[#B3AA9C]">{label}</p>
       <p className="mt-1 font-serif text-[16px] leading-tight text-[#1A1A1A]">{song.title}</p>
       {song.vibe ? (
-        <p className="mt-1 text-[12px] text-[#8C8780]">{song.vibe}</p>
+        <p className="mt-1 text-[12px] text-[#8C8780]">
+          {displayVibeLabel(song.vibe, song.tags)}
+        </p>
       ) : null}
     </button>
   );

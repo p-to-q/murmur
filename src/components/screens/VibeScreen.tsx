@@ -22,14 +22,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Pause } from "lucide-react";
+import { Play, Pause, Loader2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator, useI18nStore } from "@/lib/i18n";
-import { synth } from "@/lib/music/simple-synth";
+import { versionPreview } from "@/lib/music/version-preview";
 import { generateVibeVersions } from "@/modules/strummer/generate-versions";
+import {
+  createMagentaVersions,
+  regenerateVersionAudio,
+} from "@/modules/magenta/generate-magenta-versions";
 import { buildDemoFlowState } from "@/modules/demo/demo-flow";
 import type { VibeVersion } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
@@ -81,6 +85,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     auditioningVersionId,
     setAuditioning,
     resetFlow,
+    humStyleBlob,
   } = useMurmurStore();
 
   const [phase, setPhase] = useState<Phase>("closing");
@@ -127,13 +132,13 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     }
   }, [demoEnabled, phase, vibeVersions.length, router]);
 
-  /* ── Stop synth on unmount ────────────────────────────────────── */
+  /* ── Stop preview on unmount ──────────────────────────────────── */
   useEffect(() => {
     return () => {
       if (auditionStartTimerRef.current !== null) {
         window.clearTimeout(auditionStartTimerRef.current);
       }
-      synth.stop();
+      versionPreview.stop();
       setAuditioning(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,7 +148,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     (version: VibeVersion) => {
       if (pickingId) return;
       setPickingId(version.id);
-      synth.stop();
+      versionPreview.stop();
       setAuditioning(null);
       setCurrentVersion(version);
       memory
@@ -167,15 +172,28 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       }
 
       if (auditioningVersionId === version.id) {
-        synth.stop();
+        versionPreview.stop();
         setAuditioning(null);
         return;
       }
 
+      // Magenta clips stream in asynchronously — no audio yet, no sound.
+      if (version.generation && version.generation.status !== "ready") {
+        if (version.generation.status === "error") {
+          regenerateVersionAudio(version);
+          toast(t("vibe.gen.retrying") || "Brewing this one again…");
+        } else {
+          toast(t("vibe.generating.toast") || "Still brewing — a few more seconds.");
+        }
+        return;
+      }
+
       try {
-        synth.stop();
+        versionPreview.stop();
         setAuditioning(version.id); // Immediately set as auditioning
-        synth.play(version); // Immediately start playing
+        if (!versionPreview.play(version)) {
+          setAuditioning(null);
+        }
       } catch (err) {
         console.error("[Vibe] audition error:", err);
         toast.error(t("cards.play_error") || "Couldn't play that preview.");
@@ -187,20 +205,35 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
   const handleReroll = useCallback(() => {
     if (vibeVersions.length === 0) return;
-    const melody = vibeVersions[0]!.melody;
-    synth.stop();
+    const first = vibeVersions[0]!;
+    versionPreview.stop();
     setAuditioning(null);
-    const fresh = generateVibeVersions(melody, {
-      draftId: currentDraftId ?? vibeVersions[0]!.draftId,
-      originFlowId: currentFlowId ?? vibeVersions[0]!.originFlowId,
-      sourceType: vibeVersions[0]!.sourceType,
-      sourceMelodyKind: vibeVersions[0]!.sourceMelodyKind,
-    });
+    const common = {
+      draftId: currentDraftId ?? first.draftId,
+      originFlowId: currentFlowId ?? first.originFlowId,
+      sourceType: first.sourceType,
+      sourceMelodyKind: first.sourceMelodyKind,
+    };
+    // Magenta flow: advance to the *next* batch of three randomized vibes.
+    const fresh = first.generation
+      ? createMagentaVersions(first.melody, {
+          ...common,
+          batchIndex: first.generation.batchIndex + 1,
+          humBlob: humStyleBlob,
+        })
+      : generateVibeVersions(first.melody, common);
     setVibeVersions(fresh);
-  }, [currentDraftId, currentFlowId, setAuditioning, setVibeVersions, vibeVersions]);
+  }, [
+    currentDraftId,
+    currentFlowId,
+    humStyleBlob,
+    setAuditioning,
+    setVibeVersions,
+    vibeVersions,
+  ]);
 
   const handleBack = useCallback(() => {
-    synth.stop();
+    versionPreview.stop();
     setAuditioning(null);
     resetFlow();
     if (fromSavedSong && sourceVersion?.draftId) {
@@ -261,37 +294,50 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
               className="relative z-10 min-h-svh flex flex-col px-5 md:px-10 lg:px-16"
               style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 36px)" }}
             >
-              {/* ── Compact header — nav only, no headline ───── */}
-              {/* Header row - title and action buttons aligned at baseline */}
-              <div className="flex items-end justify-between gap-4 mb-4" style={{ paddingTop: '20px' }}>
-                <motion.button
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.4 }}
-                  onClick={handleBack}
-                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors whitespace-nowrap"
-                >
-                  ← {fromSavedSong
-                    ? t("vibe.back.saved") || "Back to your song"
-                    : t("vibe.back") || "Try a different hum"}
-                </motion.button>
+              {/* ── Compact header ─────────────────────────────
+                  Mobile: utility row (back | reroll) + headline on its own
+                  line — three items in one 375px row clipped the headline.
+                  md+: original single baseline row with the headline
+                  between the buttons. */}
+              <div className="mb-4" style={{ paddingTop: "20px" }}>
+                <div className="flex items-center md:items-end justify-between gap-4">
+                  <motion.button
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.4 }}
+                    onClick={handleBack}
+                    className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors whitespace-nowrap"
+                  >
+                    ← {fromSavedSong
+                      ? t("vibe.back.saved") || "Back to your song"
+                      : t("vibe.back") || "Try a different hum"}
+                  </motion.button>
+                  <motion.h2
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1, duration: 0.4 }}
+                    className="hidden md:block flex-1 text-center font-serif-italic text-[26px] text-[#8B8781]"
+                  >
+                    {t("cards.sub.short") || "Listen, then pick the one that feels right."}
+                  </motion.h2>
+                  <motion.button
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.15, duration: 0.4 }}
+                    onClick={handleReroll}
+                    className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors whitespace-nowrap"
+                  >
+                    {t("vibe.reroll") || "New set"} →
+                  </motion.button>
+                </div>
                 <motion.h2
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.1, duration: 0.4 }}
-                  className="font-serif-italic text-[22px] md:text-[26px] text-[#8B8781] text-center flex-1"
+                  className="md:hidden mt-3 px-2 text-center font-serif-italic text-[17px] leading-snug text-[#8B8781]"
                 >
                   {t("cards.sub.short") || "Listen, then pick the one that feels right."}
                 </motion.h2>
-                <motion.button
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.15, duration: 0.4 }}
-                  onClick={handleReroll}
-                  className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors whitespace-nowrap"
-                >
-                  {t("vibe.reroll") || "New set"} →
-                </motion.button>
               </div>
 
               {/* ── Card grid — dominates the viewport ───────── */}
@@ -365,9 +411,14 @@ function VibeCard({
   pickLabel: string;
 }) {
   const lang = useI18nStore((state) => state.lang);
+  const t = useTranslator();
   const accent = extractFirstHex(version.visualConfig.gradient) ?? "#FF8A5C";
   const vibePreset = VIBE_PRESETS.find((p) => p.id === version.vibe);
-  const vibeLabel = vibePreset?.label[lang] || version.vibe;
+  const vibeLabel =
+    version.generation?.vibeLabel[lang] || vibePreset?.label[lang] || version.vibe;
+  const genStatus = version.generation?.status ?? "ready";
+  const isPending = genStatus === "pending";
+  const isError = genStatus === "error";
 
   // Background layer blur: idle = slight soft focus, auditioning = clear, others = blurred
   const bgBlur = isAuditioning ? 0 : someoneIsAuditioning ? 4.5 : 1.5;
@@ -450,7 +501,11 @@ function VibeCard({
           {vibeLabel}
         </h3>
         <p className="mt-2 text-[11px] uppercase tracking-[0.2em] text-white/50">
-          {version.tags.slice(0, 3).join(" · ")}
+          {isPending
+            ? t("vibe.generating") || "Brewing"
+            : isError
+              ? t("vibe.gen.failed") || "Didn't brew — tap retry"
+              : version.tags.slice(0, 3).join(" · ")}
         </p>
       </div>
 
@@ -462,7 +517,15 @@ function VibeCard({
             e.stopPropagation();
             onPlayToggle(version);
           }}
-          aria-label={isAuditioning ? "Pause preview" : "Play preview"}
+          aria-label={
+            isPending
+              ? "Generating preview"
+              : isError
+                ? "Retry generation"
+                : isAuditioning
+                  ? "Pause preview"
+                  : "Play preview"
+          }
           className={[
             "flex h-11 w-11 items-center justify-center rounded-full border backdrop-blur-sm transition-all duration-200",
             isAuditioning
@@ -470,7 +533,11 @@ function VibeCard({
               : "border-white/35 bg-white/16 text-white hover:bg-white/24",
           ].join(" ")}
         >
-          {isAuditioning ? (
+          {isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : isError ? (
+            <RotateCw className="h-3.5 w-3.5" />
+          ) : isAuditioning ? (
             <Pause className="h-3.5 w-3.5" fill="currentColor" />
           ) : (
             <Play className="ml-0.5 h-3.5 w-3.5" fill="currentColor" />

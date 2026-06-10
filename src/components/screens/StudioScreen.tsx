@@ -2,12 +2,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { RotateCcw, Play, Pause } from "lucide-react";
+import { RotateCcw, Play, Pause, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator } from "@/lib/i18n";
-import { synth } from "@/lib/music/simple-synth";
+import { versionPreview } from "@/lib/music/version-preview";
 import { generateStrummerCode } from "@/modules/strummer/generate-code";
 import {
   applyEdit,
@@ -33,7 +33,7 @@ import { MurmurWave } from "@/components/murmur/murmur-wave";
 import { AurisPanel } from "@/components/studio/auris-panel";
 import { TrackMixer } from "@/components/studio/track-mixer";
 import { SceneGrid } from "@/components/studio/scene-grid";
-import { VinylDisc } from "@/components/studio/vinyl-disc";
+import { Turntable } from "@/components/studio/turntable";
 
 export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const router = useRouter();
@@ -126,9 +126,9 @@ function StudioContent({ version }: { version: VibeVersion }) {
     });
   };
 
-  const restartPlayback = (nextVersion: VibeVersion) => {
-    synth.stop();
-    synth.play(nextVersion);
+  const restartPlayback = (nextVersion: VibeVersion): boolean => {
+    versionPreview.stop();
+    return versionPreview.play(nextVersion);
   };
 
   const updateTrack = useCallback(
@@ -238,16 +238,22 @@ function StudioContent({ version }: { version: VibeVersion }) {
 
   const togglePlay = () => {
     if (isPlaying) {
-      synth.stop();
+      versionPreview.stop();
       setIsPlaying(false);
       return;
     }
-    restartPlayback(currentVersion);
-    setIsPlaying(true);
+    if (
+      currentVersion.generation &&
+      currentVersion.generation.status !== "ready"
+    ) {
+      toast(t("studio.magenta.pending") || "Audio is still brewing…");
+      return;
+    }
+    setIsPlaying(restartPlayback(currentVersion));
   };
 
   const handleSave = () => {
-    synth.stop();
+    versionPreview.stop();
     setIsPlaying(false);
     memory
       .reportAction({
@@ -269,6 +275,10 @@ function StudioContent({ version }: { version: VibeVersion }) {
   // Wave accent color
   const waveAccent =
     extractFirstHex(currentVersion.visualConfig.gradient) ?? "#FF8A5C";
+
+  // Magenta versions are whole generated clips — the per-track mixer and
+  // arrangement edits below don't apply to them.
+  const magenta = currentVersion.generation;
 
   // ── Render ─────────────────────────────────────────────────────────
 
@@ -297,17 +307,19 @@ function StudioContent({ version }: { version: VibeVersion }) {
             style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 24px)" }}
           >
             <button
-              onClick={(e) => { e.stopPropagation(); synth.stop(); router.back(); }}
+              onClick={(e) => { e.stopPropagation(); versionPreview.stop(); router.back(); }}
               className="text-[12px] tracking-[0.04em] text-white hover:text-white/70 active:text-[#E5DDD0] transition-colors"
             >
               ← {t("studio.back")}
             </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleRestore(); }}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DDD0] bg-white/70 transition-colors hover:bg-white"
-            >
-              <RotateCcw className="h-3.5 w-3.5 text-[#8C8780]" />
-            </button>
+            {!magenta && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleRestore(); }}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DDD0] bg-white/70 transition-colors hover:bg-white"
+              >
+                <RotateCcw className="h-3.5 w-3.5 text-[#8C8780]" />
+              </button>
+            )}
           </div>
             {/* Darken overlays */}
             <div className="absolute inset-0 bg-gradient-to-b from-black/12 via-transparent to-black/48 pointer-events-none" />
@@ -339,29 +351,17 @@ function StudioContent({ version }: { version: VibeVersion }) {
               </motion.div>
             </div>
 
-            {/* Tonearm — pivots at bottom-right corner */}
-            <div className="absolute bottom-6 right-6 md:bottom-8 md:right-8 pointer-events-none z-10">
-              <motion.svg
-                className="w-28 h-28 md:w-40 md:h-40"
-                viewBox="0 0 100 100" fill="none"
-                style={{ transformOrigin: "82% 82%" }}
-                initial={false}
-                animate={{ rotate: isPlaying ? -26 : 0 }}
-                transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <line x1="82" y1="82" x2="24" y2="28" stroke="rgba(255,255,255,0.55)" strokeWidth="2" strokeLinecap="round" />
-                <rect x="16" y="22" width="14" height="5" rx="1.5" fill="rgba(255,255,255,0.5)" transform="rotate(-42, 23, 24.5)" />
-                <circle cx="18" cy="24" r="1.5" fill="rgba(255,255,255,0.7)" />
-                <circle cx="82" cy="82" r="6" fill="rgba(255,255,255,0.12)" stroke="rgba(255,255,255,0.3)" strokeWidth="1" />
-                <circle cx="82" cy="82" r="2.5" fill="rgba(255,255,255,0.4)" />
-                <circle cx="72" cy="73" r="4" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" />
-              </motion.svg>
-            </div>
+            {/* Turntable — record + tonearm as one unit; needle drops when playing */}
+            <Turntable
+              isPlaying={isPlaying}
+              accent={waveAccent}
+              className="absolute bottom-5 right-5 md:bottom-7 md:right-7 z-10 w-[132px] md:w-[180px] pointer-events-none"
+            />
 
-            {/* Song info — lower left */}
-            <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
+            {/* Song info — lower left; right padding keeps clear of the turntable */}
+            <div className="absolute inset-x-0 bottom-0 p-6 pr-40 md:p-8 md:pr-60">
               <p className="text-[10px] uppercase tracking-[0.3em] text-white/55 mb-1.5">
-                {currentVersion.vibe}
+                {magenta ? magenta.vibeLabel.en : currentVersion.vibe}
               </p>
               <h2
                 className="hero-serif text-white leading-[1.0] md:text-[40px] lg:text-[48px]"
@@ -375,27 +375,14 @@ function StudioContent({ version }: { version: VibeVersion }) {
             </div>
         </motion.div>
 
-        {/* ── Panel wrapper — disc protrudes above the frame ─────── */}
+        {/* ── Panel wrapper ────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.18, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="mx-4 md:mx-8 mt-3 relative"
-          style={{ paddingTop: "40px" }}
+          className="mx-5 md:mx-8 mt-3 relative"
         >
-          {/* ── Vinyl disc — floats above panel, drops into slot ──── */}
-          <div
-            className="absolute pointer-events-none"
-            style={{ left: "28px", top: "0" }}
-          >
-            <VinylDisc
-              isPlaying={isPlaying}
-              accent={waveAccent}
-              size={92}
-            />
-          </div>
-
-          {/* ── Panel body — z-[1] so it covers the disc's lower half ── */}
+          {/* ── Panel body — the control deck ── */}
           <div
             className="overflow-hidden relative z-[1]"
             style={{
@@ -409,50 +396,67 @@ function StudioContent({ version }: { version: VibeVersion }) {
               borderBottomRightRadius: "22px",
             }}
           >
-            {/* ── Disc slot groove — the slit the disc inserts into ── */}
-            <div className="relative pointer-events-none" style={{ height: "28px" }}>
-              {/* Slot opening — recessed channel */}
-              <div
-                className="absolute left-0 right-0"
-                style={{
-                  top: "12px",
-                  height: "4px",
-                  background: "linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.18) 100%)",
-                  boxShadow: "0 1px 0 rgba(255,255,255,0.04), inset 0 1.5px 3px rgba(0,0,0,0.45)",
-                }}
-              />
+            {/* Breathing room above the prompt bar */}
+            <div style={{ height: "14px" }} />
+
+          {magenta ? (
+            /* Magenta panel — the clip is one generated whole; show its
+               prompt instead of arrangement controls. */
+            <div className="px-5 pt-2 pb-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4">
+                <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.24em] text-white/45">
+                  <Sparkles className="h-3 w-3" />
+                  {t("studio.magenta.prompt")}
+                </p>
+                <p className="mt-2 text-[13px] leading-relaxed text-white/85">
+                  {magenta.prompt}
+                </p>
+                <p className="mt-3 text-[11px] leading-relaxed text-white/40">
+                  {magenta.status === "pending" ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      {t("studio.magenta.pending")}
+                    </span>
+                  ) : (
+                    t("studio.magenta.note")
+                  )}
+                </p>
+              </div>
             </div>
+          ) : (
+            <>
+              {/* Prompt bar */}
+              <div className="px-5 pt-2 pb-3">
+                <AurisPanel
+                  busy={promptBusy}
+                  onApply={handlePrompt}
+                  variant="dark"
+                  showQuickActions={false}
+                />
+              </div>
 
-          {/* Prompt bar */}
-          <div className="px-5 pt-2 pb-3">
-            <AurisPanel
-              busy={promptBusy}
-              onApply={handlePrompt}
-              variant="dark"
-              showQuickActions={false}
-            />
-          </div>
+              {/* Scene quick-picks */}
+              <div className="px-5 pb-4">
+                <SceneGrid
+                  variant="dark"
+                  onPick={(scene) => handleScene(scene.tokens)}
+                />
+              </div>
 
-          {/* Scene quick-picks */}
-          <div className="px-5 pb-4">
-            <SceneGrid
-              variant="dark"
-              onPick={(scene) => handleScene(scene.tokens)}
-            />
-          </div>
+              {/* Divider — intent layer ↑ / granular control ↓ */}
+              <div className="mx-5 h-px bg-white/8" />
 
-          {/* Divider — intent layer ↑ / granular control ↓ */}
-          <div className="mx-5 h-px bg-white/8" />
-
-          {/* Guitar string faders */}
-          <div className="px-5 pt-4 pb-2">
-            <TrackMixer
-              variant="strings"
-              arrangement={arrangement}
-              onTrack={updateTrack}
-              isPlaying={isPlaying}
-            />
-          </div>
+              {/* Guitar string faders */}
+              <div className="px-5 pt-4 pb-2">
+                <TrackMixer
+                  variant="strings"
+                  arrangement={arrangement}
+                  onTrack={updateTrack}
+                  isPlaying={isPlaying}
+                />
+              </div>
+            </>
+          )}
 
           {/* Save button inside the panel */}
           <div className="px-5 pt-3">

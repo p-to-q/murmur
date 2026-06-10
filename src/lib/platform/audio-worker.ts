@@ -18,7 +18,9 @@ import type {
   TranscriptionResult,
 } from "@/modules/shared/types";
 
-const WORKER_TIMEOUT_MS = 30_000;
+// Generous enough to survive the worker's first-request model load
+// (SwiftF0/denoiser lazy-init can take ~40s on a cold worker).
+const WORKER_TIMEOUT_MS = 90_000;
 
 const noteSchema = z.object({
   pitch: z.number(),

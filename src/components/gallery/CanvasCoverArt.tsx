@@ -6,11 +6,28 @@ import { VIBE_PRESETS } from "@/presets/vibes";
 
 interface CanvasCoverArtProps {
   songId: string;
-  vibe: string;
+  /**
+   * The song's stored visualConfig gradient — the same string the detail
+   * page feeds to SongVisualCanvas. When present, the cover is a faithful
+   * still of what the user sees after tapping in.
+   */
+  gradient?: string;
+  /** Legacy fallback: resolve a preset gradient by vibe id. */
+  vibe?: string;
   className?: string;
 }
 
-function parseGradientColors(gradient: string): [number, number, number][] {
+/**
+ * CanvasCoverArt — a static frame of the song detail visual.
+ *
+ * Paints exactly what SongVisualCanvas shows at rest: the song's gradient
+ * laid diagonally between its first and last color, with a few drifting
+ * white particles (seeded by songId so each cover is stable). Covers used
+ * to be random aurora blobs that shared nothing with the detail page; now
+ * the card is a thumbnail of the page it opens.
+ */
+
+function parseHexes(gradient: string): [number, number, number][] {
   const hexes = gradient.match(/#[0-9A-Fa-f]{6}/g) || [];
   return hexes.map((hex) => [
     parseInt(hex.slice(1, 3), 16),
@@ -19,19 +36,13 @@ function parseGradientColors(gradient: string): [number, number, number][] {
   ]);
 }
 
-function lerpColor(
-  a: [number, number, number],
-  b: [number, number, number],
-  t: number,
-): [number, number, number] {
-  return [
-    Math.round(a[0] + (b[0] - a[0]) * t),
-    Math.round(a[1] + (b[1] - a[1]) * t),
-    Math.round(a[2] + (b[2] - a[2]) * t),
-  ];
+function resolveGradient(gradient?: string, vibe?: string): string {
+  if (gradient && /#[0-9A-Fa-f]{6}/.test(gradient)) return gradient;
+  const preset = VIBE_PRESETS.find((v) => v.id === vibe) ?? VIBE_PRESETS[0];
+  return preset.gradient;
 }
 
-export function CanvasCoverArt({ songId, vibe, className }: CanvasCoverArtProps) {
+export function CanvasCoverArt({ songId, gradient, vibe, className }: CanvasCoverArtProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -44,98 +55,34 @@ export function CanvasCoverArt({ songId, vibe, className }: CanvasCoverArtProps)
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const seed = hashString(songId);
-    const rand = mulberry32(seed);
+    const colors = parseHexes(resolveGradient(gradient, vibe));
+    if (colors.length === 0) return;
+    const first = colors[0]!;
+    const last = colors[colors.length - 1]!;
 
-    const vibePreset = VIBE_PRESETS.find((v) => v.id === vibe) || VIBE_PRESETS[0];
-    const colors = parseGradientColors(vibePreset.gradient);
-    if (colors.length < 2) return;
-
-    // Background — warm cream, slightly randomized
-    const bgWarmth = rand();
-    const bg = lerpColor([245, 241, 235], [255, 249, 240], bgWarmth);
-    ctx.fillStyle = `rgb(${bg[0]},${bg[1]},${bg[2]})`;
+    // Base — same composition as SongVisualCanvas at rest: a diagonal
+    // gradient from the first to the last color of the stored gradient.
+    const base = ctx.createLinearGradient(0, 0, size, size);
+    base.addColorStop(0, `rgb(${first[0]},${first[1]},${first[2]})`);
+    base.addColorStop(1, `rgb(${last[0]},${last[1]},${last[2]})`);
+    ctx.fillStyle = base;
     ctx.fillRect(0, 0, size, size);
 
-    // Layer 1: Large soft aurora blobs (radial gradients, no filter needed)
-    const numBlobs = 3 + Math.floor(rand() * 3);
-    for (let i = 0; i < numBlobs; i++) {
-      const colorIdx = Math.floor(rand() * colors.length);
-      const color = colors[colorIdx];
-      const cx = rand() * size;
-      const cy = rand() * size;
-      const radius = size * (0.25 + rand() * 0.3);
-      const opacity = 0.25 + rand() * 0.35;
-
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-      grad.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]},${opacity})`);
-      grad.addColorStop(0.6, `rgba(${color[0]},${color[1]},${color[2]},${opacity * 0.4})`);
-      grad.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]},0)`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, size, size);
-    }
-
-    // Layer 2: Smaller accent blobs for depth
-    const numAccent = 1 + Math.floor(rand() * 2);
-    for (let i = 0; i < numAccent; i++) {
-      const midColor = lerpColor(colors[0], colors[colors.length - 1], rand());
-      const cx = size * (0.2 + rand() * 0.6);
-      const cy = size * (0.2 + rand() * 0.6);
-      const radius = size * (0.1 + rand() * 0.15);
-      const opacity = 0.4 + rand() * 0.3;
-
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-      grad.addColorStop(0, `rgba(${midColor[0]},${midColor[1]},${midColor[2]},${opacity})`);
-      grad.addColorStop(1, `rgba(${midColor[0]},${midColor[1]},${midColor[2]},0)`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, size, size);
-    }
-
-    // Layer 3: Geometric accent (vinyl-ring, arcs, or dots)
-    const geoRoll = rand();
-    const geoColor = colors[Math.floor(rand() * colors.length)];
-    const geoAlpha = 0.12 + rand() * 0.15;
-    ctx.strokeStyle = `rgba(${geoColor[0]},${geoColor[1]},${geoColor[2]},${geoAlpha})`;
-    ctx.lineWidth = 1.2;
-
-    if (geoRoll < 0.4) {
-      // Thin circle (vinyl ring echo)
-      const r = size * (0.2 + rand() * 0.25);
-      const cx = size * (0.25 + rand() * 0.5);
-      const cy = size * (0.25 + rand() * 0.5);
+    // Drifting particles — the idle field, frozen. Seeded per song.
+    const rand = mulberry32(hashString(songId));
+    const count = 6 + Math.floor(rand() * 4);
+    for (let i = 0; i < count; i++) {
+      const x = rand() * size;
+      // Bias toward the lower half, where the field's risers live.
+      const y = size * (0.25 + rand() * 0.75);
+      const r = 1.5 + rand() * 4;
+      const alpha = 0.12 + rand() * 0.38;
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.stroke();
-    } else if (geoRoll < 0.7) {
-      // Parallel arcs (sound wave suggestion)
-      const baseY = size * (0.3 + rand() * 0.4);
-      const arcCount = 3 + Math.floor(rand() * 3);
-      for (let i = 0; i < arcCount; i++) {
-        const y = baseY + i * (size * 0.06);
-        ctx.beginPath();
-        ctx.moveTo(size * 0.15, y);
-        ctx.quadraticCurveTo(
-          size * 0.5,
-          y + (rand() - 0.5) * size * 0.15,
-          size * 0.85,
-          y,
-        );
-        ctx.stroke();
-      }
-    } else {
-      // Scattered dots
-      const dotCount = 5 + Math.floor(rand() * 8);
-      ctx.fillStyle = `rgba(${geoColor[0]},${geoColor[1]},${geoColor[2]},${geoAlpha + 0.05})`;
-      for (let i = 0; i < dotCount; i++) {
-        const x = rand() * size;
-        const y = rand() * size;
-        const r = 1.5 + rand() * 2.5;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.fill();
     }
-  }, [songId, vibe]);
+  }, [songId, gradient, vibe]);
 
   return (
     <canvas

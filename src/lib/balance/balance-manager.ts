@@ -8,7 +8,6 @@
 const LOCAL_BALANCE_KEY = "murmur-local-balance";
 const LOCAL_BALANCE_DATE_KEY = "murmur-local-balance-date";
 const LOCAL_DAILY_LIMIT = 3;
-const CLOUD_DAILY_LIMIT = 10;
 
 export interface BalanceInfo {
   notes: number;

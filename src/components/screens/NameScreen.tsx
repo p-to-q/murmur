@@ -163,12 +163,16 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
     const id = currentVersion.draftId;
     let mp3DataUrl: string | undefined;
+    let renderedDurationSec: number | undefined;
 
     const versionWithName = { ...currentVersion, title: trimmed };
 
     try {
       const rendered = await renderAudio(versionWithName);
-      if (rendered) mp3DataUrl = rendered.dataUrl;
+      if (rendered) {
+        mp3DataUrl = rendered.dataUrl;
+        renderedDurationSec = rendered.durationSec;
+      }
     } catch (error) {
       console.warn("[Name] render failed, saving without audio:", error);
     }
@@ -186,7 +190,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
           bpm: versionWithName.melody.bpm,
           keySignature: versionWithName.melody.key.split(" ")[0] ?? "C",
           scaleType: versionWithName.melody.scale,
-          duration: Math.round(versionWithName.melody.duration),
+          duration: Math.round(renderedDurationSec ?? versionWithName.melody.duration),
           parentSongId: versionWithName.parentSongId,
           rootSongId: versionWithName.rootSongId,
           lineageDepth: versionWithName.lineageDepth,

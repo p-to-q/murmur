@@ -1,0 +1,6 @@
+# Installed via setup.sh with uv (Python 3.12). Kept here for reference —
+# magenta-rt[mlx] pins its own heavy dependency tree (mlx, tensorflow, etc.).
+magenta-rt[mlx]
+fastapi
+uvicorn[standard]
+python-multipart

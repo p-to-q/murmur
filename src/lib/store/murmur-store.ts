@@ -14,6 +14,11 @@ interface MurmurStore {
   vibeVersions: VibeVersion[];
   setVibeVersions: (v: VibeVersion[]) => void;
 
+  // The trimmed hum recording for this flow — the Magenta engine blends its
+  // style embedding into each generated clip so the hum keeps mattering.
+  humStyleBlob: Blob | null;
+  setHumStyleBlob: (b: Blob | null) => void;
+
   // Selected version for studio editing
   currentVersion: VibeVersion | null;
   setCurrentVersion: (v: VibeVersion | null) => void;
@@ -46,6 +51,9 @@ export const useMurmurStore = create<MurmurStore>((set) => ({
   vibeVersions: [],
   setVibeVersions: (v) => set({ vibeVersions: v }),
 
+  humStyleBlob: null,
+  setHumStyleBlob: (b) => set({ humStyleBlob: b }),
+
   currentVersion: null,
   setCurrentVersion: (v) => set({ currentVersion: v }),
   currentDraftId: null,
@@ -67,6 +75,7 @@ export const useMurmurStore = create<MurmurStore>((set) => ({
     set({
       recordingState: "idle",
       vibeVersions: [],
+      humStyleBlob: null,
       currentVersion: null,
       currentDraftId: null,
       currentFlowId: null,

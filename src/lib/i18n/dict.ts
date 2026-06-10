@@ -99,6 +99,11 @@ export const DICT = {
   "vibe.headline":    { zh: "挑一个，让这句哼唱继续长下去。", en: "Pick the one your hum is asking to become." },
   "vibe.saved.headline": { zh: "挑一个，让这首歌往下再长一段。", en: "Pick the next shape this song wants to take." },
   "vibe.saved.sub":   { zh: "同一条旋律骨架，三种新的长法。", en: "Same melody spine, three fresh readings." },
+  "vibe.reroll":      { zh: "换一批",         en: "Next three" },
+  "vibe.generating":  { zh: "酿造中",         en: "Brewing" },
+  "vibe.generating.toast": { zh: "还在酿造中，再等几秒。", en: "Still brewing — a few more seconds." },
+  "vibe.gen.failed":  { zh: "没酿成，点一下重试", en: "Didn't brew — tap to retry" },
+  "vibe.gen.retrying": { zh: "重新酿造这一版…", en: "Brewing this one again…" },
 
   // ── Melody origin semantics ───────────────────────────────────────
   "melody_origin.intent.label": { zh: "贴近原唱", en: "INTENT" },
@@ -157,6 +162,9 @@ export const DICT = {
   "studio.empty":          { zh: "还没有选定版本", en: "No version selected yet" },
   "studio.empty.cta":      { zh: "去哼一段旋律", en: "Hum a melody" },
   "studio.rendering":      { zh: "正在渲染音频和分享页…", en: "Rendering audio + share page…" },
+  "studio.magenta.prompt": { zh: "灵感词", en: "Prompt" },
+  "studio.magenta.note":   { zh: "这一版由 Magenta 整段生成，分轨编辑暂不适用——直接试听、保存。", en: "This take was generated whole by Magenta — per-track editing doesn't apply. Listen and save." },
+  "studio.magenta.pending": { zh: "音频还在酿造，马上就好…", en: "Audio is still brewing — almost there…" },
   "name.eyebrow":          { zh: "命名",         en: "NAME IT" },
   "name.title":            { zh: "给它一个名字", en: "Give it a name" },
   "name.sub":              { zh: "之后还能在这首歌的卡片里随时改。", en: "You can change it any time later on the song card." },
@@ -205,6 +213,15 @@ export const DICT = {
   "gallery.tile.trace": { zh: "可回溯", en: "Traceable" },
   "gallery.tile.original": { zh: "原始歌稿", en: "Original" },
   "gallery.tile.branch_n": { zh: "分支 {n}", en: "Branch {n}" },
+  "gallery.delete.done": { zh: "已删除。", en: "Deleted." },
+
+  // ── Delete confirm（Gallery 与 SongDetail 共用）────────────────────
+  "song.delete":         { zh: "删除", en: "Delete" },
+  "song.delete.eyebrow": { zh: "移除", en: "REMOVE" },
+  "song.delete.title":   { zh: "删掉这首小歌？", en: "Delete this little song?" },
+  "song.delete.body":    { zh: "它会从你的藏歌里消失。以后随时可以再哼一首。", en: "It will be gone from your gallery. You can hum it again later." },
+  "song.delete.confirm": { zh: "删除", en: "Delete" },
+  "song.delete.failed":  { zh: "没删掉，再试一次？", en: "Couldn't delete that one. Try again?" },
 
   // ── SongDetail ─────────────────────────────────────────────────────
   "song.not_found.eyebrow": { zh: "空白唱片", en: "EMPTY RECORD" },
@@ -255,7 +272,7 @@ export const DICT = {
   "song.trace.editing": { zh: "后续修订", en: "Editing cue" },
   "song.trace.editing.title": { zh: "下一步该往哪推", en: "Where to push next" },
   "song.export.title":        { zh: "导出成品", en: "Export outputs" },
-  "song.export.video_hint":   { zh: "视频会复用当前音频与视觉 preset，并导出为带声音的 WebM。", en: "Video export reuses the current audio and visual preset, then renders a WebM with sound." },
+  "song.export.video_hint":   { zh: "视频会复用当前音频与视觉 preset，导出为可直接分享的 MP4（旧浏览器自动回退 WebM）。", en: "Video export reuses the current audio and visual preset and renders a shareable MP4 (older browsers fall back to WebM)." },
   "song.export.video_unsupported_hint": { zh: "当前浏览器不支持视频导出；你仍然可以下载音频、分享页和分享卡。", en: "This browser does not support video export, but audio, share page, and share card are still available." },
   "song.export.video_preparing": { zh: "正在准备导出视频，请稍候…", en: "Preparing video export…" },
   "song.export.video_progress": { zh: "正在合成画面与音频，完成后会自动开始下载。", en: "Combining visuals and audio. The download will start automatically when it is ready." },

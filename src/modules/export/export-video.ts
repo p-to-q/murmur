@@ -21,12 +21,12 @@ const WIDTH = 1080;
 const HEIGHT = 1080;
 const FPS = 30;
 
-export type WebMExportSupport = {
+export type VideoExportSupport = {
   supported: boolean;
   reason?: "missing_media_recorder" | "missing_audio_context" | "missing_capture_stream";
 };
 
-export class WebMExportError extends Error {
+export class VideoExportError extends Error {
   code:
     | "audio_required"
     | "browser_unsupported"
@@ -36,16 +36,16 @@ export class WebMExportError extends Error {
     | "recorder_failed";
 
   constructor(
-    code: WebMExportError["code"],
+    code: VideoExportError["code"],
     message: string,
   ) {
     super(message);
-    this.name = "WebMExportError";
+    this.name = "VideoExportError";
     this.code = code;
   }
 }
 
-export function getWebMExportSupport(): WebMExportSupport {
+export function getVideoExportSupport(): VideoExportSupport {
   if (typeof window === "undefined") {
     return { supported: false, reason: "missing_media_recorder" };
   }
@@ -68,21 +68,23 @@ export function getWebMExportSupport(): WebMExportSupport {
   return { supported: true };
 }
 
-export async function exportSongAsWebM(song: Song): Promise<void> {
+export async function exportSongAsVideo(song: Song): Promise<void> {
   // Export design intent:
   // reuse the song's existing audio plus its current visual preset instead of
   // inventing a separate "video mode". That keeps preview/export coherent and
   // makes video feel like a true product output, not an afterthought.
+  // Container preference: MP4 when the browser can mux it, WebM otherwise —
+  // see pickSupportedMimeType.
   if (!song.mp3DataUrl) {
-    throw new WebMExportError("audio_required", "Audio is required for video export");
+    throw new VideoExportError("audio_required", "Audio is required for video export");
   }
 
-  const support = getWebMExportSupport();
+  const support = getVideoExportSupport();
   const supportedMimeType = support.supported ? pickSupportedMimeType() : null;
   if (!support.supported || !supportedMimeType) {
-    throw new WebMExportError(
+    throw new VideoExportError(
       "browser_unsupported",
-      "This browser does not support WebM export",
+      "This browser does not support video export",
     );
   }
 
@@ -91,7 +93,7 @@ export async function exportSongAsWebM(song: Song): Promise<void> {
   canvas.height = HEIGHT;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
-    throw new WebMExportError("canvas_unavailable", "Canvas context unavailable");
+    throw new VideoExportError("canvas_unavailable", "Canvas context unavailable");
   }
 
   const audio = new Audio(song.mp3DataUrl);
@@ -106,7 +108,7 @@ export async function exportSongAsWebM(song: Song): Promise<void> {
     (window as typeof window & { webkitAudioContext?: typeof AudioContext })
       .webkitAudioContext;
   if (!AudioCtx) {
-    throw new WebMExportError(
+    throw new VideoExportError(
       "audio_context_unavailable",
       "AudioContext unavailable",
     );
@@ -174,7 +176,7 @@ export async function exportSongAsWebM(song: Song): Promise<void> {
 
   const stopped = new Promise<Blob>((resolve, reject) => {
     recorder.onerror = () =>
-      reject(new WebMExportError("recorder_failed", "MediaRecorder failed"));
+      reject(new VideoExportError("recorder_failed", "MediaRecorder failed"));
     recorder.onstop = () => {
       cancelAnimationFrame(rafId);
       const blob = new Blob(chunks, { type: supportedMimeType });
@@ -210,13 +212,19 @@ export async function exportSongAsWebM(song: Song): Promise<void> {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `${slugify(song.title)}.webm`;
+  anchor.download = `${slugify(song.title)}.${extensionForMimeType(supportedMimeType)}`;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
 function pickSupportedMimeType(): string | null {
+  // MP4 (H.264 + AAC) first — it's what chat apps, Photos, and WeChat accept
+  // without re-encoding. Safari has recorded MP4 for years and Chromium ships
+  // it too; WebM stays as the fallback for browsers that can't mux MP4.
   const candidates = [
+    'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+    "video/mp4;codecs=avc1,mp4a.40.2",
+    "video/mp4",
     "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp8,opus",
     "video/webm",
@@ -224,6 +232,10 @@ function pickSupportedMimeType(): string | null {
   return (
     candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? null
   );
+}
+
+function extensionForMimeType(mimeType: string): "mp4" | "webm" {
+  return mimeType.startsWith("video/mp4") ? "mp4" : "webm";
 }
 
 function waitForMedia(audio: HTMLAudioElement): Promise<void> {
@@ -239,7 +251,7 @@ function waitForMedia(audio: HTMLAudioElement): Promise<void> {
     };
     const onError = () => {
       cleanup();
-      reject(new WebMExportError("audio_load_failed", "Audio failed to load"));
+      reject(new VideoExportError("audio_load_failed", "Audio failed to load"));
     };
     audio.addEventListener("loadeddata", onLoaded, { once: true });
     audio.addEventListener("error", onError, { once: true });

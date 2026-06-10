@@ -9,10 +9,10 @@ import { useTranslator } from "@/lib/i18n";
 import { buildShareHtml, downloadHtml } from "@/modules/export/render-share-html";
 import { renderPoster, downloadBlob } from "@/modules/export/render-poster";
 import {
-  exportSongAsWebM,
-  getWebMExportSupport,
-  WebMExportError,
-} from "@/modules/export/export-webm";
+  exportSongAsVideo,
+  getVideoExportSupport,
+  VideoExportError,
+} from "@/modules/export/export-video";
 import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
@@ -24,7 +24,7 @@ type Song = SongCard & {
 export function ShareActions({ song }: { song: Song }) {
   const t = useTranslator();
   const [busy, setBusy] = useState<"audio" | "html" | "card" | "video" | null>(null);
-  const videoSupport = useMemo(() => getWebMExportSupport(), []);
+  const videoSupport = useMemo(() => getVideoExportSupport(), []);
 
   const gradient =
     (song.visualConfig as { posterBg?: string }).posterBg ??
@@ -137,7 +137,7 @@ export function ShareActions({ song }: { song: Song }) {
     setBusy("video");
     try {
       toast(t("song.export.video_preparing"));
-      await exportSongAsWebM(song);
+      await exportSongAsVideo(song);
       toast.success(t("song.export.video_ready"));
       memory
         .reportAction({
@@ -149,7 +149,7 @@ export function ShareActions({ song }: { song: Song }) {
         .catch(() => {});
     } catch (e) {
       console.error(e);
-      if (e instanceof WebMExportError && e.code === "browser_unsupported") {
+      if (e instanceof VideoExportError && e.code === "browser_unsupported") {
         toast(t("song.export.video_unsupported"));
       } else {
         toast.error(t("song.export.video_failed"));

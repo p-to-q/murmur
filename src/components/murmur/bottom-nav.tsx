@@ -61,13 +61,23 @@ export function BottomNav() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 18, opacity: 0 }}
           transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="fixed inset-x-0 z-50 flex justify-center md:hidden pointer-events-none"
+          className="fixed inset-x-0 bottom-0 z-50 flex justify-center md:hidden pointer-events-none"
           style={{
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
+            paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
           }}
           aria-label="Primary navigation"
         >
-          <ul className="pointer-events-auto inline-flex items-baseline gap-3 px-2">
+          {/* Cream fade so the footer words stay legible when the page
+              scrolls dark covers underneath — no card, just air. */}
+          <div
+            className="absolute inset-x-0 bottom-0 h-[88px]"
+            style={{
+              background:
+                "linear-gradient(to top, #F5F1EB 38%, rgba(245,241,235,0.82) 64%, rgba(245,241,235,0) 100%)",
+            }}
+            aria-hidden
+          />
+          <ul className="pointer-events-auto relative inline-flex items-baseline gap-3 px-2">
             {items.map((item, i) => {
               const isActive =
                 item.href === "/"

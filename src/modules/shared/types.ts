@@ -60,6 +60,29 @@ export type VisualConfig = {
   pulseSource: "drums" | "melody" | "energy";
 };
 
+export type VersionGenerationStatus = "pending" | "ready" | "error";
+
+/**
+ * Present when the version's audio comes from the Magenta RealTime worker
+ * instead of the legacy Tone.js synth. The randomized prompt is the vibe;
+ * `audioUrl` is a session-scoped object URL filled in once the clip lands.
+ */
+export type VersionGeneration = {
+  engine: "magenta";
+  /** English style prompt fed to MusicCoCa. */
+  prompt: string;
+  /** Bilingual display label for the generated vibe. */
+  vibeLabel: { zh: string; en: string };
+  status: VersionGenerationStatus;
+  audioUrl?: string;
+  durationSec: number;
+  /** Which "换一批" batch this vibe belongs to (0 = first three). */
+  batchIndex: number;
+  /** Weight of the hum's audio embedding blended into the text style. */
+  styleMix: number;
+  error?: string;
+};
+
 export type VibeVersion = {
   id: string;
   draftId: string;
@@ -80,6 +103,7 @@ export type VibeVersion = {
   arrangementState: ArrangementState;
   visualConfig: VisualConfig;
   previewAudioUrl?: string;
+  generation?: VersionGeneration;
 };
 
 export type SongCard = {

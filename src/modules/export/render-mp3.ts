@@ -16,7 +16,7 @@
  */
 
 import { assembleSong } from "@/lib/music/assemble-song";
-import type { VibeVersion } from "@/modules/shared/types";
+import type { VersionGeneration, VibeVersion } from "@/modules/shared/types";
 import { audioBufferToWav, blobToDataUrl } from "./render-wav";
 
 const MP3_BITRATE = 128;
@@ -30,6 +30,14 @@ export type RenderedAudio = {
 };
 
 export async function renderAudio(version: VibeVersion): Promise<RenderedAudio | null> {
+  // Magenta versions: the clip the user previewed IS the song — transcode it
+  // instead of re-rendering the (unheard) Tone.js arrangement. Returns null
+  // rather than falling through: saving synth audio that doesn't match what
+  // the user heard would be worse than saving no audio.
+  if (version.generation) {
+    return transcodeGeneratedClip(version.generation);
+  }
+
   let buffer: AudioBuffer | null = null;
   try {
     buffer = await renderToBuffer(version);
@@ -57,6 +65,56 @@ export async function renderAudio(version: VibeVersion): Promise<RenderedAudio |
       dataUrl: await blobToDataUrl(wavBlob),
       mime: "audio/wav",
       durationSec: buffer.duration,
+      sizeBytes: wavBlob.size,
+    };
+  } catch (e) {
+    console.warn("[render-mp3] wav fallback failed:", e);
+    return null;
+  }
+}
+
+// ── Magenta clip transcode ────────────────────────────────────────────
+
+async function transcodeGeneratedClip(
+  generation: VersionGeneration,
+): Promise<RenderedAudio | null> {
+  if (generation.status !== "ready" || !generation.audioUrl) return null;
+
+  let wavBytes: ArrayBuffer;
+  try {
+    const res = await fetch(generation.audioUrl);
+    wavBytes = await res.arrayBuffer();
+  } catch (e) {
+    console.warn("[render-mp3] could not read generated clip:", e);
+    return null;
+  }
+
+  try {
+    const Ctx =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!Ctx) throw new Error("AudioContext unavailable");
+    const ctx = new Ctx();
+    const buffer = await ctx.decodeAudioData(wavBytes.slice(0));
+    await ctx.close();
+    const mp3Blob = await encodeMp3(buffer);
+    return {
+      dataUrl: await blobToDataUrl(mp3Blob),
+      mime: "audio/mpeg",
+      durationSec: buffer.duration,
+      sizeBytes: mp3Blob.size,
+    };
+  } catch (e) {
+    console.warn("[render-mp3] clip transcode failed, storing raw WAV:", e);
+  }
+
+  try {
+    const wavBlob = new Blob([wavBytes], { type: "audio/wav" });
+    return {
+      dataUrl: await blobToDataUrl(wavBlob),
+      mime: "audio/wav",
+      durationSec: generation.durationSec,
       sizeBytes: wavBlob.size,
     };
   } catch (e) {

@@ -21,8 +21,8 @@ export const QA_ROUTE_CONTRACTS: QaRouteContract[] = [
     name: "gallery-page",
     href: "/gallery",
     label: "Gallery",
-    note: "Saved-song shelf and empty-state contract.",
-    markers: ["灵感集", "藏歌"],
+    note: "Saved-song shelf. The grid hydrates client-side from /api/songs, so the fetch smoke checks the SSR route shell plus the 藏歌 nav/title copy (renamed from 灵感集 in a2c629a).",
+    markers: ["藏歌", "gallery-route"],
   },
   {
     name: "me-page",
