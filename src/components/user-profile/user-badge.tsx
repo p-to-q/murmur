@@ -207,6 +207,15 @@ function DropdownPanel({
   );
 }
 
+function avatarGradient(seed: string): string {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  const hue1 = ((h >>> 0) % 360);
+  const hue2 = (hue1 + 40 + ((h >>> 8) % 60)) % 360;
+  const sat = 35 + ((h >>> 16) % 25);
+  return `linear-gradient(135deg, hsl(${hue1},${sat}%,72%) 0%, hsl(${hue2},${sat + 10}%,78%) 100%)`;
+}
+
 function Avatar({ user, size }: { user: AppUser; size: number }) {
   if (user.avatarUrl) {
     const avatarSrc = user.avatarUrl.startsWith("//")
@@ -225,10 +234,19 @@ function Avatar({ user, size }: { user: AppUser; size: number }) {
   }
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary"
-      style={{ width: size, height: size, fontSize: size * 0.4 }}
+      className="flex shrink-0 items-center justify-center rounded-full ring-2 ring-border"
+      style={{
+        width: size,
+        height: size,
+        background: avatarGradient(user.id ?? user.email ?? "murmur"),
+      }}
     >
-      {(user.name ?? user.email ?? "?")[0].toUpperCase()}
+      <span
+        className="font-serif-italic text-white/90 select-none"
+        style={{ fontSize: size * 0.42, lineHeight: 1, textShadow: "0 1px 3px rgba(0,0,0,0.15)" }}
+      >
+        {(user.name ?? user.email ?? "?")[0].toUpperCase()}
+      </span>
     </div>
   );
 }

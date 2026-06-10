@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
     const rows = await getSongsByUser(userId);
     return NextResponse.json(rows);
   } catch (err) {
-    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+    if (shouldUseLocalSongFallback() && isDatabaseUnavailable(err)) {
       const rows = getLocalSongsByUserFallback(userId);
       log("song.list_failed", {
         reason: "database_unavailable",
@@ -158,7 +158,8 @@ export async function POST(req: NextRequest) {
   const songInput = buildSongInput(body, userId);
 
   try {
-    if (shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname })) {
+    const skipBilling = shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname }) || COST.save === 0;
+    if (skipBilling) {
       try {
         const song = await createSong(songInput);
 
@@ -166,12 +167,11 @@ export async function POST(req: NextRequest) {
           headers: { "X-Request-Id": requestId },
         });
       } catch (dbError) {
-        // 如果数据库失败，使用本地 fallback
         if (isDatabaseUnavailable(dbError)) {
           const fallbackSong = createLocalSongFallback(songInput);
           log("song.create_failed", {
             reason: "database_unavailable",
-            fallback: "local_bypass_song_snapshot",
+            fallback: "local_song_snapshot",
             songId: fallbackSong.id,
           }, {
             route: ROUTE,
@@ -183,7 +183,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json(fallbackSong, {
             headers: {
               "X-Request-Id": requestId,
-              "X-Murmur-Fallback": "local-bypass-song",
+              "X-Murmur-Fallback": "local-song",
             },
           });
         }
@@ -252,7 +252,7 @@ export async function POST(req: NextRequest) {
       headers: { "X-Request-Id": requestId },
     });
   } catch (err) {
-    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+    if (shouldUseLocalSongFallback() && isDatabaseUnavailable(err)) {
       const fallbackSong = createLocalSongFallback(songInput);
       log("song.create_failed", {
         reason: "database_unavailable",
@@ -356,30 +356,13 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function shouldUseLocalSongFallback(req: NextRequest, userId: string): boolean {
-  // TODO: 临时允许所有用户使用本地 fallback（当数据库不可用时）
-  // 配置好数据库后，可以恢复只允许 guest 用户
-  if (shouldBypassBillingInDevelopment({ host: getRequestHostname(req) })) {
-    return true;
-  }
-
-  // 原逻辑：只允许 guest 用户
-  if (userId !== "guest") return false;
-  return shouldBypassBillingInDevelopment({
-    host: getRequestHostname(req),
-  });
+function shouldUseLocalSongFallback(): boolean {
+  // Free era: every action costs 0, so local fallback is safe for all users
+  // when the database is unreachable. Once real billing returns, gate this
+  // back to dev-only or guest-only.
+  return true;
 }
 
-function getRequestHostname(req: NextRequest): string | null {
-  const nextUrl = (req as { nextUrl?: { hostname?: string } }).nextUrl;
-  if (nextUrl?.hostname) return nextUrl.hostname;
-
-  try {
-    return new URL(req.url).hostname;
-  } catch {
-    return null;
-  }
-}
 
 function isMelodySelectionKind(value: unknown): value is MelodySelectionKind {
   return typeof value === "string" && MELODY_SELECTION_KINDS.has(value as MelodySelectionKind);

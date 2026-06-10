@@ -31,7 +31,6 @@ import { createPortal } from "react-dom";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
-import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { NAV_ITEMS, computeTrail, type ComputedStep } from "./nav-items";
 import { MurmurMark } from "./murmur-mark";
 import { ShareCardModal } from "./share-card-modal";
@@ -47,7 +46,6 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
   const { resetFlow, isPlaying, auditioningVersionId } = useMurmurStore();
-  const { balance } = useUserBalance();
   const audioActive = isPlaying || auditioningVersionId !== null;
 
   const [slashFlash, setSlashFlash] = useState(false);
@@ -210,7 +208,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
               isActive={isActive}
               showRule={i > 0}
               lang={lang}
-              meta={item.href === "/topup" ? `${balance?.notes ?? "—"}` : undefined}
+              meta={undefined}
             />
           );
           return (
@@ -262,50 +260,22 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
           </button>
         )}
 
-        {/* Balance — two-pool expression: paid + daily-free, with top-up link right-aligned */}
-        {/*   9999    ← stable, accumulates as the user tops up */}
-        {/*    +      ← small mute separator */}
-        {/*    5      ← daily refill, expires nightly (smaller) */}
-        {/*   notes   ← label below on left */}
-        {/*   top up → right-aligned, same row as notes */}
+        {/* Notes — free era: unlimited */}
         {!collapsed && (
-          <div className="space-y-1.5">
-            <div className="flex items-baseline gap-1">
-              <span className="font-serif text-[#1A1A1A] text-[28px] leading-none tabular-nums">
-                {balance?.notes ?? "—"}
-              </span>
-              <span className="text-[12px] uppercase tracking-[0.18em] text-[#B6B0A4] leading-none">
-                +
-              </span>
-              <span className="font-serif text-[#8C8780] text-[18px] leading-none tabular-nums">
-                5
-              </span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-[10px] uppercase tracking-[0.18em] text-[#B6B0A4]">
-                {t("nav.notes")}
-              </span>
-              <Link
-                href="/topup"
-                className="text-[10px] uppercase tracking-[0.18em] text-[#B6B0A4] hover:text-[#FF5924] transition-colors"
-                suppressHydrationWarning
-              >
-                {t("nav.topup")} →
-              </Link>
-            </div>
+          <div className="space-y-1">
+            <span className="font-serif text-[#1A1A1A] text-[28px] leading-none">
+              ∞
+            </span>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[#B6B0A4]">
+              {t("nav.notes")}
+            </p>
           </div>
         )}
 
         {collapsed && (
-          <Link
-            href="/topup"
-            className="block mb-2 text-[#1A1A1A] hover:text-[#FF5924] transition-colors"
-            suppressHydrationWarning
-          >
-            <span className="font-serif text-[14px] tabular-nums">
-              {((balance?.notes ?? 0) + 5)}
-            </span>
-          </Link>
+          <span className="block mb-2 font-serif text-[14px] text-[#1A1A1A]">
+            ∞
+          </span>
         )}
 
         {/* Icon row — Language LEFT bottom, Device + Bell RIGHT bottom */}

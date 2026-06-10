@@ -700,11 +700,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.export.video.label") || "Audio video"}
                 hint={
                   videoSupport.supported
-                    ? t("song.export.video.hint") || "webm"
+                    ? t("song.export.video_hint") || "mp4"
                     : t("song.export.video_unsupported_hint") ||
-                      "your browser can't render webm"
+                      "your browser doesn't support video export"
                 }
-                cost={t("song.export.cost.video") || "2 notes"}
+                cost={t("song.export.cost.video") || "free"}
                 disabled={!videoSupport.supported || !song.mp3DataUrl}
                 busy={busy === "video"}
                 onClick={exportVideo}

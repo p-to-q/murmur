@@ -80,6 +80,7 @@ export function GalleryScreen() {
   const [sort, setSort] = useState<SortMode>("newest");
   const [deleteTarget, setDeleteTarget] = useState<SongWithMeta | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [demoPreview, setDemoPreview] = useState<SongWithMeta | null>(null);
 
   // Use demo songs when user has no real songs
   const displaySongs = songs.length > 0 ? songs : DEMO_SONGS;
@@ -118,9 +119,8 @@ export function GalleryScreen() {
   }, [displaySongs, sort]);
 
   const handleSongClick = (song: SongWithMeta) => {
-    // If demo song, go to home to start humming
     if (song.id.startsWith("demo-")) {
-      router.push("/");
+      setDemoPreview(song);
       return;
     }
 
@@ -351,7 +351,7 @@ export function GalleryScreen() {
                 {t("song.delete.title") || "Delete this little song?"}
               </h3>
               <p className="mt-2 text-[13px] text-[#8C8780] leading-relaxed">
-                “{deleteTarget.title}” —{" "}
+                &ldquo;{deleteTarget.title}&rdquo; —{" "}
                 {t("song.delete.body") ||
                   "It will be gone from your gallery. You can hum it again later."}
               </p>
@@ -368,6 +368,60 @@ export function GalleryScreen() {
                   className="flex-1 h-11 rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors disabled:opacity-60"
                 >
                   {isDeleting ? "…" : t("song.delete.confirm") || "Delete"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Demo song preview */}
+      <AnimatePresence>
+        {demoPreview && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-[#1A1A1A]/45 backdrop-blur-sm"
+            onClick={() => setDemoPreview(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 40 }}
+              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md md:rounded-[24px] rounded-t-[24px] overflow-hidden"
+            >
+              <div
+                className="relative h-[240px] flex items-end p-6"
+                style={{ background: demoPreview.visualConfig?.gradient || "linear-gradient(135deg, #8B96A6, #D8D0C4)" }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                <div className="relative z-10">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-white/55 mb-1">
+                    {displayVibe(demoPreview)} · {demoPreview.bpm} BPM
+                  </p>
+                  <h3 className="hero-serif text-white text-[28px] leading-tight">
+                    {demoPreview.title}
+                  </h3>
+                </div>
+              </div>
+              <div className="bg-white px-6 py-6 text-center space-y-4">
+                <p className="text-[13px] text-[#8C8780] leading-relaxed">
+                  {t("gallery.demo.preview_hint") || "这是一首示例歌曲，哼一段旋律来创作属于你自己的。"}
+                </p>
+                <button
+                  onClick={() => { setDemoPreview(null); router.push("/"); }}
+                  className="w-full h-12 rounded-[18px] bg-[#1A1A1A] text-white text-[14px] font-medium hover:bg-[#3A3A3A] transition-colors"
+                >
+                  {t("gallery.demo.cta_create") || "开始创作"}
+                </button>
+                <button
+                  onClick={() => setDemoPreview(null)}
+                  className="text-[13px] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
+                >
+                  {t("common.cancel") || "返回"}
                 </button>
               </div>
             </motion.div>

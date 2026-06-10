@@ -214,6 +214,8 @@ export const DICT = {
   "gallery.tile.original": { zh: "原始歌稿", en: "Original" },
   "gallery.tile.branch_n": { zh: "分支 {n}", en: "Branch {n}" },
   "gallery.delete.done": { zh: "已删除。", en: "Deleted." },
+  "gallery.demo.preview_hint": { zh: "这是一首示例歌曲，哼一段旋律来创作属于你自己的。", en: "This is a demo song — hum a melody to create your own." },
+  "gallery.demo.cta_create": { zh: "开始创作", en: "Start creating" },
 
   // ── Delete confirm（Gallery 与 SongDetail 共用）────────────────────
   "song.delete":         { zh: "删除", en: "Delete" },
