@@ -22,6 +22,7 @@ import {
   bumpVersionEditState,
   resetVersionEditState,
 } from "@/modules/music/edit-depth";
+import { canSaveHeardVersion, getSaveBlockReason } from "@/modules/music/version-contract";
 import type {
   ArrangementState,
   TrackState,
@@ -253,6 +254,15 @@ function StudioContent({ version }: { version: VibeVersion }) {
   };
 
   const handleSave = () => {
+    const saveBlockReason = getSaveBlockReason(currentVersion);
+    if (!canSaveHeardVersion(currentVersion)) {
+      toast(
+        saveBlockReason === "generation_failed"
+          ? (t("studio.magenta.save_failed") || "This take did not finish rendering. Brew it again before saving.")
+          : (t("studio.magenta.save_pending") || "Let this take finish rendering before saving."),
+      );
+      return;
+    }
     versionPreview.stop();
     setIsPlaying(false);
     memory
@@ -279,6 +289,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
   // Magenta versions are whole generated clips — the per-track mixer and
   // arrangement edits below don't apply to them.
   const magenta = currentVersion.generation;
+  const canSave = canSaveHeardVersion(currentVersion);
 
   // ── Render ─────────────────────────────────────────────────────────
 
@@ -463,6 +474,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleSave}
+              disabled={!canSave}
               className="w-full rounded-full bg-white text-[14px] font-medium text-[#1A1A1A] transition-colors hover:bg-[#F5F1EB]"
               style={{ height: "52px" }}
             >

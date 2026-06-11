@@ -26,6 +26,7 @@ import { useTranslator } from "@/lib/i18n";
 import { synth } from "@/lib/music/simple-synth";
 import { buildDemoFlowState } from "@/modules/demo/demo-flow";
 import { renderAudio } from "@/modules/export/render-mp3";
+import { canSaveHeardVersion, getSaveBlockReason } from "@/modules/music/version-contract";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
 const PROCESSING_INTERVAL_MS = 900;
@@ -157,6 +158,16 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       return;
     }
     if (isSaving) return;
+    const saveBlockReason = getSaveBlockReason(currentVersion);
+    if (!canSaveHeardVersion(currentVersion)) {
+      toast(
+        saveBlockReason === "generation_failed"
+          ? (t("studio.magenta.save_failed") || "This take did not finish rendering. Brew it again before saving.")
+          : (t("studio.magenta.save_pending") || "Let this take finish rendering before saving."),
+      );
+      router.push("/studio");
+      return;
+    }
 
     setIsSaving(true);
     setProcessingIdx(0);
@@ -361,7 +372,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={() => void handleSave()}
-              disabled={isSaving || !title.trim()}
+              disabled={isSaving || !title.trim() || !canSaveHeardVersion(currentVersion)}
               className="h-14 w-full rounded-[22px] bg-[#1A1A1A] text-base font-medium text-white transition-opacity disabled:opacity-45"
             >
               {isSaving

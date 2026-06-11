@@ -165,6 +165,8 @@ export const DICT = {
   "studio.magenta.prompt": { zh: "灵感词", en: "Prompt" },
   "studio.magenta.note":   { zh: "这一版由 Magenta 整段生成，分轨编辑暂不适用——直接试听、保存。", en: "This take was generated whole by Magenta — per-track editing doesn't apply. Listen and save." },
   "studio.magenta.pending": { zh: "音频还在酿造，马上就好…", en: "Audio is still brewing — almost there…" },
+  "studio.magenta.save_pending": { zh: "这一版还没真正成音频，先等它酿好再保存。", en: "This take is not fully rendered yet. Let it finish before saving." },
+  "studio.magenta.save_failed": { zh: "这一版没酿成完整音频，先重试这一版再保存。", en: "This take did not finish rendering. Brew it again before saving." },
   "name.eyebrow":          { zh: "命名",         en: "NAME IT" },
   "name.title":            { zh: "给它一个名字", en: "Give it a name" },
   "name.sub":              { zh: "之后还能在这首歌的卡片里随时改。", en: "You can change it any time later on the song card." },
