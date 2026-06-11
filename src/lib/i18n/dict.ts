@@ -375,6 +375,8 @@ export const DICT = {
   "topup.patron":      { zh: "赞助者",     en: "Patron" },
   "topup.custom":      { zh: "自定义金额", en: "Custom Amount" },
   "topup.custom.desc": { zh: "随心支付",   en: "Pay what you want" },
+  "topup.custom.disabled": { zh: "先保留固定档位。自定义金额要等后端 SKU 和结账链路完整接好后再开放。", en: "Fixed tiers for now. Custom amounts will open once the backend SKU and checkout flow are fully wired." },
+  "topup.coming_soon": { zh: "即将开放", en: "Coming soon" },
   "topup.songs":       { zh: "约 {n} 首歌", en: "~{n} songs" },
   "topup.slider.label": { zh: "拖动调整金额", en: "Slide to adjust" },
   "topup.input.placeholder": { zh: "或输入金额", en: "Or enter amount" },

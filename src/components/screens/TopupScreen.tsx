@@ -83,7 +83,6 @@ export function TopupScreen() {
     TOPUP_SKUS.find((s) => s.highlight === "popular")?.id ?? TOPUP_SKUS[0]!.id,
   );
   const [timeRange, setTimeRange] = useState<typeof TIME_RANGES[number]>("7D");
-  const [customAmount, setCustomAmount] = useState(10); // Default $10
   const [isRestoring, setIsRestoring] = useState(false);
 
   // Animated values for number rolling
@@ -92,12 +91,8 @@ export function TopupScreen() {
   const notesInUseSpring = useSpring(0, { stiffness: 100, damping: 20 });
 
   const selected = TOPUP_SKUS.find((s) => s.id === selectedId);
-  const displayAmount = selectedId === "custom"
-    ? `$${customAmount}`
-    : selected?.display ?? "$0";
-  const displayNotes = selectedId === "custom"
-    ? Math.floor(customAmount * 20) // Roughly 20 notes per dollar
-    : selected ? topupNotesGranted(selected) : 0;
+  const displayAmount = selected?.display ?? "$0";
+  const displayNotes = selected ? topupNotesGranted(selected) : 0;
 
   const handleProceed = () => {
     if (!selected) return;
@@ -505,104 +500,25 @@ export function TopupScreen() {
                 })}
               </div>
 
-              {/* Custom amount section with slider */}
+              {/* Custom amount note — not live until the backend has a real custom SKU flow */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3, duration: 0.5 }}
-                className={`rounded-[20px] border backdrop-blur-sm px-6 py-6 transition-all ${
-                  selectedId === "custom"
-                    ? "border-[#1A1A1A] bg-white/80 shadow-[0_2px_12px_rgba(0,0,0,0.08)]"
-                    : "border-[#E5DDD0]/40 bg-white/50"
-                }`}
-                onClick={() => setSelectedId("custom")}
+                className="rounded-[20px] border border-dashed border-[#D6C7B0] bg-white/40 px-6 py-6"
               >
-                <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-[16px] font-semibold text-[#1A1A1A] mb-1">
                       {t("topup.custom")}
                     </p>
-                    <p className="text-[12px] text-[#B7AEA1]">
-                      {t("topup.custom.desc")}
+                    <p className="max-w-[20rem] text-[12px] leading-[1.55] text-[#8C8780]">
+                      {t("topup.custom.disabled")}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <p className="font-serif text-[#1A1A1A] text-[32px] leading-none">
-                      ${customAmount}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Slider */}
-                <div className="relative mb-6 pt-2">
-                  {/* Labels */}
-                  <div className="flex justify-between mb-3 text-[11px] text-[#B7AEA1] font-medium">
-                    <span>$1</span>
-                    <span className="absolute left-1/2 -translate-x-1/2">$50</span>
-                    <span>$100</span>
-                  </div>
-
-                  {/* Slider track and thumb container */}
-                  <div className="relative">
-                    {/* Simple tick marks */}
-                    <div className="absolute -top-2 left-0 right-0 flex justify-between pointer-events-none">
-                      {[0, 25, 50, 75, 100].map((n) => (
-                        <div
-                          key={`tick-${n}`}
-                          className="w-[1.5px] h-3 bg-[#D2C9B6] rounded-full"
-                          style={{ marginLeft: n === 0 ? '0.75px' : undefined }}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Slider track */}
-                    <div className="relative h-1 bg-[#E5DDD0]/60 rounded-full">
-                      {/* Progress fill */}
-                      <div
-                        className="absolute h-1 bg-[#8C8780] rounded-full transition-all duration-150"
-                        style={{ width: `${((customAmount - 1) / 99) * 100}%` }}
-                      />
-                    </div>
-
-                    {/* Slider input */}
-                    <input
-                      type="range"
-                      min="1"
-                      max="100"
-                      value={customAmount}
-                      onChange={(e) => setCustomAmount(Number(e.target.value))}
-                      className="absolute w-full h-8 opacity-0 cursor-grab active:cursor-grabbing z-10"
-                      style={{ top: '-14px', left: 0 }}
-                    />
-
-                    {/* Slider thumb */}
-                    <div
-                      className="absolute w-7 h-7 rounded-full -top-3 transition-all duration-150 pointer-events-none shadow-[0_2px_12px_rgba(0,0,0,0.25)] border-[3px] border-white z-20"
-                      style={{
-                        left: `calc(${((customAmount - 1) / 99) * 100}% - 14px)`,
-                        ...paperTextureStyle,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Input field */}
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 max-w-[200px]">
-                    <input
-                      type="number"
-                      min="1"
-                      max="999"
-                      value={customAmount}
-                      onChange={(e) => setCustomAmount(Math.min(999, Math.max(1, Number(e.target.value) || 1)))}
-                      onClick={(e) => e.stopPropagation()}
-                      placeholder={t("topup.input.placeholder")}
-                      className="w-full px-4 py-3 rounded-[14px] border border-[#E5DDD0] bg-white/60 text-[15px] text-[#1A1A1A] placeholder:text-[#C8C0B4] focus:outline-none focus:border-[#1A1A1A] transition-colors tabular-nums"
-                    />
-                  </div>
-                  <p className="text-[13px] text-[#B7AEA1]">
-                    ≈ {Math.floor(customAmount * 20)} {t("topup.notes")}
-                  </p>
+                  <span className="rounded-full border border-[#D6C7B0] px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-[#8C8780]">
+                    {t("topup.coming_soon")}
+                  </span>
                 </div>
               </motion.div>
             </motion.div>

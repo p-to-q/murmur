@@ -138,13 +138,13 @@ the system, so it has its own design/engineering layer:
 - audio export
 - share HTML export with reusable preset visuals
 - poster image export
-- real `webm` export with the existing audio embedded
+- real shareable video export with the existing audio embedded
 
 See:
 
 - [src/components/song-detail/share-actions.tsx](../src/components/song-detail/share-actions.tsx)
 - [src/modules/export/render-share-html.ts](../src/modules/export/render-share-html.ts)
-- [src/modules/export/export-webm.ts](../src/modules/export/export-webm.ts)
+- [src/modules/export/export-video.ts](../src/modules/export/export-video.ts)
 
 ## 5. Granularity We Want Reviewers To Notice
 
@@ -198,7 +198,7 @@ The system distinguishes between:
 - transcription provider unavailability
 - render failure
 - audio missing during export
-- browser capability missing for WebM
+- browser capability missing for preferred video container
 
 That separation is important because it lets the app degrade instead of simply
 collapsing.
@@ -213,7 +213,7 @@ If you only have a few minutes, read in this order:
 4. [src/components/screens/HumScreen.tsx](../src/components/screens/HumScreen.tsx)
 5. [src/components/screens/StudioScreen.tsx](../src/components/screens/StudioScreen.tsx)
 6. [src/components/screens/SongDetailScreen.tsx](../src/components/screens/SongDetailScreen.tsx)
-7. [src/modules/export/export-webm.ts](../src/modules/export/export-webm.ts)
+7. [src/modules/export/export-video.ts](../src/modules/export/export-video.ts)
 
 ## 7. Short Summary
 

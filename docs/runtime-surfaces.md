@@ -40,7 +40,7 @@ Examples:
 Examples:
 
 - `src/modules/export/render-share-html.ts`
-- `src/modules/export/export-webm.ts`
+- `src/modules/export/export-video.ts`
 - `src/modules/strummer/generate-versions.ts`
 
 ### Shared runtime libraries
@@ -136,7 +136,7 @@ Current product export surfaces:
 - WAV fallback audio
 - poster PNG
 - self-contained share HTML
-- WebM audio+visual export
+- audio-backed shareable video (MP4 first, WebM fallback)
 
 These are produced by code under:
 
@@ -144,7 +144,7 @@ These are produced by code under:
 - `src/modules/export/render-wav.ts`
 - `src/modules/export/render-poster.ts`
 - `src/modules/export/render-share-html.ts`
-- `src/modules/export/export-webm.ts`
+- `src/modules/export/export-video.ts`
 
 ## 7. What belongs where
 

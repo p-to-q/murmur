@@ -3,7 +3,8 @@
 Murmur is a humming-to-song studio. A user hums a sketch, the system
 transcribes and polishes it into a melody, generates several vibe-led
 arrangements, then lets the user refine, preview, save, and export the result
-as audio, visuals, share HTML, and an audio-backed WebM.
+as audio, visuals, share HTML, and an audio-backed shareable video
+(MP4 when supported, WebM as fallback).
 
 ## For Judges
 
@@ -56,7 +57,7 @@ start here:
 - A “what you hear is what you save” architecture:
   live preview, saved audio, and export all share the same arrangement logic
 - Export that is not just static sharing:
-  reusable visual presets, downloadable HTML, poster PNG, and audio-backed WebM
+  reusable visual presets, downloadable HTML, poster PNG, and audio-backed video
 
 ## Key Visible Files
 
@@ -69,7 +70,7 @@ start here:
 - Saved song playback + export surface:
   [src/components/screens/SongDetailScreen.tsx](./src/components/screens/SongDetailScreen.tsx)
 - Real audio+video export:
-  [src/modules/export/export-webm.ts](./src/modules/export/export-webm.ts)
+  [src/modules/export/export-video.ts](./src/modules/export/export-video.ts)
 
 ## Getting Started
 
