@@ -26,7 +26,7 @@ import { useTranslator } from "@/lib/i18n";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
-const TIME_RANGES = ["1D", "7D", "1M", "3M", "All"] as const;
+const TIME_RANGES = ["1H", "1D", "7D", "1M", "All"] as const;
 
 // Paper texture style for all black elements
 const paperTextureStyle = {
@@ -53,14 +53,40 @@ const paperTextureStyle = {
   `,
 };
 
+function formatChartLabel(date: Date, range: typeof TIME_RANGES[number]) {
+  if (range === "1H") {
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  if (range === "1D") {
+    return date.toLocaleTimeString([], { hour: "numeric" });
+  }
+
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  return `${month}/${day}`;
+}
+
+function tooltipValueUnit(range: typeof TIME_RANGES[number]) {
+  if (range === "1H") return "mins";
+  if (range === "1D") return "hrs";
+  return "notes";
+}
+
 // Generate mock usage data based on time range
 function generateChartData(range: typeof TIME_RANGES[number]) {
-  const dataPoints = range === "1D" ? 24 : range === "7D" ? 7 : range === "1M" ? 30 : range === "3M" ? 90 : 365;
+  const dataPoints =
+    range === "1H" ? 12 :
+    range === "1D" ? 24 :
+    range === "7D" ? 7 :
+    range === "1M" ? 30 : 365;
   const data = [];
   const now = Date.now();
+  const stepMs =
+    range === "1H" ? 5 * 60_000 :
+    range === "1D" ? 3_600_000 : 86_400_000;
 
   for (let i = 0; i < dataPoints; i++) {
-    const date = new Date(now - (dataPoints - i) * (range === "1D" ? 3600000 : 86400000));
+    const date = new Date(now - (dataPoints - i) * stepMs);
     // More organic growth curve with smoother fluctuations
     const baseValue = 100;
     const trend = i * 0.8; // Gradual upward trend
@@ -68,12 +94,8 @@ function generateChartData(range: typeof TIME_RANGES[number]) {
     const noise = (Math.random() - 0.5) * 4; // Reduced noise for smoother curve
     const value = baseValue + trend + wave + noise;
 
-    // Format date as M/D
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-
     data.push({
-      date: `${month}/${day}`,
+      date: formatChartLabel(date, range),
       value: Math.max(50, Math.round(value * 100) / 100), // Keep values positive
     });
   }
@@ -404,7 +426,7 @@ export function TopupScreen() {
                       itemStyle={{ color: "#1A1A1A", fontWeight: 600, fontFamily: "var(--font-serif)" }}
                       formatter={(value: unknown) => {
                         if (typeof value === 'number') {
-                          return [`${value.toFixed(0)} notes`, ""];
+                          return [`${value.toFixed(0)} ${tooltipValueUnit(timeRange)}`, ""];
                         }
                         return ["", ""];
                       }}
@@ -486,7 +508,7 @@ export function TopupScreen() {
                           className="absolute -top-2 left-1/2 -translate-x-1/2 text-white px-3 py-1 rounded-full text-[9px] font-semibold uppercase tracking-wider whitespace-nowrap"
                           style={paperTextureStyle}
                         >
-                          Most loved
+                          Most Valued
                         </div>
                       )}
 
