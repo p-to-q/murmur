@@ -15,8 +15,8 @@
  *     editorial sentence).
  *
  * Added:
- *   - Notes card — free era: a static ∞ (notes are unlimited; the ledger
- *     and top-up flow are dormant, see @murmur/core cost-table).
+ *   - Notes card (balance + refill caption + Top up CTA), driven by
+ *     `useUserBalance()` (docs/page-contracts.md §11).
  *   - Settings / Privacy / Delete account as tertiary footer.
  */
 
@@ -25,6 +25,7 @@ import { useEffect, useState } from "react";
 import { UserBadge } from "@/components/user-profile/user-badge";
 import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 
 export function MeScreen() {
@@ -32,6 +33,7 @@ export function MeScreen() {
   const t = useTranslator();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
+  const { balance, isLoading } = useUserBalance();
   const repairBias = usePreferencesStore((state) => state.repairBias);
   const setRepairBias = usePreferencesStore((state) => state.setRepairBias);
   const developerMode = usePreferencesStore((state) => state.developerMode);
@@ -56,6 +58,7 @@ export function MeScreen() {
     };
   }, []);
 
+  const refillCopy = useRefillCopy(balance?.nextRefillAt);
   const shelfCtaHref = songCount > 0 ? "/gallery" : "/";
   const shelfCtaLabel =
     songCount > 0
@@ -94,15 +97,20 @@ export function MeScreen() {
           </div>
         </Card>
 
-        {/* Notes — free era: unlimited, so no balance number, no top-up */}
+        {/* Notes balance + Top up */}
         <Card>
           <SectionLabel>{t("me.notes.title") || "MURMUR NOTES"}</SectionLabel>
-          <p className="font-serif text-[#1A1A1A] text-[52px] leading-none md:text-[56px] mb-2">
-            ∞
+          <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px] mb-2">
+            {isLoading ? "—" : balance?.notes ?? 0}
           </p>
-          <p className="text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
-            {t("me.notes.unlimited") || "Unlimited — hum as much as you like."}
-          </p>
+          <div className="flex items-end justify-between gap-4">
+            <p className="flex-1 text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
+              {refillCopy}
+            </p>
+            <Link href="/topup" className="mm-btn-primary inline-flex shrink-0">
+              {t("me.notes.cta") || "Top up"}
+            </Link>
+          </div>
         </Card>
 
         {/* Milestone & Next move — achievement-driven guidance */}
@@ -357,6 +365,36 @@ function getUserMilestone(songCount: number): {
     action: "You're on a roll",
     actionZh: "停不下来了"
   };
+}
+
+function useRefillCopy(nextRefillAtIso?: string): string {
+  const t = useTranslator();
+  if (!nextRefillAtIso) {
+    return (
+      t("me.notes.refill_default") || "5 notes refill every day at midnight."
+    );
+  }
+  const next = new Date(nextRefillAtIso);
+  const now = new Date();
+  const diffMs = next.getTime() - now.getTime();
+  if (diffMs <= 0) {
+    return (
+      t("me.notes.refill_due") || "Free notes are ready — refresh to claim."
+    );
+  }
+  const hours = Math.floor(diffMs / 3_600_000);
+  const minutes = Math.floor((diffMs % 3_600_000) / 60_000);
+  if (hours > 1) {
+    return (
+      t("me.notes.refill_in_hours") || "5 more notes in about {hours}h."
+    ).replace("{hours}", String(hours));
+  }
+  if (hours === 1) {
+    return t("me.notes.refill_in_1h") || "5 more notes in about an hour.";
+  }
+  return (
+    t("me.notes.refill_in_minutes") || "5 more notes in about {minutes} min."
+  ).replace("{minutes}", String(Math.max(minutes, 1)));
 }
 
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
