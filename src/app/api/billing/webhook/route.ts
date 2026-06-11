@@ -19,14 +19,12 @@ import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
-import {
-  CUSTOM_TOPUP_ID,
-  getCustomTopupQuote,
-  getTopupSku,
-  topupNotesGranted,
-} from "@murmur/core";
 
 import { getStripeClient, getStripeWebhookSecret } from "@/lib/billing/stripe";
+import {
+  InvalidTopupPurchaseError,
+  resolveStripeTopupPurchase,
+} from "@/lib/billing/topup-purchase";
 import { db } from "@/lib/db/client";
 import { eventsWebhook } from "@/lib/db/schema/events-webhook";
 import { purchases } from "@/lib/db/schema/purchases";
@@ -171,51 +169,14 @@ async function fulfillCheckoutSession(
     return { ignored: "unpaid", sessionId: session.id };
   }
 
-  const userId = session.metadata?.userId || session.client_reference_id;
-  if (!userId) {
-    throw new NonRetryableWebhookError(
-      `checkout session ${session.id} has no userId metadata`,
-    );
-  }
-
-  const skuId = session.metadata?.skuId ?? "";
-  const metadataNotes = Number(session.metadata?.notesGranted);
-  const customAmountUsd = Number(session.metadata?.customAmountUsd);
-  const isCustom = skuId === CUSTOM_TOPUP_ID;
-
-  let productId: string;
-  let defaultAmountCents: number;
-  let defaultCurrency: string;
-  let notesGranted: number;
-
-  if (isCustom) {
-    const quote = getCustomTopupQuote(customAmountUsd);
-    if (!quote) {
-      throw new NonRetryableWebhookError(
-        `checkout session ${session.id} references invalid custom amount "${session.metadata?.customAmountUsd ?? ""}"`,
-      );
+  let purchase;
+  try {
+    purchase = resolveStripeTopupPurchase(session);
+  } catch (error) {
+    if (error instanceof InvalidTopupPurchaseError) {
+      throw new NonRetryableWebhookError(error.message);
     }
-    productId = quote.id;
-    defaultAmountCents = quote.amountCents;
-    defaultCurrency = quote.defaultCurrency;
-    notesGranted =
-      Number.isFinite(metadataNotes) && metadataNotes > 0
-        ? Math.floor(metadataNotes)
-        : quote.notesGranted;
-  } else {
-    const sku = getTopupSku(skuId);
-    if (!sku) {
-      throw new NonRetryableWebhookError(
-        `checkout session ${session.id} references unknown SKU "${skuId}"`,
-      );
-    }
-    productId = sku.id;
-    defaultAmountCents = sku.defaultPriceCents;
-    defaultCurrency = sku.defaultCurrency;
-    notesGranted =
-      Number.isFinite(metadataNotes) && metadataNotes > 0
-        ? Math.floor(metadataNotes)
-        : topupNotesGranted(sku);
+    throw error;
   }
 
   // Purchases row first (FK on users also guards against granting to a user
@@ -224,13 +185,13 @@ async function fulfillCheckoutSession(
     .insert(purchases)
     .values({
       id: newId("pur"),
-      userId,
+      userId: purchase.userId,
       provider: "stripe",
-      productId,
+      productId: purchase.productId,
       providerRef: session.id,
-      amountCents: session.amount_total ?? defaultAmountCents,
-      currency: (session.currency ?? defaultCurrency).toUpperCase(),
-      notesGranted,
+      amountCents: purchase.amountCents,
+      currency: purchase.currency,
+      notesGranted: purchase.notesGranted,
       status: "succeeded",
       rawPayload: session as unknown as Record<string, unknown>,
     })
@@ -239,41 +200,35 @@ async function fulfillCheckoutSession(
     });
 
   const grant = await grantNotes({
-    userId,
-    amount: notesGranted,
+    userId: purchase.userId,
+    amount: purchase.notesGranted,
     reason: "purchase:topup",
     externalRef: session.id,
     metadata: {
       provider: "stripe",
-      skuId: productId,
+      ...purchase.metadata,
       checkoutSessionId: session.id,
-      ...(isCustom
-        ? { customAmountUsd: Number.isFinite(customAmountUsd) ? Math.floor(customAmountUsd) : null }
-        : {}),
-      paymentIntent:
-        typeof session.payment_intent === "string"
-          ? session.payment_intent
-          : session.payment_intent?.id ?? null,
+      paymentIntent: purchase.paymentIntentId,
     },
   });
 
   if (!grant.ok) {
     // user_not_found — the profile upsert may simply not have landed yet.
     throw new Error(
-      `grantNotes failed for ${userId} on session ${session.id}: ${grant.reason}`,
+      `grantNotes failed for ${purchase.userId} on session ${session.id}: ${grant.reason}`,
     );
   }
 
   log("notes.granted", {
-    amount: notesGranted,
-    skuId: productId,
+    amount: purchase.notesGranted,
+    skuId: purchase.productId,
     duplicate: grant.duplicate,
     sessionId: session.id,
     balanceAfter: grant.balanceAfter,
-  }, { route: ROUTE, userId });
+  }, { route: ROUTE, userId: purchase.userId });
 
   return {
-    granted: notesGranted,
+    granted: purchase.notesGranted,
     duplicate: grant.duplicate,
     sessionId: session.id,
   };
