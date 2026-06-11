@@ -74,6 +74,16 @@ these on every PR.
 - Need to **change repo structure** → `repo-architecture.md`.
 - Need to **set the bar for a PR** → `engineering-standards.md`.
 
+## Fast start for new maintainers
+
+If you only have 15 minutes to rehydrate on the repo, read in this order:
+
+1. `README.md` — product shape + local runtime commands.
+2. `architecture.md` — current boundaries and runtime flow.
+3. `delivery-cadence.md` — what a "good-sized" Murmur change looks like.
+4. `engineering-principles.md` — how to change the repo without adding drift.
+5. `review-gates.md` + `verification.md` — what counts as proof before merge.
+
 The v2 docs supersede v1 architecture / music-engine / provider-
 strategy **only where they explicitly say so.** Anything else, v1
 remains authoritative.

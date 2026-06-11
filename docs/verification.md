@@ -8,7 +8,7 @@
 - [x] `bunx next build` — 14 routes compile cleanly (Turbopack)
 - [x] `bun run build:audit` — build succeeds and only the currently allowed
   Turbopack NFT warning is present
-- [x] `bun run lint` — 0 errors, 1 pre-existing warning
+- [x] `bun run lint` — 0 errors, 0 warnings
 - [x] `bun run smoke:local` — web app, user balance API, transcribe validation,
   and audio worker health all pass against the running local stack
 - [x] `bun run smoke:pages` — primary page shells mount and expose their
@@ -60,6 +60,10 @@
   dev-only `/api/storage/local/[...key]` route because the local filesystem
   adapter is loaded inside that route. The build still succeeds and the warning
   is currently treated as a tooling edge, not a broken product path.
+- `next build` may fall back to `http://localhost:3000` for metadata URLs when
+  `MURMUR_APP_URL` and `VERCEL_URL` are both unset. This is intentional for
+  local verification; set `MURMUR_APP_URL` in deployed environments so share
+  metadata resolves to the canonical origin.
 - Mobile Safari may reject `audio.play()` if invoked outside the gesture frame
   after route navigation — SongDetail falls back to Tone player automatically.
 - MP3 encoding uses `@breezystack/lamejs`; it dynamically imports so render

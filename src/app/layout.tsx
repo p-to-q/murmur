@@ -15,9 +15,9 @@ import { I18nHydrator } from "@/lib/i18n";
 import { cn } from "@/utils/utils";
 import { AuthProvider } from "@/components/auth/auth-provider";
 
-const SITE_URL = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : undefined;
+const SITE_URL =
+  process.env.MURMUR_APP_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
 const instrumentalSerif = Instrument_Serif({
   subsets: ["latin"],

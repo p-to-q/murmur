@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { useTranslator } from "@/lib/i18n";
@@ -53,10 +54,12 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
           >
             {/* Background image card */}
             <div className="relative overflow-hidden rounded-[32px] shadow-2xl">
-              <img
+              <Image
                 src="/images/share-bg.jpg"
                 alt=""
-                className="h-[600px] w-full object-cover"
+                fill
+                sizes="(max-width: 768px) 100vw, 448px"
+                className="object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/10" />
 
@@ -66,9 +69,11 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
                   By Krystyna
                 </p>
                 <div className="flex items-center gap-4">
-                  <img
+                  <Image
                     src="/brand/murmur-wordmark-source-cropped.png"
                     alt="MURMUR"
+                    width={154}
+                    height={28}
                     className="h-7 w-auto brightness-0 invert drop-shadow"
                   />
                   <button

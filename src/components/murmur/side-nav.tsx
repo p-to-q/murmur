@@ -57,7 +57,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
       return false;
     }
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === "true";
+    return stored === "1" || stored === "true";
   });
 
   useEffect(() => {
