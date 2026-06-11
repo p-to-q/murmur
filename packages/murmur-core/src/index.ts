@@ -9,9 +9,16 @@
 export {
   COST,
   TOPUP_SKUS,
+  CUSTOM_TOPUP_ID,
+  CUSTOM_TOPUP_MIN_USD,
+  CUSTOM_TOPUP_MAX_USD,
+  CUSTOM_TOPUP_NOTES_PER_USD,
   getTopupSku,
+  getCustomTopupQuote,
+  isValidCustomTopupAmount,
   topupNotesGranted,
   type TopupSku,
+  type CustomTopupQuote,
   type NotesReason,
   type CostKey,
 } from "./payments/cost-table";

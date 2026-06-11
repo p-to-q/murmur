@@ -6,10 +6,12 @@
  * in /api/billing/webhook when `checkout.session.completed` arrives — this
  * route never touches the notes ledger.
  *
- * Body: { sku: string } — must be an id from @murmur/core TOPUP_SKUS.
+ * Body:
+ *   - { sku: string } for canonical fixed tiers
+ *   - { customAmountUsd: number } for the custom top-up flow
  *
  * Errors:
- *   400 invalid_sku            — unknown SKU id
+ *   400 invalid_topup_request  — unknown SKU or invalid custom amount
  *   401 (auth envelope)        — no session
  *   403 sign_in_required      — guest users can't purchase (nothing durable
  *                                to grant to)
@@ -18,7 +20,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getTopupSku, topupNotesGranted } from "@murmur/core";
+import {
+  CUSTOM_TOPUP_ID,
+  getCustomTopupQuote,
+  getTopupSku,
+  topupNotesGranted,
+} from "@murmur/core";
 
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
@@ -30,10 +37,76 @@ export const runtime = "nodejs";
 const ROUTE = "/api/billing/checkout";
 const CHECKOUT_RATE_LIMIT = { capacity: 10, refillWindowMs: 60_000 };
 
+type CheckoutRequestBody = {
+  sku?: unknown;
+  customAmountUsd?: unknown;
+};
+
+type CheckoutProduct =
+  | {
+      kind: "sku";
+      skuId: string;
+      display: string;
+      amountCents: number;
+      currency: string;
+      notesGranted: number;
+      productName: string;
+      productDescription: string;
+      successQuery: string;
+    }
+  | {
+      kind: "custom";
+      skuId: typeof CUSTOM_TOPUP_ID;
+      display: string;
+      amountCents: number;
+      currency: string;
+      notesGranted: number;
+      productName: string;
+      productDescription: string;
+      successQuery: string;
+      customAmountUsd: number;
+    };
+
 function resolveAppOrigin(request: NextRequest): string {
   const configured = process.env.MURMUR_APP_URL?.trim();
   if (configured) return configured.replace(/\/$/, "");
   return request.nextUrl.origin;
+}
+
+function parseCheckoutProduct(body: CheckoutRequestBody): CheckoutProduct | null {
+  if (typeof body.customAmountUsd === "number") {
+    const quote = getCustomTopupQuote(body.customAmountUsd);
+    if (!quote) return null;
+    return {
+      kind: "custom",
+      skuId: quote.id,
+      display: quote.display,
+      amountCents: quote.amountCents,
+      currency: quote.defaultCurrency,
+      notesGranted: quote.notesGranted,
+      productName: `Murmur — ${quote.notesGranted} notes`,
+      productDescription: `${quote.notesGranted} notes from a custom top up`,
+      successQuery: `customAmountUsd=${encodeURIComponent(String(quote.amountUsd))}`,
+      customAmountUsd: quote.amountUsd,
+    };
+  }
+
+  const skuId = typeof body.sku === "string" ? body.sku : "";
+  const sku = getTopupSku(skuId);
+  if (!sku) return null;
+
+  const notesGranted = topupNotesGranted(sku);
+  return {
+    kind: "sku",
+    skuId: sku.id,
+    display: sku.display,
+    amountCents: sku.defaultPriceCents,
+    currency: sku.defaultCurrency,
+    notesGranted,
+    productName: `Murmur — ${notesGranted} notes`,
+    productDescription: `${sku.notes} notes${sku.bonusNotes ? ` + ${sku.bonusNotes} bonus` : ""}`,
+    successQuery: `sku=${encodeURIComponent(sku.id)}`,
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -80,25 +153,27 @@ export async function POST(request: NextRequest) {
     return rateLimitedResponse(rateLimit, requestId);
   }
 
-  let skuId: string;
+  let body: CheckoutRequestBody;
   try {
-    const body = (await request.json()) as { sku?: unknown };
-    skuId = typeof body.sku === "string" ? body.sku : "";
+    body = (await request.json()) as CheckoutRequestBody;
   } catch {
-    skuId = "";
+    body = {};
   }
 
-  const sku = getTopupSku(skuId);
-  if (!sku) {
+  const product = parseCheckoutProduct(body);
+  if (!product) {
     return NextResponse.json(
-      { error: "invalid_sku", message: `Unknown SKU "${skuId}"`, requestId },
+      {
+        error: "invalid_topup_request",
+        message: "Provide a valid SKU or customAmountUsd between 1 and 999.",
+        requestId,
+      },
       { status: 400, headers: { "X-Request-Id": requestId } },
     );
   }
 
   const origin = resolveAppOrigin(request);
-  const notesGranted = topupNotesGranted(sku);
-  const priceId = getStripePriceId(sku.id);
+  const priceId = product.kind === "sku" ? getStripePriceId(product.skuId) : null;
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -110,11 +185,11 @@ export async function POST(request: NextRequest) {
           ? { price: priceId, quantity: 1 }
           : {
               price_data: {
-                currency: sku.defaultCurrency.toLowerCase(),
-                unit_amount: sku.defaultPriceCents,
+                currency: product.currency.toLowerCase(),
+                unit_amount: product.amountCents,
                 product_data: {
-                  name: `Murmur — ${notesGranted} notes`,
-                  description: `${sku.notes} notes${sku.bonusNotes ? ` + ${sku.bonusNotes} bonus` : ""}`,
+                  name: product.productName,
+                  description: product.productDescription,
                 },
               },
               quantity: 1,
@@ -122,14 +197,38 @@ export async function POST(request: NextRequest) {
       ],
       metadata: {
         userId,
-        skuId: sku.id,
-        notesGranted: String(notesGranted),
+        skuId: product.skuId,
+        notesGranted: String(product.notesGranted),
+        ...(product.kind === "custom"
+          ? {
+              customAmountUsd: String(product.customAmountUsd),
+              customAmountCents: String(product.amountCents),
+              purchaseKind: "custom",
+            }
+          : {
+              purchaseKind: "sku",
+            }),
       },
       payment_intent_data: {
-        metadata: { userId, skuId: sku.id },
+        metadata: {
+          userId,
+          skuId: product.skuId,
+          ...(product.kind === "custom"
+            ? {
+                customAmountUsd: String(product.customAmountUsd),
+                customAmountCents: String(product.amountCents),
+                purchaseKind: "custom",
+              }
+            : {
+                purchaseKind: "sku",
+              }),
+        },
       },
-      success_url: `${origin}/topup/checkout?sku=${encodeURIComponent(sku.id)}&status=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/topup/checkout?sku=${encodeURIComponent(sku.id)}&status=canceled`,
+      success_url: `${origin}/topup/checkout?${product.successQuery}&status=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:
+        product.kind === "custom"
+          ? `${origin}/topup/checkout?customAmountUsd=${encodeURIComponent(String(product.customAmountUsd))}&status=canceled`
+          : `${origin}/topup/checkout?sku=${encodeURIComponent(product.skuId)}&status=canceled`,
     });
 
     if (!session.url) {
@@ -143,7 +242,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     log("billing.checkout_failed", {
       error: err instanceof Error ? err.message : String(err),
-      skuId: sku.id,
+      skuId: product.skuId,
     }, {
       route: ROUTE,
       requestId,

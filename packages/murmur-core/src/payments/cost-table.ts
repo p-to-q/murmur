@@ -96,6 +96,20 @@ export interface TopupSku {
   highlight?: "popular" | "best_value";
 }
 
+export const CUSTOM_TOPUP_ID = "topup_custom";
+export const CUSTOM_TOPUP_MIN_USD = 1;
+export const CUSTOM_TOPUP_MAX_USD = 999;
+export const CUSTOM_TOPUP_NOTES_PER_USD = 20;
+
+export interface CustomTopupQuote {
+  id: typeof CUSTOM_TOPUP_ID;
+  amountUsd: number;
+  amountCents: number;
+  notesGranted: number;
+  display: string;
+  defaultCurrency: "USD";
+}
+
 export const TOPUP_SKUS: ReadonlyArray<TopupSku> = Object.freeze([
   {
     id: "topup_30_notes",
@@ -132,6 +146,27 @@ export function getTopupSku(id: string): TopupSku | null {
 /** Notes actually granted for a SKU purchase (base + bonus). */
 export function topupNotesGranted(sku: TopupSku): number {
   return sku.notes + (sku.bonusNotes ?? 0);
+}
+
+export function isValidCustomTopupAmount(amountUsd: unknown): amountUsd is number {
+  return (
+    typeof amountUsd === "number"
+    && Number.isInteger(amountUsd)
+    && amountUsd >= CUSTOM_TOPUP_MIN_USD
+    && amountUsd <= CUSTOM_TOPUP_MAX_USD
+  );
+}
+
+export function getCustomTopupQuote(amountUsd: number): CustomTopupQuote | null {
+  if (!isValidCustomTopupAmount(amountUsd)) return null;
+  return {
+    id: CUSTOM_TOPUP_ID,
+    amountUsd,
+    amountCents: amountUsd * 100,
+    notesGranted: amountUsd * CUSTOM_TOPUP_NOTES_PER_USD,
+    display: `$${amountUsd}`,
+    defaultCurrency: "USD",
+  };
 }
 
 /**

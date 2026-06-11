@@ -13,7 +13,14 @@ import { motion, useSpring, useTransform, animate } from "framer-motion";
 import { RefreshCw, Search, Share2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
-import { TOPUP_SKUS, topupNotesGranted } from "@murmur/core";
+import {
+  CUSTOM_TOPUP_ID,
+  CUSTOM_TOPUP_MAX_USD,
+  CUSTOM_TOPUP_MIN_USD,
+  getCustomTopupQuote,
+  TOPUP_SKUS,
+  topupNotesGranted,
+} from "@murmur/core";
 
 import { useTranslator } from "@/lib/i18n";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
@@ -82,6 +89,7 @@ export function TopupScreen() {
   const [selectedId, setSelectedId] = useState<string>(
     TOPUP_SKUS.find((s) => s.highlight === "popular")?.id ?? TOPUP_SKUS[0]!.id,
   );
+  const [customAmount, setCustomAmount] = useState(12);
   const [timeRange, setTimeRange] = useState<typeof TIME_RANGES[number]>("7D");
   const [isRestoring, setIsRestoring] = useState(false);
 
@@ -91,10 +99,20 @@ export function TopupScreen() {
   const notesInUseSpring = useSpring(0, { stiffness: 100, damping: 20 });
 
   const selected = TOPUP_SKUS.find((s) => s.id === selectedId);
-  const displayAmount = selected?.display ?? "$0";
-  const displayNotes = selected ? topupNotesGranted(selected) : 0;
+  const customQuote = useMemo(() => getCustomTopupQuote(customAmount), [customAmount]);
+  const displayAmount = selectedId === CUSTOM_TOPUP_ID
+    ? customQuote?.display ?? "$0"
+    : selected?.display ?? "$0";
+  const displayNotes = selectedId === CUSTOM_TOPUP_ID
+    ? customQuote?.notesGranted ?? 0
+    : selected ? topupNotesGranted(selected) : 0;
 
   const handleProceed = () => {
+    if (selectedId === CUSTOM_TOPUP_ID) {
+      if (!customQuote) return;
+      router.push(`/topup/checkout?customAmountUsd=${encodeURIComponent(String(customQuote.amountUsd))}`);
+      return;
+    }
     if (!selected) return;
     router.push(`/topup/checkout?sku=${encodeURIComponent(selected.id)}`);
   };
@@ -505,20 +523,98 @@ export function TopupScreen() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3, duration: 0.5 }}
-                className="rounded-[20px] border border-dashed border-[#D6C7B0] bg-white/40 px-6 py-6"
+                className={`rounded-[20px] border backdrop-blur-sm px-6 py-6 transition-all ${
+                  selectedId === CUSTOM_TOPUP_ID
+                    ? "border-[#1A1A1A] bg-white/80 shadow-[0_2px_12px_rgba(0,0,0,0.08)]"
+                    : "border-[#E5DDD0]/40 bg-white/50"
+                }`}
+                onClick={() => setSelectedId(CUSTOM_TOPUP_ID)}
               >
-                <div className="flex items-center justify-between gap-4">
+                <div className="mb-5 flex items-center justify-between gap-4">
                   <div>
                     <p className="text-[16px] font-semibold text-[#1A1A1A] mb-1">
                       {t("topup.custom")}
                     </p>
-                    <p className="max-w-[20rem] text-[12px] leading-[1.55] text-[#8C8780]">
-                      {t("topup.custom.disabled")}
+                    <p className="text-[12px] text-[#B7AEA1]">
+                      {t("topup.custom.desc")}
                     </p>
                   </div>
-                  <span className="rounded-full border border-[#D6C7B0] px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-[#8C8780]">
-                    {t("topup.coming_soon")}
-                  </span>
+                  <div className="text-right">
+                    <p className="font-serif text-[#1A1A1A] text-[32px] leading-none">
+                      ${customAmount}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="relative mb-6 pt-2">
+                  <div className="mb-3 flex justify-between text-[11px] font-medium text-[#B7AEA1]">
+                    <span>${CUSTOM_TOPUP_MIN_USD}</span>
+                    <span className="absolute left-1/2 -translate-x-1/2">$50</span>
+                    <span>$100</span>
+                  </div>
+
+                  <div className="relative">
+                    <div className="pointer-events-none absolute -top-2 left-0 right-0 flex justify-between">
+                      {[0, 25, 50, 75, 100].map((n) => (
+                        <div
+                          key={`tick-${n}`}
+                          className="h-3 w-[1.5px] rounded-full bg-[#D2C9B6]"
+                          style={{ marginLeft: n === 0 ? "0.75px" : undefined }}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="relative h-1 rounded-full bg-[#E5DDD0]/60">
+                      <div
+                        className="absolute h-1 rounded-full bg-[#8C8780] transition-all duration-150"
+                        style={{ width: `${((Math.min(customAmount, 100) - CUSTOM_TOPUP_MIN_USD) / 99) * 100}%` }}
+                      />
+                    </div>
+
+                    <input
+                      type="range"
+                      min={String(CUSTOM_TOPUP_MIN_USD)}
+                      max="100"
+                      value={Math.min(customAmount, 100)}
+                      onChange={(e) => setCustomAmount(Number(e.target.value))}
+                      className="absolute z-10 h-8 w-full cursor-grab opacity-0 active:cursor-grabbing"
+                      style={{ top: "-14px", left: 0 }}
+                    />
+
+                    <div
+                      className="pointer-events-none absolute -top-3 z-20 h-7 w-7 rounded-full border-[3px] border-white shadow-[0_2px_12px_rgba(0,0,0,0.25)] transition-all duration-150"
+                      style={{
+                        left: `calc(${((Math.min(customAmount, 100) - CUSTOM_TOPUP_MIN_USD) / 99) * 100}% - 14px)`,
+                        ...paperTextureStyle,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="max-w-[200px] flex-1">
+                    <input
+                      type="number"
+                      min={String(CUSTOM_TOPUP_MIN_USD)}
+                      max={String(CUSTOM_TOPUP_MAX_USD)}
+                      value={customAmount}
+                      onChange={(e) => {
+                        const value = Number(e.target.value);
+                        setCustomAmount(
+                          Math.min(
+                            CUSTOM_TOPUP_MAX_USD,
+                            Math.max(CUSTOM_TOPUP_MIN_USD, Number.isFinite(value) ? Math.floor(value) : CUSTOM_TOPUP_MIN_USD),
+                          ),
+                        );
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder={t("topup.input.placeholder")}
+                      className="w-full rounded-[14px] border border-[#E5DDD0] bg-white/60 px-4 py-3 text-[15px] text-[#1A1A1A] tabular-nums placeholder:text-[#C8C0B4] transition-colors focus:border-[#1A1A1A] focus:outline-none"
+                    />
+                  </div>
+                  <p className="text-[13px] text-[#B7AEA1]">
+                    ≈ {customQuote?.notesGranted ?? 0} {t("topup.notes")}
+                  </p>
                 </div>
               </motion.div>
             </motion.div>

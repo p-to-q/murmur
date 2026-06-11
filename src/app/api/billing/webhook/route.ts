@@ -19,7 +19,12 @@ import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import type Stripe from "stripe";
-import { getTopupSku, topupNotesGranted } from "@murmur/core";
+import {
+  CUSTOM_TOPUP_ID,
+  getCustomTopupQuote,
+  getTopupSku,
+  topupNotesGranted,
+} from "@murmur/core";
 
 import { getStripeClient, getStripeWebhookSecret } from "@/lib/billing/stripe";
 import { db } from "@/lib/db/client";
@@ -174,18 +179,44 @@ async function fulfillCheckoutSession(
   }
 
   const skuId = session.metadata?.skuId ?? "";
-  const sku = getTopupSku(skuId);
-  if (!sku) {
-    throw new NonRetryableWebhookError(
-      `checkout session ${session.id} references unknown SKU "${skuId}"`,
-    );
-  }
-
   const metadataNotes = Number(session.metadata?.notesGranted);
-  const notesGranted =
-    Number.isFinite(metadataNotes) && metadataNotes > 0
-      ? Math.floor(metadataNotes)
-      : topupNotesGranted(sku);
+  const customAmountUsd = Number(session.metadata?.customAmountUsd);
+  const isCustom = skuId === CUSTOM_TOPUP_ID;
+
+  let productId: string;
+  let defaultAmountCents: number;
+  let defaultCurrency: string;
+  let notesGranted: number;
+
+  if (isCustom) {
+    const quote = getCustomTopupQuote(customAmountUsd);
+    if (!quote) {
+      throw new NonRetryableWebhookError(
+        `checkout session ${session.id} references invalid custom amount "${session.metadata?.customAmountUsd ?? ""}"`,
+      );
+    }
+    productId = quote.id;
+    defaultAmountCents = quote.amountCents;
+    defaultCurrency = quote.defaultCurrency;
+    notesGranted =
+      Number.isFinite(metadataNotes) && metadataNotes > 0
+        ? Math.floor(metadataNotes)
+        : quote.notesGranted;
+  } else {
+    const sku = getTopupSku(skuId);
+    if (!sku) {
+      throw new NonRetryableWebhookError(
+        `checkout session ${session.id} references unknown SKU "${skuId}"`,
+      );
+    }
+    productId = sku.id;
+    defaultAmountCents = sku.defaultPriceCents;
+    defaultCurrency = sku.defaultCurrency;
+    notesGranted =
+      Number.isFinite(metadataNotes) && metadataNotes > 0
+        ? Math.floor(metadataNotes)
+        : topupNotesGranted(sku);
+  }
 
   // Purchases row first (FK on users also guards against granting to a user
   // that doesn't exist yet — retry once the profile upsert lands).
@@ -195,10 +226,10 @@ async function fulfillCheckoutSession(
       id: newId("pur"),
       userId,
       provider: "stripe",
-      productId: sku.id,
+      productId,
       providerRef: session.id,
-      amountCents: session.amount_total ?? sku.defaultPriceCents,
-      currency: (session.currency ?? sku.defaultCurrency).toUpperCase(),
+      amountCents: session.amount_total ?? defaultAmountCents,
+      currency: (session.currency ?? defaultCurrency).toUpperCase(),
       notesGranted,
       status: "succeeded",
       rawPayload: session as unknown as Record<string, unknown>,
@@ -214,8 +245,11 @@ async function fulfillCheckoutSession(
     externalRef: session.id,
     metadata: {
       provider: "stripe",
-      skuId: sku.id,
+      skuId: productId,
       checkoutSessionId: session.id,
+      ...(isCustom
+        ? { customAmountUsd: Number.isFinite(customAmountUsd) ? Math.floor(customAmountUsd) : null }
+        : {}),
       paymentIntent:
         typeof session.payment_intent === "string"
           ? session.payment_intent
@@ -232,7 +266,7 @@ async function fulfillCheckoutSession(
 
   log("notes.granted", {
     amount: notesGranted,
-    skuId: sku.id,
+    skuId: productId,
     duplicate: grant.duplicate,
     sessionId: session.id,
     balanceAfter: grant.balanceAfter,

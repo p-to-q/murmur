@@ -23,7 +23,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { getTopupSku, topupNotesGranted, TOPUP_SKUS } from "@murmur/core";
+import {
+  getCustomTopupQuote,
+  getTopupSku,
+  topupNotesGranted,
+  TOPUP_SKUS,
+} from "@murmur/core";
 
 import { useTranslator } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
@@ -39,12 +44,35 @@ export function CheckoutScreen() {
   const t = useTranslator();
 
   const skuId = params?.get("sku") ?? DEFAULT_SKU_ID;
+  const customAmountParam = params?.get("customAmountUsd");
   const returnStatus = params?.get("status");
-  const sku = useMemo(
-    () => getTopupSku(skuId) ?? getTopupSku(DEFAULT_SKU_ID) ?? TOPUP_SKUS[0]!,
-    [skuId],
+  const purchase = useMemo(
+    () => {
+      const customAmountUsd = customAmountParam ? Number(customAmountParam) : Number.NaN;
+      const customQuote = Number.isFinite(customAmountUsd)
+        ? getCustomTopupQuote(customAmountUsd)
+        : null;
+      if (customQuote) {
+        return {
+          kind: "custom" as const,
+          id: customQuote.id,
+          display: customQuote.display,
+          notesGranted: customQuote.notesGranted,
+          customAmountUsd: customQuote.amountUsd,
+        };
+      }
+
+      const sku = getTopupSku(skuId) ?? getTopupSku(DEFAULT_SKU_ID) ?? TOPUP_SKUS[0]!;
+      return {
+        kind: "sku" as const,
+        id: sku.id,
+        display: sku.display,
+        notesGranted: topupNotesGranted(sku),
+      };
+    },
+    [customAmountParam, skuId],
   );
-  const skuNotes = topupNotesGranted(sku);
+  const skuNotes = purchase.notesGranted;
 
   const [phase, setPhase] = useState<Phase>(() =>
     returnStatus === "success"
@@ -83,7 +111,11 @@ export function CheckoutScreen() {
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku: sku.id }),
+        body: JSON.stringify(
+          purchase.kind === "custom"
+            ? { customAmountUsd: purchase.customAmountUsd }
+            : { sku: purchase.id },
+        ),
       });
 
       if (response.ok) {
@@ -124,7 +156,7 @@ export function CheckoutScreen() {
       setFailureMessage(null);
       setPhase("failed");
     }
-  }, [celebrate, sku.id, t]);
+  }, [celebrate, purchase, t]);
 
   const retryCheckout = () => {
     setFailureMessage(null);
@@ -208,7 +240,7 @@ export function CheckoutScreen() {
               </span>
               <span className="text-[#D2C9B6]">·</span>
               <span className="font-serif-italic text-[16px] text-[#6F6A63]">
-                {sku.display}
+                {purchase.display}
               </span>
             </motion.div>
 

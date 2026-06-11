@@ -208,6 +208,45 @@ describe("POST /api/billing/webhook", () => {
     expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
   });
 
+  it("records and grants custom topups from webhook metadata", async () => {
+    nextEvent = paidSessionEvent({
+      amount_total: 1200,
+      metadata: {
+        userId: "usr_buyer",
+        skuId: "topup_custom",
+        notesGranted: "240",
+        customAmountUsd: "12",
+      },
+    });
+
+    const response = await POST(buildRequest());
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { granted?: number };
+    expect(body.granted).toBe(240);
+
+    expect(purchaseInserts).toHaveLength(1);
+    expect(purchaseInserts[0]).toMatchObject({
+      userId: "usr_buyer",
+      productId: "topup_custom",
+      amountCents: 1200,
+      notesGranted: 240,
+    });
+
+    expect(grantInputs).toHaveLength(1);
+    expect(grantInputs[0]).toMatchObject({
+      userId: "usr_buyer",
+      amount: 240,
+      reason: "purchase:topup",
+      externalRef: "cs_test_123",
+      metadata: {
+        provider: "stripe",
+        skuId: "topup_custom",
+        checkoutSessionId: "cs_test_123",
+        customAmountUsd: 12,
+      },
+    });
+  });
+
   it("ignores unpaid sessions without granting", async () => {
     nextEvent = paidSessionEvent({ payment_status: "unpaid" });
     const response = await POST(buildRequest());
