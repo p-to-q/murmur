@@ -55,21 +55,18 @@ const paperTextureStyle = {
 
 function formatChartLabel(date: Date, range: typeof TIME_RANGES[number]) {
   if (range === "1H") {
-    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
   }
   if (range === "1D") {
-    return date.toLocaleTimeString([], { hour: "numeric" });
+    const hours = String(date.getHours()).padStart(2, "0");
+    return `${hours}:00`;
   }
 
   const month = date.getMonth() + 1;
   const day = date.getDate();
   return `${month}/${day}`;
-}
-
-function tooltipValueUnit(range: typeof TIME_RANGES[number]) {
-  if (range === "1H") return "mins";
-  if (range === "1D") return "hrs";
-  return "notes";
 }
 
 // Generate mock usage data based on time range
@@ -111,7 +108,7 @@ export function TopupScreen() {
   const [selectedId, setSelectedId] = useState<string>(
     TOPUP_SKUS.find((s) => s.highlight === "popular")?.id ?? TOPUP_SKUS[0]!.id,
   );
-  const [customAmount, setCustomAmount] = useState(12);
+  const [customAmount, setCustomAmount] = useState(10);
   const [timeRange, setTimeRange] = useState<typeof TIME_RANGES[number]>("7D");
   const [isRestoring, setIsRestoring] = useState(false);
 
@@ -400,7 +397,7 @@ export function TopupScreen() {
                       style={{ fontSize: "10px", fontFamily: "system-ui", fill: "#B7AEA1", fontWeight: 500 }}
                       tickLine={false}
                       axisLine={false}
-                      interval={Math.floor(chartData.length / 6)}
+                      interval={timeRange === "1H" ? 2 : timeRange === "1D" ? 5 : Math.floor(chartData.length / 6)}
                       tickMargin={10}
                     />
                     <YAxis
@@ -426,7 +423,7 @@ export function TopupScreen() {
                       itemStyle={{ color: "#1A1A1A", fontWeight: 600, fontFamily: "var(--font-serif)" }}
                       formatter={(value: unknown) => {
                         if (typeof value === 'number') {
-                          return [`${value.toFixed(0)} ${tooltipValueUnit(timeRange)}`, ""];
+                          return [`${value.toFixed(0)} notes`, ""];
                         }
                         return ["", ""];
                       }}
@@ -508,7 +505,7 @@ export function TopupScreen() {
                           className="absolute -top-2 left-1/2 -translate-x-1/2 text-white px-3 py-1 rounded-full text-[9px] font-semibold uppercase tracking-wider whitespace-nowrap"
                           style={paperTextureStyle}
                         >
-                          Most Valued
+                          {sku.highlight === "popular" ? "Most loved" : "Most valued"}
                         </div>
                       )}
 
@@ -570,7 +567,7 @@ export function TopupScreen() {
 
                 <div className="relative mb-6 pt-2">
                   <div className="mb-3 flex justify-between text-[11px] font-medium text-[#B7AEA1]">
-                    <span>${CUSTOM_TOPUP_MIN_USD}</span>
+                    <span>$1</span>
                     <span className="absolute left-1/2 -translate-x-1/2">$50</span>
                     <span>$100</span>
                   </div>
@@ -589,7 +586,7 @@ export function TopupScreen() {
                     <div className="relative h-1 rounded-full bg-[#E5DDD0]/60">
                       <div
                         className="absolute h-1 rounded-full bg-[#8C8780] transition-all duration-150"
-                        style={{ width: `${((Math.min(customAmount, 100) - CUSTOM_TOPUP_MIN_USD) / 99) * 100}%` }}
+                        style={{ width: `${((customAmount - 1) / 99) * 100}%` }}
                       />
                     </div>
 
@@ -597,7 +594,7 @@ export function TopupScreen() {
                       type="range"
                       min={String(CUSTOM_TOPUP_MIN_USD)}
                       max="100"
-                      value={Math.min(customAmount, 100)}
+                      value={customAmount}
                       onChange={(e) => setCustomAmount(Number(e.target.value))}
                       className="absolute z-10 h-8 w-full cursor-grab opacity-0 active:cursor-grabbing"
                       style={{ top: "-14px", left: 0 }}
@@ -606,7 +603,7 @@ export function TopupScreen() {
                     <div
                       className="pointer-events-none absolute -top-3 z-20 h-7 w-7 rounded-full border-[3px] border-white shadow-[0_2px_12px_rgba(0,0,0,0.25)] transition-all duration-150"
                       style={{
-                        left: `calc(${((Math.min(customAmount, 100) - CUSTOM_TOPUP_MIN_USD) / 99) * 100}% - 14px)`,
+                        left: `calc(${((customAmount - 1) / 99) * 100}% - 14px)`,
                         ...paperTextureStyle,
                       }}
                     />
@@ -635,7 +632,7 @@ export function TopupScreen() {
                     />
                   </div>
                   <p className="text-[13px] text-[#B7AEA1]">
-                    ≈ {customQuote?.notesGranted ?? 0} {t("topup.notes")}
+                    ≈ {Math.floor(customAmount * 20)} {t("topup.notes")}
                   </p>
                 </div>
               </motion.div>
