@@ -281,6 +281,7 @@ export const DICT = {
   "song.export.video_ready":  { zh: "视频已开始下载", en: "Video download started" },
   "song.export.video_failed": { zh: "视频导出失败，请稍后重试", en: "Video export failed. Please try again." },
   "song.export.video_unsupported": { zh: "当前浏览器暂不支持视频导出，可先下载音频或分享页。", en: "This browser does not support video export yet. You can still download the audio or share page." },
+  "song.export.cost.video":  { zh: "2 颗音磅", en: "2 notes" },
   "song.export.exporting":    { zh: "导出中…",   en: "Exporting…" },
   "song.export.ok":           { zh: "已下载",     en: "Downloaded" },
   "song.export.err":          { zh: "导出失败，请重试", en: "Export failed — please retry" },
