@@ -31,6 +31,7 @@ import { createPortal } from "react-dom";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
+import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { NAV_ITEMS, computeTrail, type ComputedStep } from "./nav-items";
 import { MurmurMark } from "./murmur-mark";
 import { ShareCardModal } from "./share-card-modal";
@@ -45,6 +46,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const t = useTranslator();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
+  const { balance } = useUserBalance();
   const { resetFlow, isPlaying, auditioningVersionId } = useMurmurStore();
   const audioActive = isPlaying || auditioningVersionId !== null;
 
@@ -260,22 +262,45 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
           </button>
         )}
 
-        {/* Notes — free era: unlimited */}
+        {/* Balance — two-pool expression: paid + daily-free, with top-up link right-aligned */}
         {!collapsed && (
-          <div className="space-y-1">
-            <span className="font-serif text-[#1A1A1A] text-[28px] leading-none">
-              ∞
-            </span>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[#B6B0A4]">
-              {t("nav.notes")}
-            </p>
+          <div className="space-y-1.5">
+            <div className="flex items-baseline gap-1">
+              <span className="font-serif text-[#1A1A1A] text-[28px] leading-none tabular-nums">
+                {balance?.notes ?? "—"}
+              </span>
+              <span className="text-[12px] uppercase tracking-[0.18em] text-[#B6B0A4] leading-none">
+                +
+              </span>
+              <span className="font-serif text-[#8C8780] text-[18px] leading-none tabular-nums">
+                5
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-[#B6B0A4]">
+                {t("nav.notes")}
+              </span>
+              <Link
+                href="/topup"
+                className="text-[10px] uppercase tracking-[0.18em] text-[#B6B0A4] hover:text-[#FF5924] transition-colors"
+                suppressHydrationWarning
+              >
+                {t("nav.topup")} →
+              </Link>
+            </div>
           </div>
         )}
 
         {collapsed && (
-          <span className="block mb-2 font-serif text-[14px] text-[#1A1A1A]">
-            ∞
-          </span>
+          <Link
+            href="/topup"
+            className="block mb-2 text-[#1A1A1A] hover:text-[#FF5924] transition-colors"
+            suppressHydrationWarning
+          >
+            <span className="font-serif text-[14px] tabular-nums">
+              {(balance?.notes ?? 0) + 5}
+            </span>
+          </Link>
         )}
 
         {/* Icon row — Language LEFT bottom, Device + Bell RIGHT bottom */}
