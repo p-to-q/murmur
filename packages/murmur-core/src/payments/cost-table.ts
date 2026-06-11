@@ -41,17 +41,16 @@ export type NotesReason =
 /**
  * Cost of each chargeable action in notes.
  *
- * FREE ERA (2026-06): every cost is 0 — notes are unlimited by product
- * decision. A zero cost short-circuits in `spendNotes` (no ledger row, no
- * balance change), so the 402 wall is unreachable while the ledger, grants,
- * and Stripe top-up machinery stay dormant but intact. To re-enable
- * monetization, restore real prices here and the rest wakes up unchanged.
+ * If a new action is added: update this table, update
+ * docs/payment-topup-feature.md §3, and update the matching gate in the UI.
+ * Do not introduce a "free for now" cost; either it costs something or it
+ * does not need to be in this table.
  */
 export const COST: Readonly<Record<CostKey, number>> = Object.freeze({
-  hum:          0,
-  llm_edit:     0,
-  save:         0,
-  export_webm:  0,
+  hum:          1,
+  llm_edit:     1,
+  save:         1,
+  export_webm:  2,
 });
 
 /**

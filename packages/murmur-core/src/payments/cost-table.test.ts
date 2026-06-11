@@ -11,8 +11,8 @@ import {
 } from "./cost-table";
 
 describe("cost-table", () => {
-  it("free era: every action costs zero (notes are unlimited)", () => {
-    expect(Object.values(COST).every((value) => value === 0)).toBe(true);
+  it("defines positive note costs for every action", () => {
+    expect(Object.values(COST).every((value) => value > 0)).toBe(true);
   });
 
   it("exposes the expected refill invariants", () => {
