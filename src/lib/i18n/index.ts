@@ -55,12 +55,14 @@ export function I18nHydrator() {
     if (initial !== useI18nStore.getState().lang) setLang(initial);
     const html = document.documentElement;
     html.dataset.lang = initial;
+    html.lang = initial === "zh" ? "zh-CN" : "en";
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     const html = document.documentElement;
     const unsubscribe = useI18nStore.subscribe((state) => {
       html.dataset.lang = state.lang;
+      html.lang = state.lang === "zh" ? "zh-CN" : "en";
     });
     return unsubscribe;
   }, []);

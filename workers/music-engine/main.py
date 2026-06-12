@@ -134,6 +134,15 @@ def _load_model():
 
 
 @app.on_event("startup")
+def _warn_if_unauthenticated() -> None:
+    if not os.getenv("MUSIC_WORKER_TOKEN", "").strip():
+        logger.warning(
+            "MUSIC_WORKER_TOKEN is not set — all endpoints are UNAUTHENTICATED. "
+            "Fine for localhost dev; never expose this process through a public tunnel."
+        )
+
+
+@app.on_event("startup")
 def _preload_model() -> None:
     if MOCK or not PRELOAD:
         return
@@ -155,7 +164,11 @@ def _verify_auth(request: Request) -> None:
     if not expected:
         return
     provided = request.headers.get("authorization", "")
-    if not hmac.compare_digest(provided, f"Bearer {expected}"):
+    # Compare as bytes: str compare_digest raises TypeError (→ 500) on
+    # non-ASCII input, and header values arrive latin-1 decoded.
+    if not hmac.compare_digest(
+        provided.encode("utf-8"), f"Bearer {expected}".encode("utf-8")
+    ):
         raise HTTPException(status_code=401, detail={"error": "unauthorized"})
 
 

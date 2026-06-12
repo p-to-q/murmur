@@ -19,12 +19,14 @@ function resolveMessageKey(error: string): string {
   }
 }
 
-export function AuthErrorScreen({ error }: { error: string }) {
+export function AuthErrorScreen({
+  error,
+  isLocal,
+}: {
+  error: string;
+  isLocal: boolean;
+}) {
   const t = useTranslator();
-  const isLocal =
-    typeof window !== "undefined" &&
-    (window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1");
   const messageKey =
     error === "Configuration" && !isLocal
       ? "auth.error.configuration_prod"

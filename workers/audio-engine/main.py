@@ -41,6 +41,15 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Murmur Audio Engine", version="0.3.0")
 
+
+@app.on_event("startup")
+def _warn_if_unauthenticated() -> None:
+    if not os.getenv("AUDIO_WORKER_TOKEN", "").strip():
+        logger.warning(
+            "AUDIO_WORKER_TOKEN is not set — all endpoints are UNAUTHENTICATED. "
+            "Fine for localhost dev; never expose this process through a public tunnel."
+        )
+
 SR = 22050
 FMIN = 75
 FMAX = 1050
@@ -187,7 +196,11 @@ def require_worker_auth(authorization: Annotated[str | None, Header()] = None) -
     if not expected:
         return
     provided = authorization or ""
-    if not hmac.compare_digest(provided, f"Bearer {expected}"):
+    # Compare as bytes: str compare_digest raises TypeError (→ 500) on
+    # non-ASCII input, and header values arrive latin-1 decoded.
+    if not hmac.compare_digest(
+        provided.encode("utf-8"), f"Bearer {expected}".encode("utf-8")
+    ):
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
@@ -207,11 +220,11 @@ def decode_audio(data: bytes, filename: str) -> np.ndarray:
         from pydub import AudioSegment
 
         ext = os.path.splitext(filename)[-1] or ".webm"
-        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
-            tmp.write(data)
-            tmp_path = tmp.name
-
+        tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
+        tmp_path = tmp.name
         try:
+            with tmp:
+                tmp.write(data)
             segment = AudioSegment.from_file(tmp_path)
         finally:
             os.unlink(tmp_path)

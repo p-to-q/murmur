@@ -21,7 +21,7 @@ import {
   topupNotesGranted,
 } from "@murmur/core";
 
-import { useTranslator } from "@/lib/i18n";
+import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { useUserBalance, fetchUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
@@ -68,6 +68,7 @@ function formatRefillTime(iso: string, locale: string): string {
 export function TopupScreen() {
   const router = useRouter();
   const t = useTranslator();
+  const lang = useI18nStore((s) => s.lang);
   const { balance, isLoading, refresh } = useUserBalance();
 
   const [selectedId, setSelectedId] = useState<string>(
@@ -94,12 +95,7 @@ export function TopupScreen() {
   const nextRefillLabel = balance?.nextRefillAt
     ? t("topup.next_refill").replace(
         "{time}",
-        formatRefillTime(
-          balance.nextRefillAt,
-          typeof document !== "undefined" && document.documentElement.lang.startsWith("zh")
-            ? "zh-CN"
-            : "en-US",
-        ),
+        formatRefillTime(balance.nextRefillAt, lang === "zh" ? "zh-CN" : "en-US"),
       )
     : null;
 
