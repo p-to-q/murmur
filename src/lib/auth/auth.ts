@@ -57,7 +57,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             name: user.name || user.email.split("@")[0],
             avatarUrl: user.image,
             regionId: "intl",
-            notesBalance: 0,
             planTier: "free",
           });
 

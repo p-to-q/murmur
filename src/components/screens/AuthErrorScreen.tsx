@@ -14,6 +14,8 @@ function resolveMessageKey(error: string): string {
       return "auth.error.configuration";
     case "AccessDenied":
       return "auth.error.access_denied";
+    case "Verification":
+      return "auth.error.verification";
     default:
       return "auth.error.default";
   }

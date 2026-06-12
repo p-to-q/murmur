@@ -121,7 +121,7 @@ export function HumScreen() {
   const [showHeardMessage, setShowHeardMessage] = useState(false);
   const { refresh: refreshBalance } = useUserBalance();
   const { status: sessionStatus } = useSession();
-  const { signInWithGoogle } = useGoogleSignIn();
+  const { signInWithGoogle, googleAuthAvailable } = useGoogleSignIn();
   // During "loading" we do NOT gate, so a returning signed-in user is never
   // briefly walled by a stale guest counter on their device.
   const isGuest = sessionStatus === "unauthenticated";
@@ -1081,10 +1081,16 @@ export function HumScreen() {
                 </p>
                 <button
                   onClick={() => signInWithGoogle("/")}
-                  className="mm-btn-primary w-full justify-center mb-3"
+                  disabled={googleAuthAvailable === false}
+                  className="mm-btn-primary mb-3 w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {t("hum.login_wall.cta")}
                 </button>
+                {googleAuthAvailable === false && (
+                  <p className="mb-3 text-[12px] leading-relaxed text-[#8C8780]">
+                    {t("auth.google_unavailable")}
+                  </p>
+                )}
                 <button
                   onClick={() => setShowLoginWall(false)}
                   className="text-[#8C8780] text-[13px] underline-mm"

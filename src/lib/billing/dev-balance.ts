@@ -7,9 +7,9 @@ const DEFAULT_DEV_NOTES = 9_999;
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 /**
- * Billing fallback is a development-only convenience: it keeps local demos
- * usable when the ledger DB is unreachable. Production traffic never skips
- * billing — only `NODE_ENV === "development"` or a loopback host qualifies.
+ * Billing fallback keeps local demos usable when the ledger DB is unreachable.
+ * Enabled when NODE_ENV is development, the host is loopback, or
+ * MURMUR_ALLOW_DEV_BILLING_FALLBACK is explicitly set to 1/true.
  */
 export function shouldUseDevBalanceFallback(options: {
   host?: string | null;
@@ -19,7 +19,12 @@ export function shouldUseDevBalanceFallback(options: {
   }
 
   const host = options.host?.trim().toLowerCase();
-  return !!host && LOOPBACK_HOSTS.has(host);
+  if (host && LOOPBACK_HOSTS.has(host)) {
+    return true;
+  }
+
+  const flag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK?.trim().toLowerCase();
+  return flag === "1" || flag === "true";
 }
 
 export function shouldBypassBillingInDevelopment(options: {

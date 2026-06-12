@@ -25,6 +25,42 @@ export const DICT = {
     zh: "Google 登录尚未配置。请在 .env 中设置 GOOGLE_CLIENT_ID 与 GOOGLE_CLIENT_SECRET。",
     en: "Google sign-in isn't configured yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.",
   },
+  "auth.continue_google": {
+    zh: "使用 Google 登录",
+    en: "Continue with Google",
+  },
+  "auth.sign_out": {
+    zh: "退出登录",
+    en: "Sign out",
+  },
+  "auth.local_creator": {
+    zh: "本地创作者",
+    en: "Local Creator",
+  },
+  "auth.songs": {
+    zh: "作品",
+    en: "Songs",
+  },
+  "auth.joined": {
+    zh: "加入",
+    en: "Joined",
+  },
+  "auth.account": {
+    zh: "账号",
+    en: "Account",
+  },
+  "auth.account_google": {
+    zh: "Google",
+    en: "Google",
+  },
+  "auth.account_local": {
+    zh: "本地创作者",
+    en: "Local Creator",
+  },
+  "auth.user_id": {
+    zh: "用户 ID",
+    en: "User ID",
+  },
   "auth.error.title": {
     zh: "登录出了点问题",
     en: "Sign-in hit a snag",
@@ -34,8 +70,12 @@ export const DICT = {
     en: "After Google authorized you, the server couldn't reach Google to finish sign-in. Enable system-wide VPN/TUN, or set HTTPS_PROXY=http://127.0.0.1:7890 in .env.local (use your proxy's local port), then restart bun dev.",
   },
   "auth.error.configuration_prod": {
-    zh: "Google 授权后服务器未能完成登录。请在 Vercel 环境变量中确认 GOOGLE_CLIENT_SECRET、AUTH_SECRET 与 Google Cloud Console 一致，并设置 AUTH_URL=https://murmur.ptoq.io，然后重新部署。",
-    en: "Google authorized you, but the server couldn't finish sign-in. In Vercel env vars, verify GOOGLE_CLIENT_SECRET and AUTH_SECRET match Google Cloud Console, set AUTH_URL=https://murmur.ptoq.io, then redeploy.",
+    zh: "Google 授权后服务器未能完成登录。请在 Vercel 环境变量中确认 GOOGLE_CLIENT_SECRET、AUTH_SECRET 与 Google Cloud Console 一致，并设置 AUTH_URL 为你的公开域名，然后重新部署。",
+    en: "Google authorized you, but the server couldn't finish sign-in. In Vercel env vars, verify GOOGLE_CLIENT_SECRET and AUTH_SECRET match Google Cloud Console, set AUTH_URL to your public origin, then redeploy.",
+  },
+  "auth.error.verification": {
+    zh: "登录链接已过期或无效，请重新尝试 Google 登录。",
+    en: "That sign-in link expired or is invalid. Try Google sign-in again.",
   },
   "auth.error.access_denied": {
     zh: "你已取消 Google 登录。",
