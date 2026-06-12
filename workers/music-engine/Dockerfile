@@ -1,11 +1,9 @@
-# Magenta RT music engine — JAX/CUDA for RunPod / Lambda / EC2 g5+.
-# Build on linux/amd64 (GitHub Actions or: docker buildx build --platform linux/amd64 …).
+# Magenta RT music engine — JAX/CUDA for RunPod (linux/amd64).
+# Base: RunPod PyTorch image (Python 3.11 + CUDA 12.4) — magenta-rt requires >=3.11.
 #
-# Model weights (~4 GB) download on first boot into /root/Documents/Magenta —
-# mount a RunPod network volume there to survive restarts:
-#   volumeMountPath: /root/Documents/Magenta
+# Model weights (~4 GB) download on first boot into /root/Documents/Magenta.
 
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+FROM runpod/pytorch:2.4.0-py3.11-124-124
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
@@ -16,19 +14,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PORT=8002
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-pip \
-    python3-venv \
-    ffmpeg \
-    curl \
-  && rm -rf /var/lib/apt/lists/* \
-  && ln -sf /usr/bin/python3 /usr/local/bin/python \
-  && ln -sf /usr/bin/pip3 /usr/local/bin/pip
+  && apt-get install -y --no-install-recommends ffmpeg curl \
+  && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --upgrade pip \
-  && (pip install "magenta-rt[gpu]" fastapi "uvicorn[standard]" python-multipart \
-      || pip install magenta-rt "jax[cuda12]" fastapi "uvicorn[standard]" python-multipart)
+  && pip install "magenta-rt[gpu]" fastapi "uvicorn[standard]" python-multipart \
+  || pip install magenta-rt "jax[cuda12]" fastapi "uvicorn[standard]" python-multipart
 
 WORKDIR /app
 COPY main.py .
