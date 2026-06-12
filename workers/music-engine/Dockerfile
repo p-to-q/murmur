@@ -3,7 +3,7 @@
 #
 # Model weights (~4 GB) download on first boot into /root/Documents/Magenta.
 
-FROM runpod/pytorch:2.4.0-py3.11-124-124
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
