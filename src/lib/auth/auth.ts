@@ -9,6 +9,7 @@ import {
   isGoogleOAuthConfigured,
 } from "@/lib/auth/google-config";
 import { resolveAuthSecret } from "@/lib/auth/env";
+import { assertProductionAuthConfig } from "@/lib/auth/assert-config";
 
 /**
  * Google OAuth is optional: without credentials the provider list is empty,
@@ -18,6 +19,8 @@ import { resolveAuthSecret } from "@/lib/auth/env";
  * surfaced as a ClientFetchError on every page.
  */
 const googleConfigured = isGoogleOAuthConfigured();
+
+assertProductionAuthConfig();
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // authjs hard-requires a secret even for anonymous session reads.

@@ -43,6 +43,7 @@ import threading
 import time
 import wave
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -63,8 +64,6 @@ MIN_DURATION = 2.0
 MAX_DURATION = 30.0
 MAX_HUM_BYTES = 8 * 1024 * 1024
 MAX_PROMPT_CHARS = 300
-
-app = FastAPI(title="murmur-music-engine")
 
 # MLX binds its GPU stream to the thread that loaded the model, so *every*
 # model operation (load, embed, generate) must run on one dedicated thread.
@@ -133,27 +132,27 @@ def _load_model():
             _loading = False
 
 
-@app.on_event("startup")
-def _warn_if_unauthenticated() -> None:
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
     if not os.getenv("MUSIC_WORKER_TOKEN", "").strip():
         logger.warning(
             "MUSIC_WORKER_TOKEN is not set — all endpoints are UNAUTHENTICATED. "
             "Fine for localhost dev; never expose this process through a public tunnel."
         )
 
+    if not MOCK and PRELOAD:
+        def _bg() -> None:
+            try:
+                _load_model()
+            except Exception:  # noqa: BLE001 — already logged; /health reports it
+                pass
 
-@app.on_event("startup")
-def _preload_model() -> None:
-    if MOCK or not PRELOAD:
-        return
+        _executor.submit(_bg)
 
-    def _bg() -> None:
-        try:
-            _load_model()
-        except Exception:  # noqa: BLE001 — already logged; /health reports it
-            pass
+    yield
 
-    _executor.submit(_bg)
+
+app = FastAPI(title="murmur-music-engine", lifespan=_lifespan)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import os
 import tempfile
 import time
 import uuid
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 import librosa
@@ -39,16 +40,18 @@ from audio_engine.frames import pyin_to_notes
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Murmur Audio Engine", version="0.3.0")
 
-
-@app.on_event("startup")
-def _warn_if_unauthenticated() -> None:
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
     if not os.getenv("AUDIO_WORKER_TOKEN", "").strip():
         logger.warning(
             "AUDIO_WORKER_TOKEN is not set — all endpoints are UNAUTHENTICATED. "
             "Fine for localhost dev; never expose this process through a public tunnel."
         )
+    yield
+
+
+app = FastAPI(title="Murmur Audio Engine", version="0.3.0", lifespan=_lifespan)
 
 SR = 22050
 FMIN = 75
