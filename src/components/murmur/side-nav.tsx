@@ -23,7 +23,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronsLeft, ChevronsRight, LinkIcon } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -41,6 +41,36 @@ import { Fragment } from "react";
 const STORAGE_KEY = "murmur:side-nav-collapsed";
 const ENABLE_NAV_ENTRANCE_MOTION = true;
 
+const collapsedListeners = new Set<() => void>();
+
+function readCollapsedPreference(): boolean {
+  if (typeof window === "undefined") return false;
+  const stored = localStorage.getItem(STORAGE_KEY);
+  return stored === "1" || stored === "true";
+}
+
+function subscribeCollapsedPreference(onStoreChange: () => void) {
+  collapsedListeners.add(onStoreChange);
+  return () => {
+    collapsedListeners.delete(onStoreChange);
+  };
+}
+
+function writeCollapsedPreference(next: boolean) {
+  localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+  for (const listener of collapsedListeners) listener();
+}
+
+function useSideNavCollapsed() {
+  const collapsed = useSyncExternalStore(
+    subscribeCollapsedPreference,
+    readCollapsedPreference,
+    () => false,
+  );
+
+  return [collapsed, writeCollapsedPreference] as const;
+}
+
 function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -53,19 +83,12 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
 
   const [slashFlash, setSlashFlash] = useState(false);
 
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored === "1" || stored === "true";
-  });
+  const [collapsed, setCollapsed] = useSideNavCollapsed();
 
   useEffect(() => {
     const html = document.documentElement;
     if (collapsed) html.classList.add("nav-collapsed");
     else html.classList.remove("nav-collapsed");
-    localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
 
   useEffect(() => {

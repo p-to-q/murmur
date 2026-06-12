@@ -32,7 +32,7 @@ const DEMO_SONGS: SongWithMeta[] = [
     title: "Velvet Nocturne",
     vibe: "Melancholic",
     bpm: 72,
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: "2026-06-11T10:00:00.000Z",
     visualConfig: {
       preset: "end_credits",
       gradient: "linear-gradient(148deg, #4E5D6E 0%, #8B96A6 48%, #D8D0C4 100%)",
@@ -45,7 +45,7 @@ const DEMO_SONGS: SongWithMeta[] = [
     title: "Tokyo Rain",
     vibe: "Lo-fi",
     bpm: 88,
-    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: "2026-06-08T10:00:00.000Z",
     visualConfig: {
       preset: "rain_glass",
       gradient: "linear-gradient(148deg, #5A8EAA 0%, #9DB8C0 48%, #DFE0DA 100%)",
@@ -58,7 +58,7 @@ const DEMO_SONGS: SongWithMeta[] = [
     title: "Wilderness Dream",
     vibe: "Ethereal",
     bpm: 105,
-    createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: "2026-06-05T10:00:00.000Z",
     visualConfig: {
       preset: "warm_particles",
       gradient: "linear-gradient(148deg, #A8C8E8 0%, #E8E2F4 48%, #7FA6CC 100%)",
