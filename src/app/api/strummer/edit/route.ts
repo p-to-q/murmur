@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
+import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 import { ai } from "@/lib/platform/ai-server";
@@ -83,7 +84,11 @@ export async function POST(req: NextRequest) {
       { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
-  if (!shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname }) && balance.notes < COST.llm_edit) {
+  if (
+    !shouldSkipNotesBilling(auth)
+    && !shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname })
+    && balance.notes < COST.llm_edit
+  ) {
     return NextResponse.json(
       {
         error: "insufficient_notes",
@@ -122,7 +127,7 @@ export async function POST(req: NextRequest) {
         balanceAfter: null;
         duplicate: false;
       };
-  if (shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname })) {
+  if (shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname }) || shouldSkipNotesBilling(auth)) {
     spend = {
       ok: true,
       ledgerId: null,

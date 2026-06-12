@@ -3,6 +3,7 @@ import { z } from "zod";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
+import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { getSongsByUser, createSong, createSongWithSpend } from "@/lib/db/queries/songs";
 import {
   createLocalSongFallback,
@@ -158,7 +159,10 @@ export async function POST(req: NextRequest) {
   const songInput = buildSongInput(body, userId);
 
   try {
-    const skipBilling = shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname }) || COST.save === 0;
+    const skipBilling =
+      shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname })
+      || COST.save === 0
+      || shouldSkipNotesBilling(auth);
     if (skipBilling) {
       try {
         const song = await createSong(songInput);

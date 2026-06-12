@@ -5,8 +5,9 @@ import Image from "next/image";
 import { LogOut, UserRound, X } from "lucide-react";
 import { authClient, usePlatformState } from "@/lib/platform/auth-client";
 import type { AppUser } from "@/lib/platform/types";
-import { useSession, signIn, signOut } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { GoogleSignInButton } from "@/components/auth/google-auth-buttons";
+import { useGoogleSignIn } from "@/lib/hooks/use-google-sign-in";
 
 export function UserBadge() {
   const platformUser = usePlatformState((s) => s.auth.user);
@@ -24,6 +25,7 @@ export function UserBadge() {
   } as AppUser : platformUser;
 
   const isGoogleUser = !!session?.user;
+  const { signInWithGoogle } = useGoogleSignIn();
 
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -66,7 +68,7 @@ export function UserBadge() {
           {!isGoogleUser && (
             <button
               onClick={() => {
-                signIn("google", { callbackUrl: "/" });
+                signInWithGoogle("/");
                 setOpen(false);
               }}
               className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-[#1A1A1A] bg-[#F5F1EB] hover:bg-[#E0DDD5] mb-1"

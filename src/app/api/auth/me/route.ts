@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveRequestAuth } from "@/lib/auth";
 import { buildAuthMePayload } from "@/lib/auth/me-payload";
 import { getDevBalanceFallback, shouldUseDevBalanceFallback } from "@/lib/billing/dev-balance";
+import { isAuthenticatedSession } from "@/lib/billing/session-billing";
 import { getNotesBalance } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 
@@ -31,7 +32,9 @@ export async function GET(request: NextRequest) {
         source: auth.source,
         sessionId: auth.sessionId,
         balance: {
-          notes: balance.notes,
+          notes: isAuthenticatedSession(auth)
+            ? Number.POSITIVE_INFINITY
+            : balance.notes,
           planTier: balance.planTier,
         },
       }),

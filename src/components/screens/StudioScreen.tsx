@@ -6,7 +6,7 @@ import { RotateCcw, Play, Pause, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
-import { useTranslator } from "@/lib/i18n";
+import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
 import { generateStrummerCode } from "@/modules/strummer/generate-code";
 import {
@@ -97,10 +97,17 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
 function StudioContent({ version }: { version: VibeVersion }) {
   const router = useRouter();
   const t = useTranslator();
+  const lang = useI18nStore((s) => s.lang);
   const setCurrentVersion = useMurmurStore((state) => state.setCurrentVersion);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [promptBusy, setPromptBusy] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      versionPreview.stop();
+    };
+  }, []);
 
   const currentVersion = version;
   const arrangement = currentVersion.arrangementState;
@@ -320,6 +327,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
             <button
               onClick={(e) => { e.stopPropagation(); versionPreview.stop(); router.back(); }}
               className="text-[12px] tracking-[0.04em] text-white hover:text-white/70 active:text-[#E5DDD0] transition-colors"
+              aria-label={t("studio.back")}
             >
               ← {t("studio.back")}
             </button>
@@ -327,6 +335,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
               <button
                 onClick={(e) => { e.stopPropagation(); handleRestore(); }}
                 className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DDD0] bg-white/70 transition-colors hover:bg-white"
+                aria-label={t("studio.restore_toast")}
               >
                 <RotateCcw className="h-3.5 w-3.5 text-[#8C8780]" />
               </button>
@@ -372,7 +381,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
             {/* Song info — lower left; right padding keeps clear of the turntable */}
             <div className="absolute inset-x-0 bottom-0 p-6 pr-40 md:p-8 md:pr-60">
               <p className="text-[10px] uppercase tracking-[0.3em] text-white/55 mb-1.5">
-                {magenta ? magenta.vibeLabel.en : currentVersion.vibe}
+                {magenta ? magenta.vibeLabel[lang] : currentVersion.vibe}
               </p>
               <h2
                 className="hero-serif text-white leading-[1.0] md:text-[40px] lg:text-[48px]"

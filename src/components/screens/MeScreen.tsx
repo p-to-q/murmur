@@ -22,6 +22,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { UserBadge } from "@/components/user-profile/user-badge";
 import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
@@ -34,6 +35,8 @@ export function MeScreen() {
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
   const { balance, isLoading } = useUserBalance();
+  const { data: session } = useSession();
+  const isSignedIn = !!session?.user;
   const repairBias = usePreferencesStore((state) => state.repairBias);
   const setRepairBias = usePreferencesStore((state) => state.setRepairBias);
   const developerMode = usePreferencesStore((state) => state.developerMode);
@@ -101,15 +104,25 @@ export function MeScreen() {
         <Card>
           <SectionLabel>{t("me.notes.title") || "MURMUR NOTES"}</SectionLabel>
           <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px] mb-2">
-            {isLoading ? "—" : balance?.notes ?? 0}
+            {isLoading
+              ? "—"
+              : isSignedIn || balance?.unlimited
+                ? "∞"
+                : balance?.notes ?? 0}
           </p>
           <div className="flex items-end justify-between gap-4">
             <p className="flex-1 text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
-              {refillCopy}
+              {isSignedIn || balance?.unlimited
+                ? t("me.notes.unlimited")
+                : refillCopy}
             </p>
-            <Link href="/topup" className="mm-btn-primary inline-flex shrink-0">
-              {t("me.notes.cta") || "Top up"}
-            </Link>
+            {isSignedIn ? (
+              <span className="text-[13px] text-[#8C8780]">{t("me.notes.signed_in")}</span>
+            ) : (
+              <Link href="/topup" className="mm-btn-primary inline-flex shrink-0">
+                {t("me.notes.cta") || "Top up"}
+              </Link>
+            )}
           </div>
         </Card>
 

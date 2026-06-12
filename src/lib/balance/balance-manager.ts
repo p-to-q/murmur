@@ -1,13 +1,14 @@
 /**
- * Balance management for Local Creator vs Google users
+ * Balance management for guest (pre-login) users.
  *
- * Local Creator: 3 notes/day (localStorage)
- * Google User: 10 notes/day (database)
+ * Guests receive DAILY_REFILL notes per device per day via localStorage.
+ * Signed-in users have unlimited notes — server skips ledger spends.
  */
+
+import { COST, DAILY_REFILL } from "@murmur/core";
 
 const LOCAL_BALANCE_KEY = "murmur-local-balance";
 const LOCAL_BALANCE_DATE_KEY = "murmur-local-balance-date";
-const LOCAL_DAILY_LIMIT = 3;
 
 export interface BalanceInfo {
   notes: number;
@@ -16,50 +17,52 @@ export interface BalanceInfo {
 }
 
 /**
- * Get current balance for Local Creator
- * Resets daily at midnight
+ * Get current balance for a guest on this device.
+ * Resets to DAILY_REFILL at local midnight.
  */
 export function getLocalBalance(): BalanceInfo {
   const today = new Date().toDateString();
   const storedDate = localStorage.getItem(LOCAL_BALANCE_DATE_KEY);
 
-  // Reset if it's a new day
   if (storedDate !== today) {
-    localStorage.setItem(LOCAL_BALANCE_KEY, String(LOCAL_DAILY_LIMIT));
+    localStorage.setItem(LOCAL_BALANCE_KEY, String(DAILY_REFILL));
     localStorage.setItem(LOCAL_BALANCE_DATE_KEY, today);
   }
 
-  const notes = parseInt(localStorage.getItem(LOCAL_BALANCE_KEY) || String(LOCAL_DAILY_LIMIT), 10);
+  const notes = parseInt(
+    localStorage.getItem(LOCAL_BALANCE_KEY) || String(DAILY_REFILL),
+    10,
+  );
 
-  // Calculate next refill (tomorrow at midnight)
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(0, 0, 0, 0);
 
   return {
-    notes,
-    dailyLimit: LOCAL_DAILY_LIMIT,
+    notes: Number.isFinite(notes) ? notes : DAILY_REFILL,
+    dailyLimit: DAILY_REFILL,
     nextRefillAt: tomorrow.toISOString(),
   };
 }
 
-/**
- * Spend notes for Local Creator
- */
-export function spendLocalNotes(amount: number): boolean {
+/** Spend notes for a guest action (e.g. one hum = COST.hum). */
+export function spendLocalNotes(amount: number = COST.hum): boolean {
   const balance = getLocalBalance();
 
   if (balance.notes < amount) {
-    return false; // Not enough notes
+    return false;
   }
 
-  const newBalance = balance.notes - amount;
-  localStorage.setItem(LOCAL_BALANCE_KEY, String(newBalance));
+  localStorage.setItem(LOCAL_BALANCE_KEY, String(balance.notes - amount));
   return true;
 }
 
+export function hasLocalNotes(amount: number = COST.hum): boolean {
+  return getLocalBalance().notes >= amount;
+}
+
 /**
- * Get balance from cloud (for Google users)
+ * @deprecated Guests use local balance; signed-in users are unlimited.
  */
 export async function getCloudBalance(): Promise<BalanceInfo> {
   const response = await fetch("/api/user/balance");
@@ -70,17 +73,12 @@ export async function getCloudBalance(): Promise<BalanceInfo> {
 }
 
 /**
- * Check if user has enough balance (local or cloud)
+ * @deprecated Use hasLocalNotes for guests; signed-in users are unlimited.
  */
 export async function hasEnoughBalance(
   amount: number,
-  isGoogleUser: boolean
+  isGoogleUser: boolean,
 ): Promise<boolean> {
-  if (isGoogleUser) {
-    const balance = await getCloudBalance();
-    return balance.notes >= amount;
-  } else {
-    const balance = getLocalBalance();
-    return balance.notes >= amount;
-  }
+  if (isGoogleUser) return true;
+  return getLocalBalance().notes >= amount;
 }

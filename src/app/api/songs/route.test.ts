@@ -257,7 +257,7 @@ describe("POST /api/songs", () => {
     }, "req_guest_fallback", "http://localhost/api/songs"));
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("X-Murmur-Fallback")).toBe("local-guest-song");
+    expect(response.headers.get("X-Murmur-Fallback")).toBe("local-song");
     expect(createdSongs).toHaveLength(0);
     const body = await response.json() as Record<string, unknown>;
     expect(body.id).toBe("song_guest_fallback");

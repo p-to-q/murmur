@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
+import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
 let nextAuth: ResolvedRequestAuth = {
@@ -16,18 +17,6 @@ const grantInputs: Array<Record<string, unknown>> = [];
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
-}));
-
-mock.module("@/lib/rate-limit", () => ({
-  getRateLimitStore: () => ({
-    hit: async () => ({
-      allowed: true,
-      retryAfterMs: 0,
-      retryAt: new Date("2026-06-12T00:00:00.000Z"),
-      limit: 5,
-      remaining: 4,
-    }),
-  }),
 }));
 
 mock.module("@/lib/billing/stripe", () => ({
@@ -126,7 +115,11 @@ function stripeSession(overrides: Record<string, unknown> = {}) {
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Real in-memory rate-limit store; partial module mocks of "@/lib/rate-limit"
+  // leak into every test file that runs later in the same bun process.
+  resetCachedRateLimitStore();
+  await getRateLimitStore().resetAll();
   nextAuth = {
     ok: true,
     user: { id: "usr_restore", email: "restore@test.local", name: "Restore Tester", avatarUrl: null },

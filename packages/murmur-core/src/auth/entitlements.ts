@@ -77,13 +77,25 @@ export function resolveEntitlement(
   const type = userType(user);
   const isAuthed = type !== "guest";
 
+  if (isAuthed) {
+    return {
+      canHum: true,
+      canSave: true,
+      canLlmEdit: true,
+      canExportWebm: true,
+      canTopUp: true,
+      canDeleteAccount: true,
+      remainingNotes: Number.POSITIVE_INFINITY,
+    };
+  }
+
   return {
-    canHum:           balance >= COST.hum,
-    canSave:          isAuthed && balance >= COST.save,
-    canLlmEdit:       balance >= COST.llm_edit,
-    canExportWebm:    isAuthed && balance >= COST.export_webm,
-    canTopUp:         isAuthed,
-    canDeleteAccount: isAuthed,
-    remainingNotes:   balance,
+    canHum: balance >= COST.hum,
+    canSave: false,
+    canLlmEdit: balance >= COST.llm_edit,
+    canExportWebm: false,
+    canTopUp: false,
+    canDeleteAccount: false,
+    remainingNotes: balance,
   };
 }

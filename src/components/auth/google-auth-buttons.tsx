@@ -1,11 +1,14 @@
 "use client";
 
-import { signIn, signOut } from "next-auth/react";
+import { signOut } from "next-auth/react";
+import { useGoogleSignIn } from "@/lib/hooks/use-google-sign-in";
 
 export function GoogleSignInButton({ className }: { className?: string }) {
+  const { signInWithGoogle } = useGoogleSignIn();
+
   return (
     <button
-      onClick={() => signIn("google", { callbackUrl: "/" })}
+      onClick={() => signInWithGoogle("/")}
       className={className}
     >
       <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">

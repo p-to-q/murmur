@@ -8,6 +8,7 @@ import {
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
+import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 import { COST } from "@murmur/core";
@@ -169,6 +170,16 @@ export async function POST(request: NextRequest) {
       }
     }
     if (billingMode === "ledger" && shouldBypassBillingForLocalDemo(request)) {
+      billingMode = "dev_fallback";
+      balance = {
+        ok: true,
+        userId,
+        notes: Number.POSITIVE_INFINITY,
+        planTier: "free",
+        freeNotesGrantedAt: new Date(),
+      };
+    }
+    if (billingMode === "ledger" && shouldSkipNotesBilling(auth)) {
       billingMode = "dev_fallback";
       balance = {
         ok: true,

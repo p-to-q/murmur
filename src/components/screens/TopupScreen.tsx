@@ -1,17 +1,16 @@
 "use client";
 
 /**
- * TopupScreen — Coinbase-inspired balance view + package selection.
+ * TopupScreen — balance view + package selection.
  *
- * Top section: Asset-style balance display with usage chart
- * Bottom section: Three elegant package cards
+ * Shows the authenticated user's real notes balance and top-up SKUs.
+ * Chart / USD mock data removed — only live balance is shown.
  */
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useSpring, useTransform, animate } from "framer-motion";
-import { RefreshCw, Search, Share2 } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import {
   CUSTOM_TOPUP_ID,
@@ -23,10 +22,10 @@ import {
 } from "@murmur/core";
 
 import { useTranslator } from "@/lib/i18n";
-import { useUserBalance } from "@/lib/hooks/use-user-balance";
+import { useUserBalance, fetchUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
-const TIME_RANGES = ["1H", "1D", "7D", "1M", "All"] as const;
+const SLIDER_MAX_USD = Math.min(100, CUSTOM_TOPUP_MAX_USD);
 
 // Paper texture style for all black elements
 const paperTextureStyle = {
@@ -53,69 +52,32 @@ const paperTextureStyle = {
   `,
 };
 
-function formatChartLabel(date: Date, range: typeof TIME_RANGES[number]) {
-  if (range === "1H") {
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    return `${hours}:${minutes}`;
+function formatRefillTime(iso: string, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
   }
-  if (range === "1D") {
-    const hours = String(date.getHours()).padStart(2, "0");
-    return `${hours}:00`;
-  }
-
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  return `${month}/${day}`;
-}
-
-// Generate mock usage data based on time range
-function generateChartData(range: typeof TIME_RANGES[number]) {
-  const dataPoints =
-    range === "1H" ? 12 :
-    range === "1D" ? 24 :
-    range === "7D" ? 7 :
-    range === "1M" ? 30 : 365;
-  const data = [];
-  const now = Date.now();
-  const stepMs =
-    range === "1H" ? 5 * 60_000 :
-    range === "1D" ? 3_600_000 : 86_400_000;
-
-  for (let i = 0; i < dataPoints; i++) {
-    const date = new Date(now - (dataPoints - i) * stepMs);
-    // More organic growth curve with smoother fluctuations
-    const baseValue = 100;
-    const trend = i * 0.8; // Gradual upward trend
-    const wave = Math.sin(i * 0.3) * 8; // Smooth wave pattern
-    const noise = (Math.random() - 0.5) * 4; // Reduced noise for smoother curve
-    const value = baseValue + trend + wave + noise;
-
-    data.push({
-      date: formatChartLabel(date, range),
-      value: Math.max(50, Math.round(value * 100) / 100), // Keep values positive
-    });
-  }
-
-  return data;
 }
 
 export function TopupScreen() {
   const router = useRouter();
   const t = useTranslator();
-  const { balance, isLoading } = useUserBalance();
+  const { balance, isLoading, refresh } = useUserBalance();
 
   const [selectedId, setSelectedId] = useState<string>(
     TOPUP_SKUS.find((s) => s.highlight === "popular")?.id ?? TOPUP_SKUS[0]!.id,
   );
   const [customAmount, setCustomAmount] = useState(10);
-  const [timeRange, setTimeRange] = useState<typeof TIME_RANGES[number]>("7D");
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Animated values for number rolling
-  const totalNotesSpring = useSpring(0, { stiffness: 100, damping: 20 });
-  const balanceUSDSpring = useSpring(0, { stiffness: 100, damping: 20 });
-  const notesInUseSpring = useSpring(0, { stiffness: 100, damping: 20 });
+  const notesSpring = useSpring(0, { stiffness: 100, damping: 20 });
 
   const selected = TOPUP_SKUS.find((s) => s.id === selectedId);
   const customQuote = useMemo(() => getCustomTopupQuote(customAmount), [customAmount]);
@@ -125,6 +87,21 @@ export function TopupScreen() {
   const displayNotes = selectedId === CUSTOM_TOPUP_ID
     ? customQuote?.notesGranted ?? 0
     : selected ? topupNotesGranted(selected) : 0;
+
+  const currentBalance = balance?.notes ?? 0;
+  const planLabel =
+    balance?.planTier === "premium" ? t("topup.plan.premium") : t("topup.plan.free");
+  const nextRefillLabel = balance?.nextRefillAt
+    ? t("topup.next_refill").replace(
+        "{time}",
+        formatRefillTime(
+          balance.nextRefillAt,
+          typeof document !== "undefined" && document.documentElement.lang.startsWith("zh")
+            ? "zh-CN"
+            : "en-US",
+        ),
+      )
+    : null;
 
   const handleProceed = () => {
     if (selectedId === CUSTOM_TOPUP_ID) {
@@ -136,17 +113,27 @@ export function TopupScreen() {
     router.push(`/topup/checkout?sku=${encodeURIComponent(selected.id)}`);
   };
 
-  const handleRefresh = () => {
-    // Animate to 0 first, then to target values
-    animate(totalNotesSpring, 0, { duration: 0.3 }).then(() => {
-      animate(totalNotesSpring, totalNotes, { duration: 0.5 });
-    });
-    animate(balanceUSDSpring, 0, { duration: 0.3 }).then(() => {
-      animate(balanceUSDSpring, balanceUSD, { duration: 0.5 });
-    });
-    animate(notesInUseSpring, 0, { duration: 0.3 }).then(() => {
-      animate(notesInUseSpring, notesInUse, { duration: 0.5 });
-    });
+  const animateBalance = useCallback(
+    (value: number) => {
+      animate(notesSpring, 0, { duration: 0.25 }).then(() => {
+        animate(notesSpring, value, { duration: 0.5 });
+      });
+    },
+    [notesSpring],
+  );
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await refresh();
+      const result = await fetchUserBalance({ force: true });
+      if (result.balance) {
+        animateBalance(result.balance.notes);
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleRestorePurchases = async () => {
@@ -159,100 +146,74 @@ export function TopupScreen() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to restore purchases");
+        throw new Error(
+          (errorData as { message?: string }).message || t("topup.restore.failed"),
+        );
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as {
+        restored?: unknown[];
+        newPurchases?: number;
+        totalNotes?: number;
+      };
 
-      // Show appropriate feedback based on results
       if (data.restored && data.restored.length > 0) {
-        if (data.newPurchases > 0) {
-          toast.success(`已恢复 ${data.newPurchases} 笔新购买，共 ${data.totalNotes} 颗音磅`);
-          // Refresh balance after successful restore
-          setTimeout(() => {
-            window.location.reload();
-          }, 2000);
+        if ((data.newPurchases ?? 0) > 0) {
+          toast.success(
+            t("topup.restore.success")
+              .replace("{count}", String(data.newPurchases))
+              .replace("{notes}", String(data.totalNotes ?? 0)),
+          );
+          await refresh();
+          animateBalance(balance?.notes ?? currentBalance);
         } else {
-          toast.info(`找到 ${data.restored.length} 笔购买记录，共 ${data.totalNotes} 颗音磅`);
+          toast.info(
+            t("topup.restore.found")
+              .replace("{count}", String(data.restored.length))
+              .replace("{notes}", String(data.totalNotes ?? 0)),
+          );
         }
       } else {
-        toast.info("没有找到可恢复的购买记录");
+        toast.info(t("topup.restore.none"));
       }
     } catch (error) {
       console.error("[restore-purchases] Error:", error);
-      toast.error(error instanceof Error ? error.message : "恢复购买失败，请稍后重试");
+      toast.error(
+        error instanceof Error ? error.message : t("topup.restore.failed"),
+      );
     } finally {
       setIsRestoring(false);
     }
   };
 
-  // Calculate real-time balance and changes
-  const currentBalance = balance?.notes ?? 0;
-  const totalAvailable = currentBalance;
-
-  // Balance in USD - mock value, should come from actual payment system
-  const balanceUSD = 8.23;
-
-  // In use - notes used in recent days, not USD
-  const notesInUse = 45;
-  const totalNotes = totalAvailable + notesInUse;
-
-  // Initialize spring values on mount
   useEffect(() => {
-    totalNotesSpring.set(totalNotes);
-    balanceUSDSpring.set(balanceUSD);
-    notesInUseSpring.set(notesInUse);
-  }, [totalNotes, balanceUSD, notesInUse, totalNotesSpring, balanceUSDSpring, notesInUseSpring]);
+    notesSpring.set(currentBalance);
+  }, [currentBalance, notesSpring]);
 
-  // Generate chart data based on selected time range
-  const chartData = useMemo(() => generateChartData(timeRange), [timeRange]);
-
-  // Calculate real 24h change from chart data
-  const firstValue = chartData[0]?.value ?? 0;
-  const lastValue = chartData[chartData.length - 1]?.value ?? 0;
-  const change24hValue = lastValue - firstValue;
-  const change24hPercent = firstValue !== 0 ? ((change24hValue / firstValue) * 100) : 0;
-
-  const changeText = `${change24hValue >= 0 ? '+' : ''}${Math.abs(change24hValue).toFixed(0)} (${change24hPercent >= 0 ? '+' : ''}${change24hPercent.toFixed(2)}%)`;
-  const changeColor = change24hValue >= 0 ? "#5F8A6B" : "#C87355";
-
-  // Animated display values
-  const displayTotalNotes = useTransform(totalNotesSpring, (v) => Math.round(v));
-  const displayBalanceUSD = useTransform(balanceUSDSpring, (v) => v.toFixed(2));
-  const displayNotesInUse = useTransform(notesInUseSpring, (v) => Math.round(v));
+  const displayNotesBalance = useTransform(notesSpring, (v) => Math.round(v));
+  const sliderSpan = SLIDER_MAX_USD - CUSTOM_TOPUP_MIN_USD;
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
 
       <div className="relative z-10 flex min-h-svh flex-col">
-        {/* ── Header ───────────────────────── */}
         <div
           className="flex items-center justify-end px-5 pb-3"
           style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 20px)" }}
         >
-          {/* Right: Action icons */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRefresh}
-              className="flex h-9 w-9 items-center justify-center"
-              aria-label={t("topup.refresh")}
-            >
-              <RefreshCw className="h-5 w-5 text-[#8C8780]" />
-            </button>
-            <button className="flex h-9 w-9 items-center justify-center">
-              <Search className="h-5 w-5 text-[#8C8780]" />
-            </button>
-            <button className="flex h-9 w-9 items-center justify-center">
-              <Share2 className="h-5 w-5 text-[#8C8780]" />
-            </button>
-          </div>
+          <button
+            onClick={() => void handleRefresh()}
+            disabled={isRefreshing}
+            className="flex h-9 w-9 items-center justify-center disabled:opacity-50"
+            aria-label={t("topup.refresh")}
+          >
+            <RefreshCw className={`h-5 w-5 text-[#8C8780] ${isRefreshing ? "animate-spin" : ""}`} />
+          </button>
         </div>
 
-        {/* ── Body: Balance + chart ───────────── */}
         <div className="flex-1 px-5 pb-32">
           <div className="mx-auto max-w-lg">
-            {/* Assets title - aligned with balance */}
             <motion.h2
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -261,7 +222,7 @@ export function TopupScreen() {
             >
               {t("topup.assets")}
             </motion.h2>
-            {/* Big balance number with refresh icon */}
+
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -269,189 +230,65 @@ export function TopupScreen() {
               className="flex items-start gap-2"
             >
               <h1 className="font-serif text-[#1A1A1A] text-[68px] leading-[1.0] tabular-nums tracking-tight">
-                {isLoading ? "—" : <motion.span>{displayTotalNotes}</motion.span>}
+                {isLoading ? "—" : <motion.span>{displayNotesBalance}</motion.span>}
               </h1>
-              <button
-                onClick={handleRefresh}
-                className="mt-1 flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5 transition-colors"
-                aria-label={t("topup.refresh")}
-              >
-                <RefreshCw className="h-4 w-4 text-[#8C8780]" />
-              </button>
+              <span className="mt-6 text-[18px] text-[#8C8780]">{t("topup.notes")}</span>
             </motion.div>
 
-            {/* 24H change */}
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.08, duration: 0.5 }}
-              className="mt-2.5 text-[14px] font-medium flex items-center gap-1.5"
-              style={{ color: changeColor }}
-            >
-              <span>{change24hValue >= 0 ? '↑' : '↓'}</span>
-              <span className="tabular-nums">{changeText}</span>
-              <span className="text-[#B7AEA1]">· {t("topup.24h")}</span>
-            </motion.p>
+            {nextRefillLabel && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.08, duration: 0.5 }}
+                className="mt-2.5 text-[14px] text-[#8C8780]"
+              >
+                {nextRefillLabel}
+              </motion.p>
+            )}
 
-            {/* Balance & In Use cards */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.12, duration: 0.5 }}
               className="mt-8 grid grid-cols-2 gap-4"
             >
-              {/* Balance */}
               <div className="rounded-[20px] bg-white/60 backdrop-blur-sm border border-[#E5DDD0]/40 px-5 py-5">
-                <p className="text-[11px] text-[#B7AEA1] font-semibold mb-3 tracking-wider uppercase">{t("topup.balance")}</p>
+                <p className="text-[11px] text-[#B7AEA1] font-semibold mb-3 tracking-wider uppercase">
+                  {t("topup.balance")}
+                </p>
                 <p className="font-serif text-[#1A1A1A] text-[28px] leading-none tabular-nums">
-                  $<motion.span>{displayBalanceUSD}</motion.span>
+                  {isLoading ? "—" : currentBalance}
+                  <span className="text-[14px] font-normal text-[#8C8780] ml-1">{t("topup.notes")}</span>
                 </p>
               </div>
 
-              {/* In Use */}
               <div className="rounded-[20px] bg-white/60 backdrop-blur-sm border border-[#E5DDD0]/40 px-5 py-5">
-                <p className="text-[11px] text-[#B7AEA1] font-semibold mb-3 tracking-wider uppercase">{t("topup.in_use")}</p>
-                <p className="font-serif text-[#1A1A1A] text-[28px] leading-none tabular-nums">
-                  <motion.span>{displayNotesInUse}</motion.span>
-                  <span className="text-[14px] font-normal text-[#1A1A1A] ml-1">{t("topup.notes")}</span>
+                <p className="text-[11px] text-[#B7AEA1] font-semibold mb-3 tracking-wider uppercase">
+                  {t("topup.plan_label")}
+                </p>
+                <p className="font-serif text-[#1A1A1A] text-[22px] leading-none">
+                  {planLabel}
                 </p>
               </div>
             </motion.div>
 
-            {/* Chart card - gray background with grid lines like reference */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.16, duration: 0.5 }}
-              className="mt-5 rounded-[22px] bg-white/50 backdrop-blur-sm border border-[#E5DDD0]/40 px-6 py-6"
+              className="mt-5 rounded-[22px] bg-white/50 backdrop-blur-sm border border-[#E5DDD0]/40 px-6 py-8 text-center"
             >
-              {/* Time period selector - sliding pill design */}
-              <div className="relative inline-flex items-center mb-5 bg-white rounded-full p-1 mx-auto">
-                {TIME_RANGES.map((range, idx) => {
-                  const isSelected = timeRange === range;
-                  return (
-                    <button
-                      key={range}
-                      id={`time-range-${idx}`}
-                      onClick={() => setTimeRange(range)}
-                      className={`relative z-10 text-[14px] font-semibold transition-colors px-5 py-2 rounded-full ${
-                        isSelected
-                          ? "text-white"
-                          : "text-[#B7AEA1] hover:text-[#8C8780]"
-                      }`}
-                    >
-                      {range}
-                    </button>
-                  );
-                })}
-                {/* Sliding indicator with paper texture */}
-                <motion.div
-                  className="absolute rounded-full z-0 pointer-events-none"
-                  animate={{
-                    left: (() => {
-                      if (typeof document === 'undefined') return 0;
-                      const idx = TIME_RANGES.indexOf(timeRange);
-                      const button = document.getElementById(`time-range-${idx}`);
-                      if (button) {
-                        const parent = button.parentElement;
-                        if (parent) {
-                          const parentRect = parent.getBoundingClientRect();
-                          const buttonRect = button.getBoundingClientRect();
-                          return buttonRect.left - parentRect.left;
-                        }
-                      }
-                      return 0;
-                    })(),
-                    width: (() => {
-                      if (typeof document === 'undefined') return 0;
-                      const idx = TIME_RANGES.indexOf(timeRange);
-                      const button = document.getElementById(`time-range-${idx}`);
-                      return button ? button.offsetWidth : 0;
-                    })(),
-                  }}
-                  initial={false}
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  style={{
-                    top: "4px",
-                    bottom: "4px",
-                    ...paperTextureStyle,
-                  }}
-                />
-              </div>
-
-              {/* Interactive chart with grid lines */}
-              <div className="h-48 -ml-1 -mr-1 [&_*]:outline-none [&_*]:focus:outline-none">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
-                    {/* 5 horizontal grid lines */}
-                    <CartesianGrid
-                      horizontal={true}
-                      vertical={false}
-                      stroke="#E5DDD0"
-                      strokeWidth={1}
-                      strokeDasharray="0"
-                    />
-                    <XAxis
-                      dataKey="date"
-                      stroke="#D2C9B6"
-                      style={{ fontSize: "10px", fontFamily: "system-ui", fill: "#B7AEA1", fontWeight: 500 }}
-                      tickLine={false}
-                      axisLine={false}
-                      interval={timeRange === "1H" ? 2 : timeRange === "1D" ? 5 : Math.floor(chartData.length / 6)}
-                      tickMargin={10}
-                    />
-                    <YAxis
-                      stroke="#E5DDD0"
-                      style={{ fontSize: "11px", fontFamily: "system-ui", fill: "#8C8780" }}
-                      tickLine={false}
-                      axisLine={false}
-                      domain={["auto", "auto"]}
-                      tickMargin={8}
-                      hide={true}
-                      tickCount={5}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "rgba(255, 255, 255, 0.98)",
-                        border: "1px solid #E5DDD0",
-                        borderRadius: "10px",
-                        fontSize: "12px",
-                        padding: "8px 12px",
-                        boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
-                      }}
-                      labelStyle={{ color: "#8C8780", fontSize: "11px", marginBottom: "3px" }}
-                      itemStyle={{ color: "#1A1A1A", fontWeight: 600, fontFamily: "var(--font-serif)" }}
-                      formatter={(value: unknown) => {
-                        if (typeof value === 'number') {
-                          return [`${value.toFixed(0)} notes`, ""];
-                        }
-                        return ["", ""];
-                      }}
-                      cursor={{ stroke: "#B7AEA1", strokeWidth: 1.5 }}
-                    />
-                    <Line
-                      type="monotoneX"
-                      dataKey="value"
-                      stroke="#B7AEA1"
-                      strokeWidth={2.5}
-                      dot={false}
-                      activeDot={{ r: 5, fill: "#8C8780", strokeWidth: 0 }}
-                      animationDuration={800}
-                      animationEasing="ease-in-out"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              <p className="font-serif-italic text-[14px] text-[#8C8780]">
+                {t("topup.chart.soon")}
+              </p>
             </motion.div>
 
-            {/* Support / Pricing section */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2, duration: 0.5 }}
               className="mt-8"
             >
-              {/* Header */}
               <div className="mb-6">
                 <h3 className="text-[18px] font-semibold text-[#8C8780] mb-2">
                   {t("topup.packages")}
@@ -461,7 +298,6 @@ export function TopupScreen() {
                 </p>
               </div>
 
-              {/* Three preset tiers */}
               <div className="grid grid-cols-3 gap-3 mb-6">
                 {TOPUP_SKUS.map((sku, idx) => {
                   const isSelected = sku.id === selectedId;
@@ -478,53 +314,27 @@ export function TopupScreen() {
                           ? "border-[#1A1A1A] bg-white/80 shadow-[0_2px_12px_rgba(0,0,0,0.08)]"
                           : "border-[#E5DDD0]/40 bg-white/50 hover:border-[#C8C0B4]"
                       }`}
-                      style={
-                        isSelected
-                          ? {
-                              background: `
-                                linear-gradient(135deg,
-                                  rgba(26, 26, 26, 0.02) 0%,
-                                  rgba(26, 26, 26, 0.0) 100%
-                                ),
-                                repeating-linear-gradient(
-                                  90deg,
-                                  rgba(0, 0, 0, 0.01) 0px,
-                                  transparent 1px,
-                                  transparent 2px,
-                                  rgba(0, 0, 0, 0.01) 3px
-                                ),
-                                rgba(255, 255, 255, 0.8)
-                              `,
-                            }
-                          : undefined
-                      }
                     >
-                      {/* Badge */}
                       {sku.highlight && (
                         <div
                           className="absolute -top-2 left-1/2 -translate-x-1/2 text-white px-3 py-1 rounded-full text-[9px] font-semibold uppercase tracking-wider whitespace-nowrap"
                           style={paperTextureStyle}
                         >
-                          {sku.highlight === "popular" ? "Most loved" : "Most valued"}
+                          {sku.highlight === "popular"
+                            ? t("topup.badge.popular")
+                            : t("topup.badge.best")}
                         </div>
                       )}
 
-                      {/* Tier name */}
                       <p className="text-[11px] text-[#B7AEA1] font-semibold uppercase tracking-wider mb-3">
                         {tierNames[idx]}
                       </p>
-
-                      {/* Price */}
                       <p className="font-serif text-[#1A1A1A] text-[28px] leading-none mb-1">
                         {sku.display}
                       </p>
-
-                      {/* Song count */}
                       <p className="text-[12px] text-[#8C8780] mb-3">
                         {t("topup.songs").replace("{n}", String(songCount))}
                       </p>
-
-                      {/* Notes + bonus */}
                       <div className="flex items-baseline justify-center gap-1">
                         <span className="font-serif text-[#1A1A1A] text-[16px]">{sku.notes}</span>
                         {sku.bonusNotes && (
@@ -537,7 +347,6 @@ export function TopupScreen() {
                 })}
               </div>
 
-              {/* Custom amount note — not live until the backend has a real custom SKU flow */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -567,35 +376,28 @@ export function TopupScreen() {
 
                 <div className="relative mb-6 pt-2">
                   <div className="mb-3 flex justify-between text-[11px] font-medium text-[#B7AEA1]">
-                    <span>$1</span>
-                    <span className="absolute left-1/2 -translate-x-1/2">$50</span>
-                    <span>$100</span>
+                    <span>${CUSTOM_TOPUP_MIN_USD}</span>
+                    <span className="absolute left-1/2 -translate-x-1/2">${Math.round(SLIDER_MAX_USD / 2)}</span>
+                    <span>${SLIDER_MAX_USD}</span>
                   </div>
 
                   <div className="relative">
-                    <div className="pointer-events-none absolute -top-2 left-0 right-0 flex justify-between">
-                      {[0, 25, 50, 75, 100].map((n) => (
-                        <div
-                          key={`tick-${n}`}
-                          className="h-3 w-[1.5px] rounded-full bg-[#D2C9B6]"
-                          style={{ marginLeft: n === 0 ? "0.75px" : undefined }}
-                        />
-                      ))}
-                    </div>
-
                     <div className="relative h-1 rounded-full bg-[#E5DDD0]/60">
                       <div
                         className="absolute h-1 rounded-full bg-[#8C8780] transition-all duration-150"
-                        style={{ width: `${((customAmount - 1) / 99) * 100}%` }}
+                        style={{
+                          width: `${((customAmount - CUSTOM_TOPUP_MIN_USD) / sliderSpan) * 100}%`,
+                        }}
                       />
                     </div>
 
                     <input
                       type="range"
                       min={String(CUSTOM_TOPUP_MIN_USD)}
-                      max="100"
-                      value={customAmount}
+                      max={String(SLIDER_MAX_USD)}
+                      value={Math.min(customAmount, SLIDER_MAX_USD)}
                       onChange={(e) => setCustomAmount(Number(e.target.value))}
+                      aria-label={t("topup.slider.label")}
                       className="absolute z-10 h-8 w-full cursor-grab opacity-0 active:cursor-grabbing"
                       style={{ top: "-14px", left: 0 }}
                     />
@@ -603,7 +405,7 @@ export function TopupScreen() {
                     <div
                       className="pointer-events-none absolute -top-3 z-20 h-7 w-7 rounded-full border-[3px] border-white shadow-[0_2px_12px_rgba(0,0,0,0.25)] transition-all duration-150"
                       style={{
-                        left: `calc(${((customAmount - 1) / 99) * 100}% - 14px)`,
+                        left: `calc(${((Math.min(customAmount, SLIDER_MAX_USD) - CUSTOM_TOPUP_MIN_USD) / sliderSpan) * 100}% - 14px)`,
                         ...paperTextureStyle,
                       }}
                     />
@@ -622,7 +424,10 @@ export function TopupScreen() {
                         setCustomAmount(
                           Math.min(
                             CUSTOM_TOPUP_MAX_USD,
-                            Math.max(CUSTOM_TOPUP_MIN_USD, Number.isFinite(value) ? Math.floor(value) : CUSTOM_TOPUP_MIN_USD),
+                            Math.max(
+                              CUSTOM_TOPUP_MIN_USD,
+                              Number.isFinite(value) ? Math.floor(value) : CUSTOM_TOPUP_MIN_USD,
+                            ),
                           ),
                         );
                       }}
@@ -640,7 +445,6 @@ export function TopupScreen() {
           </div>
         </div>
 
-        {/* ── Bottom CTA ───────────────────────────────────────── */}
         <div
           className="fixed left-0 right-0 bg-gradient-to-t from-[#F5F1EB] via-[#F5F1EB] to-transparent px-6 pt-6 pb-5"
           style={{
@@ -666,7 +470,7 @@ export function TopupScreen() {
                 disabled={isRestoring}
                 className="hover:text-[#1A1A1A] transition-colors disabled:opacity-50"
               >
-                {isRestoring ? "恢复中..." : `↻ ${t("topup.restore") || "恢复已购买"}`}
+                {isRestoring ? t("topup.restoring") : `↻ ${t("topup.restore")}`}
               </button>
             </div>
           </div>

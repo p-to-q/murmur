@@ -34,14 +34,13 @@ describe("resolveEntitlement", () => {
   });
 
   it("allows authenticated users to save when they have enough notes", () => {
-    expect(resolveEntitlement(freeUser, 2)).toMatchObject({
+    expect(resolveEntitlement(freeUser, 0)).toMatchObject({
       canHum: true,
       canSave: true,
       canLlmEdit: true,
       canExportWebm: true,
       canTopUp: true,
       canDeleteAccount: true,
-      remainingNotes: 2,
     });
   });
 });

@@ -18,6 +18,7 @@ export interface UserBalance {
   notes: number;
   planTier: "free" | "premium";
   nextRefillAt: string;
+  unlimited?: boolean;
 }
 
 export type UserBalanceFetchError = "unauthorized" | "unavailable";
@@ -79,14 +80,16 @@ export async function fetchUserBalance(
       }
       const payload = (await response.json()) as Partial<UserBalance> & {
         error?: string;
+        unlimited?: boolean;
       };
-      if (typeof payload.notes !== "number") {
+      if (typeof payload.notes !== "number" && !payload.unlimited) {
         return { ok: false, balance: null, error: "unavailable" as const };
       }
       const balance: UserBalance = {
-        notes: payload.notes,
+        notes: payload.unlimited ? Number.POSITIVE_INFINITY : payload.notes!,
         planTier: payload.planTier === "premium" ? "premium" : "free",
         nextRefillAt: payload.nextRefillAt ?? new Date().toISOString(),
+        unlimited: payload.unlimited === true,
       };
       cachedBalance = balance;
       cachedAt = Date.now();
@@ -129,12 +132,12 @@ export function useUserBalance(): UseUserBalanceResult {
 
   const refresh = useCallback(async () => {
     if (!isGoogleUser) {
-      // Local Creator: get from localStorage
       const localBalance = getLocalBalance();
       setSnapshot({
         notes: localBalance.notes,
         planTier: "free",
         nextRefillAt: localBalance.nextRefillAt,
+        unlimited: false,
       });
       setIsLoading(false);
       return;
@@ -162,6 +165,7 @@ export function useUserBalance(): UseUserBalanceResult {
           notes: localBalance.notes,
           planTier: "free",
           nextRefillAt: localBalance.nextRefillAt,
+          unlimited: false,
         });
         setIsLoading(false);
       }

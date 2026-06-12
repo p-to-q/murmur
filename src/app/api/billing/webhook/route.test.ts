@@ -26,6 +26,9 @@ const eventInserts: Row[] = [];
 const purchaseInserts: Row[] = [];
 const eventUpdates: Row[] = [];
 let eventInsertConflicts = false;
+// Row returned by the reclaim lookup when an insert conflicts. "processed"
+// means true duplicate; "failed"/"received" means the grant never landed.
+let reclaimRow: { id: string; status: string } | null = null;
 
 function insertChain(values: Row) {
   const isEventRow = "providerEventId" in values;
@@ -44,6 +47,13 @@ function insertChain(values: Row) {
 mock.module("@/lib/db/client", () => ({
   db: {
     insert: () => ({ values: (v: Row) => insertChain(v) }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => (reclaimRow ? [reclaimRow] : []),
+        }),
+      }),
+    }),
     update: () => ({
       set: (v: Row) => ({
         where: () => {
@@ -131,6 +141,7 @@ beforeEach(() => {
   nextEvent = paidSessionEvent();
   signatureError = null;
   eventInsertConflicts = false;
+  reclaimRow = { id: "evw_prior", status: "processed" };
   eventInserts.length = 0;
   purchaseInserts.length = 0;
   eventUpdates.length = 0;
@@ -177,6 +188,28 @@ describe("POST /api/billing/webhook", () => {
     expect(body.duplicate).toBe(true);
     expect(grantInputs).toHaveLength(0);
     expect(purchaseInserts).toHaveLength(0);
+  });
+
+  it("reprocesses a redelivered event whose first attempt failed", async () => {
+    eventInsertConflicts = true;
+    reclaimRow = { id: "evw_prior", status: "failed" };
+    const response = await POST(buildRequest());
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { granted?: number };
+    expect(body.granted).toBe(130);
+    expect(grantInputs).toHaveLength(1);
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
+  it("reprocesses a redelivered event stuck in received from a crash", async () => {
+    eventInsertConflicts = true;
+    reclaimRow = { id: "evw_prior", status: "received" };
+    const response = await POST(buildRequest());
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { granted?: number };
+    expect(body.granted).toBe(130);
+    expect(grantInputs).toHaveLength(1);
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
   });
 
   it("records the purchase and grants notes for a paid session", async () => {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
+import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
 let nextAuth: ResolvedRequestAuth = {
@@ -27,18 +28,6 @@ mock.module("@/lib/billing/stripe", () => ({
   getStripePriceId: () => null,
 }));
 
-mock.module("@/lib/rate-limit", () => ({
-  getRateLimitStore: () => ({
-    hit: async () => ({
-      allowed: true,
-      retryAfterMs: 0,
-      retryAt: new Date("2026-06-12T00:00:00.000Z"),
-      limit: 10,
-      remaining: 9,
-    }),
-  }),
-}));
-
 const { POST } = await import("./route");
 
 function buildRequest(body: Record<string, unknown>): NextRequest {
@@ -52,7 +41,11 @@ function buildRequest(body: Record<string, unknown>): NextRequest {
   }) as unknown as NextRequest;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Real in-memory rate-limit store; partial module mocks of "@/lib/rate-limit"
+  // leak into every test file that runs later in the same bun process.
+  resetCachedRateLimitStore();
+  await getRateLimitStore().resetAll();
   process.env.MURMUR_APP_URL = "http://test.local";
   nextAuth = {
     ok: true,

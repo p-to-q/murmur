@@ -30,6 +30,7 @@ import { createPortal } from "react-dom";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
+import { versionPreview } from "@/lib/music/version-preview";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { NAV_ITEMS, computeTrail, type ComputedStep } from "./nav-items";
@@ -67,9 +68,14 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
     localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
 
+  useEffect(() => {
+    versionPreview.stop();
+  }, [pathname]);
+
   const goHome = (e: React.MouseEvent) => {
     e.preventDefault();
     getPlayer().stop().catch(() => {});
+    versionPreview.stop();
     resetFlow();
     router.push("/");
   };

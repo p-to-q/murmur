@@ -156,43 +156,33 @@ afterEach(() => {
 });
 
 describe("POST /api/strummer/edit", () => {
-  it("spends before calling the model and returns filtered tokens", async () => {
+  it("returns filtered tokens without spending for signed-in users", async () => {
     const response = await POST(buildRequest());
 
     expect(response.status).toBe(200);
-    expect(callOrder).toEqual(["spend", "ai"]);
-    expect(lastSpendInputs).toHaveLength(1);
-    expect(lastSpendInputs[0]?.reason).toBe("spend:llm_edit");
-    expect(lastSpendInputs[0]?.metadata?.phase).toBe("preflight");
+    expect(callOrder).toEqual(["ai"]);
+    expect(lastSpendInputs).toHaveLength(0);
     const body = await response.json() as { tokens: string[] };
     expect(body.tokens).toEqual(["warmer", "less_drums"]);
   });
 
-  it("refunds the preflight spend when the model fails", async () => {
+  it("does not refund when the model fails for signed-in users", async () => {
     nextAiThrows = new Error("provider offline");
 
     const response = await POST(buildRequest("make it cinematic", "req_llm_fail"));
 
     expect(response.status).toBe(502);
-    expect(callOrder).toEqual(["spend", "ai", "refund"]);
-    expect(lastRefundInputs).toHaveLength(1);
-    expect(lastRefundInputs[0]?.originalLedgerId).toBe("nle_llm");
+    expect(callOrder).toEqual(["ai"]);
+    expect(lastRefundInputs).toHaveLength(0);
   });
 
-  it("does not refund duplicate spends on model failure", async () => {
-    nextSpendResult = {
-      ok: true,
-      ledgerId: "nle_existing",
-      balanceBefore: 10,
-      balanceAfter: 9,
-      duplicate: true,
-    };
+  it("skips billing entirely for signed-in users on model failure", async () => {
     nextAiThrows = new Error("provider offline");
 
     const response = await POST(buildRequest());
 
     expect(response.status).toBe(502);
-    expect(callOrder).toEqual(["spend", "ai"]);
+    expect(callOrder).toEqual(["ai"]);
     expect(lastRefundInputs).toHaveLength(0);
   });
 

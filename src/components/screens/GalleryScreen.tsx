@@ -176,7 +176,7 @@ export function GalleryScreen() {
             transition={{ delay: 0.1, duration: 0.5 }}
           >
             <ActivityHeatmap
-              dates={displaySongs.map((s) => s.createdAt)}
+              dates={isShowingDemo ? [] : displaySongs.map((s) => s.createdAt)}
               songCount={songs.length}
               title={t("gallery.title")}
               recentSongs={sorted.slice(0, 3).map((s) => ({

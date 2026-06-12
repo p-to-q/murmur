@@ -1,7 +1,13 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { COST } from "@murmur/core";
+import {
+  hasLocalNotes,
+  spendLocalNotes,
+} from "@/lib/balance/balance-manager";
+import { useGoogleSignIn } from "@/lib/hooks/use-google-sign-in";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
@@ -44,13 +50,8 @@ const IDLE_ROTATE_INTERVAL = 9000;
 const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
 const ENABLE_HUM_ENTRANCE_MOTION = true;
 
-// 未登录访客每台设备可免费创作 GUEST_FREE_LIMIT 次；用完后哼唱球与示例旋律
-// CTA 改为弹出登录墙而不再生成。登录（依然免费）即解除上限。
-// 上限只在「点击动作」时判断，绝不在 render 时门控——示例旋律 CTA 必须留在
-// 服务端 HTML 里（qa-routes hum-home SSR 契约）；用 useState(false) 初始值挡掉
-// 它会把文案踢出 SSR，smoke:pages 会红。
-const GUEST_FREE_LIMIT = 5;
-const HUM_VISITS_KEY = "murmur:hum-visits";
+// 未登录访客每台设备每天 DAILY_REFILL 枚音磅（见 balance-manager）；用完后弹出登录墙。
+// 登录后 server 端跳过扣费，无限创作。
 
 /**
  * Surface variants the Hum screen knows how to render. The router below
@@ -120,6 +121,7 @@ export function HumScreen() {
   const [showHeardMessage, setShowHeardMessage] = useState(false);
   const { refresh: refreshBalance } = useUserBalance();
   const { status: sessionStatus } = useSession();
+  const { signInWithGoogle } = useGoogleSignIn();
   // During "loading" we do NOT gate, so a returning signed-in user is never
   // briefly walled by a stale guest counter on their device.
   const isGuest = sessionStatus === "unauthenticated";
@@ -249,14 +251,12 @@ export function HumScreen() {
   // guest has used up their free creations on this device; authed users and
   // guests under the limit pass through untouched.
   const passGuestGate = (): boolean => {
-    if (isGuest && readHumVisits() >= GUEST_FREE_LIMIT) {
+    if (!isGuest) return true;
+    if (!hasLocalNotes(COST.hum)) {
       setShowLoginWall(true);
       return false;
     }
     return true;
-  };
-  const bumpGuestVisit = () => {
-    if (isGuest) writeHumVisits(readHumVisits() + 1);
   };
 
   const transcribeAndGenerate = async (blob: Blob | undefined) => {
@@ -313,14 +313,10 @@ export function HumScreen() {
         .catch(() => {});
       if (blob) {
         writeFixtureRescueState(noteLiveSuccess(readFixtureRescueState()));
+        if (isGuest) spendLocalNotes(COST.hum);
       }
-      // A live take debits the balance server-side; pull the fresh number
-      // so the next idle render reflects reality. Demo runs (blob === undefined)
-      // never touch the ledger, so we skip the refresh round-trip there.
+      // A live take debits guest quota locally; signed-in users are unlimited.
       if (blob) void refreshBalance();
-      // A delivered creation (live hum or demo) counts against the guest's
-      // free quota; no-op for authed users.
-      bumpGuestVisit();
       setRecordingState("done");
       // Vibe is its own route in v2; hand the journey off so the iris-close
       // transition mounts on /vibe instead of bouncing through an overlay.
@@ -1084,7 +1080,7 @@ export function HumScreen() {
                   {t("hum.login_wall.detail")}
                 </p>
                 <button
-                  onClick={() => signIn("google", { callbackUrl: "/" })}
+                  onClick={() => signInWithGoogle("/")}
                   className="mm-btn-primary w-full justify-center mb-3"
                 >
                   {t("hum.login_wall.cta")}
@@ -1119,18 +1115,6 @@ function writeFixtureRescueState(
     FIXTURE_RESCUE_STORAGE_KEY,
     serializeFixtureRescueState(state),
   );
-}
-
-function readHumVisits(): number {
-  if (typeof window === "undefined") return 0;
-  const raw = window.localStorage.getItem(HUM_VISITS_KEY);
-  const n = raw ? Number.parseInt(raw, 10) : 0;
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
-function writeHumVisits(count: number): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(HUM_VISITS_KEY, String(Math.max(0, count)));
 }
 
 function copyForState(

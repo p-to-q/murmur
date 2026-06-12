@@ -18,6 +18,33 @@ export const DICT = {
   "nav.share.reward":  { zh: "各得 100 音磅", en: "100 notes for both" },
   "share.tagline":     { zh: "创造值得分享的快乐。", en: "Create joy worth sharing." },
   "share.google":      { zh: "使用Google登录",    en: "Sign in with Google" },
+  "share.copy_link":   { zh: "复制邀请链接",      en: "Copy invite link" },
+  "share.copied":      { zh: "链接已复制",        en: "Link copied" },
+  "share.copy_failed": { zh: "复制失败，请手动分享", en: "Couldn't copy — try sharing manually" },
+  "auth.google_unavailable": {
+    zh: "Google 登录尚未配置。请在 .env 中设置 GOOGLE_CLIENT_ID 与 GOOGLE_CLIENT_SECRET。",
+    en: "Google sign-in isn't configured yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env.",
+  },
+  "auth.error.title": {
+    zh: "登录出了点问题",
+    en: "Sign-in hit a snag",
+  },
+  "auth.error.configuration": {
+    zh: "Google 授权后，服务器无法连接 Google 完成登录。请开启 VPN 的全局/TUN 模式，或在 .env.local 设置 HTTPS_PROXY=http://127.0.0.1:7890（改成你代理软件的本地端口），然后重启 bun dev。",
+    en: "After Google authorized you, the server couldn't reach Google to finish sign-in. Enable system-wide VPN/TUN, or set HTTPS_PROXY=http://127.0.0.1:7890 in .env.local (use your proxy's local port), then restart bun dev.",
+  },
+  "auth.error.access_denied": {
+    zh: "你已取消 Google 登录。",
+    en: "You cancelled Google sign-in.",
+  },
+  "auth.error.default": {
+    zh: "登录未完成，请稍后再试。",
+    en: "Sign-in didn't finish. Please try again in a moment.",
+  },
+  "auth.error.back": {
+    zh: "返回 Murmur",
+    en: "Back to Murmur",
+  },
   "nav.device.title":  { zh: "跨设备同步",        en: "Device sync" },
   "nav.device.desc":   { zh: "手机端体验更佳，所有数据实时同步", en: "Better on mobile, all data syncs in real-time" },
   "nav.notify.title":  { zh: "通知",              en: "Notifications" },
@@ -326,6 +353,7 @@ export const DICT = {
   "me.profile.helper":     { zh: "这是你在 Murmur 里留下旋律的名字。", en: "This is the name your songs live under in Murmur." },
   "me.notes.title":        { zh: "音磅", en: "MURMUR NOTES" },
   "me.notes.unlimited":    { zh: "不限量——想哼多少哼多少。", en: "Unlimited — hum as much as you like." },
+  "me.notes.signed_in":    { zh: "已登录 · 无限音磅", en: "Signed in · unlimited notes" },
   "me.notes.cta":          { zh: "去补给", en: "Top up" },
   "me.notes.refill_default": { zh: "每天午夜补回 5 枚音磅。", en: "5 notes refill every day at midnight." },
   "me.notes.refill_due":   { zh: "免费音磅已经到了，刷新即可领取。", en: "Free notes are ready — refresh to claim." },
@@ -465,6 +493,54 @@ export const DICT = {
 
   // ── SideNav footer popovers + dual-pool balance ────────────────────
   "nav.daily":                   { zh: "今日",     en: "today" },
+
+  // ── Global error / loading / 404 ───────────────────────────────────
+  "error.eyebrow":       { zh: "MURMUR", en: "MURMUR" },
+  "error.title":         { zh: "这一句走调了。", en: "That line went off-key." },
+  "error.body":          { zh: "页面出了点问题，不过你的旋律都还在。再试一次，或者先回首页哼一句。", en: "Something broke on this page, but your songs are safe. Try again, or hum a new one from home." },
+  "error.digest":        { zh: "错误编号 {id}", en: "Error {id}" },
+  "error.retry":         { zh: "再试一次", en: "Try again" },
+  "error.home":          { zh: "回首页", en: "Back home" },
+  "loading.aria":        { zh: "加载中", en: "Loading" },
+  "not_found.code":      { zh: "404", en: "404" },
+  "not_found.title":     { zh: "这里没有旋律。", en: "No melody here." },
+  "not_found.body":      { zh: "你找的页面不存在，或者已经被收进别的歌里了。", en: "This page doesn't exist, or it wandered into another song." },
+  "not_found.home":      { zh: "回去哼一句", en: "Hum something new" },
+  "not_found.gallery":   { zh: "看看歌单", en: "Browse gallery" },
+
+  // ── Privacy ────────────────────────────────────────────────────────
+  "privacy.title":       { zh: "隐私说明", en: "Privacy" },
+  "privacy.intro":       { zh: "Murmur 只收集创作所需的最少信息，让你的哼唱能变成可保存的小歌。", en: "Murmur collects only what we need to turn your hums into songs you can save." },
+  "privacy.collect.title": { zh: "我们收集什么", en: "What we collect" },
+  "privacy.collect.body":  { zh: "账号信息（登录时）、你保存的歌曲与设置、以及让产品正常运行的基础诊断数据。", en: "Account info when you sign in, songs and preferences you save, and basic diagnostics to keep the app running." },
+  "privacy.use.title":     { zh: "我们如何使用", en: "How we use it" },
+  "privacy.use.body":      { zh: "用于转写哼唱、生成编曲、保存作品、同步余额，以及在你遇到问题时提供支持。", en: "To transcribe hums, generate arrangements, save your work, sync your balance, and help when something goes wrong." },
+  "privacy.share.title":   { zh: "分享与第三方", en: "Sharing & third parties" },
+  "privacy.share.body":    { zh: "支付由 Stripe 处理；我们不会出售你的个人数据。你主动分享的歌卡片只包含你选择导出的内容。", en: "Payments go through Stripe. We don't sell your data. Shared song cards only include what you choose to export." },
+  "privacy.contact.title": { zh: "联系我们", en: "Contact" },
+  "privacy.contact.body":  { zh: "如有隐私相关问题，请通过应用内设置或 support@murmur.app 联系我们。", en: "Questions about privacy? Reach us via in-app settings or support@murmur.app." },
+  "privacy.back":          { zh: "返回", en: "Back" },
+
+  // ── Account deletion ───────────────────────────────────────────────
+  "delete.title":        { zh: "删除账号", en: "Delete account" },
+  "delete.intro":        { zh: "你可以随时请求删除 Murmur 账号。删除后，个人资料将被标记为不可用，歌曲会在保留期后从服务器移除。", en: "You can request deletion of your Murmur account at any time. Your profile will be deactivated and songs removed from our servers after a retention period." },
+  "delete.sign_in":      { zh: "请先登录后再申请删除账号。", en: "Sign in first to request account deletion." },
+  "delete.steps.title":  { zh: "删除流程", en: "What happens" },
+  "delete.steps.1":      { zh: "账号进入 30 天冷静期，期间可以取消删除。", en: "Your account enters a 30-day grace period during which you can cancel." },
+  "delete.steps.2":      { zh: "冷静期结束后，个人资料与关联数据会被永久删除。", en: "After the grace period, your profile and linked data are permanently deleted." },
+  "delete.steps.3":      { zh: "已购买的音磅余额不可退款；删除前请先用完或联系支持。", en: "Purchased note balances are non-refundable — use them or contact support before deleting." },
+  "delete.cta":          { zh: "发送删除请求", en: "Request deletion" },
+  "delete.cta.pending":  { zh: "删除 API 即将上线。如需立即处理，请发邮件至 support@murmur.app。", en: "The delete API is coming soon. For immediate help, email support@murmur.app." },
+  "delete.back":         { zh: "返回我的", en: "Back to Me" },
+
+  // ── Topup extras ───────────────────────────────────────────────────
+  "topup.next_refill":   { zh: "下次补给 {time}", en: "Next refill {time}" },
+  "topup.plan.free":     { zh: "免费计划", en: "Free plan" },
+  "topup.plan.premium":  { zh: "高级计划", en: "Premium" },
+  "topup.plan_label":    { zh: "计划", en: "Plan" },
+  "topup.restoring":     { zh: "恢复中…", en: "Restoring…" },
+  "topup.chart.soon":    { zh: "使用记录即将上线", en: "Usage history coming soon" },
+  "checkout.confirming_grant": { zh: "正在确认到账…", en: "Confirming your notes…" },
 } as const;
 
 export type TKey = keyof typeof DICT;

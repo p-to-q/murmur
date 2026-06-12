@@ -31,9 +31,10 @@ import {
 } from "@murmur/core";
 
 import { useTranslator } from "@/lib/i18n";
+import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
-type Phase = "requesting" | "succeeded" | "canceled" | "failed";
+type Phase = "requesting" | "confirming" | "succeeded" | "canceled" | "failed";
 
 const PROCESSING_INTERVAL_MS = 900;
 const DEFAULT_SKU_ID = "topup_120_notes";
@@ -76,7 +77,7 @@ export function CheckoutScreen() {
 
   const [phase, setPhase] = useState<Phase>(() =>
     returnStatus === "success"
-      ? "succeeded"
+      ? "confirming"
       : returnStatus === "canceled"
         ? "canceled"
         : "requesting",
@@ -95,7 +96,14 @@ export function CheckoutScreen() {
     [t],
   );
 
-  const celebrate = useCallback(() => {
+  const celebrate = useCallback(async () => {
+    setPhase("confirming");
+    for (let attempt = 0; attempt < 6; attempt++) {
+      await fetchUserBalance({ force: true });
+      if (attempt < 5) {
+        await new Promise((resolve) => window.setTimeout(resolve, 600 * (attempt + 1)));
+      }
+    }
     setPhase("succeeded");
     toast.success(
       (t("checkout.toast.success") || "+{notes} notes added.").replace(
@@ -168,14 +176,28 @@ export function CheckoutScreen() {
         initialized from the URL, so this never calls setState directly. ── */
   useEffect(() => {
     if (returnStatus === "success") {
-      toast.success(
-        (t("checkout.toast.success") || "+{notes} notes added.").replace(
-          "{notes}",
-          String(skuNotes),
-        ),
-      );
-      const id = window.setTimeout(() => router.push("/me"), 1600);
-      return () => window.clearTimeout(id);
+      let cancelled = false;
+      void (async () => {
+        setPhase("confirming");
+        for (let attempt = 0; attempt < 6 && !cancelled; attempt++) {
+          await fetchUserBalance({ force: true });
+          if (attempt < 5) {
+            await new Promise((resolve) => window.setTimeout(resolve, 600 * (attempt + 1)));
+          }
+        }
+        if (cancelled) return;
+        setPhase("succeeded");
+        toast.success(
+          (t("checkout.toast.success") || "+{notes} notes added.").replace(
+            "{notes}",
+            String(skuNotes),
+          ),
+        );
+        window.setTimeout(() => router.push("/me"), 1600);
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
     if (returnStatus === "canceled") return;
     if (checkoutStartedRef.current) return;
@@ -272,6 +294,21 @@ export function CheckoutScreen() {
                   </motion.div>
                 )}
 
+                {phase === "confirming" && (
+                  <motion.div
+                    key="confirm"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col items-center gap-4"
+                  >
+                    <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#FF5924] border-t-transparent" />
+                    <p className="font-serif-italic text-[14px] text-[#6F6A63]">
+                      {t("checkout.confirming_grant")}
+                    </p>
+                  </motion.div>
+                )}
+
                 {phase === "succeeded" && (
                   <motion.div
                     key="ok"
@@ -350,6 +387,8 @@ export function CheckoutScreen() {
 function phaseHeadline(phase: Phase, t: (k: string) => string): string {
   switch (phase) {
     case "requesting":
+      return t("checkout.headline.requesting") || "Holding the door open.";
+    case "confirming":
       return t("checkout.headline.requesting") || "Holding the door open.";
     case "succeeded":
       return t("checkout.headline.ok") || "Done. Enjoy.";
