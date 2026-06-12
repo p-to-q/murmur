@@ -67,6 +67,8 @@ start_worker() { # engine port
 # has no `declare -A`; with it, both tunnels would collapse to index 0.
 TUN_PID_audio=""
 TUN_PID_music=""
+TUN_FAIL_audio=0
+TUN_FAIL_music=0
 start_tunnel() { # name port
   local name="$1" port="$2"
   local log="$LOG_DIR/tunnel-$name.log"
@@ -79,6 +81,24 @@ start_tunnel() { # name port
   slog "started tunnel-$name → :$port (pid $!)"
 }
 tunnel_alive() { local v="TUN_PID_$1"; local p="${!v}"; [ -n "$p" ] && kill -0 "$p" 2>/dev/null; }
+
+# A cloudflared process can stay alive while its edge connection silently
+# drops — the tunnel then serves 000/530 even though `kill -0` says "alive".
+# PID checks miss that, so also probe end-to-end and restart after 2 consecutive
+# misses (long enough to ignore a transient blip or a still-warming tunnel).
+heal_tunnel() { # name port url
+  local name="$1" port="$2" url="$3"
+  [ -z "$url" ] && return 0
+  if edge_ok "$url"; then eval "TUN_FAIL_$name=0"; return 0; fi
+  local fv="TUN_FAIL_$name"; local f=$(( ${!fv} + 1 )); eval "TUN_FAIL_$name=$f"
+  slog "tunnel-$name not routing (edge miss $f) url=$url"
+  if [ "$f" -ge 2 ]; then
+    slog "tunnel-$name half-dead → restarting"
+    local pv="TUN_PID_$name"; local p="${!pv}"; [ -n "$p" ] && kill "$p" 2>/dev/null
+    start_tunnel "$name" "$port"
+    eval "TUN_FAIL_$name=0"
+  fi
+}
 
 # ── Vercel re-sync (only when the URL pair actually changes) ───────────
 sync_vercel() { # audio_url music_url
@@ -123,7 +143,7 @@ PY
 run() {
   ensure_tokens
   echo $$ > "$PIDFILE"
-  trap 'slog "supervisor stopping; killing children"; for p in "$TUN_PID_audio" "$TUN_PID_music"; do [ -n "$p" ] && kill "$p" 2>/dev/null; done; for pt in 8001 8002; do x=$(port_listener "$pt"); [ -n "$x" ] && kill "$x" 2>/dev/null; done; rm -f "$PIDFILE"; exit 0' INT TERM
+  trap 'slog "supervisor stopping; killing children"; for p in "$TUN_PID_audio" "$TUN_PID_music"; do [ -n "$p" ] && kill "$p" 2>/dev/null; done; for pt in 8001 8002; do x=$(port_listener "$pt"); [ -n "$x" ] && kill "$x" 2>/dev/null; done; [ "$(cat "$PIDFILE" 2>/dev/null)" = "$$" ] && rm -f "$PIDFILE"; exit 0' INT TERM
 
   slog "supervisor up (pid $$, tick ${TICK}s, root=$ROOT)"
   while :; do
@@ -131,6 +151,8 @@ run() {
     worker_healthy 8002 || start_worker music-engine 8002
     tunnel_alive audio || start_tunnel audio 8001
     tunnel_alive music || start_tunnel music 8002
+    heal_tunnel audio 8001 "$(url_from "$LOG_DIR/tunnel-audio.log")"
+    heal_tunnel music 8002 "$(url_from "$LOG_DIR/tunnel-music.log")"
 
     local a m wanted have
     a="$(url_from "$LOG_DIR/tunnel-audio.log")"
@@ -157,7 +179,14 @@ case "${1:-}" in
     echo "  Watch:  bash scripts/murmur-supervisor.sh status"
     ;;
   stop)
-    if [ -f "$PIDFILE" ]; then kill "$(cat "$PIDFILE")" 2>/dev/null && echo "• supervisor stopped"; fi
+    # Wait for the process to fully die (so a following `start` never races the
+    # dying supervisor's trap and ends up with a deleted PID file or duplicate).
+    if [ -f "$PIDFILE" ]; then
+      pid="$(cat "$PIDFILE")"
+      kill "$pid" 2>/dev/null
+      for _ in $(seq 1 30); do kill -0 "$pid" 2>/dev/null || break; sleep 0.3; done
+      echo "• supervisor stopped"
+    fi
     rm -f "$PIDFILE"
     ;;
   status)
