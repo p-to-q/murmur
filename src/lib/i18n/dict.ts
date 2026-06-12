@@ -33,6 +33,10 @@ export const DICT = {
     zh: "Google 授权后，服务器无法连接 Google 完成登录。请开启 VPN 的全局/TUN 模式，或在 .env.local 设置 HTTPS_PROXY=http://127.0.0.1:7890（改成你代理软件的本地端口），然后重启 bun dev。",
     en: "After Google authorized you, the server couldn't reach Google to finish sign-in. Enable system-wide VPN/TUN, or set HTTPS_PROXY=http://127.0.0.1:7890 in .env.local (use your proxy's local port), then restart bun dev.",
   },
+  "auth.error.configuration_prod": {
+    zh: "Google 授权后服务器未能完成登录。请在 Vercel 环境变量中确认 GOOGLE_CLIENT_SECRET、AUTH_SECRET 与 Google Cloud Console 一致，并设置 AUTH_URL=https://murmur.ptoq.io，然后重新部署。",
+    en: "Google authorized you, but the server couldn't finish sign-in. In Vercel env vars, verify GOOGLE_CLIENT_SECRET and AUTH_SECRET match Google Cloud Console, set AUTH_URL=https://murmur.ptoq.io, then redeploy.",
+  },
   "auth.error.access_denied": {
     zh: "你已取消 Google 登录。",
     en: "You cancelled Google sign-in.",

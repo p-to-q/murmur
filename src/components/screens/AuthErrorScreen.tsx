@@ -21,7 +21,14 @@ function resolveMessageKey(error: string): string {
 
 export function AuthErrorScreen({ error }: { error: string }) {
   const t = useTranslator();
-  const messageKey = resolveMessageKey(error);
+  const isLocal =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1");
+  const messageKey =
+    error === "Configuration" && !isLocal
+      ? "auth.error.configuration_prod"
+      : resolveMessageKey(error);
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">

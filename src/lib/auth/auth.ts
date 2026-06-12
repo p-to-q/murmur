@@ -8,6 +8,7 @@ import {
   googleOAuthProviderOptions,
   isGoogleOAuthConfigured,
 } from "@/lib/auth/google-config";
+import { resolveAuthSecret } from "@/lib/auth/env";
 
 /**
  * Google OAuth is optional: without credentials the provider list is empty,
@@ -23,7 +24,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // Production must provide AUTH_SECRET (fail loudly if not); local dev
   // falls back to a fixed value so keyless setups boot cleanly.
   secret:
-    process.env.AUTH_SECRET ??
+    resolveAuthSecret() ??
     (process.env.NODE_ENV === "production"
       ? undefined
       : "murmur-dev-insecure-secret"),
@@ -101,12 +102,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             : null;
 
       if (googleSub && !token.murmurUserId) {
-        const [identity] = await db
-          .select({ userId: externalIdentities.userId })
-          .from(externalIdentities)
-          .where(eq(externalIdentities.externalId, googleSub))
-          .limit(1);
-        if (identity) token.murmurUserId = identity.userId;
+        try {
+          const [identity] = await db
+            .select({ userId: externalIdentities.userId })
+            .from(externalIdentities)
+            .where(eq(externalIdentities.externalId, googleSub))
+            .limit(1);
+          if (identity) token.murmurUserId = identity.userId;
+        } catch (error) {
+          console.error("JWT identity lookup error:", error);
+        }
       }
 
       return token;
