@@ -18,7 +18,7 @@ export function createProxyFetch(): typeof fetch | undefined {
 
   return (input, init) =>
     undiciFetch(input as Parameters<typeof undiciFetch>[0], {
-      ...(init ?? {}),
+      ...(init as Parameters<typeof undiciFetch>[1] | undefined),
       dispatcher,
     }) as unknown as Promise<Response>;
 }
