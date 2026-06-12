@@ -17,11 +17,12 @@ export async function GET() {
   }
 
   try {
-    // Tunnel round-trips from a cold Vercel function can take a few
-    // seconds; clients budget 10s for the whole probe, so 8s here keeps
+    // Tunnel round-trips from a cold Vercel function can take several
+    // seconds — the first probe after a tunnel reconnect routinely blows
+    // an 8s budget. Clients budget 20s and retry once, so 12s here keeps
     // a real answer ahead of their deadline.
     const res = await fetch(`${workerBase.replace(/\/+$/, "")}/health`, {
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(12_000),
       cache: "no-store",
     });
     if (!res.ok) {
@@ -35,7 +36,12 @@ export async function GET() {
       loading?: boolean;
       loadError?: string | null;
     };
-    const available = data.status === "ok";
+    // A worker that is loading (or already has a model resident) can take
+    // generation requests — they queue behind the load. Only a hard load
+    // failure with no model counts as unavailable; a transient `degraded`
+    // blip must not pin clients to the legacy engine.
+    const available =
+      data.status === "ok" || data.loaded === true || data.loading === true;
     return NextResponse.json({
       available,
       model: data.model ?? null,

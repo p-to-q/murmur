@@ -43,6 +43,11 @@ export const DICT = {
   "hum.cta":           { zh: "按住开始哼唱",  en: "HOLD TO HUM" },
   "hum.cta.release":   { zh: "松开结束",      en: "RELEASE TO STOP" },
   "hum.demo.cta":      { zh: "示例旋律",      en: "Try demo" },
+  "hum.cta_demo":      { zh: "用示例旋律继续", en: "Use the demo melody" },
+  "hum.login_wall.title":   { zh: "免费试唱用完啦", en: "That's your free taste" },
+  "hum.login_wall.detail":  { zh: "登录后就能无限次哼唱、生成和保存——而且依然免费。", en: "Sign in to hum, generate, and save without limits — still free." },
+  "hum.login_wall.cta":     { zh: "用 Google 登录", en: "Continue with Google" },
+  "hum.login_wall.dismiss": { zh: "再看看",        en: "Maybe later" },
   "hum.recording":     { zh: "正在听…",    en: "Listening…" },
   "hum.level.idle":    { zh: "正在听",      en: "Listening" },
   "hum.level.heard":   { zh: "听到了！",    en: "Heard!" },
@@ -174,6 +179,11 @@ export const DICT = {
   "name.cancel":           { zh: "再调一调",     en: "Keep editing" },
   "name.save":             { zh: "收进藏歌",     en: "Save into Gallery" },
   "name.required":         { zh: "得有个名字才能存哦", en: "Needs a name first" },
+  "name.suggestions":      { zh: "试试这些",     en: "Try" },
+  "name.proc.rendering":   { zh: "正在渲染",     en: "rendering" },
+  "name.proc.polishing":   { zh: "正在打磨",     en: "polishing" },
+  "name.proc.encoding":    { zh: "正在编码",     en: "encoding" },
+  "name.proc.almost":      { zh: "马上就好",     en: "almost there" },
 
   // ── Track labels ───────────────────────────────────────────────────
   "track.melody":  { zh: "主旋律", en: "Melody" },
@@ -218,6 +228,13 @@ export const DICT = {
   "gallery.delete.done": { zh: "已删除。", en: "Deleted." },
   "gallery.demo.preview_hint": { zh: "这是一首示例歌曲，哼一段旋律来创作属于你自己的。", en: "This is a demo song — hum a melody to create your own." },
   "gallery.demo.cta_create": { zh: "开始创作", en: "Start creating" },
+  "gallery.demo.hint":   { zh: "这些是示例歌曲，点击开始创作你的第一首 ↓", en: "These are demo songs — tap one to start your first ↓" },
+  "gallery.start_hum":   { zh: "开始哼唱", en: "Start humming" },
+
+  // ── Activity heatmap（Gallery 顶部）───────────────────────────────
+  "gallery.heatmap.less":   { zh: "少",   en: "Less" },
+  "gallery.heatmap.more":   { zh: "多",   en: "More" },
+  "gallery.heatmap.recent": { zh: "最近", en: "Recent" },
 
   // ── Delete confirm（Gallery 与 SongDetail 共用）────────────────────
   "song.delete":         { zh: "删除", en: "Delete" },
@@ -232,6 +249,9 @@ export const DICT = {
   "song.not_found":      { zh: "找不到这首歌",       en: "Song not found" },
   "song.back_to_gallery":{ zh: "返回藏歌",           en: "Back to Gallery" },
   "song.remix_again":    { zh: "再生三版",           en: "Try new versions" },
+  "song.edit_again":     { zh: "再改一改",           en: "Edit again" },
+  "song.menu":           { zh: "更多",               en: "More" },
+  "song.caption":        { zh: "{date}，由一句哼唱而来。", en: "Made by humming, {date}." },
   "song.meta.vibe":      { zh: "Vibe",               en: "Vibe" },
   "song.meta.bpm":       { zh: "BPM",                en: "BPM" },
   "song.meta.key":       { zh: "Key",                en: "Key" },
@@ -276,6 +296,17 @@ export const DICT = {
   "song.trace.editing": { zh: "后续修订", en: "Editing cue" },
   "song.trace.editing.title": { zh: "下一步该往哪推", en: "Where to push next" },
   "song.export.title":        { zh: "导出成品", en: "Export outputs" },
+  "song.export.eyebrow":      { zh: "导出", en: "EXPORT" },
+  "song.export.audio.label":  { zh: "音频", en: "Audio" },
+  "song.export.audio.hint":   { zh: "mp3", en: "mp3" },
+  "song.export.html.label":   { zh: "分享卡", en: "Share card" },
+  "song.export.html.hint":    { zh: "单文件 html", en: "self-contained html" },
+  "song.export.poster.label": { zh: "海报", en: "Poster" },
+  "song.export.poster.hint":  { zh: "png", en: "png" },
+  "song.export.video.label":  { zh: "音乐视频", en: "Audio video" },
+  "song.export.free":         { zh: "免费", en: "free" },
+  "song.export.cost.video":   { zh: "免费", en: "free" },
+  "song.export.no_audio_yet": { zh: "音频还没渲染好", en: "not yet rendered" },
   "song.export.video_hint":   { zh: "视频会复用当前音频与视觉 preset，导出为可直接分享的 MP4（旧浏览器自动回退 WebM）。", en: "Video export reuses the current audio and visual preset and renders a shareable MP4 (older browsers fall back to WebM)." },
   "song.export.video_unsupported_hint": { zh: "当前浏览器不支持视频导出；你仍然可以下载音频、分享页和分享卡。", en: "This browser does not support video export, but audio, share page, and share card are still available." },
   "song.export.video_preparing": { zh: "正在准备导出视频，请稍候…", en: "Preparing video export…" },
@@ -283,7 +314,6 @@ export const DICT = {
   "song.export.video_ready":  { zh: "视频已开始下载", en: "Video download started" },
   "song.export.video_failed": { zh: "视频导出失败，请稍后重试", en: "Video export failed. Please try again." },
   "song.export.video_unsupported": { zh: "当前浏览器暂不支持视频导出，可先下载音频或分享页。", en: "This browser does not support video export yet. You can still download the audio or share page." },
-  "song.export.cost.video":  { zh: "2 颗音磅", en: "2 notes" },
   "song.export.exporting":    { zh: "导出中…",   en: "Exporting…" },
   "song.export.ok":           { zh: "已下载",     en: "Downloaded" },
   "song.export.err":          { zh: "导出失败，请重试", en: "Export failed — please retry" },
@@ -359,6 +389,7 @@ export const DICT = {
   // ── Common ──────────────────────────────────────────────────────────
   "common.back":                 { zh: "返回",     en: "Back" },
   "common.cancel":               { zh: "取消",     en: "Cancel" },
+  "common.audio_unlock_hint":    { zh: "点击任意位置以启用音频播放", en: "Tap anywhere to enable audio" },
 
   // ── Topup ──────────────────────────────────────────────────────
   "topup.assets":      { zh: "资产",       en: "Assets" },
@@ -384,7 +415,9 @@ export const DICT = {
   "topup.eyebrow":               { zh: "音磅",                  en: "MURMUR NOTES" },
   "topup.headline":              { zh: "多一点音磅，多几首小歌。", en: "More notes, more little songs." },
   "topup.balance":               { zh: "你的余额",                en: "you have" },
+  "topup.balance.unit":          { zh: "颗音磅",                  en: "notes" },
   "topup.balance.sub":           { zh: "颗音磅 · 每天 0 点补 5 颗", en: "notes · 5 refill every day at midnight" },
+  "topup.per_note":              { zh: "颗",                      en: "note" },
   "topup.pick.eyebrow":          { zh: "选一档",                  en: "PICK A TOP UP" },
   "topup.notes_label":           { zh: "音磅",                  en: "notes" },
   "topup.badge.popular":         { zh: "热门",                    en: "popular" },
@@ -393,6 +426,10 @@ export const DICT = {
   "topup.provider.stripe":       { zh: "用 Stripe 支付",          en: "pay via Stripe" },
   "topup.provider.wechat":       { zh: "用微信支付",              en: "pay via WeChat" },
   "topup.restore":               { zh: "恢复已购买",              en: "Restore purchases" },
+  "topup.restore.success":       { zh: "已恢复 {count} 笔新购买，共 {notes} 颗音磅", en: "Restored {count} new purchases — {notes} notes in total" },
+  "topup.restore.found":         { zh: "找到 {count} 笔购买记录，共 {notes} 颗音磅", en: "Found {count} past purchases — {notes} notes in total" },
+  "topup.restore.none":          { zh: "没有找到可恢复的购买记录",  en: "No purchases to restore" },
+  "topup.restore.failed":        { zh: "恢复购买失败，请稍后重试",  en: "Couldn't restore purchases — try again later" },
   "topup.terms":                 { zh: "条款",                    en: "Terms" },
   "topup.privacy":               { zh: "隐私",                    en: "Privacy" },
 
@@ -416,6 +453,7 @@ export const DICT = {
   "checkout.try_again":          { zh: "再试一次",         en: "Try again" },
   "checkout.different":          { zh: "换个支付方式",     en: "use a different method" },
   "checkout.toast.success":      { zh: "已经多了 {notes} 颗音磅。", en: "+{notes} notes added." },
+  "checkout.sign_in_required":   { zh: "请先登录，再来补给音磅。", en: "Sign in first, then top up your notes." },
 
   // ── Side / bottom nav ──────────────────────────────────────────────
   "nav.flow.vibe":               { zh: "风物",     en: "Vibe" },

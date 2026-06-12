@@ -22,20 +22,30 @@ worker 在公网上必须带 token（`MUSIC_WORKER_TOKEN`/`AUDIO_WORKER_TOKEN`
 
 ## 方案 A（当前在用，免费）：本机 M4 Max + Cloudflare 快速隧道
 
+**常驻方式（推荐，2026-06 起）** — launchd 系统服务，崩溃自动拉起、
+重启自动恢复、隧道 URL 轮换后自动改写 Vercel env 并重新部署，全程无人值守：
+
 ```bash
-bash scripts/serve-workers-public.sh --sync-vercel
-caffeinate -dims &        # 防休眠
+bash scripts/murmur-services.sh install    # 一次安装，永久生效
+bash scripts/murmur-services.sh status     # launchd 状态 + 本地健康 + 当前隧道 URL
+bash scripts/murmur-services.sh logs       # tail 全部日志（~/Library/Logs/murmur/）
+bash scripts/murmur-services.sh restart    # 全量重启
+bash scripts/murmur-services.sh uninstall  # 停掉并移除
 ```
 
-脚本会：起两个 worker → 开两条 trycloudflare 隧道 → 预热模型 →
-把 URL/token 写进 Vercel production env → 自动重新部署。
+六个服务：`audio-engine`(:8001)、`music-engine`(:8002)、`tunnel-audio`、
+`tunnel-music`、`tunnel-sync`（监视隧道 URL，变了就自动 sync Vercel + 预热模型）、
+`caffeinate`（防休眠）。**不再需要开着终端窗口。**
+
+**手动方式（备用）**：`bash scripts/serve-workers-public.sh --sync-vercel`
+（前台运行，关终端即全停 —— 这正是历史上"后端老是崩"的原因，仅调试时用）。
 
 - **优点**：零成本，M4 Max 上 mrt2_base 生成 1 秒音频 ≈ 1 秒，体验最好。
-- **限制**：Mac 必须开机在线；快速隧道的 URL **每次重启会换**（所以要带
-  `--sync-vercel` 重跑）；trycloudflare 无 SLA，偶发掉线。
+- **限制**：Mac 必须开机在线（笔记本合盖需插电）；快速隧道 URL 每次重启会换
+  （`tunnel-sync` 服务已自动处理，约 3 分钟内恢复）；trycloudflare 无 SLA。
 - 升级稳定性：注册 Cloudflare 账号 + 域名后改用 **named tunnel**
   （`cloudflared tunnel create murmur-workers`），URL 永久固定，
-  之后就不再需要 `--sync-vercel`。
+  连自动同步都不再需要。
 
 ## 方案 B（7×24 稳定）：租 GPU 云主机
 

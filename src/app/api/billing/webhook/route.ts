@@ -17,7 +17,7 @@
 
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type Stripe from "stripe";
 
 import { getStripeClient, getStripeWebhookSecret } from "@/lib/billing/stripe";
@@ -100,7 +100,13 @@ export async function POST(request: NextRequest) {
     })
     .returning({ id: eventsWebhook.id });
 
-  const eventRow = insertedRows[0];
+  // Conflict ⇒ we've seen this event id before. Only a fully *processed*
+  // event is a true duplicate: a "failed" row (or a "received" row from a
+  // crashed attempt) means the grant never happened, and answering 200 here
+  // would stop Stripe's retries forever — the paid user would never be
+  // credited. Reprocessing is safe because the purchase + grant writes are
+  // individually idempotent.
+  const eventRow = insertedRows[0] ?? (await reclaimUnprocessedEvent(event.id));
   if (!eventRow) {
     return NextResponse.json({ received: true, duplicate: true, requestId });
   }
@@ -145,6 +151,23 @@ export async function POST(request: NextRequest) {
       { received: true, error: "non_retryable", requestId },
     );
   }
+}
+
+async function reclaimUnprocessedEvent(
+  providerEventId: string,
+): Promise<{ id: string } | null> {
+  const [existing] = await db
+    .select({ id: eventsWebhook.id, status: eventsWebhook.status })
+    .from(eventsWebhook)
+    .where(
+      and(
+        eq(eventsWebhook.provider, "stripe"),
+        eq(eventsWebhook.providerEventId, providerEventId),
+      ),
+    )
+    .limit(1);
+  if (!existing || existing.status === "processed") return null;
+  return { id: existing.id };
 }
 
 async function handleStripeEvent(

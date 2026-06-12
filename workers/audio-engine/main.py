@@ -15,6 +15,7 @@ import math
 import os
 import tempfile
 import time
+import uuid
 from typing import Annotated
 
 import librosa
@@ -49,6 +50,60 @@ MIN_NOTE_DUR = 0.08
 MIN_CONF = 0.4
 MAX_AUDIO_BYTES = 2 * 1024 * 1024
 MAX_AUDIO_SECONDS = 30
+
+# ── Hum capture ───────────────────────────────────────────────────────
+# Every hum that reaches the worker is a real input someone sang. Saving
+# the raw upload to a local folder lets the operator listen back to what
+# people actually hum — including the failures worth debugging. Disable
+# with MURMUR_CAPTURE_HUMS=0; capped so it never fills the disk.
+CAPTURE_HUMS = os.getenv("MURMUR_CAPTURE_HUMS", "1").strip().lower() not in {"0", "false", "no"}
+CAPTURE_DIR = os.path.expanduser(os.getenv("MURMUR_CAPTURE_DIR", "~/Documents/murmur-hums"))
+CAPTURE_MAX_FILES = max(1, int(os.getenv("MURMUR_CAPTURE_MAX_FILES", "3000") or 3000))
+
+
+def _prune_captures() -> None:
+    """Keep the capture folder under CAPTURE_MAX_FILES, oldest first."""
+    try:
+        entries = [
+            os.path.join(CAPTURE_DIR, n)
+            for n in os.listdir(CAPTURE_DIR)
+            if not n.startswith(".")
+        ]
+        excess = len(entries) - CAPTURE_MAX_FILES
+        if excess <= 0:
+            return
+        entries.sort(key=os.path.getmtime)
+        for old in entries[:excess]:
+            try:
+                os.remove(old)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+def _capture_hum(data: bytes, filename: str, target_instrument: str) -> None:
+    """Best-effort save of the raw hum upload for offline listening.
+
+    Never raises into the request path — capture is a convenience, not a
+    contract.
+    """
+    if not CAPTURE_HUMS or not data:
+        return
+    try:
+        os.makedirs(CAPTURE_DIR, exist_ok=True)
+        ext = os.path.splitext(filename or "")[-1].lower()
+        if not ext or len(ext) > 6 or "/" in ext or "\\" in ext:
+            ext = ".webm"
+        instrument = "".join(c for c in target_instrument if c.isalnum())[:16] or "piano"
+        name = f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}-{instrument}{ext}"
+        with open(os.path.join(CAPTURE_DIR, name), "wb") as fh:
+            fh.write(data)
+        _prune_captures()
+    except Exception:
+        logger.warning("hum capture failed", exc_info=True)
+
+
 TRIM_HEAD_GUARD_SECONDS = 0.18
 TRIM_TAIL_GUARD_SECONDS = 0.12
 NOTE_HYPOTHESES = (
@@ -1660,6 +1715,8 @@ async def transcribe(
             raise HTTPException(status_code=400, detail="empty audio file")
         if len(data) > MAX_AUDIO_BYTES:
             raise HTTPException(status_code=413, detail="audio file too large")
+
+        _capture_hum(data, audio.filename or "hum.webm", targetInstrument)
 
         phase = time.perf_counter()
         y = decode_audio(data, audio.filename or "hum.webm")

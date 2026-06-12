@@ -14,8 +14,10 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { startAudioContext } from "@/lib/music/tone-player";
+import { useTranslator } from "@/lib/i18n";
 
 export function AudioUnlock() {
+  const t = useTranslator();
   const [showHint, setShowHint] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -71,7 +73,7 @@ export function AudioUnlock() {
           className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] pointer-events-none"
         >
           <div className="bg-[#22303A] text-white text-xs px-4 py-2.5 rounded-full shadow-lg whitespace-nowrap">
-            点击任意位置以启用音频播放
+            {t("common.audio_unlock_hint") || "点击任意位置以启用音频播放"}
           </div>
         </motion.div>
       )}

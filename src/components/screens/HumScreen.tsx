@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { signIn, useSession } from "next-auth/react";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
@@ -43,14 +44,13 @@ const IDLE_ROTATE_INTERVAL = 9000;
 const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
 const ENABLE_HUM_ENTRANCE_MOTION = true;
 
-// TODO: 以后改回访问次数限制（前5次）
-// 注意：示例旋律 CTA 是 qa-routes hum-home 契约的 SSR 标记，按钮必须出现在
-// 服务端 HTML 里——访问限制只能在水合后用 effect 隐藏，不能用 useState(false)
-// 初始值门控（那会把文案挡在 SSR 之外，smoke:pages 会红）。
-// 原来的逻辑：
-// const DEMO_VISIT_KEY = "murmur:hum-visits";
-// const DEMO_VISIT_LIMIT = 5;
-// 在 useEffect 中检查 localStorage.getItem(DEMO_VISIT_KEY) < DEMO_VISIT_LIMIT
+// 未登录访客每台设备可免费创作 GUEST_FREE_LIMIT 次；用完后哼唱球与示例旋律
+// CTA 改为弹出登录墙而不再生成。登录（依然免费）即解除上限。
+// 上限只在「点击动作」时判断，绝不在 render 时门控——示例旋律 CTA 必须留在
+// 服务端 HTML 里（qa-routes hum-home SSR 契约）；用 useState(false) 初始值挡掉
+// 它会把文案踢出 SSR，smoke:pages 会红。
+const GUEST_FREE_LIMIT = 5;
+const HUM_VISITS_KEY = "murmur:hum-visits";
 
 /**
  * Surface variants the Hum screen knows how to render. The router below
@@ -119,6 +119,11 @@ export function HumScreen() {
   const [levelState, setLevelState] = useState<"idle" | "quiet" | "heard">("idle");
   const [showHeardMessage, setShowHeardMessage] = useState(false);
   const { refresh: refreshBalance } = useUserBalance();
+  const { status: sessionStatus } = useSession();
+  // During "loading" we do NOT gate, so a returning signed-in user is never
+  // briefly walled by a stale guest counter on their device.
+  const isGuest = sessionStatus === "unauthenticated";
+  const [showLoginWall, setShowLoginWall] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -240,6 +245,20 @@ export function HumScreen() {
     if (msgTimerRef.current) clearInterval(msgTimerRef.current);
   };
 
+  // Action-time guest gate. Returns false (and raises the login wall) once a
+  // guest has used up their free creations on this device; authed users and
+  // guests under the limit pass through untouched.
+  const passGuestGate = (): boolean => {
+    if (isGuest && readHumVisits() >= GUEST_FREE_LIMIT) {
+      setShowLoginWall(true);
+      return false;
+    }
+    return true;
+  };
+  const bumpGuestVisit = () => {
+    if (isGuest) writeHumVisits(readHumVisits() + 1);
+  };
+
   const transcribeAndGenerate = async (blob: Blob | undefined) => {
     setRecordingState("processing");
     tickMessages();
@@ -299,6 +318,9 @@ export function HumScreen() {
       // so the next idle render reflects reality. Demo runs (blob === undefined)
       // never touch the ledger, so we skip the refresh round-trip there.
       if (blob) void refreshBalance();
+      // A delivered creation (live hum or demo) counts against the guest's
+      // free quota; no-op for authed users.
+      bumpGuestVisit();
       setRecordingState("done");
       // Vibe is its own route in v2; hand the journey off so the iris-close
       // transition mounts on /vibe instead of bouncing through an overlay.
@@ -790,6 +812,7 @@ export function HumScreen() {
               <motion.button
                 onPointerDown={() => {
                   if (isIdle && !humError) {
+                    if (!passGuestGate()) return;
                     startAudioContext();
                     startRecording();
                   }
@@ -905,26 +928,34 @@ export function HumScreen() {
               </AnimatePresence>
             </div>
 
-            {/* "Try demo" whisper below the orb — always rendered so the
-                示例旋律 copy stays in the SSR HTML (qa-routes hum-home marker) */}
-            <AnimatePresence>
-              {isIdle && !humError && (
-                <motion.button
-                  key="demo-whisper"
-                  initial={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : false}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ delay: 0.6, duration: 0.5 }}
-                  onClick={() => {
-                    startAudioContext();
-                    transcribeAndGenerate(undefined);
-                  }}
-                  className="mt-6 font-serif-italic text-[12px] text-[#B6B0A4] hover:text-[#8C8780] transition-colors"
-                >
-                  {t("hum.demo.cta")}
-                </motion.button>
-              )}
-            </AnimatePresence>
+            {/* "Try demo" whisper below the orb. The slot is a FIXED-height
+                box that is ALWAYS present (the button itself only renders when
+                idle — still in the SSR HTML for the qa-routes hum-home marker).
+                Reserving the space keeps the orb column the same height in every
+                state; without it, the demo line vanishing on first click shrinks
+                this column, the vertically-centered row re-centers, and the orb
+                + headline visibly jump once. */}
+            <div className="mt-6 h-[18px] flex items-start justify-center">
+              <AnimatePresence>
+                {isIdle && !humError && (
+                  <motion.button
+                    key="demo-whisper"
+                    initial={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : false}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ delay: 0.6, duration: 0.5 }}
+                    onClick={() => {
+                      if (!passGuestGate()) return;
+                      startAudioContext();
+                      transcribeAndGenerate(undefined);
+                    }}
+                    className="font-serif-italic text-[12px] leading-none text-[#B6B0A4] hover:text-[#8C8780] transition-colors"
+                  >
+                    {t("hum.demo.cta")}
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
 
@@ -1034,6 +1065,40 @@ export function HumScreen() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* ── Guest login wall — shown once free creations are used up ── */}
+        <AnimatePresence>
+          {showLoginWall && (
+            <motion.div
+              key="login-wall"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-30 flex items-center justify-center px-6 bg-[#F5F1EB]/70 backdrop-blur-sm"
+            >
+              <div className="mm-card px-6 py-8 max-w-sm w-full text-center">
+                <p className="text-[#1A1A1A] text-[15px] font-medium mb-2">
+                  {t("hum.login_wall.title")}
+                </p>
+                <p className="text-[#8C8780] text-[13px] leading-relaxed mb-6">
+                  {t("hum.login_wall.detail")}
+                </p>
+                <button
+                  onClick={() => signIn("google", { callbackUrl: "/" })}
+                  className="mm-btn-primary w-full justify-center mb-3"
+                >
+                  {t("hum.login_wall.cta")}
+                </button>
+                <button
+                  onClick={() => setShowLoginWall(false)}
+                  className="text-[#8C8780] text-[13px] underline-mm"
+                >
+                  {t("hum.login_wall.dismiss")}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -1054,6 +1119,18 @@ function writeFixtureRescueState(
     FIXTURE_RESCUE_STORAGE_KEY,
     serializeFixtureRescueState(state),
   );
+}
+
+function readHumVisits(): number {
+  if (typeof window === "undefined") return 0;
+  const raw = window.localStorage.getItem(HUM_VISITS_KEY);
+  const n = raw ? Number.parseInt(raw, 10) : 0;
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function writeHumVisits(count: number): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(HUM_VISITS_KEY, String(Math.max(0, count)));
 }
 
 function copyForState(

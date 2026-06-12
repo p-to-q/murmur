@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
+import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { log } from "@/lib/observability/log";
 import { getMusicWorkerUrl } from "@/lib/platform/music-worker";
 
@@ -13,7 +14,10 @@ const ROUTE = "/api/music/generate";
 // One hum fans out into three clips and rerolls fan out again — the budget
 // is per-clip, so keep it well above the transcribe route's.
 const GENERATE_RATE_LIMIT = { capacity: 30, refillWindowMs: 60_000 };
-const WORKER_TIMEOUT_MS = 180_000; // first call may sit behind a ~45 s model load
+// Must stay below maxDuration (120 s): if the worker fetch outlives the
+// function, the platform kills us mid-wait and the client gets an opaque
+// 502 instead of our structured timeout error.
+const WORKER_TIMEOUT_MS = 110_000;
 const MAX_PROMPT_CHARS = 300;
 const MAX_HUM_BYTES = 4 * 1024 * 1024;
 const MIN_DURATION = 2;
@@ -23,6 +27,7 @@ type MusicRouteError =
   | "prompt_required"
   | "validation_error"
   | "worker_unconfigured"
+  | "worker_unauthorized"
   | "worker_http_error"
   | "server_error";
 
@@ -41,10 +46,17 @@ export async function POST(request: NextRequest) {
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
 
+  // All anonymous traffic resolves to the single "guest" user; keying the
+  // bucket by IP for guests keeps one visitor from draining everyone's
+  // budget on this GPU-backed endpoint.
+  const rateLimitId =
+    auth.source === "guest"
+      ? `${userId}:${clientIpFromHeaders(request.headers)}`
+      : userId;
   const rateLimit = await checkApiRateLimit({
     route: ROUTE,
     bucket: "user",
-    userId,
+    userId: rateLimitId,
     requestId,
     sessionId: auth.sessionId,
     options: GENERATE_RATE_LIMIT,
@@ -133,11 +145,26 @@ export async function POST(request: NextRequest) {
     }
 
     if (!workerRes.ok) {
+      // Surface the worker's own error payload in our logs — without it,
+      // "HTTP 500" hides whether generation failed, auth drifted, or the
+      // worker was mid-load.
+      let workerDetail: unknown = null;
+      try {
+        workerDetail = (await workerRes.json()) as unknown;
+      } catch {
+        // non-JSON body (tunnel error pages etc.) — nothing to extract
+      }
+      const unauthorized = workerRes.status === 401 || workerRes.status === 403;
       return fail(
-        "worker_http_error",
-        `Music worker returned HTTP ${workerRes.status}`,
-        workerRes.status === 401 ? 502 : 502,
-        { requestId, userId, startedAt, ext: { workerStatus: workerRes.status } },
+        unauthorized ? "worker_unauthorized" : "worker_http_error",
+        unauthorized
+          ? "Music worker rejected our token (MUSIC_WORKER_TOKEN out of sync?)"
+          : `Music worker returned HTTP ${workerRes.status}`,
+        502,
+        {
+          requestId, userId, startedAt,
+          ext: { workerStatus: workerRes.status, workerDetail },
+        },
       );
     }
 

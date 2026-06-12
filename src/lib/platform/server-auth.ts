@@ -1,4 +1,5 @@
 import type { AppUser, AuthResult } from "./types";
+import { auth as nextAuthSession } from "@/lib/auth/auth";
 import { getSessionByToken } from "@/lib/db/queries/sessions";
 
 export const SESSION_COOKIE_NAME = "__murmur_session";
@@ -96,6 +97,32 @@ export async function resolveRequestAuth(
       source: "session",
       sessionId: session.sessionId,
     };
+  }
+
+  // NextAuth (Google) session. The web client signs in through authjs, whose
+  // JWT cookie the API routes previously never consulted — production
+  // identity then collapsed to the shared guest user, putting every
+  // visitor's songs and balance in one bucket.
+  try {
+    const nextAuth = await nextAuthSession();
+    const nextAuthUser = nextAuth?.user as
+      | { id?: string; email?: string | null; name?: string | null; image?: string | null }
+      | undefined;
+    if (nextAuthUser?.id && nextAuthUser.id !== DEFAULT_USER.id) {
+      return {
+        ok: true,
+        user: {
+          id: nextAuthUser.id,
+          email: nextAuthUser.email ?? null,
+          name: nextAuthUser.name ?? DEFAULT_USER.name,
+          avatarUrl: nextAuthUser.image ?? null,
+        },
+        source: "session",
+        sessionId: null,
+      };
+    }
+  } catch {
+    // authjs not configured / no request scope — fall through to guest.
   }
 
   const user = getRequestUser(request);

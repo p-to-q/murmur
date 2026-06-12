@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ulid } from "ulid";
 
 import { rateLimitedResponse } from "@/lib/api/rate-limit";
+import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { log } from "@/lib/observability/log";
 import { getRateLimitStore } from "@/lib/rate-limit";
 
@@ -24,12 +25,7 @@ import { getRateLimitStore } from "@/lib/rate-limit";
 const GLOBAL_API_RATE_LIMIT = { capacity: 100, refillWindowMs: 60_000 };
 
 function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return request.headers.get("x-real-ip")?.trim() || "unknown";
+  return clientIpFromHeaders(request.headers);
 }
 
 export default async function proxy(request: NextRequest) {

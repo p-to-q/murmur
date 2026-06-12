@@ -14,13 +14,17 @@ export async function GET(request: NextRequest) {
 
   const { user } = auth;
 
-  // Upsert in the background — don't block the response on DB latency.
-  upsertUser({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    avatarUrl: user.avatarUrl,
-  }).catch((err) => {
+  // Await the upsert: on serverless the instance can freeze as soon as the
+  // response returns, so a fire-and-forget write is not guaranteed to land.
+  // The latency cost is one indexed upsert on a rarely-hit route.
+  try {
+    await upsertUser({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+    });
+  } catch (err) {
     log("user.profile_failed", {
       error: err instanceof Error ? err.message : String(err),
       stage: "upsert_user",
@@ -29,7 +33,7 @@ export async function GET(request: NextRequest) {
       userId: user.id,
       level: "error",
     });
-  });
+  }
 
   return NextResponse.json({ ok: true, user });
 }

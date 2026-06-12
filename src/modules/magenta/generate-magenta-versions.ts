@@ -39,23 +39,31 @@ export async function checkMusicEngineAvailable(): Promise<boolean> {
       : HEALTH_TTL_UNAVAILABLE_MS;
     if (Date.now() - healthCache.at < ttl) return healthCache.available;
   }
-  let available = false;
-  try {
-    // Generous budget: in production this fetch traverses a cold Vercel
-    // function plus the Cloudflare tunnel to the worker. Callers overlap
-    // it with transcription, so the wait is usually free.
-    const res = await fetch("/api/music/health", {
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (res.ok) {
-      const data = (await res.json()) as { available?: boolean };
-      available = data.available === true;
-    }
-  } catch {
-    available = false;
+  // One cold-start hiccup (cold Vercel function + tunnel round-trip) must
+  // not commit the whole flow to the legacy engine — probe twice before
+  // caching a negative. Callers overlap this with transcription, so the
+  // wait is usually free.
+  let available = await probeHealthOnce();
+  if (!available) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    available = await probeHealthOnce();
   }
   healthCache = { at: Date.now(), available };
   return available;
+}
+
+async function probeHealthOnce(): Promise<boolean> {
+  try {
+    // Budget must outlast the server route's own 12s worker probe.
+    const res = await fetch("/api/music/health", {
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { available?: boolean };
+    return data.available === true;
+  } catch {
+    return false;
+  }
 }
 
 export interface MagentaVersionOptions {
