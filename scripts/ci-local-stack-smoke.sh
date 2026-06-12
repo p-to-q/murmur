@@ -40,6 +40,9 @@ cleanup() {
 trap cleanup EXIT
 
 export AUTH_SECRET="${AUTH_SECRET:-murmur-ci-smoke-secret}"
+# Satisfy production db/client guard; routes fall back when Postgres is absent.
+export DATABASE_URL="${DATABASE_URL:-postgresql://postgres:password@127.0.0.1:5432/murmur_ci_smoke}"
+export MURMUR_STORAGE_DRIVER="${MURMUR_STORAGE_DRIVER:-memory}"
 unset GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET 2>/dev/null || true
 
 "${PYTHON_BIN}" -m uvicorn \
