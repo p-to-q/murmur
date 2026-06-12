@@ -45,6 +45,8 @@ yarn-error.log*
 # local env files — also exclude the plain .env (template lives in .env.example)
 .env
 .env*.local
+.env.workers.cloud
+.env.workers.local
 !.env.example
 
 # vercel

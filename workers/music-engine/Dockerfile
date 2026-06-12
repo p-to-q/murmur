@@ -1,35 +1,42 @@
-# Magenta RT music engine — JAX/CUDA image for rented GPU servers
-# (RunPod, Lambda, EC2 g5/g6, etc.). The Mac/MLX path doesn't use this.
-#
-# NOTE: authored on a Mac without an NVIDIA GPU, so this image is untested
-# here — treat the first remote build as a smoke test. See
-# docs/DEPLOY_MUSIC_ENGINE.md for the full walkthrough.
+# Magenta RT music engine — JAX/CUDA for RunPod / Lambda / EC2 g5+.
+# Build on linux/amd64 (GitHub Actions or: docker buildx build --platform linux/amd64 …).
 #
 # Model weights (~4 GB) download on first boot into /root/Documents/Magenta —
-# mount a volume there to survive restarts:
-#   docker run --gpus all -p 8002:8002 \
-#     -e MUSIC_WORKER_TOKEN=<token> \
-#     -v magenta-models:/root/Documents/Magenta murmur-music-engine
+# mount a RunPod network volume there to survive restarts:
+#   volumeMountPath: /root/Documents/Magenta
 
-FROM python:3.12-slim
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    MAGENTA_BACKEND=jax \
+    MAGENTA_MODEL=mrt2_base \
+    MUSIC_ENGINE_PRELOAD=1 \
+    PORT=8002
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg \
-  && rm -rf /var/lib/apt/lists/*
+  && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    ffmpeg \
+    curl \
+  && rm -rf /var/lib/apt/lists/* \
+  && ln -sf /usr/bin/python3 /usr/local/bin/python \
+  && ln -sf /usr/bin/pip3 /usr/local/bin/pip
 
-# magenta-rt's GPU extra when it exists; otherwise the base package plus
-# the CUDA-enabled JAX wheel.
-RUN pip install --no-cache-dir "magenta-rt[gpu]" fastapi "uvicorn[standard]" python-multipart \
-  || pip install --no-cache-dir magenta-rt "jax[cuda12]" fastapi "uvicorn[standard]" python-multipart
+RUN pip install --upgrade pip \
+  && (pip install "magenta-rt[gpu]" fastapi "uvicorn[standard]" python-multipart \
+      || pip install magenta-rt "jax[cuda12]" fastapi "uvicorn[standard]" python-multipart)
 
 WORKDIR /app
 COPY main.py .
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-ENV MAGENTA_BACKEND=jax \
-    MAGENTA_MODEL=mrt2_base \
-    MUSIC_ENGINE_PRELOAD=1
-
 EXPOSE 8002
+HEALTHCHECK --interval=30s --timeout=10s --start-period=600s --retries=3 \
+  CMD curl -fsS "http://127.0.0.1:${PORT}/health" || exit 1
+
 ENTRYPOINT ["docker-entrypoint.sh"]

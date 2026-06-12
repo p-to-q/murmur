@@ -6,6 +6,8 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "dev": "next dev --webpack",
+    "dev:stack": "bash scripts/dev-stack.sh",
+    "deploy:music-gpu": "bun run scripts/deploy-music-gpu.ts",
     "dev:audio": "cd workers/audio-engine && ./.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001",
     "dev:music": "cd workers/music-engine && ./.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8002",
     "setup:music": "bash workers/music-engine/setup.sh",

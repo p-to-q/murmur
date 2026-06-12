@@ -47,30 +47,33 @@ bash scripts/murmur-services.sh uninstall  # 停掉并移除
   （`cloudflared tunnel create murmur-workers`），URL 永久固定，
   连自动同步都不再需要。
 
-## 方案 B（7×24 稳定）：租 GPU 云主机
+## 方案 B（7×24 稳定，推荐生产）：RunPod GPU
 
-适合 Mac 不想常开、或访问量上来之后。月成本参考（2026-06）：
+**一键部署** — 见 [DEPLOY_MUSIC_ENGINE_GPU.md](./DEPLOY_MUSIC_ENGINE_GPU.md)
 
-| 平台 | 机型 | 价格 | 备注 |
-| --- | --- | --- | --- |
-| RunPod | RTX 4090 / A5000 | ~$0.3-0.5/h（按用量） | 起停灵活，适合先试 |
-| Lambda | A10 | ~$0.75/h | 稳定 |
-| AWS | g5.xlarge (A10G) | ~$1/h 按需 | 企业级，贵 |
+```bash
+RUNPOD_API_KEY=rpa_… VERCEL=1 bun run deploy:music-gpu
+```
 
-步骤（worker 已支持 `MAGENTA_BACKEND=jax`，CUDA 上自动走 JAX）：
+- JAX/CUDA，不依赖本机 MLX / 隧道
+- 固定 `https://<pod-id>-8002.proxy.runpod.net`
+- 约 $0.3–0.5/h（L4 / 4090）
+
+<details>
+<summary>手动 Docker 步骤（旧）</summary>
 
 ```bash
 cd workers/music-engine
-docker build -t murmur-music-engine .        # 镜像在 GPU 机上构建
+docker build -t murmur-music-engine .
 docker run --gpus all -p 8002:8002 \
   -e MUSIC_WORKER_TOKEN=<token> \
   -v magenta-models:/root/Documents/Magenta \
   murmur-music-engine
-# 然后把 https://<GPU机域名>:8002 写进 Vercel 的 MUSIC_WORKER_URL
 ```
 
-> Dockerfile 在 Mac 上无法实测（没有 NVIDIA 卡），首次远端构建当作冒烟
-> 测试；audio-engine 是纯 CPU 的，可以一并丢上去（Fly.io/任何 VPS 即可）。
+> audio-engine 是纯 CPU 的，可继续走本机隧道或单独 VPS。
+
+</details>
 
 ## 方案 C：Mac mini 常驻 + named tunnel
 
