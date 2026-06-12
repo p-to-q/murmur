@@ -4,7 +4,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
-  // RFC1918 LAN ranges + localhost for `next dev` HMR over Wi-Fi.
   allowedDevOrigins: [
     "localhost",
     "127.0.0.1",
@@ -27,6 +26,11 @@ const nextConfig: NextConfig = {
     "172.30.*.*",
     "172.31.*.*",
   ],
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "lh3.googleusercontent.com", pathname: "/**" },
+    ],
+  },
 };
 
 export default nextConfig;

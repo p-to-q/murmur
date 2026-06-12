@@ -218,8 +218,49 @@ function avatarGradient(seed: string): string {
   return `linear-gradient(135deg, hsl(${hue1},${sat}%,72%) 0%, hsl(${hue2},${sat + 10}%,78%) 100%)`;
 }
 
+function userInitial(name: string | null | undefined, email: string | null | undefined): string {
+  const source = name?.trim() || email?.trim() || "?";
+  return source[0]?.toUpperCase() ?? "?";
+}
+
+function InitialsAvatar({
+  seed,
+  initial,
+  size,
+}: {
+  seed: string;
+  initial: string;
+  size: number;
+}) {
+  return (
+    <div
+      className="flex shrink-0 items-center justify-center rounded-full ring-2 ring-border"
+      style={{
+        width: size,
+        height: size,
+        background: avatarGradient(seed),
+      }}
+    >
+      <span
+        className="font-serif-italic text-white/90 select-none"
+        style={{ fontSize: size * 0.42, lineHeight: 1, textShadow: "0 1px 3px rgba(0,0,0,0.15)" }}
+      >
+        {initial}
+      </span>
+    </div>
+  );
+}
+
 function Avatar({ user, size }: { user: AppUser; size: number }) {
-  if (user.avatarUrl) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const seed = user.id ?? user.email ?? user.name ?? "murmur";
+  const initial = userInitial(user.name, user.email);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [user.avatarUrl]);
+
+  if (user.avatarUrl && !imageFailed) {
     const avatarSrc = user.avatarUrl.startsWith("//")
       ? `https:${user.avatarUrl}`
       : user.avatarUrl;
@@ -231,26 +272,12 @@ function Avatar({ user, size }: { user: AppUser; size: number }) {
         height={size}
         className="rounded-full object-cover ring-2 ring-border"
         style={{ width: size, height: size }}
+        onError={() => setImageFailed(true)}
       />
     );
   }
-  return (
-    <div
-      className="flex shrink-0 items-center justify-center rounded-full ring-2 ring-border"
-      style={{
-        width: size,
-        height: size,
-        background: avatarGradient(user.id ?? user.email ?? "murmur"),
-      }}
-    >
-      <span
-        className="font-serif-italic text-white/90 select-none"
-        style={{ fontSize: size * 0.42, lineHeight: 1, textShadow: "0 1px 3px rgba(0,0,0,0.15)" }}
-      >
-        {(user.name ?? user.email ?? "?")[0].toUpperCase()}
-      </span>
-    </div>
-  );
+
+  return <InitialsAvatar seed={seed} initial={initial} size={size} />;
 }
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
