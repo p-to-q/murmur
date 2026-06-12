@@ -39,6 +39,9 @@ cleanup() {
 
 trap cleanup EXIT
 
+export AUTH_SECRET="${AUTH_SECRET:-murmur-ci-smoke-secret}"
+unset GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET 2>/dev/null || true
+
 "${PYTHON_BIN}" -m uvicorn \
   --app-dir workers/audio-engine \
   main:app \
@@ -75,6 +78,7 @@ wait_for_url() {
 
 wait_for_url "${WORKER_BASE}/health" "worker"
 wait_for_url "${WEB_BASE}" "web"
+wait_for_url "${WEB_BASE}/api/qa/health" "web-api"
 
 MURMUR_WEB_BASE_URL="${WEB_BASE}" AUDIO_WORKER_URL="${WORKER_BASE}" bun run smoke:local
 MURMUR_WEB_BASE_URL="${WEB_BASE}" bun run smoke:pages

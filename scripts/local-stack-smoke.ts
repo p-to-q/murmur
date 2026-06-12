@@ -12,15 +12,16 @@ type CheckResult = {
 };
 
 async function main() {
-  const checks: Array<Promise<CheckResult>> = [
-    checkWebHome(),
-    checkUserBalance(),
-    checkTranscribeValidation(),
-    checkAudioWorkerHealth(),
-    checkQaHealth(),
-  ];
-
-  const results = await Promise.all(checks);
+  const results: CheckResult[] = [];
+  for (const check of [
+    checkWebHome,
+    checkUserBalance,
+    checkTranscribeValidation,
+    checkAudioWorkerHealth,
+    checkQaHealth,
+  ]) {
+    results.push(await check());
+  }
   const failed = results.filter((result) => !result.ok);
 
   for (const result of results) {
