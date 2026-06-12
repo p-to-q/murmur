@@ -4,6 +4,7 @@ import { shouldUseDevBalanceFallback } from "./dev-balance";
 
 describe("shouldUseDevBalanceFallback", () => {
   it("allows explicit production opt-in via env flag", () => {
+    const prevNode = process.env.NODE_ENV;
     const prev = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     process.env.NODE_ENV = "production";
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
@@ -11,6 +12,8 @@ describe("shouldUseDevBalanceFallback", () => {
     try {
       expect(shouldUseDevBalanceFallback({ host: "murmur.ptoq.io" })).toBe(true);
     } finally {
+      if (prevNode === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = prevNode;
       if (prev === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prev;
     }

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import { nextNotesRefillAt } from "@/lib/billing/notes-clock";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
@@ -41,11 +41,17 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
 
 const { GET } = await import("./route");
 
-const originalNodeEnv = process.env.NODE_ENV;
-const originalDevBillingFallback = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+let originalNodeEnv: string | undefined;
+let originalDevBillingFallback: string | undefined;
+
+beforeEach(() => {
+  originalNodeEnv = process.env.NODE_ENV;
+  originalDevBillingFallback = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+});
 
 afterEach(() => {
-  process.env.NODE_ENV = originalNodeEnv;
+  if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = originalNodeEnv;
   if (originalDevBillingFallback === undefined) {
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
   } else {
@@ -71,17 +77,26 @@ describe("user balance route helpers", () => {
 
 describe("GET /api/user/balance", () => {
   it("keeps localhost previews usable when the ledger is unavailable outside dev mode", async () => {
+    const prevNode = process.env.NODE_ENV;
+    const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     process.env.NODE_ENV = "production";
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     nextBalanceError = new Error("ECONNREFUSED");
 
-    const response = await GET(
-      new Request("http://127.0.0.1:3100/api/user/balance") as unknown as NextRequest,
-    );
+    try {
+      const response = await GET(
+        new Request("http://127.0.0.1:3100/api/user/balance") as unknown as NextRequest,
+      );
 
-    expect(response.status).toBe(200);
-    const body = await response.json() as { notes?: unknown; planTier?: unknown };
-    expect(body.notes).toBe(9999);
-    expect(body.planTier).toBe("free");
+      expect(response.status).toBe(200);
+      const body = await response.json() as { notes?: unknown; planTier?: unknown };
+      expect(body.notes).toBe(9999);
+      expect(body.planTier).toBe("free");
+    } finally {
+      if (prevNode === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = prevNode;
+      if (prevFlag === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+      else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
+    }
   });
 });

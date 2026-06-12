@@ -42,6 +42,9 @@ beforeEach(() => {
     source: "session",
     sessionId: "sess_debug",
   };
+  if (process.env.NODE_ENV === "production") {
+    process.env.NODE_ENV = "test";
+  }
 });
 
 describe("GET /api/observability/recent-events", () => {
