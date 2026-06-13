@@ -106,9 +106,15 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const melodyRaw = formData.get("melody");
+    const melody = typeof melodyRaw === "string" ? melodyRaw.trim() : "";
+
     const workerForm = new FormData();
     workerForm.append("prompt", prompt);
     workerForm.append("duration", String(duration));
+    if (melody) {
+      workerForm.append("melody", melody);
+    }
     if (hum instanceof File && hum.size > 0 && styleMix > 0) {
       workerForm.append("style_mix", String(styleMix));
       workerForm.append("hum", hum, hum.name || "hum.webm");

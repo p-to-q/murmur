@@ -220,6 +220,9 @@ async function requestClip(
     const form = new FormData();
     form.append("prompt", generation.prompt);
     form.append("duration", String(generation.durationSec));
+    if (version.melody?.notes?.length) {
+      form.append("melody", JSON.stringify(version.melody));
+    }
     if (humBlob && generation.styleMix > 0) {
       form.append("styleMix", String(generation.styleMix));
       form.append("hum", humBlob, "hum.webm");

@@ -36,6 +36,7 @@ import asyncio
 import functools
 import hmac
 import io
+import json
 import logging
 import math
 import os
@@ -227,8 +228,49 @@ def mock_clip(prompt: str, duration: float) -> bytes:
     return pcm16_wav_bytes(np.stack([left * fade, right * fade], axis=1))
 
 
+CFG_NOTES_MELODY = 3.0
+CHUNK_FRAMES = FRAMES_PER_SECOND  # 25 frames = 1 second per chunk
+
+
+def melody_to_piano_rolls(
+    melody: dict, total_duration: float
+) -> list[list[int]]:
+    """Convert melody notes to per-second piano roll arrays for Magenta.
+
+    Each roll is 128 ints (one per MIDI pitch):
+      -1 = masked (model is free to choose)
+       0 = off
+       1 = continuation (note still held from a previous chunk)
+       2 = onset (note starts in this chunk)
+    """
+    notes = melody.get("notes", [])
+    if not notes:
+        return []
+    chunk_sec = CHUNK_FRAMES / FRAMES_PER_SECOND
+    num_chunks = int(math.ceil(total_duration / chunk_sec))
+    rolls: list[list[int]] = []
+    for ci in range(num_chunks):
+        t0 = ci * chunk_sec
+        t1 = t0 + chunk_sec
+        roll = [-1] * 128
+        for n in notes:
+            pitch = int(n.get("pitch", -1))
+            if pitch < 0 or pitch > 127:
+                continue
+            ns = float(n.get("start", 0))
+            ne = ns + float(n.get("duration", 0))
+            if ns < t1 and ne > t0:
+                roll[pitch] = 2 if ns >= t0 else 1
+        rolls.append(roll)
+    return rolls
+
+
 def _generate_on_model_thread(
-    prompt: str, duration: float, hum_bytes: bytes | None, style_mix: float
+    prompt: str,
+    duration: float,
+    hum_bytes: bytes | None,
+    style_mix: float,
+    melody: dict | None = None,
 ) -> tuple[bytes, dict[str, str]]:
     """Run one full clip generation. Must execute on the `_executor` thread."""
     mrt = _load_model()
@@ -247,15 +289,41 @@ def _generate_on_model_thread(
         except Exception as error:  # noqa: BLE001 — hum styling is best-effort
             logger.warning("Hum style embedding failed, using text only: %s", error)
 
+    rolls = melody_to_piano_rolls(melody, duration) if melody else []
+    has_melody = len(rolls) > 0
+
     total_frames = int(round(duration * FRAMES_PER_SECOND))
     chunks = []
     state = None
-    remaining = total_frames
-    while remaining > 0:
-        frames = min(MAX_FRAMES_PER_CALL, remaining)
-        wav, state = mrt.generate(style=style, frames=frames, state=state)
-        chunks.append(wav)
-        remaining -= frames
+
+    if has_melody:
+        for ci, roll in enumerate(rolls):
+            remaining_total = total_frames - ci * CHUNK_FRAMES
+            if remaining_total <= 0:
+                break
+            frames = min(CHUNK_FRAMES, remaining_total)
+            wav, state = mrt.generate(
+                style=style,
+                notes=roll,
+                cfg_notes=CFG_NOTES_MELODY,
+                frames=frames,
+                state=state,
+            )
+            chunks.append(wav)
+        generated = len(rolls) * CHUNK_FRAMES
+        remaining = total_frames - generated
+        while remaining > 0:
+            frames = min(MAX_FRAMES_PER_CALL, remaining)
+            wav, state = mrt.generate(style=style, frames=frames, state=state)
+            chunks.append(wav)
+            remaining -= frames
+    else:
+        remaining = total_frames
+        while remaining > 0:
+            frames = min(MAX_FRAMES_PER_CALL, remaining)
+            wav, state = mrt.generate(style=style, frames=frames, state=state)
+            chunks.append(wav)
+            remaining -= frames
 
     if len(chunks) == 1:
         full = chunks[0]
@@ -271,10 +339,12 @@ def _generate_on_model_thread(
         "X-Model": MODEL_NAME,
         "X-Generation-Ms": str(elapsed_ms),
         "X-Style-Mix": f"{mixed:.2f}",
+        "X-Melody-Conditioned": "1" if has_melody else "0",
     }
     logger.info(
-        "Generated %.1fs clip in %dms (prompt=%r, style_mix=%.2f)",
+        "Generated %.1fs clip in %dms (prompt=%r, style_mix=%.2f, melody=%s)",
         duration, elapsed_ms, prompt[:80], mixed,
+        f"{len(rolls)} chunks" if has_melody else "none",
     )
     return pcm16_wav_bytes(samples, full.sample_rate), meta
 
@@ -300,6 +370,7 @@ async def generate(
     prompt: str = Form(...),
     duration: float = Form(10.0),
     style_mix: float = Form(0.35),
+    melody: str = Form(""),
     hum: UploadFile | None = File(None),
 ) -> Response:
     _verify_auth(request)
@@ -311,6 +382,13 @@ async def generate(
         prompt = prompt[:MAX_PROMPT_CHARS]
     duration = max(MIN_DURATION, min(MAX_DURATION, float(duration)))
     style_mix = max(0.0, min(0.8, float(style_mix)))
+
+    melody_obj: dict | None = None
+    if melody.strip():
+        try:
+            melody_obj = json.loads(melody)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail={"error": "invalid_melody_json"})
 
     hum_bytes: bytes | None = None
     if hum is not None:
@@ -332,7 +410,7 @@ async def generate(
         body, meta = await asyncio.get_running_loop().run_in_executor(
             _executor,
             functools.partial(
-                _generate_on_model_thread, prompt, duration, hum_bytes, style_mix
+                _generate_on_model_thread, prompt, duration, hum_bytes, style_mix, melody_obj
             ),
         )
     except HTTPException:
