@@ -1,0 +1,35 @@
+# Fly.io deploy for the Murmur audio-engine (transcription worker).
+#
+# An always-on single small CPU machine with a stable URL
+# (https://<app>.fly.dev) — this replaces the home-Mac + cloudflared
+# quick-tunnel setup so production transcription no longer depends on a
+# laptop being awake. Deploy:  fly deploy -c workers/audio-engine/fly.toml
+app = "murmur-audio"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Container disk is ephemeral; don't try to persist captured hums here.
+  MURMUR_CAPTURE_HUMS = "0"
+
+[http_service]
+  internal_port = 8001
+  force_https = true
+  # Keep one machine always warm: swift-f0 loads on first request and we want
+  # transcription instantly available, not cold-started per hum.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "40s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

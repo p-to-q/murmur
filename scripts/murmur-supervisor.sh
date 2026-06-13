@@ -263,6 +263,24 @@ run() {
 }
 
 # ── CLI ───────────────────────────────────────────────────────────────
+
+# Retirement guard (2026-06-13): audio-engine moved to Fly.io and music to
+# RunPod, so this Mac supervisor is retired. `start`/`run` would re-spawn the
+# local workers + quick tunnels and overwrite the production AUDIO_WORKER_URL
+# in Vercel back to a throwaway tunnel — breaking the Fly wiring. Refuse unless
+# explicitly forced back into the legacy local stack.
+case "${1:-}" in
+  run|start)
+    if grep -qE '^AUDIO_WORKER_URL=.*fly\.dev' "$ENV_FILE" 2>/dev/null && [ "${MURMUR_SUPERVISOR_FORCE:-0}" != "1" ]; then
+      echo "⛔ supervisor is retired — audio-engine runs on Fly (murmur-audio.fly.dev), music on RunPod." >&2
+      echo "   Starting it would clobber the production AUDIO_WORKER_URL. To bring music up, use:" >&2
+      echo "       bun run deploy:music-gpu" >&2
+      echo "   Force the legacy local stack anyway: MURMUR_SUPERVISOR_FORCE=1 $0 ${1:-}" >&2
+      exit 2
+    fi
+    ;;
+esac
+
 case "${1:-}" in
   run) run ;;  # internal: the foreground loop (start nohups this)
   start)

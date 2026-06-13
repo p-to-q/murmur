@@ -1,0 +1,11 @@
+# Keep the build context (and image) lean: the runtime only needs main.py,
+# the audio_engine/ package, and requirements.txt.
+.venv/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+tests/
+tests_full/
+tools/
+*.md
+.DS_Store

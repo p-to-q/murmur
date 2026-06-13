@@ -20,7 +20,23 @@ worker 在公网上必须带 token（`MUSIC_WORKER_TOKEN`/`AUDIO_WORKER_TOKEN`
 
 ---
 
-## 方案 A（当前在用，免费）：本机 M4 Max + Cloudflare 快速隧道
+## 当前生产架构（2026-06-13 起）
+
+| worker | 落脚点 | URL | 拉起方式 |
+| --- | --- | --- | --- |
+| audio-engine（转写） | **Fly.io**，常驻常热 | `https://murmur-audio.fly.dev`（固定不变） | `fly deploy ./workers/audio-engine` |
+| music-engine（音乐） | **RunPod GPU**，按需 | pod 重建会变，部署脚本自动同步 Vercel | `bun run deploy:music-gpu` |
+
+转写已彻底脱离本机 —— `murmur.ptoq.io` 不再依赖 Mac 开机。音乐仍是按需：想用时
+`bun run deploy:music-gpu` 拉起 RunPod pod 并同步 `MUSIC_WORKER_URL`（只碰音乐，
+不会动 Fly 的 `AUDIO_WORKER_URL`）。Fly 端重新部署：`fly deploy ./workers/audio-engine`
+（配置见 `workers/audio-engine/fly.toml`，鉴权 token 是 Fly secret `AUDIO_WORKER_TOKEN`）。
+
+> **方案 A / supervisor 已退役**：两个 worker 都上云后，本机 supervisor + 隧道不再需要。
+> `murmur-supervisor.sh` 已加 guard——直接跑会被拒绝（否则它会把 Vercel 的
+> `AUDIO_WORKER_URL` 覆盖回临时隧道，反而搞坏 Fly 接线）。下面方案 A 仅留作本地调试/历史参考。
+
+## 方案 A（legacy，仅本地调试）：本机 M4 Max + Cloudflare 快速隧道
 
 **常驻方式（推荐，2026-06 起）** — launchd 系统服务，崩溃自动拉起、
 重启自动恢复、隧道 URL 轮换后自动改写 Vercel env 并重新部署，全程无人值守：
