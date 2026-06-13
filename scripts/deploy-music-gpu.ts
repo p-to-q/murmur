@@ -574,7 +574,7 @@ async function waitForHealth(
           loaded?: boolean;
           loading?: boolean;
         };
-        if (body.status === "ok" || body.loaded || body.loading) return true;
+        if (body.status === "ok" || body.loaded === true) return true;
       }
     } catch {
       // pod still booting / model downloading

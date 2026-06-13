@@ -44,6 +44,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Make GHCR package public (RunPod pulls without registry auth)
+        continue-on-error: true
         run: |
           gh api --method PATCH \
             "/orgs/${{ github.repository_owner }}/packages/container/murmur-music-engine" \
