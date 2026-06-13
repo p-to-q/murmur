@@ -228,41 +228,96 @@ def mock_clip(prompt: str, duration: float) -> bytes:
     return pcm16_wav_bytes(np.stack([left * fade, right * fade], axis=1))
 
 
-CFG_NOTES_MELODY = 3.0
-CHUNK_FRAMES = FRAMES_PER_SECOND  # 25 frames = 1 second per chunk
+NOTES_DIM = 128                 # one slot per MIDI pitch (0–127)
+# Notes CFG scale. The library default is 1.0; 3.0 over-forces the melody and
+# strips its musicality (robotic, dissonant). 1.5 keeps a clear melodic link
+# while letting the model actually voice it. Retune without a redeploy via
+# the MAGENTA_CFG_NOTES env var; the model's valid range is [-1.0, 7.0].
+CFG_NOTES_MELODY = max(-1.0, min(7.0, float(os.getenv("MAGENTA_CFG_NOTES", "1.5"))))
+# Sub-perceptual runs (transcription jitter) fold into the prior note so the
+# model isn't machine-gunned with re-onsets. 3 frames ≈ 0.12 s.
+MIN_RUN_FRAMES = 3
 
 
-def melody_to_piano_rolls(
+def _held_notes(vec: list[int] | None) -> list[int] | None:
+    """Onset → continuation, for the tail of a note split across calls."""
+    if vec is None:
+        return None
+    return [1 if v == 2 else v for v in vec]
+
+
+def melody_to_segments(
     melody: dict, total_duration: float
-) -> list[list[int]]:
-    """Convert melody notes to per-second piano roll arrays for Magenta.
+) -> list[tuple[list[int] | None, int]]:
+    """Turn transcribed notes into (notes_vector, frames) generation segments.
 
-    Each roll is 128 ints (one per MIDI pitch):
-      -1 = masked (model is free to choose)
-       0 = off
-       1 = continuation (note still held from a previous chunk)
-       2 = onset (note starts in this chunk)
+    The model holds its `notes` argument constant for a whole generate() call,
+    so a melody that changes over time has to be sliced: one segment per note,
+    one per rest. Each note becomes a *monophonic* onset — a hum is a single
+    line, so the old per-second roll (which switched on every pitch overlapping
+    the window) just produced dissonant clusters. Rests are all-masked so the
+    model stays free to sustain its accompaniment underneath the silence.
+
+    notes_vector is 128 ints (-1 masked / 0 off / 1 hold / 2 onset / 3 model's
+    choice); None is an all-masked rest. frames run at 25 per second, and the
+    returned segments tile the whole clip (notes + rests) with no gaps.
     """
-    notes = melody.get("notes", [])
-    if not notes:
+    raw = (melody or {}).get("notes") or []
+    total_frames = int(round(total_duration * FRAMES_PER_SECOND))
+    if not raw or total_frames <= 0:
         return []
-    chunk_sec = CHUNK_FRAMES / FRAMES_PER_SECOND
-    num_chunks = int(math.ceil(total_duration / chunk_sec))
-    rolls: list[list[int]] = []
-    for ci in range(num_chunks):
-        t0 = ci * chunk_sec
-        t1 = t0 + chunk_sec
-        roll = [-1] * 128
-        for n in notes:
+
+    events: list[tuple[int, int, int]] = []
+    for n in raw:
+        try:
             pitch = int(n.get("pitch", -1))
-            if pitch < 0 or pitch > 127:
-                continue
-            ns = float(n.get("start", 0))
-            ne = ns + float(n.get("duration", 0))
-            if ns < t1 and ne > t0:
-                roll[pitch] = 2 if ns >= t0 else 1
-        rolls.append(roll)
-    return rolls
+            start = float(n.get("start", 0.0))
+            dur = float(n.get("duration", 0.0))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if not (0 <= pitch <= 127) or dur <= 0 or start < 0:
+            continue
+        sf = int(round(start * FRAMES_PER_SECOND))
+        ef = int(round((start + dur) * FRAMES_PER_SECOND))
+        if sf >= total_frames:
+            continue
+        events.append((sf, min(max(ef, sf + 1), total_frames), pitch))
+
+    if not events:
+        return []
+    events.sort(key=lambda e: (e[0], e[1]))
+
+    # Collapse to a monophonic per-frame pitch track; the earliest note wins an
+    # overlap so a clean hum stays a single line instead of a chord.
+    track = [-1] * total_frames
+    for sf, ef, pitch in events:
+        for f in range(sf, ef):
+            if track[f] == -1:
+                track[f] = pitch
+
+    # Run-length encode, folding sub-perceptual blips into the prior run.
+    runs: list[list[int]] = []  # [pitch, frames]
+    for pitch in track:
+        if runs and runs[-1][0] == pitch:
+            runs[-1][1] += 1
+        else:
+            runs.append([pitch, 1])
+    merged: list[list[int]] = []
+    for pitch, frames in runs:
+        if merged and frames < MIN_RUN_FRAMES:
+            merged[-1][1] += frames
+        else:
+            merged.append([pitch, frames])
+
+    segments: list[tuple[list[int] | None, int]] = []
+    for pitch, frames in merged:
+        if pitch < 0:
+            segments.append((None, frames))
+        else:
+            vec = [-1] * NOTES_DIM
+            vec[pitch] = 2  # onset; the held tail lives inside this one call
+            segments.append((vec, frames))
+    return segments
 
 
 def _generate_on_model_thread(
@@ -289,34 +344,31 @@ def _generate_on_model_thread(
         except Exception as error:  # noqa: BLE001 — hum styling is best-effort
             logger.warning("Hum style embedding failed, using text only: %s", error)
 
-    rolls = melody_to_piano_rolls(melody, duration) if melody else []
-    has_melody = len(rolls) > 0
+    segments = melody_to_segments(melody, duration) if melody else []
+    has_melody = len(segments) > 0
 
     total_frames = int(round(duration * FRAMES_PER_SECOND))
     chunks = []
     state = None
 
     if has_melody:
-        for ci, roll in enumerate(rolls):
-            remaining_total = total_frames - ci * CHUNK_FRAMES
-            if remaining_total <= 0:
-                break
-            frames = min(CHUNK_FRAMES, remaining_total)
-            wav, state = mrt.generate(
-                style=style,
-                notes=roll,
-                cfg_notes=CFG_NOTES_MELODY,
-                frames=frames,
-                state=state,
-            )
-            chunks.append(wav)
-        generated = len(rolls) * CHUNK_FRAMES
-        remaining = total_frames - generated
-        while remaining > 0:
-            frames = min(MAX_FRAMES_PER_CALL, remaining)
-            wav, state = mrt.generate(style=style, frames=frames, state=state)
-            chunks.append(wav)
-            remaining -= frames
+        # Segments already tile the whole clip (notes + rests), so this single
+        # pass both voices the melody and fills the tail — no separate free run.
+        for notes_vec, seg_frames in segments:
+            remaining = seg_frames
+            first = True
+            while remaining > 0:
+                frames = min(MAX_FRAMES_PER_CALL, remaining)
+                wav, state = mrt.generate(
+                    style=style,
+                    notes=notes_vec if first else _held_notes(notes_vec),
+                    cfg_notes=CFG_NOTES_MELODY,
+                    frames=frames,
+                    state=state,
+                )
+                chunks.append(wav)
+                remaining -= frames
+                first = False
     else:
         remaining = total_frames
         while remaining > 0:
@@ -340,11 +392,12 @@ def _generate_on_model_thread(
         "X-Generation-Ms": str(elapsed_ms),
         "X-Style-Mix": f"{mixed:.2f}",
         "X-Melody-Conditioned": "1" if has_melody else "0",
+        "X-Cfg-Notes": f"{CFG_NOTES_MELODY:.1f}" if has_melody else "0",
     }
     logger.info(
-        "Generated %.1fs clip in %dms (prompt=%r, style_mix=%.2f, melody=%s)",
-        duration, elapsed_ms, prompt[:80], mixed,
-        f"{len(rolls)} chunks" if has_melody else "none",
+        "Generated %.1fs clip in %dms (prompt=%r, style_mix=%.2f, cfg_notes=%.1f, melody=%s)",
+        duration, elapsed_ms, prompt[:80], mixed, CFG_NOTES_MELODY,
+        f"{len(segments)} segments" if has_melody else "none",
     )
     return pcm16_wav_bytes(samples, full.sample_rate), meta
 
