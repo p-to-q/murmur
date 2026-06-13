@@ -17,7 +17,28 @@ pip install -q "magenta-rt[jax]" "jax[cuda12]" fastapi "uvicorn[standard]" pytho
 
 mkdir -p /app
 curl -fsSL "${BASE}/main.py" -o /app/main.py
-curl -fsSL "${BASE}/docker-entrypoint.sh" -o /usr/local/bin/docker-entrypoint.sh
+
+cat > /usr/local/bin/docker-entrypoint.sh << 'ENTRY'
+#!/usr/bin/env bash
+set -euo pipefail
+MODEL="${MAGENTA_MODEL:-mrt2_base}"
+ASSETS_ROOT="${HOME}/Documents/Magenta"
+ASSETS_DIR="${ASSETS_ROOT}/magenta-rt-v2"
+CHECKPOINT="${ASSETS_DIR}/checkpoints/${MODEL}.safetensors"
+PORT="${PORT:-8002}"
+mkdir -p "$ASSETS_ROOT"
+if [ ! -f "$CHECKPOINT" ]; then
+  echo "[entrypoint] downloading Magenta resources + JAX checkpoint for ${MODEL} (first boot, ~4 GB)…"
+  mrt models init
+  mrt checkpoints download "${MODEL}.safetensors" 2>/dev/null || mrt checkpoints download "mrt2_base.safetensors"
+fi
+if [ ! -f "$CHECKPOINT" ]; then
+  echo "[entrypoint] checkpoint missing after download: ${CHECKPOINT}" >&2
+  exit 1
+fi
+echo "[entrypoint] starting uvicorn on 0.0.0.0:${PORT} (backend=${MAGENTA_BACKEND:-jax})"
+exec uvicorn main:app --host 0.0.0.0 --port "${PORT}"
+ENTRY
 chmod +x /usr/local/bin/docker-entrypoint.sh
 
 cd /app

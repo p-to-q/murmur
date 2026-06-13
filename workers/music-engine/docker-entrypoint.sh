@@ -14,7 +14,7 @@ if [ ! -f "$CHECKPOINT" ]; then
   echo "[entrypoint] downloading Magenta resources + JAX checkpoint for ${MODEL} (first boot, ~4 GB)…"
   if command -v mrt >/dev/null 2>&1; then
     mrt models init
-    mrt checkpoints download "$MODEL" 2>/dev/null || mrt checkpoints download
+    mrt checkpoints download "${MODEL}.safetensors" 2>/dev/null || mrt checkpoints download "mrt2_base.safetensors"
   else
     python - <<'PY'
 import os

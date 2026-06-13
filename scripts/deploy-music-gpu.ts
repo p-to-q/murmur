@@ -274,6 +274,11 @@ async function ensureRegistryAuth(apiKey: string): Promise<string | undefined> {
 }
 
 function bootstrapDockerArgs(): string {
+  const localScript = resolve(ROOT, "workers/music-engine/runpod-bootstrap.sh");
+  if (existsSync(localScript)) {
+    const b64 = Buffer.from(readFileSync(localScript, "utf8")).toString("base64");
+    return `bash -lc 'echo ${b64} | base64 -d | bash'`;
+  }
   const ref = process.env.MURMUR_GIT_REF?.trim() || "main";
   const scriptUrl = `https://raw.githubusercontent.com/p-to-q/murmur/${ref}/workers/music-engine/runpod-bootstrap.sh`;
   return `bash -lc 'curl -fsSL ${scriptUrl} | bash'`;
