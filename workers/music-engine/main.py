@@ -96,12 +96,15 @@ def _import_system_class():
                 raise
     import magenta_rt
 
-    for name in ("MagentaRT2", "MagentaRT2System"):
-        cls = getattr(magenta_rt, name, None)
+    for name in ("MagentaRT2Jax", "MagentaRT2", "MagentaRT2System"):
+        try:
+            cls = getattr(magenta_rt, name, None)
+        except ImportError:
+            cls = None
         if cls is not None:
             return "jax", cls
     raise RuntimeError(
-        "magenta_rt exposes neither MagentaRT2 nor MagentaRT2System for the JAX backend"
+        "magenta_rt exposes no JAX system class (install with: pip install magenta-rt[jax] jax[cuda12])"
     )
 
 

@@ -18,8 +18,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --upgrade pip \
-  && pip install "magenta-rt[gpu]" fastapi "uvicorn[standard]" python-multipart \
-  || pip install magenta-rt "jax[cuda12]" fastapi "uvicorn[standard]" python-multipart
+  && pip install "magenta-rt[jax]" "jax[cuda12]" fastapi "uvicorn[standard]" python-multipart
 
 WORKDIR /app
 COPY main.py .

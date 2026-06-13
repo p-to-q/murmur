@@ -13,8 +13,7 @@ apt-get install -y -qq ffmpeg curl
 
 echo "[bootstrap] installing Python deps (magenta-rt + server)…"
 pip install -q --upgrade pip
-pip install -q "magenta-rt[gpu]" fastapi "uvicorn[standard]" python-multipart \
-  || pip install -q magenta-rt "jax[cuda12]" fastapi "uvicorn[standard]" python-multipart
+pip install -q "magenta-rt[jax]" "jax[cuda12]" fastapi "uvicorn[standard]" python-multipart
 
 mkdir -p /app
 curl -fsSL "${BASE}/main.py" -o /app/main.py
