@@ -72,13 +72,9 @@ export async function buildSavedSongRemixVersions(song: SavedSong): Promise<Vibe
     return [];
   }
   const version = hydrateSavedSongToVersion(song);
-  const remixLineage = buildRemixLineage(song);
   return createMagentaVersions(version.melody, {
     draftId: song.id,
     originFlowId: `saved-${song.id}`,
-    parentSongId: remixLineage.parentSongId,
-    rootSongId: remixLineage.rootSongId,
-    lineageDepth: remixLineage.lineageDepth,
     sourceType: "library",
     sourceMelodyKind: version.sourceMelodyKind,
     batchIndex: 0,
