@@ -667,8 +667,14 @@ export function HumScreen() {
         {/* ── Desktop: side-by-side layout / Mobile: stacked ──── */}
         <div className="flex-1 flex flex-col md:flex-row items-center justify-center px-6 md:px-16 lg:px-24 gap-8 md:gap-12">
           {/* ── Left column: headline text ────────────────────── */}
-          {/* Fixed min-height prevents layout shifts when headlines rotate */}
-          <div className="min-w-0 w-full md:w-[520px] md:flex-shrink-0 text-center md:text-left pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0 min-h-[120px] md:min-h-[160px]">
+          {/* The inner reserved-height box keeps the headline AND the orb
+              anchored. Its min-height fits the tallest copy (a 3-line idle
+              headline), so swapping idle↔recording↔processing — or rotating
+              headlines — never grows or collapses the column and nudges the
+              orb. Height is content-only; the safe-area padding stays on the
+              outer div so a notch can never change the reserved height. */}
+          <div className="min-w-0 w-full md:w-[520px] md:flex-shrink-0 text-center md:text-left pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
+            <div className="flex flex-col justify-center min-h-[116px] md:min-h-[170px] lg:min-h-[196px]">
             <AnimatePresence mode="wait">
               {isIdle && !humError && (
                 <motion.h1
@@ -759,6 +765,7 @@ export function HumScreen() {
                 </motion.div>
               )}
             </AnimatePresence>
+            </div>
           </div>
 
           {/* ── Right column: the orb ─────────────────────────── */}
@@ -843,10 +850,20 @@ export function HumScreen() {
                   if (isRecording) stopRecording();
                 }}
                 disabled={isProcessing}
-                animate={{
-                  scale: isRecording ? 0.92 : 1,
-                }}
-                whileHover={isIdle ? { scale: 1.03 } : undefined}
+                // Scale is locked at 1 in every state: a press/record used to
+                // shrink the orb to 0.92 while the glow + progress ring stayed
+                // full size, which read as the inner circle drifting out of the
+                // outer ring. The orb must never resize — press feedback comes
+                // from a size-neutral shadow lift, not a transform.
+                animate={{ scale: 1 }}
+                whileHover={
+                  isIdle
+                    ? {
+                        boxShadow:
+                          "0 6px 48px rgba(255,255,255,0.78), 0 0 0 1px rgba(255,255,255,0.92)",
+                      }
+                    : undefined
+                }
                 transition={{
                   type: "spring",
                   stiffness: 200,
