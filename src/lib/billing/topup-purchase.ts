@@ -58,7 +58,13 @@ function resolveFromMetadata(
         ? Math.floor(metadataNotes)
         : quote.notesGranted;
     purchaseMetadata = { skuId: productId, customAmountUsd: quote.amountUsd };
-    assertPaidAmountMatchesQuote(providerRef, amountCents, quote.amountCents);
+    assertPaidAmountMatchesQuote(
+      providerRef,
+      amountCents,
+      quote.amountCents,
+      currency,
+      quote.defaultCurrency,
+    );
     if (Number.isFinite(metadataNotes) && metadataNotes > 0 && metadataNotes !== quote.notesGranted) {
       throw new InvalidTopupPurchaseError(
         `purchase ${providerRef} notesGranted ${metadataNotes} does not match quote ${quote.notesGranted}`,
@@ -79,7 +85,13 @@ function resolveFromMetadata(
         ? Math.floor(metadataNotes)
         : topupNotesGranted(sku);
     purchaseMetadata = { skuId: productId };
-    assertPaidAmountMatchesQuote(providerRef, amountCents, sku.defaultPriceCents);
+    assertPaidAmountMatchesQuote(
+      providerRef,
+      amountCents,
+      sku.defaultPriceCents,
+      currency,
+      sku.defaultCurrency,
+    );
     const expectedNotes = topupNotesGranted(sku);
     if (Number.isFinite(metadataNotes) && metadataNotes > 0 && metadataNotes !== expectedNotes) {
       throw new InvalidTopupPurchaseError(
@@ -103,8 +115,15 @@ function assertPaidAmountMatchesQuote(
   providerRef: string,
   amountCents: number,
   expectedCents: number,
+  paidCurrency: string,
+  quoteCurrency: string,
 ): void {
   if (amountCents <= 0 || expectedCents <= 0) return;
+  // Cents are only comparable in the quote's own currency. Checkout pins the
+  // session currency, so a mismatch here means the provider settled in a
+  // converted currency — equality against USD cents would reject a legit
+  // payment, so we rely on the metadata/notes validation instead.
+  if (paidCurrency.toUpperCase() !== quoteCurrency.toUpperCase()) return;
   if (amountCents !== expectedCents) {
     throw new InvalidTopupPurchaseError(
       `purchase ${providerRef} amount ${amountCents} does not match quote ${expectedCents}`,

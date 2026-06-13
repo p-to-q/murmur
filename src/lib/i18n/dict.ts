@@ -145,6 +145,7 @@ export const DICT = {
   "hum.err.insufficient.title": { zh: "音磅用完了",                 en: "Out of notes" },
   "hum.err.insufficient.detail":{ zh: "每天会自动补一次。先用示例旋律继续也行。", en: "Notes refill once a day. The example melody walks through the same flow for free." },
   "hum.err.insufficient.cta_retry":{ zh: "等下再录",                  en: "Try later" },
+  "hum.err.insufficient.cta_topup":{ zh: "去补给音磅",                en: "Top up notes" },
   "hum.err.rate_limited.title": { zh: "录得太频繁了",                 en: "A bit too many in a row" },
   "hum.err.rate_limited.detail":{ zh: "稍等一会儿再继续，或先听一段示例。", en: "Hold on a moment, then try again — or listen to the demo." },
   "hum.err.rate_limited.cta_retry":{ zh: "稍后再试",                  en: "Try again soon" },

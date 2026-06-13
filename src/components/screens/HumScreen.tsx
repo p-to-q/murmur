@@ -576,7 +576,8 @@ export function HumScreen() {
           CSS drift animations still run; framer-motion adds a reactivity
           layer on top via the `style` prop — seamless composition. */}
       <div className="absolute inset-0 overflow-hidden" aria-hidden>
-        {/* Pink/magenta blob — left side */}
+        {/* Coral blob — left side. Brand accent, kept soft so it reads as
+            warm light on paper rather than a synthetic mesh gradient. */}
         <motion.div
           className="aurora-blob-1 absolute rounded-full"
           style={{
@@ -585,13 +586,13 @@ export function HumScreen() {
             left: "-5%",
             bottom: "10%",
             background:
-              "radial-gradient(ellipse at center, rgba(255,105,210,0.38) 0%, rgba(255,80,180,0.12) 50%, transparent 75%)",
+              "radial-gradient(ellipse at center, rgba(255,138,92,0.36) 0%, rgba(255,89,36,0.10) 50%, transparent 75%)",
             filter: "blur(60px)",
             scale: blob1Scale,
             opacity: blobOpacity,
           }}
         />
-        {/* Yellow/gold blob — right side */}
+        {/* Warm gold blob — right side */}
         <motion.div
           className="aurora-blob-2 absolute rounded-full"
           style={{
@@ -600,13 +601,13 @@ export function HumScreen() {
             right: "-8%",
             top: "8%",
             background:
-              "radial-gradient(ellipse at center, rgba(255,224,64,0.35) 0%, rgba(255,200,40,0.10) 50%, transparent 75%)",
+              "radial-gradient(ellipse at center, rgba(235,203,139,0.42) 0%, rgba(235,203,139,0.12) 50%, transparent 75%)",
             filter: "blur(55px)",
             scale: blob2Scale,
             opacity: blobOpacity,
           }}
         />
-        {/* Lavender/blue blob — top center */}
+        {/* Dust blue blob — top center, cool counterweight */}
         <motion.div
           className="aurora-blob-3 absolute rounded-full"
           style={{
@@ -615,13 +616,13 @@ export function HumScreen() {
             left: "30%",
             top: "-5%",
             background:
-              "radial-gradient(ellipse at center, rgba(170,190,255,0.22) 0%, rgba(200,180,240,0.08) 50%, transparent 75%)",
+              "radial-gradient(ellipse at center, rgba(167,184,200,0.26) 0%, rgba(201,182,228,0.08) 50%, transparent 75%)",
             filter: "blur(50px)",
             scale: blob3Scale,
             opacity: blobOpacity,
           }}
         />
-        {/* Subtle green iridescence — bottom right */}
+        {/* Soft lavender — bottom right */}
         <motion.div
           className="aurora-blob-1 absolute rounded-full"
           style={{
@@ -630,7 +631,7 @@ export function HumScreen() {
             right: "15%",
             bottom: "20%",
             background:
-              "radial-gradient(ellipse at center, rgba(140,230,200,0.15) 0%, transparent 60%)",
+              "radial-gradient(ellipse at center, rgba(201,182,228,0.18) 0%, transparent 60%)",
             filter: "blur(45px)",
             animationDelay: "-8s",
             scale: blob2Scale,
@@ -754,8 +755,8 @@ export function HumScreen() {
                 style={{
                   inset: "-18%",
                   background: isRecording
-                    ? "conic-gradient(from 0deg, #FF8A5C, #FF5924, #FF69D2, #FFE040, #FF8A5C)"
-                    : "conic-gradient(from 0deg, #FF8A5C88, #FF69D266, #A7B8C844, #FFE04066, #C9B6E444, #FF8A5C88)",
+                    ? "conic-gradient(from 0deg, #FF8A5C, #FF5924, #D9421A, #EBCB8B, #FF8A5C)"
+                    : "conic-gradient(from 0deg, #FF8A5C88, #EBCB8B66, #A7B8C844, #FFE6DA66, #C9B6E444, #FF8A5C88)",
                   filter: glowFilter,
                   scale: glowScale,
                   opacity: glowOpacity,
@@ -1002,16 +1003,27 @@ export function HumScreen() {
                 <p className="text-[#8C8780] text-[13px] leading-relaxed mb-6">
                   {errorCopy.detail}
                 </p>
-                <button
-                  onClick={() => {
-                    startAudioContext();
-                    setHumError(null);
-                    transcribeAndGenerate(undefined);
-                  }}
-                  className="mm-btn-primary w-full justify-center mb-3"
-                >
-                  {t("hum.mic.cta_example")}
-                </button>
+                {humError.variant === "insufficient" && !isGuest ? (
+                  /* Out of notes while signed in — the useful action is a
+                     top-up, not another free demo run. */
+                  <button
+                    onClick={() => router.push("/topup")}
+                    className="mm-btn-primary w-full justify-center mb-3"
+                  >
+                    {t("hum.err.insufficient.cta_topup")}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      startAudioContext();
+                      setHumError(null);
+                      transcribeAndGenerate(undefined);
+                    }}
+                    className="mm-btn-primary w-full justify-center mb-3"
+                  >
+                    {t("hum.mic.cta_example")}
+                  </button>
+                )}
 
                 {/* 如果是 billing_unavailable，显示两个按钮 */}
                 {humError.code === "billing_unavailable" ? (

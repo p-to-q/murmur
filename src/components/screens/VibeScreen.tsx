@@ -264,7 +264,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                 background: "transparent",
                 border: "3px solid transparent",
                 backgroundImage:
-                  "conic-gradient(from 0deg, #FF5924, #FFE040, #40E080, #40A0FF, #C070FF, #FF69D2, #FF5924)",
+                  "conic-gradient(from 0deg, #FF5924, #EBCB8B, #A7B8C8, #C9B6E4, #FF8A5C, #FF5924)",
                 WebkitMask:
                   "linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0)",
                 WebkitMaskComposite: "xor",

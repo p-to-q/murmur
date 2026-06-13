@@ -422,6 +422,18 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .scene-particle { animation: none; opacity: 0.55; }
+  /* Ambient/decorative motion stops; functional transitions (ring progress,
+     loading spinners) stay so state changes remain legible. */
+  .aurora-blob-1,
+  .aurora-blob-2,
+  .aurora-blob-3,
+  .glow-spin,
+  .breathing,
+  .breathing-ring,
+  .mark-breathe,
+  .animate-shimmer {
+    animation: none;
+  }
 }
 
 /* Responsive main content bottom padding:

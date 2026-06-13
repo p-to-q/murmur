@@ -118,7 +118,8 @@ export function CheckoutScreen() {
    */
   const confirmGrant = useCallback(
     async (signal?: { cancelled: boolean }) => {
-      setPhase("confirming");
+      // Phase is already "confirming" — the useState initializer reads the
+      // `?status=success` return leg, which is the only path that runs this.
       const baseline = await fetchUserBalance({ force: true }).catch(() => null);
       const baselineNotes = baseline?.balance?.notes ?? null;
       for (let attempt = 0; attempt < 8; attempt++) {
@@ -204,7 +205,9 @@ export function CheckoutScreen() {
   useEffect(() => {
     if (returnStatus === "success") {
       const signal = { cancelled: false };
-      void confirmGrant(signal);
+      void (async () => {
+        await confirmGrant(signal);
+      })();
       return () => {
         signal.cancelled = true;
       };

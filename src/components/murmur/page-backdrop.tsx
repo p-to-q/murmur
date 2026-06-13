@@ -3,8 +3,9 @@
 /**
  * PageBackdrop — the unified visual anchor for every screen.
  *
- * Renders the cream surface with four pastel corner blobs (pink BL, yellow TR,
- * lavender TL/top, mint BR). Drifts slowly via CSS keyframes. Pure presentation,
+ * Renders the cream surface with four warm corner blobs (coral BL, gold TR,
+ * dust-blue TL/top, lavender BR) drawn from the brand palette so every page
+ * reads as warm light on paper. Drifts slowly via CSS keyframes. Pure presentation,
  * no audio reactivity — HumScreen keeps its own audio-reactive backdrop because
  * it has different requirements (amplitude-driven scale + opacity).
  *
@@ -34,7 +35,7 @@ export function PageBackdrop({ variant = "default", className = "" }: PageBackdr
       aria-hidden
       style={{ opacity: o }}
     >
-      {/* Pink — bottom-left */}
+      {/* Coral — bottom-left */}
       <div
         className="aurora-blob-1 absolute rounded-full"
         style={{
@@ -43,11 +44,11 @@ export function PageBackdrop({ variant = "default", className = "" }: PageBackdr
           left: "-6%",
           bottom: "8%",
           background:
-            "radial-gradient(ellipse at center, rgba(255,105,210,0.32) 0%, rgba(255,80,180,0.10) 50%, transparent 75%)",
+            "radial-gradient(ellipse at center, rgba(255,138,92,0.30) 0%, rgba(255,89,36,0.09) 50%, transparent 75%)",
           filter: "blur(60px)",
         }}
       />
-      {/* Yellow — top-right */}
+      {/* Warm gold — top-right */}
       <div
         className="aurora-blob-2 absolute rounded-full"
         style={{
@@ -56,11 +57,11 @@ export function PageBackdrop({ variant = "default", className = "" }: PageBackdr
           right: "-8%",
           top: "6%",
           background:
-            "radial-gradient(ellipse at center, rgba(255,224,64,0.30) 0%, rgba(255,200,40,0.09) 50%, transparent 75%)",
+            "radial-gradient(ellipse at center, rgba(235,203,139,0.36) 0%, rgba(235,203,139,0.10) 50%, transparent 75%)",
           filter: "blur(55px)",
         }}
       />
-      {/* Lavender — top center / top-left */}
+      {/* Dust blue — top center / top-left */}
       <div
         className="aurora-blob-3 absolute rounded-full"
         style={{
@@ -69,11 +70,11 @@ export function PageBackdrop({ variant = "default", className = "" }: PageBackdr
           left: "18%",
           top: "-6%",
           background:
-            "radial-gradient(ellipse at center, rgba(170,190,255,0.22) 0%, rgba(200,180,240,0.08) 50%, transparent 75%)",
+            "radial-gradient(ellipse at center, rgba(167,184,200,0.24) 0%, rgba(201,182,228,0.08) 50%, transparent 75%)",
           filter: "blur(50px)",
         }}
       />
-      {/* Mint — bottom-right */}
+      {/* Lavender — bottom-right */}
       <div
         className="aurora-blob-1 absolute rounded-full"
         style={{
@@ -82,7 +83,7 @@ export function PageBackdrop({ variant = "default", className = "" }: PageBackdr
           right: "10%",
           bottom: "12%",
           background:
-            "radial-gradient(ellipse at center, rgba(140,230,200,0.20) 0%, transparent 60%)",
+            "radial-gradient(ellipse at center, rgba(201,182,228,0.18) 0%, transparent 60%)",
           filter: "blur(45px)",
           animationDelay: "-8s",
         }}
