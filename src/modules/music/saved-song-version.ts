@@ -1,5 +1,6 @@
 import type { CleanMelody, MelodySelectionKind, SongCard, VibeVersion } from "@/modules/shared/types";
 import { generateVibeVersions } from "@/modules/strummer/generate-versions";
+import { createMagentaVersions, checkMusicEngineAvailable } from "@/modules/magenta/generate-magenta-versions";
 import { deriveEditDepth, normalizeEditCount } from "./edit-depth";
 import { VIBE_PRESETS, type VibeId } from "@/presets/vibes";
 import { buildRemixLineage, normalizeLineageDepth, resolveParentSongId, resolveRootSongId } from "./lineage";
@@ -54,6 +55,49 @@ export function buildSavedSongVibeVersions(song: SavedSong): VibeVersion[] {
     lineageDepth: remixLineage.lineageDepth,
     sourceType: "library",
     sourceMelodyKind: version.sourceMelodyKind,
+    preferredVibeId,
+    preferredVibeMode,
+  });
+}
+
+export async function buildSavedSongRemixVersions(song: SavedSong): Promise<VibeVersion[]> {
+  const version = hydrateSavedSongToVersion(song);
+  const preferredVibeId = resolvePreferredSavedSongVibeId(song);
+  const preferredVibeMode =
+    version.editDepth === "reworked"
+      ? "anchor"
+      : version.editDepth === "shaped"
+        ? "boost"
+        : undefined;
+  const remixLineage = buildRemixLineage(song);
+  const common = {
+    draftId: song.id,
+    originFlowId: `saved-${song.id}`,
+    parentSongId: remixLineage.parentSongId,
+    rootSongId: remixLineage.rootSongId,
+    lineageDepth: remixLineage.lineageDepth,
+    sourceType: "library" as const,
+    sourceMelodyKind: version.sourceMelodyKind,
+  };
+
+  if (preferredVibeId) {
+    return generateVibeVersions(version.melody, {
+      ...common,
+      preferredVibeId,
+      preferredVibeMode,
+    });
+  }
+
+  if (await checkMusicEngineAvailable()) {
+    return createMagentaVersions(version.melody, {
+      ...common,
+      batchIndex: 0,
+      humBlob: null,
+    });
+  }
+
+  return generateVibeVersions(version.melody, {
+    ...common,
     preferredVibeId,
     preferredVibeMode,
   });

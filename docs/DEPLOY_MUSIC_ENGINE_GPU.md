@@ -11,7 +11,32 @@
 2. 充值（RTX 4090 / L4 约 **$0.3–0.5/小时**，常驻月租约 **$220–360**）
 3. 在 [Settings → API Keys](https://www.runpod.io/console/user/settings) 创建 key
 
-### 2. 构建 GPU 镜像（首次 / 代码更新后）
+### 2. GHCR 镜像权限（必做）
+
+默认镜像 `ghcr.io/p-to-q/murmur-music-engine:latest` 是 **私有包**，RunPod 拉取时需要 registry 凭证，否则会出现 `IMAGE_AUTH_ERROR: unauthorized`。
+
+任选其一：
+
+**A. 自动注册（推荐）** — 在 `.env.local` 添加 GitHub PAT（需 `read:packages`）：
+
+```bash
+GHCR_USERNAME=<你的 GitHub 用户名>
+GHCR_TOKEN=ghp_xxxxxxxx
+```
+
+部署脚本会把凭证写入 RunPod → Container Registry Auth（名称 `murmur-ghcr`）。
+
+**B. RunPod 控制台手动添加** — [Settings → Container Registry Auth](https://www.runpod.io/console/user/settings)：
+
+- Username：GitHub 用户名
+- Password：PAT（`read:packages`）
+- 记下生成的 ID，写入 `.env.local`：`RUNPOD_REGISTRY_AUTH_ID=…`
+
+**C. 公开 GHCR 包（org admin）** — GitHub → p-to-q → Packages → murmur-music-engine → Change visibility → Public。公开后无需 registry 凭证。
+
+PAT 创建：GitHub → Settings → Developer settings → Personal access tokens → `read:packages`。
+
+### 3. 构建 GPU 镜像（首次 / 代码更新后）
 
 镜像托管在 GitHub Container Registry，push 到 `main` 后自动构建，或手动触发 Actions → **Music engine GPU image**。
 
@@ -23,7 +48,7 @@ docker buildx build --platform linux/amd64 \
   workers/music-engine --push
 ```
 
-### 3. 部署 + 写入 Vercel
+### 4. 部署 + 写入 Vercel
 
 ```bash
 export RUNPOD_API_KEY=rpa_xxxxxxxx
@@ -41,7 +66,7 @@ bun run deploy:music-gpu
 
 凭证保存在 `.env.workers.cloud`（已 gitignore）。
 
-### 4. 验证
+### 5. 验证
 
 ```bash
 curl -sS "https://<pod-id>-8002.proxy.runpod.net/health" \
@@ -76,10 +101,11 @@ bash scripts/murmur-supervisor.sh stop   # 若在用 supervisor
 
 | 现象 | 处理 |
 | --- | --- |
+| `IMAGE_AUTH_ERROR: unauthorized` | 配置 `GHCR_USERNAME` + `GHCR_TOKEN`，或 `RUNPOD_REGISTRY_AUTH_ID`；见上文 §2 |
 | `No instances currently available` | 换 `RUNPOD_GPU_TYPE_ID` 或稍后重试 |
 | `/health` 长时间 loading | 正常，首次下载 ~4 GB；看 RunPod 控制台日志 |
 | Vercel 502 | 核对 `MUSIC_WORKER_TOKEN` 与 Pod env 一致 |
-| 镜像 pull 失败 | 确认 GHCR 包为 public，或配置 RunPod registry auth |
+| 镜像 pull 失败（非 auth） | 确认 GHCR 包存在且 tag 正确；Actions → Music engine GPU image |
 
 ## 架构
 

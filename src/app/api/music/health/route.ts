@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getMusicWorkerUrl } from "@/lib/platform/music-worker";
+import { getMusicWorkerUrl, isMusicWorkerConfigured } from "@/lib/platform/music-worker";
 
 export const runtime = "nodejs";
 
@@ -11,9 +11,14 @@ export const runtime = "nodejs";
  * Magenta path as soon as the worker process answers.
  */
 export async function GET() {
+  const configured = isMusicWorkerConfigured();
   const workerBase = getMusicWorkerUrl();
   if (!workerBase) {
-    return NextResponse.json({ available: false, reason: "unconfigured" });
+    return NextResponse.json({
+      available: false,
+      configured: false,
+      reason: "unconfigured",
+    });
   }
 
   try {
@@ -26,7 +31,11 @@ export async function GET() {
       cache: "no-store",
     });
     if (!res.ok) {
-      return NextResponse.json({ available: false, reason: `http_${res.status}` });
+      return NextResponse.json({
+        available: false,
+        configured,
+        reason: `http_${res.status}`,
+      });
     }
     const data = (await res.json()) as {
       status?: string;
@@ -44,6 +53,7 @@ export async function GET() {
       data.status === "ok" || data.loaded === true || data.loading === true;
     return NextResponse.json({
       available,
+      configured,
       model: data.model ?? null,
       mock: data.mock ?? false,
       loaded: data.loaded ?? false,
@@ -51,6 +61,10 @@ export async function GET() {
       reason: available ? null : data.loadError ?? "degraded",
     });
   } catch {
-    return NextResponse.json({ available: false, reason: "unreachable" });
+    return NextResponse.json({
+      available: false,
+      configured,
+      reason: "unreachable",
+    });
   }
 }

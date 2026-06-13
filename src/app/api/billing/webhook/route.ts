@@ -1,29 +1,21 @@
 /**
- * POST /api/billing/webhook — Stripe webhook receiver.
+ * POST /api/billing/webhook — Waffo Pancake webhook receiver.
  *
- * Flow per docs/data-model.md §3.7 + docs/api-conventions.md §10:
- *   1. Verify the Stripe signature against the raw body.
- *   2. Record the event in events_webhook; the (provider, providerEventId)
- *      unique index makes redelivery a no-op.
- *   3. On checkout.session.completed (paid): write the purchases row and
- *      grant notes via the ledger. Both writes are idempotent — purchases
- *      via (provider, providerRef), the grant via (userId, reason,
- *      externalRef) — so Stripe retries can never double-grant.
- *
- * Responses: 2xx tells Stripe to stop retrying. We return 500 only for
- * failures that a retry can fix (DB blips, user row not yet provisioned);
- * permanently malformed payloads are marked failed and answered 200.
+ *   1. Verify X-Waffo-Signature against the raw body.
+ *   2. Record in events_webhook (provider + providerEventId unique).
+ *   3. On order.completed: write purchases + grant notes (idempotent).
  */
 
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
-import type Stripe from "stripe";
+import { verifyWebhook, WebhookEventType } from "@waffo/pancake-ts";
+import type { WebhookEvent, WebhookEventData } from "@waffo/pancake-ts";
 
-import { getStripeClient, getStripeWebhookSecret } from "@/lib/billing/stripe";
+import { isWaffoConfigured } from "@/lib/billing/waffo";
 import {
   InvalidTopupPurchaseError,
-  resolveStripeTopupPurchase,
+  resolveWaffoTopupPurchase,
 } from "@/lib/billing/topup-purchase";
 import { db } from "@/lib/db/client";
 import { eventsWebhook } from "@/lib/db/schema/events-webhook";
@@ -34,9 +26,9 @@ import { log } from "@/lib/observability/log";
 export const runtime = "nodejs";
 
 const ROUTE = "/api/billing/webhook";
-const ROUTE_ID = "billing.webhook.stripe";
+const ROUTE_ID = "billing.webhook.waffo";
+const PROVIDER = "waffo";
 
-/** Payload is malformed in a way no retry can fix — record + acknowledge. */
 class NonRetryableWebhookError extends Error {}
 
 function newId(prefix: string): string {
@@ -45,18 +37,16 @@ function newId(prefix: string): string {
 
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
-  const stripe = getStripeClient();
-  const webhookSecret = getStripeWebhookSecret();
 
-  if (!stripe || !webhookSecret) {
+  if (!isWaffoConfigured()) {
     return NextResponse.json(
-      { error: "stripe_not_configured", requestId },
+      { error: "waffo_not_configured", requestId },
       { status: 503 },
     );
   }
 
   const payload = await request.text();
-  const signature = request.headers.get("stripe-signature");
+  const signature = request.headers.get("x-waffo-signature");
   if (!signature) {
     return NextResponse.json(
       { error: "missing_signature", requestId },
@@ -64,31 +54,29 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let event: Stripe.Event;
+  let event: WebhookEvent<WebhookEventData>;
   try {
-    event = await stripe.webhooks.constructEventAsync(
-      payload,
-      signature,
-      webhookSecret,
-    );
+    event = verifyWebhook(payload, signature);
   } catch (err) {
-    log("billing.webhook_failed", {
-      stage: "signature",
-      error: err instanceof Error ? err.message : String(err),
-    }, { route: ROUTE, requestId, level: "warn" });
-    return NextResponse.json(
-      { error: "invalid_signature", requestId },
-      { status: 400 },
-    );
+      log(
+        "billing.webhook_failed",
+        {
+          stage: "signature",
+          error: err instanceof Error ? err.message : String(err),
+        },
+        { route: ROUTE, requestId, level: "warn" },
+      );
+      return NextResponse.json(
+        { error: "invalid_signature", requestId },
+        { status: 401 },
+      );
   }
 
-  // Idempotency gate: first delivery inserts, redeliveries hit the unique
-  // index and bail out here.
   const insertedRows = await db
     .insert(eventsWebhook)
     .values({
       id: newId("evw"),
-      provider: "stripe",
+      provider: PROVIDER,
       providerEventId: event.id,
       routeId: ROUTE_ID,
       status: "received",
@@ -100,24 +88,23 @@ export async function POST(request: NextRequest) {
     })
     .returning({ id: eventsWebhook.id });
 
-  // Conflict ⇒ we've seen this event id before. Only a fully *processed*
-  // event is a true duplicate: a "failed" row (or a "received" row from a
-  // crashed attempt) means the grant never happened, and answering 200 here
-  // would stop Stripe's retries forever — the paid user would never be
-  // credited. Reprocessing is safe because the purchase + grant writes are
-  // individually idempotent.
   const eventRow = insertedRows[0] ?? (await reclaimUnprocessedEvent(event.id));
   if (!eventRow) {
     return NextResponse.json({ received: true, duplicate: true, requestId });
   }
 
-  log("billing.webhook_received", {
-    eventType: event.type,
-    providerEventId: event.id,
-  }, { route: ROUTE, requestId });
+  log(
+    "billing.webhook_received",
+    {
+      eventType: event.eventType,
+      providerEventId: event.id,
+      mode: event.mode,
+    },
+    { route: ROUTE, requestId },
+  );
 
   try {
-    const outcome = await handleStripeEvent(event);
+    const outcome = await handleWaffoEvent(event);
     await db
       .update(eventsWebhook)
       .set({ status: "processed", processedAt: new Date() })
@@ -127,13 +114,17 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : String(err);
     const retryable = !(err instanceof NonRetryableWebhookError);
 
-    log("billing.webhook_failed", {
-      stage: "process",
-      eventType: event.type,
-      providerEventId: event.id,
-      error: message,
-      retryable,
-    }, { route: ROUTE, requestId, level: "error" });
+    log(
+      "billing.webhook_failed",
+      {
+        stage: "process",
+        eventType: event.eventType,
+        providerEventId: event.id,
+        error: message,
+        retryable,
+      },
+      { route: ROUTE, requestId, level: "error" },
+    );
 
     await db
       .update(eventsWebhook)
@@ -161,7 +152,7 @@ async function reclaimUnprocessedEvent(
     .from(eventsWebhook)
     .where(
       and(
-        eq(eventsWebhook.provider, "stripe"),
+        eq(eventsWebhook.provider, PROVIDER),
         eq(eventsWebhook.providerEventId, providerEventId),
       ),
     )
@@ -170,31 +161,34 @@ async function reclaimUnprocessedEvent(
   return { id: existing.id };
 }
 
-async function handleStripeEvent(
-  event: Stripe.Event,
+async function handleWaffoEvent(
+  event: WebhookEvent<WebhookEventData>,
 ): Promise<Record<string, unknown>> {
-  switch (event.type) {
-    case "checkout.session.completed":
-    case "checkout.session.async_payment_succeeded":
-      return fulfillCheckoutSession(
-        event.data.object as Stripe.Checkout.Session,
-      );
+  switch (event.eventType) {
+    case WebhookEventType.OrderCompleted:
+      return fulfillOrder(event.data);
     default:
-      return { ignored: event.type };
+      return { ignored: event.eventType };
   }
 }
 
-async function fulfillCheckoutSession(
-  session: Stripe.Checkout.Session,
+async function fulfillOrder(
+  data: WebhookEventData,
 ): Promise<Record<string, unknown>> {
-  if (session.payment_status !== "paid") {
-    // Delayed payment methods complete later via async_payment_succeeded.
-    return { ignored: "unpaid", sessionId: session.id };
+  const orderId = data.orderId;
+  if (!orderId) {
+    throw new NonRetryableWebhookError("order.completed missing orderId");
   }
 
   let purchase;
   try {
-    purchase = resolveStripeTopupPurchase(session);
+    purchase = resolveWaffoTopupPurchase({
+      orderId,
+      orderMetadata: data.orderMetadata ?? undefined,
+      amountDisplay: data.amount,
+      currency: data.currency,
+      paymentId: data.paymentId ?? null,
+    });
   } catch (error) {
     if (error instanceof InvalidTopupPurchaseError) {
       throw new NonRetryableWebhookError(error.message);
@@ -202,21 +196,19 @@ async function fulfillCheckoutSession(
     throw error;
   }
 
-  // Purchases row first (FK on users also guards against granting to a user
-  // that doesn't exist yet — retry once the profile upsert lands).
   await db
     .insert(purchases)
     .values({
       id: newId("pur"),
       userId: purchase.userId,
-      provider: "stripe",
+      provider: PROVIDER,
       productId: purchase.productId,
-      providerRef: session.id,
+      providerRef: orderId,
       amountCents: purchase.amountCents,
       currency: purchase.currency,
       notesGranted: purchase.notesGranted,
       status: "succeeded",
-      rawPayload: session as unknown as Record<string, unknown>,
+      rawPayload: data as unknown as Record<string, unknown>,
     })
     .onConflictDoNothing({
       target: [purchases.provider, purchases.providerRef],
@@ -226,33 +218,37 @@ async function fulfillCheckoutSession(
     userId: purchase.userId,
     amount: purchase.notesGranted,
     reason: "purchase:topup",
-    externalRef: session.id,
+    externalRef: orderId,
     metadata: {
-      provider: "stripe",
+      provider: PROVIDER,
       ...purchase.metadata,
-      checkoutSessionId: session.id,
-      paymentIntent: purchase.paymentIntentId,
+      orderId,
+      paymentId: purchase.paymentIntentId,
+      waffoEventId: data.paymentId,
     },
   });
 
   if (!grant.ok) {
-    // user_not_found — the profile upsert may simply not have landed yet.
     throw new Error(
-      `grantNotes failed for ${purchase.userId} on session ${session.id}: ${grant.reason}`,
+      `grantNotes failed for ${purchase.userId} on order ${orderId}: ${grant.reason}`,
     );
   }
 
-  log("notes.granted", {
-    amount: purchase.notesGranted,
-    skuId: purchase.productId,
-    duplicate: grant.duplicate,
-    sessionId: session.id,
-    balanceAfter: grant.balanceAfter,
-  }, { route: ROUTE, userId: purchase.userId });
+  log(
+    "notes.granted",
+    {
+      amount: purchase.notesGranted,
+      skuId: purchase.productId,
+      duplicate: grant.duplicate,
+      orderId,
+      balanceAfter: grant.balanceAfter,
+    },
+    { route: ROUTE, userId: purchase.userId },
+  );
 
   return {
     granted: purchase.notesGranted,
     duplicate: grant.duplicate,
-    sessionId: session.id,
+    orderId,
   };
 }

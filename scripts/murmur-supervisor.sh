@@ -1,26 +1,14 @@
 #!/usr/bin/env bash
 # murmur-supervisor.sh — keep the Murmur worker stack alive, self-healing.
 #
-# Why not launchd? The repo lives under ~/Desktop and the Magenta model under
-# ~/Documents — both macOS-TCC-protected, which launchd-spawned processes may
-# NOT read ("Operation not permitted", exit 126). So the stack is supervised
-# here instead, from a shell that DOES have disk access (this one). The loop:
+# Prefer login auto-start via murmur-services.sh (LaunchAgent). This script is
+# the supervised loop: workers, tunnels, Vercel sync, model warm-up.
 #
-#   • starts + restarts both uvicorn workers (audio :8001, music :8002),
-#     forcibly reclaiming a hung worker by freeing its port;
-#   • starts + restarts both cloudflared quick tunnels;
-#   • whenever a tunnel URL rotates (every cloudflared restart mints a new one)
-#     AND both tunnels route end-to-end, rewrites the Vercel production env and
-#     redeploys — so prod never silently falls back to the structured engine;
-#   • warms the pitch model after each (re)sync.
-#
-# It survives closing the terminal and logging out. A full reboot stops it —
-# re-arm with one command:  bash scripts/murmur-supervisor.sh start
-#
-#   bash scripts/murmur-supervisor.sh start     # launch detached + adopt ports
-#   bash scripts/murmur-supervisor.sh status    # supervisor + worker/tunnel state
-#   bash scripts/murmur-supervisor.sh stop       # stop supervisor + all children
-#   bash scripts/murmur-supervisor.sh logs       # tail everything
+#   bash scripts/murmur-services.sh install   # recommended: start on every login
+#   bash scripts/murmur-supervisor.sh start     # manual detached supervisor
+#   bash scripts/murmur-supervisor.sh status
+#   bash scripts/murmur-supervisor.sh stop
+#   bash scripts/murmur-supervisor.sh logs
 #
 # Logs: ~/Library/Logs/murmur/*.log
 set -o pipefail  # no -e/-u: a long-running supervisor must never die on a transient error or an unset optional var
@@ -30,12 +18,17 @@ ENV_FILE="$ROOT/.env.workers.local"
 LOG_DIR="$HOME/Library/Logs/murmur"
 PIDFILE="$LOG_DIR/supervisor.pid"
 STATEFILE="$LOG_DIR/synced-urls.state"
+WARMED_FILE="$LOG_DIR/models-warmed.state"
 TICK="${MURMUR_SUPERVISOR_TICK:-15}"
+MUSIC_LOAD_GRACE_SEC="${MURMUR_MUSIC_LOAD_GRACE_SEC:-240}"
 export PATH="/opt/homebrew/bin:$HOME/.bun/bin:/usr/local/bin:/usr/bin:/bin"
 mkdir -p "$LOG_DIR"
 
 ts()  { date '+%F %T'; }
 slog() { printf '%s %s\n' "$(ts)" "$*" >>"$LOG_DIR/supervisor.log"; }
+
+CAFF_PID=""
+MUSIC_STARTED_AT=0
 
 ensure_tokens() {
   if [ ! -f "$ENV_FILE" ]; then
@@ -46,10 +39,59 @@ ensure_tokens() {
   source "$ENV_FILE"; set +a
 }
 
+preflight() {
+  local ok=1
+  for venv in "$ROOT/workers/audio-engine/.venv" "$ROOT/workers/music-engine/.venv"; do
+    if [ ! -x "$venv/bin/uvicorn" ]; then
+      slog "preflight failed: missing $venv — run bun run setup:audio && bun run setup:music"
+      ok=0
+    fi
+  done
+  for bin in cloudflared curl; do
+    if ! command -v "$bin" >/dev/null 2>&1; then
+      slog "preflight failed: missing $bin on PATH"
+      ok=0
+    fi
+  done
+  [ "$ok" -eq 1 ]
+}
+
 port_listener() { lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1; }
-worker_healthy() { curl -sf -m 3 "http://127.0.0.1:$1/health" >/dev/null 2>&1; }
-edge_ok() { [ "$(curl -s -o /dev/null -m 10 -w '%{http_code}' "$1/health" 2>/dev/null)" = "200" ]; }
+worker_healthy() { curl -sf -m 5 "http://127.0.0.1:$1/health" >/dev/null 2>&1; }
+edge_ok() { [ "$(curl -s -o /dev/null -m 12 -w '%{http_code}' "$1/health" 2>/dev/null)" = "200" ]; }
 url_from() { { grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$1" 2>/dev/null || true; } | tail -1; }
+
+music_still_loading() {
+  curl -sf -m 5 "http://127.0.0.1:8002/health" 2>/dev/null \
+    | grep -qE '"loading"[[:space:]]*:[[:space:]]*true|"loaded"[[:space:]]*:[[:space:]]*false' \
+    || return 1
+  local now elapsed
+  now=$(date +%s)
+  elapsed=$((now - MUSIC_STARTED_AT))
+  [ "$MUSIC_STARTED_AT" -gt 0 ] && [ "$elapsed" -lt "$MUSIC_LOAD_GRACE_SEC" ]
+}
+
+wait_for_network() {
+  for _ in $(seq 1 15); do
+    if curl -sf -m 3 https://1.1.1.1/cdn-cgi/trace >/dev/null 2>&1 \
+      || curl -sf -m 3 https://www.apple.com >/dev/null 2>&1 \
+      || ping -c 1 -W 1000 1.1.1.1 >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  slog "network offline after 30s — starting workers anyway; tunnels sync when online"
+  return 1
+}
+
+start_caffeinate() {
+  [ -n "$CAFF_PID" ] && kill -0 "$CAFF_PID" 2>/dev/null && return 0
+  if command -v caffeinate >/dev/null 2>&1; then
+    caffeinate -dims >>"$LOG_DIR/caffeinate.log" 2>&1 &
+    CAFF_PID=$!
+    slog "caffeinate started (pid $CAFF_PID) — prevents idle sleep while serving"
+  fi
+}
 
 # ── workers ───────────────────────────────────────────────────────────
 start_worker() { # engine port
@@ -59,6 +101,9 @@ start_worker() { # engine port
   ( cd "$ROOT/workers/$engine" && MAGENTA_MODEL="${MAGENTA_MODEL:-mrt2_base}" \
       exec ./.venv/bin/uvicorn main:app --host 127.0.0.1 --port "$port" ) \
       >>"$LOG_DIR/$engine.log" 2>&1 &
+  if [ "$engine" = "music-engine" ]; then
+    MUSIC_STARTED_AT=$(date +%s)
+  fi
   slog "started $engine on :$port (pid $!)"
 }
 
@@ -139,20 +184,47 @@ PY
   slog "pitch model warmed"
 }
 
+warm_models_if_ready() {
+  worker_healthy 8001 || return 0
+  curl -sf -m 5 http://127.0.0.1:8002/health 2>/dev/null | grep -q '"loaded":true' || return 0
+  local stamp="audio+music"
+  [ "$(cat "$WARMED_FILE" 2>/dev/null || true)" = "$stamp" ] && return 0
+  warm_audio
+  printf '%s' "$stamp" > "$WARMED_FILE"
+  slog "models warmed (audio transcribe + magenta resident)"
+}
+
 # ── main loop ─────────────────────────────────────────────────────────
 run() {
+  if [ -f "$PIDFILE" ]; then
+    oldpid="$(cat "$PIDFILE" 2>/dev/null || true)"
+    if [ -n "$oldpid" ] && [ "$oldpid" != "$$" ] && kill -0 "$oldpid" 2>/dev/null; then
+      slog "supervisor already running (pid $oldpid), exiting duplicate"
+      exit 0
+    fi
+  fi
   ensure_tokens
   echo $$ > "$PIDFILE"
-  trap 'slog "supervisor stopping; killing children"; for p in "$TUN_PID_audio" "$TUN_PID_music"; do [ -n "$p" ] && kill "$p" 2>/dev/null; done; for pt in 8001 8002; do x=$(port_listener "$pt"); [ -n "$x" ] && kill "$x" 2>/dev/null; done; [ "$(cat "$PIDFILE" 2>/dev/null)" = "$$" ] && rm -f "$PIDFILE"; exit 0' INT TERM
-
+  trap 'slog "supervisor stopping"; [ -n "$CAFF_PID" ] && kill "$CAFF_PID" 2>/dev/null; for p in "$TUN_PID_audio" "$TUN_PID_music"; do [ -n "$p" ] && kill "$p" 2>/dev/null; done; for pt in 8001 8002; do x=$(port_listener "$pt"); [ -n "$x" ] && kill "$x" 2>/dev/null; done; [ "$(cat "$PIDFILE" 2>/dev/null)" = "$$" ] && rm -f "$PIDFILE"; exit 0' INT TERM
   slog "supervisor up (pid $$, tick ${TICK}s, root=$ROOT)"
+  preflight || true
+  wait_for_network || true
+  start_caffeinate
+  rm -f "$WARMED_FILE"
   while :; do
     worker_healthy 8001 || start_worker audio-engine 8001
-    worker_healthy 8002 || start_worker music-engine 8002
+    if ! worker_healthy 8002; then
+      if music_still_loading; then
+        : # MLX model still loading — do not kill/restart
+      else
+        start_worker music-engine 8002
+      fi
+    fi
     tunnel_alive audio || start_tunnel audio 8001
     tunnel_alive music || start_tunnel music 8002
     heal_tunnel audio 8001 "$(url_from "$LOG_DIR/tunnel-audio.log")"
     heal_tunnel music 8002 "$(url_from "$LOG_DIR/tunnel-music.log")"
+    warm_models_if_ready
 
     local a m wanted have
     a="$(url_from "$LOG_DIR/tunnel-audio.log")"
@@ -161,6 +233,7 @@ run() {
     if [ -n "$a" ] && [ -n "$m" ] && [ "$wanted" != "$have" ] \
        && edge_ok "$a" && edge_ok "$m"; then
       sync_vercel "$a" "$m"
+      rm -f "$WARMED_FILE"
     fi
     sleep "$TICK"
   done
@@ -193,14 +266,24 @@ case "${1:-}" in
     if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null; then
       echo "supervisor: RUNNING (pid $(cat "$PIDFILE"))"
     else
-      echo "supervisor: stopped"
+      echo "supervisor: stopped (install: bash scripts/murmur-services.sh install)"
     fi
     for p in 8001 8002; do
-      printf ':%s  ' "$p"; curl -sf -m 3 "http://127.0.0.1:$p/health" || printf 'DOWN'; echo
+      printf ':%s  ' "$p"
+      curl -sf -m 5 "http://127.0.0.1:$p/health" 2>/dev/null || printf 'DOWN'
+      echo
     done
     echo "tunnels:"
-    grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$LOG_DIR/tunnel-audio.log" 2>/dev/null | tail -1 | sed 's/^/  audio: /'
-    grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$LOG_DIR/tunnel-music.log" 2>/dev/null | tail -1 | sed 's/^/  music: /'
+    for pair in audio:8001 music:8002; do
+      name="${pair%%:*}"; port="${pair##*:}"
+      url="$(url_from "$LOG_DIR/tunnel-$name.log")"
+      if [ -n "$url" ]; then
+        code="$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$url/health" 2>/dev/null || echo 000)"
+        echo "  $name: $url (edge $code)"
+      else
+        echo "  $name: (no URL yet)"
+      fi
+    done
     echo "last synced: $(cat "$STATEFILE" 2>/dev/null || echo never)"
     ;;
   logs) tail -n 40 -F "$LOG_DIR"/supervisor.log "$LOG_DIR"/music-engine.log "$LOG_DIR"/audio-engine.log ;;

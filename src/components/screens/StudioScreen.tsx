@@ -17,7 +17,7 @@ import {
 } from "@/modules/strummer/apply-edit";
 import { classifyPromptWithLLM } from "@/lib/api/strummer";
 import { memory } from "@/lib/platform/memory";
-import { buildDemoFlowState } from "@/modules/demo/demo-flow";
+import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import {
   bumpVersionEditState,
   resetVersionEditState,
@@ -52,11 +52,12 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
       return;
     }
     demoSeededRef.current = true;
-    const demo = buildDemoFlowState();
-    setVibeVersions(demo.versions);
-    setCurrentDraftId(demo.draftId);
-    setCurrentFlowId(demo.flowId);
-    setCurrentVersion(demo.currentVersion);
+    void buildDemoFlowStateAsync().then((demo) => {
+      setVibeVersions(demo.versions);
+      setCurrentDraftId(demo.draftId);
+      setCurrentFlowId(demo.flowId);
+      setCurrentVersion(demo.currentVersion);
+    });
   }, [
     currentVersion,
     demoEnabled,

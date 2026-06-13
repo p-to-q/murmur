@@ -24,7 +24,7 @@ import { memory } from "@/lib/platform/memory";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator } from "@/lib/i18n";
 import { synth } from "@/lib/music/simple-synth";
-import { buildDemoFlowState } from "@/modules/demo/demo-flow";
+import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import { renderAudio } from "@/modules/export/render-mp3";
 import { canSaveHeardVersion, getSaveBlockReason } from "@/modules/music/version-contract";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
@@ -66,12 +66,13 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       return;
     }
     demoSeededRef.current = true;
-    const demo = buildDemoFlowState();
-    setVibeVersions(demo.versions);
-    setCurrentDraftId(demo.draftId);
-    setCurrentFlowId(demo.flowId);
-    setCurrentVersion(demo.currentVersion);
-    setTitle(demo.currentVersion.title);
+    void buildDemoFlowStateAsync().then((demo) => {
+      setVibeVersions(demo.versions);
+      setCurrentDraftId(demo.draftId);
+      setCurrentFlowId(demo.flowId);
+      setCurrentVersion(demo.currentVersion);
+      setTitle(demo.currentVersion.title);
+    });
   }, [
     currentVersion,
     demoEnabled,

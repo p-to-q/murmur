@@ -1,22 +1,20 @@
 /**
  * POST /api/billing/checkout
  *
- * Creates a Stripe Checkout Session for a top-up SKU and returns
- * `{ checkoutUrl }` for the client to redirect to. The actual grant happens
- * in /api/billing/webhook when `checkout.session.completed` arrives — this
- * route never touches the notes ledger.
+ * Creates a Waffo Pancake checkout session for a top-up SKU and returns
+ * `{ checkoutUrl }` for the client to open in a new tab. The grant happens
+ * in /api/billing/webhook when `order.completed` arrives.
  *
  * Body:
  *   - { sku: string } for canonical fixed tiers
  *   - { customAmountUsd: number } for the custom top-up flow
  *
  * Errors:
- *   400 invalid_topup_request  — unknown SKU or invalid custom amount
- *   401 (auth envelope)        — no session
- *   403 sign_in_required      — guest users can't purchase (nothing durable
- *                                to grant to)
- *   503 stripe_not_configured  — STRIPE_SECRET_KEY unset (local dev)
- *   502 checkout_failed        — Stripe API error
+ *   400 invalid_topup_request
+ *   401 (auth envelope)
+ *   403 sign_in_required
+ *   503 waffo_not_configured
+ *   502 checkout_failed
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -29,8 +27,14 @@ import {
 
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
-import { getStripeClient, getStripePriceId } from "@/lib/billing/stripe";
+import {
+  centsToDisplayAmount,
+  getWaffoClient,
+  getWaffoTopupProductId,
+  isWaffoConfigured,
+} from "@/lib/billing/waffo";
 import { log } from "@/lib/observability/log";
+import { TaxCategory } from "@waffo/pancake-ts";
 
 export const runtime = "nodejs";
 
@@ -109,21 +113,34 @@ function parseCheckoutProduct(body: CheckoutRequestBody): CheckoutProduct | null
   };
 }
 
+function checkoutMetadata(
+  userId: string,
+  product: CheckoutProduct,
+): Record<string, string> {
+  const base: Record<string, string> = {
+    userId,
+    skuId: product.skuId,
+    notesGranted: String(product.notesGranted),
+    purchaseKind: product.kind === "custom" ? "custom" : "sku",
+  };
+  if (product.kind === "custom") {
+    base.customAmountUsd = String(product.customAmountUsd);
+    base.customAmountCents = String(product.amountCents);
+  }
+  return base;
+}
+
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
 
-  // Order matters: report "not configured" before "sign in required" so
-  // keyless local dev gets the 503 and the client can run its stub flow
-  // even as a guest. With keys present, guests still must sign in.
-  const stripe = getStripeClient();
-  if (!stripe) {
+  if (!isWaffoConfigured()) {
     return NextResponse.json(
       {
-        error: "stripe_not_configured",
-        message: "Stripe is not configured on this deployment.",
+        error: "waffo_not_configured",
+        message: "Waffo payments are not configured on this deployment.",
         requestId,
       },
       { status: 503, headers: { "X-Request-Id": requestId } },
@@ -172,84 +189,56 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const client = getWaffoClient()!;
+  const productId = getWaffoTopupProductId()!;
   const origin = resolveAppOrigin(request);
-  const priceId = product.kind === "sku" ? getStripePriceId(product.skuId) : null;
+  const metadata = checkoutMetadata(userId, product);
+  const displayAmount = centsToDisplayAmount(
+    product.amountCents,
+    product.currency,
+  );
 
   try {
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      client_reference_id: userId,
-      ...(auth.user.email ? { customer_email: auth.user.email } : {}),
-      line_items: [
-        priceId
-          ? { price: priceId, quantity: 1 }
-          : {
-              price_data: {
-                currency: product.currency.toLowerCase(),
-                unit_amount: product.amountCents,
-                product_data: {
-                  name: product.productName,
-                  description: product.productDescription,
-                },
-              },
-              quantity: 1,
-            },
-      ],
-      metadata: {
-        userId,
-        skuId: product.skuId,
-        notesGranted: String(product.notesGranted),
-        ...(product.kind === "custom"
-          ? {
-              customAmountUsd: String(product.customAmountUsd),
-              customAmountCents: String(product.amountCents),
-              purchaseKind: "custom",
-            }
-          : {
-              purchaseKind: "sku",
-            }),
+    const session = await client.checkout.createSession({
+      productId,
+      currency: product.currency,
+      ...(auth.user.email ? { buyerEmail: auth.user.email } : {}),
+      successUrl: `${origin}/topup/checkout?${product.successQuery}&status=success`,
+      metadata,
+      orderMerchantExternalId: `${userId}:${product.skuId}:${crypto.randomUUID()}`,
+      priceSnapshot: {
+        amount: displayAmount,
+        taxCategory: TaxCategory.DigitalGoods,
       },
-      payment_intent_data: {
-        metadata: {
-          userId,
-          skuId: product.skuId,
-          ...(product.kind === "custom"
-            ? {
-                customAmountUsd: String(product.customAmountUsd),
-                customAmountCents: String(product.amountCents),
-                purchaseKind: "custom",
-              }
-            : {
-                purchaseKind: "sku",
-              }),
-        },
-      },
-      success_url: `${origin}/topup/checkout?${product.successQuery}&status=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:
-        product.kind === "custom"
-          ? `${origin}/topup/checkout?customAmountUsd=${encodeURIComponent(String(product.customAmountUsd))}&status=canceled`
-          : `${origin}/topup/checkout?sku=${encodeURIComponent(product.skuId)}&status=canceled`,
     });
 
-    if (!session.url) {
-      throw new Error("Stripe returned a session without a redirect URL");
+    if (!session.checkoutUrl) {
+      throw new Error("Waffo returned a session without checkoutUrl");
     }
 
     return NextResponse.json(
-      { checkoutUrl: session.url, sessionId: session.id, requestId },
+      {
+        checkoutUrl: session.checkoutUrl,
+        sessionId: session.sessionId,
+        requestId,
+      },
       { headers: { "X-Request-Id": requestId } },
     );
   } catch (err) {
-    log("billing.checkout_failed", {
-      error: err instanceof Error ? err.message : String(err),
-      skuId: product.skuId,
-    }, {
-      route: ROUTE,
-      requestId,
-      userId,
-      sessionId: auth.sessionId,
-      level: "error",
-    });
+    log(
+      "billing.checkout_failed",
+      {
+        error: err instanceof Error ? err.message : String(err),
+        skuId: product.skuId,
+      },
+      {
+        route: ROUTE,
+        requestId,
+        userId,
+        sessionId: auth.sessionId,
+        level: "error",
+      },
+    );
     return NextResponse.json(
       {
         error: "checkout_failed",

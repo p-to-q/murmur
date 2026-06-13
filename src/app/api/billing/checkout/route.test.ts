@@ -12,20 +12,25 @@ let nextAuth: ResolvedRequestAuth = {
 
 const checkoutCreate = mock(async (payload: Record<string, unknown>) => {
   createdSessions.push(payload);
-  return { id: "cs_checkout_123", url: "https://checkout.stripe.test/session" };
+  return {
+    sessionId: "cs_checkout_123",
+    checkoutUrl: "https://checkout.waffo.test/session",
+  };
 });
 const createdSessions: Array<Record<string, unknown>> = [];
-let stripeConfigured = true;
+let waffoConfigured = true;
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
 }));
 
-mock.module("@/lib/billing/stripe", () => ({
-  getStripeClient: () =>
-    stripeConfigured ? { checkout: { sessions: { create: checkoutCreate } } } : null,
-  getStripeWebhookSecret: () => null,
-  getStripePriceId: () => null,
+mock.module("@/lib/billing/waffo", () => ({
+  getWaffoClient: () =>
+    waffoConfigured ? { checkout: { createSession: checkoutCreate } } : null,
+  getWaffoTopupProductId: () => (waffoConfigured ? "PROD_test_topup" : null),
+  isWaffoConfigured: () => waffoConfigured,
+  centsToDisplayAmount: (cents: number) => (cents / 100).toFixed(2),
+  displayAmountToCents: (amount: string) => Math.round(Number(amount) * 100),
 }));
 
 const { POST } = await import("./route");
@@ -42,8 +47,6 @@ function buildRequest(body: Record<string, unknown>): NextRequest {
 }
 
 beforeEach(async () => {
-  // Real in-memory rate-limit store; partial module mocks of "@/lib/rate-limit"
-  // leak into every test file that runs later in the same bun process.
   resetCachedRateLimitStore();
   await getRateLimitStore().resetAll();
   process.env.MURMUR_APP_URL = "http://test.local";
@@ -55,26 +58,30 @@ beforeEach(async () => {
   };
   createdSessions.length = 0;
   checkoutCreate.mockClear();
-  stripeConfigured = true;
+  waffoConfigured = true;
 });
 
 describe("POST /api/billing/checkout", () => {
-  it("creates a stripe checkout session for a fixed SKU", async () => {
+  it("creates a Waffo checkout session for a fixed SKU", async () => {
     const response = await POST(buildRequest({ sku: "topup_120_notes" }));
     expect(response.status).toBe(200);
     expect(createdSessions).toHaveLength(1);
     expect(createdSessions[0]).toMatchObject({
+      productId: "PROD_test_topup",
+      currency: "USD",
+      buyerEmail: "checkout@test.local",
       metadata: {
         userId: "usr_checkout",
         skuId: "topup_120_notes",
         notesGranted: "130",
         purchaseKind: "sku",
       },
-      success_url: "http://test.local/topup/checkout?sku=topup_120_notes&status=success&session_id={CHECKOUT_SESSION_ID}",
+      successUrl: "http://test.local/topup/checkout?sku=topup_120_notes&status=success",
+      priceSnapshot: { amount: "5.99", taxCategory: "digital_goods" },
     });
   });
 
-  it("creates a stripe checkout session for a custom amount", async () => {
+  it("creates a Waffo checkout session for a custom amount", async () => {
     const response = await POST(buildRequest({ customAmountUsd: 12 }));
     expect(response.status).toBe(200);
     expect(createdSessions).toHaveLength(1);
@@ -87,8 +94,8 @@ describe("POST /api/billing/checkout", () => {
         customAmountUsd: "12",
         customAmountCents: "1200",
       },
-      success_url: "http://test.local/topup/checkout?customAmountUsd=12&status=success&session_id={CHECKOUT_SESSION_ID}",
-      cancel_url: "http://test.local/topup/checkout?customAmountUsd=12&status=canceled",
+      successUrl: "http://test.local/topup/checkout?customAmountUsd=12&status=success",
+      priceSnapshot: { amount: "12.00", taxCategory: "digital_goods" },
     });
   });
 
@@ -100,7 +107,7 @@ describe("POST /api/billing/checkout", () => {
     expect(createdSessions).toHaveLength(0);
   });
 
-  it("requires sign-in when stripe is configured", async () => {
+  it("requires sign-in when Waffo is configured", async () => {
     nextAuth = {
       ok: true,
       user: { id: "guest", email: null, name: "Guest", avatarUrl: null },
@@ -111,8 +118,8 @@ describe("POST /api/billing/checkout", () => {
     expect(response.status).toBe(403);
   });
 
-  it("answers 503 when stripe is not configured", async () => {
-    stripeConfigured = false;
+  it("answers 503 when Waffo is not configured", async () => {
+    waffoConfigured = false;
     const response = await POST(buildRequest({ sku: "topup_30_notes" }));
     expect(response.status).toBe(503);
   });

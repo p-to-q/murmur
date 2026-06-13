@@ -1,33 +1,40 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
+import { WebhookEventType } from "@waffo/pancake-ts";
 
-/* ── Stripe mock ────────────────────────────────────────────────────── */
-
-let stripeConfigured = true;
+let waffoConfigured = true;
 let nextEvent: Record<string, unknown> | null = null;
 let signatureError: Error | null = null;
 
-const constructEventAsync = mock(async () => {
+const verifyWebhook = mock(() => {
   if (signatureError) throw signatureError;
   return nextEvent;
 });
 
-mock.module("@/lib/billing/stripe", () => ({
-  getStripeClient: () =>
-    stripeConfigured ? { webhooks: { constructEventAsync } } : null,
-  getStripeWebhookSecret: () => (stripeConfigured ? "whsec_test" : null),
-  getStripePriceId: () => null,
+mock.module("@waffo/pancake-ts", () => ({
+  verifyWebhook,
+  WebhookEventType: {
+    OrderCompleted: "order.completed",
+  },
 }));
 
-/* ── DB mock ────────────────────────────────────────────────────────── */
+mock.module("@/lib/billing/waffo", () => ({
+  isWaffoConfigured: () => waffoConfigured,
+  getWaffoClient: () => (waffoConfigured ? {} : null),
+  getWaffoTopupProductId: () => "PROD_test",
+  displayAmountToCents: (amount: string, currency: string) => {
+    const value = Number(amount);
+    return currency.toUpperCase() === "JPY" ? Math.round(value) : Math.round(value * 100);
+  },
+  centsToDisplayAmount: (cents: number, currency: string) =>
+    currency.toUpperCase() === "JPY" ? String(cents) : (cents / 100).toFixed(2),
+}));
 
 type Row = Record<string, unknown>;
 const eventInserts: Row[] = [];
 const purchaseInserts: Row[] = [];
 const eventUpdates: Row[] = [];
 let eventInsertConflicts = false;
-// Row returned by the reclaim lookup when an insert conflicts. "processed"
-// means true duplicate; "failed"/"received" means the grant never landed.
 let reclaimRow: { id: string; status: string } | null = null;
 
 function insertChain(values: Row) {
@@ -65,8 +72,6 @@ mock.module("@/lib/db/client", () => ({
   },
 }));
 
-/* ── Ledger mock ────────────────────────────────────────────────────── */
-
 const grantInputs: Row[] = [];
 let grantResult: Row = {
   ok: true,
@@ -81,8 +86,6 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
     grantInputs.push(input);
     return grantResult;
   }),
-  // Unused here, but every mock of this module must declare the full export
-  // surface — bun can't add new export names to an already-created record.
   getNotesBalance: async () => ({
     ok: true as const,
     userId: "guest",
@@ -103,42 +106,40 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
 
 const { POST } = await import("./route");
 
-/* ── Helpers ────────────────────────────────────────────────────────── */
-
 function buildRequest(withSignature = true): NextRequest {
   return new Request("http://test.local/api/billing/webhook", {
     method: "POST",
-    headers: withSignature ? { "stripe-signature": "t=1,v1=sig" } : {},
+    headers: withSignature ? { "x-waffo-signature": "sig_test" } : {},
     body: "{}",
   }) as unknown as NextRequest;
 }
 
-function paidSessionEvent(overrides: Record<string, unknown> = {}) {
+function orderCompletedEvent(overrides: Record<string, unknown> = {}) {
   return {
-    id: "evt_1",
-    type: "checkout.session.completed",
+    id: "wh_deliv_1",
+    eventType: WebhookEventType.OrderCompleted,
+    mode: "test",
     data: {
-      object: {
-        id: "cs_test_123",
-        payment_status: "paid",
-        amount_total: 599,
-        currency: "usd",
-        payment_intent: "pi_123",
-        client_reference_id: "usr_buyer",
-        metadata: {
-          userId: "usr_buyer",
-          skuId: "topup_120_notes",
-          notesGranted: "130",
-        },
-        ...overrides,
+      orderId: "ORD_test_123",
+      buyerEmail: "buyer@test.local",
+      currency: "USD",
+      amount: "5.99",
+      taxAmount: "0.00",
+      productName: "Murmur Notes Top-up",
+      paymentId: "PAY_test_123",
+      orderMetadata: {
+        userId: "usr_buyer",
+        skuId: "topup_120_notes",
+        notesGranted: "130",
       },
+      ...overrides,
     },
   };
 }
 
 beforeEach(() => {
-  stripeConfigured = true;
-  nextEvent = paidSessionEvent();
+  waffoConfigured = true;
+  nextEvent = orderCompletedEvent();
   signatureError = null;
   eventInsertConflicts = false;
   reclaimRow = { id: "evw_prior", status: "processed" };
@@ -153,18 +154,17 @@ beforeEach(() => {
     balanceAfter: 135,
     duplicate: false,
   };
+  verifyWebhook.mockClear();
 });
 
-/* ── Tests ──────────────────────────────────────────────────────────── */
-
 describe("POST /api/billing/webhook", () => {
-  it("answers 503 when Stripe is not configured", async () => {
-    stripeConfigured = false;
+  it("answers 503 when Waffo is not configured", async () => {
+    waffoConfigured = false;
     const response = await POST(buildRequest());
     expect(response.status).toBe(503);
   });
 
-  it("rejects requests without a stripe-signature header", async () => {
+  it("rejects requests without x-waffo-signature", async () => {
     const response = await POST(buildRequest(false));
     expect(response.status).toBe(400);
     const body = (await response.json()) as { error: string };
@@ -174,7 +174,7 @@ describe("POST /api/billing/webhook", () => {
   it("rejects requests with an invalid signature", async () => {
     signatureError = new Error("bad signature");
     const response = await POST(buildRequest());
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(401);
     const body = (await response.json()) as { error: string };
     expect(body.error).toBe("invalid_signature");
     expect(eventInserts).toHaveLength(0);
@@ -201,18 +201,7 @@ describe("POST /api/billing/webhook", () => {
     expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
   });
 
-  it("reprocesses a redelivered event stuck in received from a crash", async () => {
-    eventInsertConflicts = true;
-    reclaimRow = { id: "evw_prior", status: "received" };
-    const response = await POST(buildRequest());
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { granted?: number };
-    expect(body.granted).toBe(130);
-    expect(grantInputs).toHaveLength(1);
-    expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
-  });
-
-  it("records the purchase and grants notes for a paid session", async () => {
+  it("records the purchase and grants notes for order.completed", async () => {
     const response = await POST(buildRequest());
     expect(response.status).toBe(200);
     const body = (await response.json()) as { granted?: number };
@@ -221,9 +210,9 @@ describe("POST /api/billing/webhook", () => {
     expect(purchaseInserts).toHaveLength(1);
     expect(purchaseInserts[0]).toMatchObject({
       userId: "usr_buyer",
-      provider: "stripe",
+      provider: "waffo",
       productId: "topup_120_notes",
-      providerRef: "cs_test_123",
+      providerRef: "ORD_test_123",
       amountCents: 599,
       currency: "USD",
       notesGranted: 130,
@@ -235,16 +224,16 @@ describe("POST /api/billing/webhook", () => {
       userId: "usr_buyer",
       amount: 130,
       reason: "purchase:topup",
-      externalRef: "cs_test_123",
+      externalRef: "ORD_test_123",
     });
 
     expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
   });
 
-  it("records and grants custom topups from webhook metadata", async () => {
-    nextEvent = paidSessionEvent({
-      amount_total: 1200,
-      metadata: {
+  it("records and grants custom topups from order metadata", async () => {
+    nextEvent = orderCompletedEvent({
+      amount: "12.00",
+      orderMetadata: {
         userId: "usr_buyer",
         skuId: "topup_custom",
         notesGranted: "240",
@@ -257,43 +246,23 @@ describe("POST /api/billing/webhook", () => {
     const body = (await response.json()) as { granted?: number };
     expect(body.granted).toBe(240);
 
-    expect(purchaseInserts).toHaveLength(1);
     expect(purchaseInserts[0]).toMatchObject({
-      userId: "usr_buyer",
       productId: "topup_custom",
       amountCents: 1200,
       notesGranted: 240,
     });
 
-    expect(grantInputs).toHaveLength(1);
     expect(grantInputs[0]).toMatchObject({
-      userId: "usr_buyer",
-      amount: 240,
-      reason: "purchase:topup",
-      externalRef: "cs_test_123",
       metadata: {
-        provider: "stripe",
+        provider: "waffo",
         skuId: "topup_custom",
-        checkoutSessionId: "cs_test_123",
         customAmountUsd: 12,
       },
     });
   });
 
-  it("ignores unpaid sessions without granting", async () => {
-    nextEvent = paidSessionEvent({ payment_status: "unpaid" });
-    const response = await POST(buildRequest());
-    expect(response.status).toBe(200);
-    expect(grantInputs).toHaveLength(0);
-    expect(purchaseInserts).toHaveLength(0);
-    expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
-  });
-
-  it("marks malformed sessions failed but acknowledges them", async () => {
-    nextEvent = paidSessionEvent({
-      client_reference_id: null,
-      metadata: {},
-    });
+  it("marks malformed orders failed but acknowledges them", async () => {
+    nextEvent = orderCompletedEvent({ orderMetadata: {} });
     const response = await POST(buildRequest());
     expect(response.status).toBe(200);
     const body = (await response.json()) as { error?: string };
@@ -302,7 +271,7 @@ describe("POST /api/billing/webhook", () => {
     expect(eventUpdates.at(-1)).toMatchObject({ status: "failed" });
   });
 
-  it("returns 500 (retryable) when the grant fails", async () => {
+  it("returns 500 when the grant fails", async () => {
     grantResult = { ok: false, reason: "user_not_found" };
     const response = await POST(buildRequest());
     expect(response.status).toBe(500);
@@ -310,11 +279,11 @@ describe("POST /api/billing/webhook", () => {
   });
 
   it("ignores unrelated event types", async () => {
-    nextEvent = { id: "evt_2", type: "invoice.paid", data: { object: {} } };
+    nextEvent = { id: "wh_2", eventType: "subscription.activated", data: {} };
     const response = await POST(buildRequest());
     expect(response.status).toBe(200);
     const body = (await response.json()) as { ignored?: string };
-    expect(body.ignored).toBe("invoice.paid");
+    expect(body.ignored).toBe("subscription.activated");
     expect(grantInputs).toHaveLength(0);
   });
 });

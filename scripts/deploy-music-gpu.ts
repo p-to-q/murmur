@@ -500,14 +500,6 @@ async function deployWithGpuFallback(
   throw new Error(`All GPU types unavailable. Last error: ${lastError}`);
 }
 
-async function pickGpuType(apiKey: string): Promise<string> {
-  const candidates = await listGpuCandidates(apiKey);
-  if (!candidates[0]) {
-    throw new Error("No suitable RunPod GPU type found. Set RUNPOD_GPU_TYPE_ID explicitly.");
-  }
-  return candidates[0];
-}
-
 async function deployPod(
   apiKey: string,
   gpuTypeId: string,
@@ -592,37 +584,34 @@ async function waitForHealth(
 
 async function syncVercelEnv(url: string, token: string) {
   console.log("Syncing Vercel production env (MUSIC_WORKER_URL + TOKEN)…");
+  const pathEnv = `${process.env.HOME}/.bun/bin:${process.env.PATH ?? ""}`;
   for (const [key, value] of [
     ["MUSIC_WORKER_URL", url],
     ["MUSIC_WORKER_TOKEN", token],
   ] as const) {
-    await runCommand("vercel", ["env", "add", key, "production", "--force"], {
-      input: value,
-      cwd: ROOT,
-    });
+    await runShell(
+      `printf '%s' '${value.replace(/'/g, `'\\''`)}' | vercel env add ${key} production --force`,
+      { cwd: ROOT, pathEnv },
+    );
   }
   console.log("Redeploying production…");
-  await runCommand("vercel", ["--prod", "--yes"], { cwd: ROOT });
+  await runShell("vercel --prod --yes", { cwd: ROOT, pathEnv });
 }
 
-function runCommand(
-  cmd: string,
-  args: string[],
-  options: { cwd?: string; input?: string } = {},
+function runShell(
+  command: string,
+  options: { cwd?: string; pathEnv?: string } = {},
 ): Promise<void> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(cmd, args, {
+    const child = spawn("sh", ["-lc", command], {
       cwd: options.cwd,
-      stdio: ["pipe", "inherit", "inherit"],
+      env: { ...process.env, PATH: options.pathEnv ?? process.env.PATH },
+      stdio: "inherit",
     });
-    if (options.input !== undefined) {
-      child.stdin?.write(options.input);
-      child.stdin?.end();
-    }
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) resolvePromise();
-      else reject(new Error(`${cmd} ${args.join(" ")} exited with code ${code ?? "unknown"}`));
+      else reject(new Error(`shell ${command} exited with code ${code ?? "unknown"}`));
     });
   });
 }

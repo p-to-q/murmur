@@ -31,11 +31,11 @@ import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
 import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import {
-  checkMusicEngineAvailable,
   createMagentaVersions,
   regenerateVersionAudio,
+  shouldUseMagentaEngine,
 } from "@/modules/magenta/generate-magenta-versions";
-import { buildDemoFlowState } from "@/modules/demo/demo-flow";
+import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import type { VibeVersion } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { MurmurWave } from "@/components/murmur/murmur-wave";
@@ -115,10 +115,11 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       return;
     }
     demoSeededRef.current = true;
-    const demo = buildDemoFlowState();
-    setVibeVersions(demo.versions);
-    setCurrentDraftId(demo.draftId);
-    setCurrentFlowId(demo.flowId);
+    void buildDemoFlowStateAsync().then((demo) => {
+      setVibeVersions(demo.versions);
+      setCurrentDraftId(demo.draftId);
+      setCurrentFlowId(demo.flowId);
+    });
   }, [
     demoEnabled,
     setCurrentDraftId,
@@ -219,7 +220,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     // A legacy batch gets a second chance to upgrade — its first health
     // probe may have lost a race against a cold start.
     const useMagenta =
-      first.generation !== undefined || (await checkMusicEngineAvailable());
+      first.generation !== undefined || (await shouldUseMagentaEngine());
     const fresh = useMagenta
       ? createMagentaVersions(first.melody, {
           ...common,

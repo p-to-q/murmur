@@ -7,13 +7,13 @@
  *
  * State machine: idle → requesting → succeeded | canceled | failed.
  *
- * Real flow (Stripe):
- *   1. Land here with `?sku=…` → POST /api/billing/checkout → redirect to
- *      the Stripe-hosted page.
- *   2. Stripe sends the user back with `?status=success|canceled`; the
- *      ledger grant itself happens server-side via /api/billing/webhook.
+ * Real flow (Waffo Pancake):
+ *   1. Land here with `?sku=…` → POST /api/billing/checkout → open
+ *      Waffo-hosted checkout in a new tab.
+ *   2. Waffo sends the user back with `?status=success|canceled`; the
+ *      ledger grant happens server-side via /api/billing/webhook.
  *
- * Dev without STRIPE_SECRET_KEY: the API answers 503 stripe_not_configured
+ * Dev without Waffo keys: the API answers 503 waffo_not_configured
  * and we simulate the post-payment return leg so the routing UX stays
  * exercisable end-to-end.
  */
@@ -34,7 +34,7 @@ import { useTranslator } from "@/lib/i18n";
 import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
-type Phase = "requesting" | "confirming" | "succeeded" | "canceled" | "failed";
+type Phase = "requesting" | "awaiting_payment" | "confirming" | "succeeded" | "canceled" | "failed";
 
 const PROCESSING_INTERVAL_MS = 900;
 const DEFAULT_SKU_ID = "topup_120_notes";
@@ -96,23 +96,51 @@ export function CheckoutScreen() {
     [t],
   );
 
-  const celebrate = useCallback(async () => {
-    setPhase("confirming");
-    for (let attempt = 0; attempt < 6; attempt++) {
-      await fetchUserBalance({ force: true });
-      if (attempt < 5) {
-        await new Promise((resolve) => window.setTimeout(resolve, 600 * (attempt + 1)));
+  const finishSucceeded = useCallback(
+    (granted: number) => {
+      setPhase("succeeded");
+      toast.success(
+        (t("checkout.toast.success") || "+{notes} notes added.").replace(
+          "{notes}",
+          String(granted),
+        ),
+      );
+      window.setTimeout(() => router.push("/me"), 1600);
+    },
+    [router, t],
+  );
+
+  /**
+   * Post-payment leg: briefly poll the ledger so the toast shows the real
+   * grant once the webhook lands. The webhook is the source of truth — if
+   * it already landed before we measured the baseline (or is slow), we
+   * fall back to the SKU amount instead of stalling the user.
+   */
+  const confirmGrant = useCallback(
+    async (signal?: { cancelled: boolean }) => {
+      setPhase("confirming");
+      const baseline = await fetchUserBalance({ force: true }).catch(() => null);
+      const baselineNotes = baseline?.balance?.notes ?? null;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        if (signal?.cancelled) return;
+        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+        const next = await fetchUserBalance({ force: true }).catch(() => null);
+        const nextNotes = next?.balance?.notes;
+        if (
+          typeof nextNotes === "number" &&
+          baselineNotes !== null &&
+          nextNotes > baselineNotes
+        ) {
+          if (signal?.cancelled) return;
+          finishSucceeded(nextNotes - baselineNotes);
+          return;
+        }
       }
-    }
-    setPhase("succeeded");
-    toast.success(
-      (t("checkout.toast.success") || "+{notes} notes added.").replace(
-        "{notes}",
-        String(skuNotes),
-      ),
-    );
-    window.setTimeout(() => router.push("/me"), 1600);
-  }, [router, skuNotes, t]);
+      if (signal?.cancelled) return;
+      finishSucceeded(skuNotes);
+    },
+    [finishSucceeded, skuNotes],
+  );
 
   const beginCheckout = useCallback(async () => {
     try {
@@ -129,7 +157,8 @@ export function CheckoutScreen() {
       if (response.ok) {
         const data = (await response.json()) as { checkoutUrl?: string };
         if (data.checkoutUrl) {
-          window.location.assign(data.checkoutUrl);
+          window.open(data.checkoutUrl, "_blank", "noopener,noreferrer");
+          setPhase("awaiting_payment");
           return;
         }
         throw new Error("missing checkoutUrl");
@@ -140,13 +169,11 @@ export function CheckoutScreen() {
         message?: string;
       };
 
-      // No Stripe keys in local dev — simulate the post-payment return leg
-      // so the routing UX stays exercisable.
-      if (
-        errorBody.error === "stripe_not_configured" &&
-        process.env.NODE_ENV === "development"
-      ) {
-        window.setTimeout(celebrate, 1400);
+      if (errorBody.error === "waffo_not_configured") {
+        // Keyless local dev: simulate the post-payment leg so the routing
+        // UX stays exercisable. No webhook will land, so skip polling.
+        setPhase("confirming");
+        window.setTimeout(() => finishSucceeded(skuNotes), 1400);
         return;
       }
 
@@ -164,7 +191,7 @@ export function CheckoutScreen() {
       setFailureMessage(null);
       setPhase("failed");
     }
-  }, [celebrate, purchase, t]);
+  }, [finishSucceeded, purchase, skuNotes, t]);
 
   const retryCheckout = () => {
     setFailureMessage(null);
@@ -176,27 +203,10 @@ export function CheckoutScreen() {
         initialized from the URL, so this never calls setState directly. ── */
   useEffect(() => {
     if (returnStatus === "success") {
-      let cancelled = false;
-      void (async () => {
-        setPhase("confirming");
-        for (let attempt = 0; attempt < 6 && !cancelled; attempt++) {
-          await fetchUserBalance({ force: true });
-          if (attempt < 5) {
-            await new Promise((resolve) => window.setTimeout(resolve, 600 * (attempt + 1)));
-          }
-        }
-        if (cancelled) return;
-        setPhase("succeeded");
-        toast.success(
-          (t("checkout.toast.success") || "+{notes} notes added.").replace(
-            "{notes}",
-            String(skuNotes),
-          ),
-        );
-        window.setTimeout(() => router.push("/me"), 1600);
-      })();
+      const signal = { cancelled: false };
+      void confirmGrant(signal);
       return () => {
-        cancelled = true;
+        signal.cancelled = true;
       };
     }
     if (returnStatus === "canceled") return;
@@ -207,7 +217,7 @@ export function CheckoutScreen() {
   }, [returnStatus]);
 
   useEffect(() => {
-    if (phase !== "requesting") return;
+    if (phase !== "requesting" && phase !== "confirming") return;
     const id = window.setInterval(() => {
       setCopyIdx((i) => (i + 1) % PROCESSING_COPY.length);
     }, PROCESSING_INTERVAL_MS);
@@ -269,6 +279,30 @@ export function CheckoutScreen() {
             {/* Phase-dependent body */}
             <div className="mt-10 min-h-[80px] flex flex-col items-center justify-center">
               <AnimatePresence mode="wait">
+                {phase === "awaiting_payment" && (
+                  <motion.div
+                    key="await"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col items-center gap-4"
+                  >
+                    <p className="font-serif-italic text-[15px] text-[#1A1A1A]">
+                      {t("checkout.awaiting_payment") || "Complete payment in the other tab."}
+                    </p>
+                    <p className="text-[12px] text-[#8C8780] max-w-xs">
+                      {t("checkout.awaiting_payment_hint") ||
+                        "When you finish, you'll return here automatically. You can also close the tab and come back."}
+                    </p>
+                    <button
+                      onClick={() => router.push(`/topup/checkout?${purchase.kind === "custom" ? `customAmountUsd=${purchase.customAmountUsd}` : `sku=${purchase.id}`}&status=success`)}
+                      className="text-[13px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] underline-mm transition-colors"
+                    >
+                      {t("checkout.already_paid") || "I already paid"}
+                    </button>
+                  </motion.div>
+                )}
+
                 {phase === "requesting" && (
                   <motion.div
                     key="req"
@@ -388,8 +422,10 @@ function phaseHeadline(phase: Phase, t: (k: string) => string): string {
   switch (phase) {
     case "requesting":
       return t("checkout.headline.requesting") || "Holding the door open.";
+    case "awaiting_payment":
+      return t("checkout.headline.awaiting") || "Finish in the other tab.";
     case "confirming":
-      return t("checkout.headline.requesting") || "Holding the door open.";
+      return t("checkout.headline.confirming") || "Confirming your notes…";
     case "succeeded":
       return t("checkout.headline.ok") || "Done. Enjoy.";
     case "canceled":

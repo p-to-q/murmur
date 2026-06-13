@@ -43,7 +43,7 @@ import {
   VideoExportError,
 } from "@/modules/export/export-video";
 import {
-  buildSavedSongVibeVersions,
+  buildSavedSongRemixVersions,
   hydrateSavedSongToVersion,
 } from "@/modules/music/saved-song-version";
 import { buildLineageTrail } from "@/modules/music/lineage";
@@ -448,24 +448,25 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   };
 
   const handleRemixAgain = () => {
-    const versions = buildSavedSongVibeVersions(song);
-    setVibeVersions(versions);
-    setCurrentDraftId(song.id);
-    setCurrentFlowId(`saved-${song.id}`);
-    setCurrentVersion(null);
-    memory
-      .reportAction({
-        content: `Remixed "${song.title}" into fresh vibe choices`,
-        event_type: "navigate",
-        page: "song-detail",
-        metadata: {
-          type: "song_remix",
-          song_id: song.id,
-          source_melody_kind: song.sourceMelodyKind ?? "corrected",
-        },
-      })
-      .catch(() => {});
-    router.push("/vibe");
+    void buildSavedSongRemixVersions(song).then((versions) => {
+      setVibeVersions(versions);
+      setCurrentDraftId(song.id);
+      setCurrentFlowId(`saved-${song.id}`);
+      setCurrentVersion(null);
+      memory
+        .reportAction({
+          content: `Remixed "${song.title}" into fresh vibe choices`,
+          event_type: "navigate",
+          page: "song-detail",
+          metadata: {
+            type: "song_remix",
+            song_id: song.id,
+            source_melody_kind: song.sourceMelodyKind ?? "corrected",
+          },
+        })
+        .catch(() => {});
+      router.push("/vibe");
+    });
   };
 
   return (

@@ -27,42 +27,95 @@ export const DEFAULT_HUM_STYLE_MIX = 0.35;
 const HEALTH_TTL_AVAILABLE_MS = 60_000;
 const HEALTH_TTL_UNAVAILABLE_MS = 10_000;
 
-let healthCache: { at: number; available: boolean } | null = null;
+export type MusicEngineStatus = {
+  configured: boolean;
+  available: boolean;
+  reason: string | null;
+};
+
+let healthCache: { at: number; status: MusicEngineStatus } | null = null;
 let activeAbort: AbortController | null = null;
 let liveObjectUrls: string[] = [];
 
-/** Is the Magenta worker reachable? Cached; cheap to call. */
-export async function checkMusicEngineAvailable(): Promise<boolean> {
-  if (healthCache) {
-    const ttl = healthCache.available
-      ? HEALTH_TTL_AVAILABLE_MS
-      : HEALTH_TTL_UNAVAILABLE_MS;
-    if (Date.now() - healthCache.at < ttl) return healthCache.available;
-  }
-  // One cold-start hiccup (cold Vercel function + tunnel round-trip) must
-  // not commit the whole flow to the legacy engine — probe twice before
-  // caching a negative. Callers overlap this with transcription, so the
-  // wait is usually free.
-  let available = await probeHealthOnce();
-  if (!available) {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    available = await probeHealthOnce();
-  }
-  healthCache = { at: Date.now(), available };
-  return available;
+export function invalidateMusicEngineCache(): void {
+  healthCache = null;
 }
 
-async function probeHealthOnce(): Promise<boolean> {
+/** Warm the status cache as soon as the hum screen mounts. */
+export function prefetchMusicEngineStatus(): void {
+  void fetchMusicEngineStatus(true);
+}
+
+/**
+ * Should this flow use Magenta instead of the legacy Tone.js engine?
+ *
+ * Only when the worker is actually reachable — configured-but-down (e.g. local
+ * dev without `dev:music`, or RunPod cold start) falls back to Tone.js.
+ */
+export async function shouldUseMagentaEngine(): Promise<boolean> {
+  const status = await fetchMusicEngineStatus();
+  return status.available;
+}
+
+/** Is the worker process answering health right now? Cached; cheap to call. */
+export async function checkMusicEngineAvailable(): Promise<boolean> {
+  const status = await fetchMusicEngineStatus();
+  return status.available;
+}
+
+export async function fetchMusicEngineStatus(force = false): Promise<MusicEngineStatus> {
+  if (!force && healthCache) {
+    const ttl = healthCache.status.available
+      ? HEALTH_TTL_AVAILABLE_MS
+      : HEALTH_TTL_UNAVAILABLE_MS;
+    if (Date.now() - healthCache.at < ttl) return healthCache.status;
+  }
+
+  const retryDelaysMs = [0, 1500, 3000, 5000];
+  let lastStatus: MusicEngineStatus = {
+    configured: false,
+    available: false,
+    reason: "unreachable",
+  };
+
+  for (const delayMs of retryDelaysMs) {
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    const status = await probeHealthOnce();
+    if (!status) continue;
+    lastStatus = status;
+    if (status.available) {
+      healthCache = { at: Date.now(), status };
+      return status;
+    }
+  }
+
+  healthCache = { at: Date.now(), status: lastStatus };
+  return lastStatus;
+}
+
+async function probeHealthOnce(): Promise<MusicEngineStatus | null> {
   try {
-    // Budget must outlast the server route's own 12s worker probe.
     const res = await fetch("/api/music/health", {
       signal: AbortSignal.timeout(20_000),
+      cache: "no-store",
     });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { available?: boolean };
-    return data.available === true;
+    if (!res.ok) {
+      return { configured: false, available: false, reason: `http_${res.status}` };
+    }
+    const data = (await res.json()) as {
+      available?: boolean;
+      configured?: boolean;
+      reason?: string | null;
+    };
+    return {
+      configured: data.configured === true,
+      available: data.available === true,
+      reason: data.reason ?? null,
+    };
   } catch {
-    return false;
+    return null;
   }
 }
 

@@ -10,45 +10,11 @@ let nextAuth: ResolvedRequestAuth = {
   sessionId: "sess_restore",
 };
 
-let stripeConfigured = true;
-let stripeSessions: Array<Record<string, unknown>> = [];
 const purchaseRows: Array<Record<string, unknown>> = [];
-const grantInputs: Array<Record<string, unknown>> = [];
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
 }));
-
-mock.module("@/lib/billing/stripe", () => ({
-  getStripeClient: () =>
-    stripeConfigured
-      ? {
-          checkout: {
-            sessions: {
-              list: async function* () {
-                for (const session of stripeSessions) {
-                  yield session;
-                }
-              },
-            },
-          },
-        }
-      : null,
-  getStripeWebhookSecret: () => null,
-  getStripePriceId: () => null,
-}));
-
-function insertPurchase(values: Record<string, unknown>) {
-  const duplicate = purchaseRows.some(
-    (row) => row.provider === values.provider && row.providerRef === values.providerRef,
-  );
-  if (!duplicate) purchaseRows.push({ ...values });
-  return {
-    onConflictDoNothing: () => ({
-      returning: async () => (duplicate ? [] : [{ id: values.id }]),
-    }),
-  };
-}
 
 mock.module("@/lib/db/client", () => ({
   db: {
@@ -67,23 +33,7 @@ mock.module("@/lib/db/client", () => ({
         }),
       }),
     }),
-    insert: () => ({
-      values: (values: Record<string, unknown>) => insertPurchase(values),
-    }),
   },
-}));
-
-mock.module("@/lib/db/queries/notes-ledger", () => ({
-  grantNotes: mock(async (input: Record<string, unknown>) => {
-    grantInputs.push(input);
-    return {
-      ok: true as const,
-      ledgerId: "nle_restore",
-      balanceBefore: 10,
-      balanceAfter: 140,
-      duplicate: false,
-    };
-  }),
 }));
 
 const { POST } = await import("./route");
@@ -97,27 +47,7 @@ function buildRequest(): NextRequest {
   }) as unknown as NextRequest;
 }
 
-function stripeSession(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "cs_restore_123",
-    payment_status: "paid",
-    amount_total: 599,
-    currency: "usd",
-    payment_intent: "pi_restore_123",
-    client_reference_id: "usr_restore",
-    customer_details: { email: "restore@test.local" },
-    metadata: {
-      userId: "usr_restore",
-      skuId: "topup_120_notes",
-      notesGranted: "130",
-    },
-    ...overrides,
-  };
-}
-
 beforeEach(async () => {
-  // Real in-memory rate-limit store; partial module mocks of "@/lib/rate-limit"
-  // leak into every test file that runs later in the same bun process.
   resetCachedRateLimitStore();
   await getRateLimitStore().resetAll();
   nextAuth = {
@@ -126,10 +56,7 @@ beforeEach(async () => {
     source: "session",
     sessionId: "sess_restore",
   };
-  stripeConfigured = true;
-  stripeSessions = [];
   purchaseRows.length = 0;
-  grantInputs.length = 0;
 });
 
 describe("POST /api/purchases/restore", () => {
@@ -144,14 +71,13 @@ describe("POST /api/purchases/restore", () => {
     expect(response.status).toBe(403);
   });
 
-  it("returns existing local purchases when stripe is unavailable", async () => {
-    stripeConfigured = false;
+  it("returns existing local Waffo purchases", async () => {
     purchaseRows.push({
       id: "pur_existing",
       userId: "usr_restore",
-      provider: "stripe",
+      provider: "waffo",
       productId: "topup_30_notes",
-      providerRef: "cs_existing",
+      providerRef: "ORD_existing",
       amountCents: 199,
       currency: "USD",
       notesGranted: 30,
@@ -165,58 +91,5 @@ describe("POST /api/purchases/restore", () => {
     expect(body.newPurchases).toBe(0);
     expect(body.restored).toHaveLength(1);
     expect(body.restored[0]?.id).toBe("pur_existing");
-  });
-
-  it("restores a missing stripe purchase into local records and ledger", async () => {
-    stripeSessions = [stripeSession()];
-
-    const response = await POST(buildRequest());
-    expect(response.status).toBe(200);
-
-    const body = (await response.json()) as { newPurchases: number; restored: Array<{ productId: string }> };
-    expect(body.newPurchases).toBe(1);
-    expect(body.restored.some((purchase) => purchase.productId === "topup_120_notes")).toBe(true);
-    expect(purchaseRows).toHaveLength(1);
-    expect(grantInputs).toHaveLength(1);
-    expect(grantInputs[0]).toMatchObject({
-      userId: "usr_restore",
-      amount: 130,
-      reason: "purchase:topup",
-      externalRef: "cs_restore_123",
-      metadata: {
-        provider: "stripe",
-        skuId: "topup_120_notes",
-        checkoutSessionId: "cs_restore_123",
-        restoredBy: "restore_route",
-      },
-    });
-  });
-
-  it("restores custom topups with the same server-side pricing contract", async () => {
-    stripeSessions = [
-      stripeSession({
-        id: "cs_restore_custom",
-        amount_total: 1200,
-        payment_intent: "pi_restore_custom",
-        metadata: {
-          userId: "usr_restore",
-          skuId: "topup_custom",
-          notesGranted: "240",
-          customAmountUsd: "12",
-        },
-      }),
-    ];
-
-    const response = await POST(buildRequest());
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { newPurchases: number };
-    expect(body.newPurchases).toBe(1);
-    expect(grantInputs[0]).toMatchObject({
-      amount: 240,
-      metadata: {
-        skuId: "topup_custom",
-        customAmountUsd: 12,
-      },
-    });
   });
 });
