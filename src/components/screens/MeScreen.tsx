@@ -76,7 +76,7 @@ export function MeScreen() {
 
       {/* ── Hero ───────────────────────────────────────────────────── */}
       <div
-        className="relative z-10 px-5 md:px-12 pb-6 max-w-3xl"
+        className="relative z-10 px-5 md:px-12 pb-6 max-w-3xl mx-auto"
         style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 56px)" }}
       >
         <h1 className="hero-serif-italic text-[#1A1A1A] text-[44px] leading-[1.02] md:text-[72px]">
@@ -88,7 +88,7 @@ export function MeScreen() {
       </div>
 
       {/* ── Body cards ─────────────────────────────────────────────── */}
-      <div className="relative z-10 px-5 md:px-12 max-w-3xl space-y-5 pb-6">
+      <div className="relative z-10 px-5 md:px-12 max-w-3xl mx-auto space-y-5 pb-6">
         <Card className="relative z-20 overflow-visible">
           <SectionLabel>{t("me.profile.title") || "Profile"}</SectionLabel>
           <div className="space-y-4">
@@ -238,7 +238,7 @@ export function MeScreen() {
       </div>
 
       {/* ── Manifesto (keep — best copy in the product) ────────────── */}
-      <div className="relative z-10 px-5 md:px-12 max-w-3xl pb-10">
+      <div className="relative z-10 px-5 md:px-12 max-w-3xl mx-auto pb-10">
         <div className="mm-manifesto">
           <p className="eyebrow text-[#FF8A5C] mb-5">{t("me.manifesto.eyebrow") || "A QUIET PLACE"}</p>
           <p className="font-serif text-[28px] md:text-[34px] leading-[1.15] text-[#F5F1EB]">
@@ -255,7 +255,7 @@ export function MeScreen() {
       </div>
 
       {/* ── About ──────────────────────────────────────────────────── */}
-      <div className="relative z-10 px-5 md:px-12 max-w-3xl pb-10">
+      <div className="relative z-10 px-5 md:px-12 max-w-3xl mx-auto pb-10">
         <Card>
           <SectionLabel>{t("me.about.title")}</SectionLabel>
           <p className="font-serif text-[#1A1A1A] text-[22px] leading-tight mb-2">
@@ -271,7 +271,7 @@ export function MeScreen() {
       </div>
 
       {/* ── Tertiary footer ─────────────────────────────────────────── */}
-      <div className="relative z-10 px-6 md:px-12 max-w-3xl pb-28">
+      <div className="relative z-10 px-6 md:px-12 max-w-3xl mx-auto pb-28">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px] tracking-[0.04em] text-[#8C8780]">
           {developerMode ? (
             <>

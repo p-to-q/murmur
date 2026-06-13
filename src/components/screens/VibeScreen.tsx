@@ -29,7 +29,6 @@ import { memory } from "@/lib/platform/memory";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
-import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import {
   createMagentaVersions,
   regenerateVersionAudio,
@@ -216,18 +215,21 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       sourceType: first.sourceType,
       sourceMelodyKind: first.sourceMelodyKind,
     };
-    // Magenta flow: advance to the *next* batch of three randomized vibes.
-    // A legacy batch gets a second chance to upgrade — its first health
-    // probe may have lost a race against a cold start.
+    // Magenta is the only engine. A batch already on Magenta rerolls straight
+    // to the next batch; a legacy batch (only reachable via demo/remix seeds)
+    // re-probes once. If the worker is down we keep the current batch and tell
+    // the user to retry, rather than silently generating structured audio.
     const useMagenta =
       first.generation !== undefined || (await shouldUseMagentaEngine());
-    const fresh = useMagenta
-      ? createMagentaVersions(first.melody, {
-          ...common,
-          batchIndex: (first.generation?.batchIndex ?? -1) + 1,
-          humBlob: humStyleBlob,
-        })
-      : generateVibeVersions(first.melody, common);
+    if (!useMagenta) {
+      toast(t("vibe.gen.engine_warming") || "Music engine is warming up — try again in a moment.");
+      return;
+    }
+    const fresh = createMagentaVersions(first.melody, {
+      ...common,
+      batchIndex: (first.generation?.batchIndex ?? -1) + 1,
+      humBlob: humStyleBlob,
+    });
     setVibeVersions(fresh);
   }, [
     currentDraftId,
@@ -235,6 +237,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     humStyleBlob,
     setAuditioning,
     setVibeVersions,
+    t,
     vibeVersions,
   ]);
 

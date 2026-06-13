@@ -1,39 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { mulberry32, hashString } from "@/lib/utils/seeded-random";
 import { VIBE_PRESETS } from "@/presets/vibes";
 
 interface CanvasCoverArtProps {
   songId: string;
-  /**
-   * The song's stored visualConfig gradient — the same string the detail
-   * page feeds to SongVisualCanvas. When present, the cover is a faithful
-   * still of what the user sees after tapping in.
-   */
   gradient?: string;
-  /** Legacy fallback: resolve a preset gradient by vibe id. */
   vibe?: string;
   className?: string;
-}
-
-/**
- * CanvasCoverArt — a static frame of the song detail visual.
- *
- * Paints exactly what SongVisualCanvas shows at rest: the song's gradient
- * laid diagonally between its first and last color, with a few drifting
- * white particles (seeded by songId so each cover is stable). Covers used
- * to be random aurora blobs that shared nothing with the detail page; now
- * the card is a thumbnail of the page it opens.
- */
-
-function parseHexes(gradient: string): [number, number, number][] {
-  const hexes = gradient.match(/#[0-9A-Fa-f]{6}/g) || [];
-  return hexes.map((hex) => [
-    parseInt(hex.slice(1, 3), 16),
-    parseInt(hex.slice(3, 5), 16),
-    parseInt(hex.slice(5, 7), 16),
-  ]);
 }
 
 function resolveGradient(gradient?: string, vibe?: string): string {
@@ -42,47 +16,80 @@ function resolveGradient(gradient?: string, vibe?: string): string {
   return preset.gradient;
 }
 
-export function CanvasCoverArt({ songId, gradient, vibe, className }: CanvasCoverArtProps) {
+function parseHex(h: string) {
+  return {
+    r: parseInt(h.slice(1, 3), 16),
+    g: parseInt(h.slice(3, 5), 16),
+    b: parseInt(h.slice(5, 7), 16),
+  };
+}
+
+export function CanvasCoverArt({ gradient, vibe, className }: CanvasCoverArtProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef<number>(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
     const size = 400;
     canvas.width = size;
     canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
 
-    const colors = parseHexes(resolveGradient(gradient, vibe));
-    if (colors.length === 0) return;
-    const first = colors[0]!;
-    const last = colors[colors.length - 1]!;
+    const resolved = resolveGradient(gradient, vibe);
+    const hexes = resolved.match(/#[0-9A-Fa-f]{6}/g) ?? ["#F4C87A", "#E9A06D"];
+    const rgb1 = parseHex(hexes[0]!);
+    const rgb2 = parseHex(hexes[hexes.length - 1]!);
 
-    // Base — same composition as SongVisualCanvas at rest: a diagonal
-    // gradient from the first to the last color of the stored gradient.
-    const base = ctx.createLinearGradient(0, 0, size, size);
-    base.addColorStop(0, `rgb(${first[0]},${first[1]},${first[2]})`);
-    base.addColorStop(1, `rgb(${last[0]},${last[1]},${last[2]})`);
-    ctx.fillStyle = base;
-    ctx.fillRect(0, 0, size, size);
+    interface P { x: number; y: number; vx: number; vy: number; r: number; life: number; max: number }
+    let particles: P[] = [];
+    let frame = 0;
 
-    // Drifting particles — the idle field, frozen. Seeded per song.
-    const rand = mulberry32(hashString(songId));
-    const count = 6 + Math.floor(rand() * 4);
-    for (let i = 0; i < count; i++) {
-      const x = rand() * size;
-      // Bias toward the lower half, where the field's risers live.
-      const y = size * (0.25 + rand() * 0.75);
-      const r = 1.5 + rand() * 4;
-      const alpha = 0.12 + rand() * 0.38;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-      ctx.fill();
+    function spawn(): P {
+      return {
+        x: Math.random() * size,
+        y: size + 3,
+        vx: (Math.random() - 0.5) * 0.8,
+        vy: -(Math.random() * 1.0 + 0.3),
+        r: Math.random() * 3 + 1,
+        life: 0,
+        max: Math.random() * 90 + 60,
+      };
     }
-  }, [songId, gradient, vibe]);
+
+    function draw() {
+      if (!ctx || !canvas) return;
+
+      const t = (frame % 240) / 240;
+      const lerp = (a: number, b: number) => Math.round(a + (b - a) * Math.sin(t * Math.PI));
+      const gr = ctx.createLinearGradient(0, 0, size, size);
+      gr.addColorStop(0, `rgb(${lerp(rgb1.r, rgb2.r)},${lerp(rgb1.g, rgb2.g)},${lerp(rgb1.b, rgb2.b)})`);
+      gr.addColorStop(1, `rgb(${rgb2.r},${rgb2.g},${rgb2.b})`);
+      ctx.fillStyle = gr;
+      ctx.fillRect(0, 0, size, size);
+
+      if (particles.length < 8 && frame % 18 === 0) particles.push(spawn());
+      particles = particles.filter((p) => p.life < p.max);
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy -= 0.008;
+        p.life++;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${(1 - p.life / p.max) * 0.45})`;
+        ctx.fill();
+      }
+
+      frame++;
+      rafRef.current = requestAnimationFrame(draw);
+    }
+
+    draw();
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [gradient, vibe]);
 
   return (
     <canvas

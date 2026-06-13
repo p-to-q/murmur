@@ -93,7 +93,7 @@ export function SettingsScreen() {
       <PageBackdrop variant="soft" />
 
       <div
-        className="relative z-10 max-w-3xl px-6 pb-28 md:px-12"
+        className="relative z-10 max-w-3xl mx-auto px-6 pb-28 md:px-12"
         style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 48px)" }}
       >
         <Link

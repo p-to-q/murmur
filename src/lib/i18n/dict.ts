@@ -154,6 +154,9 @@ export const DICT = {
   "hum.err.unavailable.cta_retry":{ zh: "重试",                       en: "Retry" },
   "hum.err.worker_unconfigured.title": { zh: "音频引擎还没接上", en: "Audio engine not wired yet" },
   "hum.err.worker_unconfigured.detail": { zh: "本地开发环境里还没有配置 `AUDIO_WORKER_URL`，所以真实录音暂时跑不起来。示例旋律仍然可以走完整流程。", en: "This local build does not have `AUDIO_WORKER_URL` configured yet, so live recordings cannot run. The demo melody still walks through the full flow." },
+  "hum.err.music_engine.title":  { zh: "曲子正在热机",                 en: "The music engine is warming up" },
+  "hum.err.music_engine.detail": { zh: "Magenta 模型刚醒来，稍等十几秒再试一次就好。", en: "Magenta is just waking up — give it a few seconds and try again." },
+  "hum.err.music_engine.cta_retry": { zh: "再试一次",                  en: "Try again" },
   "hum.err.billing_unavailable.title": { zh: "音磅账本暂时不可用", en: "Notes ledger unavailable" },
   "hum.err.billing_unavailable.detail": { zh: "这更像是 Murmur 的计费侧没连上，不是你这句没唱好。可以稍后再试，或先用示例旋律继续。", en: "This is a Murmur billing-side issue, not a problem with your take. Try again later, or use the demo melody for now." },
 
@@ -181,6 +184,7 @@ export const DICT = {
   "vibe.generating.toast": { zh: "还在酿造中，再等几秒。", en: "Still brewing — a few more seconds." },
   "vibe.gen.failed":  { zh: "没酿成，点一下重试", en: "Didn't brew — tap to retry" },
   "vibe.gen.retrying": { zh: "重新酿造这一版…", en: "Brewing this one again…" },
+  "vibe.gen.engine_warming": { zh: "曲子引擎正在热机，过一会儿再换一批。", en: "Music engine is warming up — try again in a moment." },
 
   // ── Melody origin semantics ───────────────────────────────────────
   "melody_origin.intent.label": { zh: "贴近原唱", en: "INTENT" },

@@ -145,15 +145,33 @@ heal_tunnel() { # name port url
   fi
 }
 
+# ── Cloud music override ───────────────────────────────────────────────
+# When scripts/deploy-music-gpu.ts has provisioned a GPU worker, its URL and
+# token live in .env.workers.cloud. Production must keep pointing at the GPU
+# pod — never at the local Mac tunnel — so sync_vercel uses these instead of
+# the music tunnel whenever the file is present.
+CLOUD_ENV="$ROOT/.env.workers.cloud"
+cloud_music_url()   { [ -f "$CLOUD_ENV" ] && grep '^MUSIC_WORKER_URL='   "$CLOUD_ENV" | tail -1 | cut -d= -f2-; }
+cloud_music_token() { [ -f "$CLOUD_ENV" ] && grep '^MUSIC_WORKER_TOKEN=' "$CLOUD_ENV" | tail -1 | cut -d= -f2-; }
+
 # ── Vercel re-sync (only when the URL pair actually changes) ───────────
 sync_vercel() { # audio_url music_url
   local a="$1" m="$2" ok=1
-  slog "tunnel URLs changed → syncing prod: audio=$a music=$m"
+  local mtok="${MUSIC_WORKER_TOKEN:-}"
+  local cloud_url cloud_tok
+  cloud_url="$(cloud_music_url || true)"
+  if [ -n "$cloud_url" ]; then
+    cloud_tok="$(cloud_music_token || true)"
+    m="$cloud_url"
+    [ -n "$cloud_tok" ] && mtok="$cloud_tok"
+    slog "cloud music worker configured → prod music stays on $m"
+  fi
+  slog "worker URLs changed → syncing prod: audio=$a music=$m"
   grep -v '_WORKER_URL=' "$ENV_FILE" > "$ENV_FILE.tmp" 2>/dev/null || true
   mv "$ENV_FILE.tmp" "$ENV_FILE"
   printf "AUDIO_WORKER_URL=%s\nMUSIC_WORKER_URL=%s\n" "$a" "$m" >> "$ENV_FILE"
   for KV in "AUDIO_WORKER_URL=$a" "AUDIO_WORKER_TOKEN=${AUDIO_WORKER_TOKEN:-}" \
-            "MUSIC_WORKER_URL=$m" "MUSIC_WORKER_TOKEN=${MUSIC_WORKER_TOKEN:-}"; do
+            "MUSIC_WORKER_URL=$m" "MUSIC_WORKER_TOKEN=$mtok"; do
     printf '%s' "${KV#*=}" | (cd "$ROOT" && vercel env add "${KV%%=*}" production --force) \
       >>"$LOG_DIR/vercel-deploy.log" 2>&1 || ok=0
   done
@@ -226,9 +244,14 @@ run() {
     heal_tunnel music 8002 "$(url_from "$LOG_DIR/tunnel-music.log")"
     warm_models_if_ready
 
-    local a m wanted have
+    local a m cloud_m wanted have
     a="$(url_from "$LOG_DIR/tunnel-audio.log")"
     m="$(url_from "$LOG_DIR/tunnel-music.log")"
+    # Cloud GPU worker overrides the local music tunnel for prod sync, so the
+    # change detection and edge probe must look at the same URL sync_vercel
+    # will actually push — otherwise every tick re-syncs (deploy loop).
+    cloud_m="$(cloud_music_url || true)"
+    [ -n "$cloud_m" ] && m="$cloud_m"
     wanted="$a $m"; have="$(cat "$STATEFILE" 2>/dev/null || true)"
     if [ -n "$a" ] && [ -n "$m" ] && [ "$wanted" != "$have" ] \
        && edge_ok "$a" && edge_ok "$m"; then

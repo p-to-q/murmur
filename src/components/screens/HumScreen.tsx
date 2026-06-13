@@ -11,7 +11,6 @@ import { useGoogleSignIn } from "@/lib/hooks/use-google-sign-in";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
-import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import {
   createMagentaVersions,
   prefetchMusicEngineStatus,
@@ -69,10 +68,23 @@ type HumErrorVariant =
 
 interface HumErrorState {
   variant: HumErrorVariant;
-  code: TranscribeRequestErrorCode | "mic_unavailable";
+  code: TranscribeRequestErrorCode | "mic_unavailable" | "music_engine_unavailable";
   requestId: string | null;
   currentBalance: number | null;
   showSupportCode: boolean;
+}
+
+/**
+ * The Magenta worker is the ONLY music engine — when its health probe fails
+ * we stop the flow with an honest error instead of silently downgrading to
+ * the legacy structured synth. Thrown by transcribeAndGenerate, mapped to the
+ * "unavailable" card below.
+ */
+class MusicEngineUnavailableError extends Error {
+  constructor() {
+    super("music engine unavailable");
+    this.name = "MusicEngineUnavailableError";
+  }
 }
 
 function variantForCode(code: TranscribeRequestErrorCode): HumErrorVariant {
@@ -276,23 +288,22 @@ export function HumScreen() {
       const draftId = crypto.randomUUID();
       const flowId = crypto.randomUUID();
       const selectedMelody = selectGenerationMelody(result, { repairBias });
+      // Magenta is the only music engine. If the worker is unreachable after
+      // all health-probe retries we stop with an honest error card — never
+      // a silent downgrade to the legacy structured synth.
       const useMagenta = await magentaPathPromise;
-      setHumStyleBlob(useMagenta ? preparedBlob ?? null : null);
-      const versions = useMagenta
-        ? createMagentaVersions(selectedMelody.melody, {
-            draftId,
-            originFlowId: flowId,
-            sourceType: blob ? "hum" : "demo",
-            sourceMelodyKind: selectedMelody.kind,
-            batchIndex: 0,
-            humBlob: preparedBlob ?? null,
-          })
-        : generateVibeVersions(selectedMelody.melody, {
-            draftId,
-            originFlowId: flowId,
-            sourceType: blob ? "hum" : "demo",
-            sourceMelodyKind: selectedMelody.kind,
-          });
+      if (!useMagenta) {
+        throw new MusicEngineUnavailableError();
+      }
+      setHumStyleBlob(preparedBlob ?? null);
+      const versions = createMagentaVersions(selectedMelody.melody, {
+        draftId,
+        originFlowId: flowId,
+        sourceType: blob ? "hum" : "demo",
+        sourceMelodyKind: selectedMelody.kind,
+        batchIndex: 0,
+        humBlob: preparedBlob ?? null,
+      });
       setVibeVersions(versions);
       setCurrentDraftId(draftId);
       setCurrentFlowId(flowId);
@@ -401,6 +412,17 @@ export function HumScreen() {
     error: unknown,
     fixtureState: FixtureRescueState,
   ): HumErrorState => {
+    if (error instanceof MusicEngineUnavailableError) {
+      // Magenta is the only engine — a down worker is a service outage,
+      // not a problem with the user's take.
+      return {
+        variant: "unavailable",
+        code: "music_engine_unavailable",
+        requestId: null,
+        currentBalance: null,
+        showSupportCode: false,
+      };
+    }
     if (error instanceof TranscribeRequestError) {
       return {
         variant: variantForCode(error.code),
@@ -1013,6 +1035,9 @@ export function HumScreen() {
                     {t("hum.err.insufficient.cta_topup")}
                   </button>
                 ) : (
+                  /* Re-run the flow. For a warming music engine the same
+                     action re-probes Magenta; the label just stops promising
+                     a "demo melody" that would need the same down engine. */
                   <button
                     onClick={() => {
                       startAudioContext();
@@ -1021,7 +1046,9 @@ export function HumScreen() {
                     }}
                     className="mm-btn-primary w-full justify-center mb-3"
                   >
-                    {t("hum.mic.cta_example")}
+                    {humError.code === "music_engine_unavailable"
+                      ? errorCopy.retry
+                      : t("hum.mic.cta_example")}
                   </button>
                 )}
 
@@ -1058,7 +1085,9 @@ export function HumScreen() {
                     }}
                     className="text-[#8C8780] text-[13px] underline-mm"
                   >
-                    {errorCopy.retry}
+                    {humError.code === "music_engine_unavailable"
+                      ? t("hum.hear.cta_retry")
+                      : errorCopy.retry}
                   </button>
                 )}
                 {humError.requestId && humError.showSupportCode && (
@@ -1139,6 +1168,13 @@ function copyForState(
   error: HumErrorState,
   t: (key: Parameters<ReturnType<typeof useTranslator>>[0]) => string,
 ): { title: string; detail: string; retry: string; demo?: string } {
+  if (error.code === "music_engine_unavailable") {
+    return {
+      title: t("hum.err.music_engine.title"),
+      detail: t("hum.err.music_engine.detail"),
+      retry: t("hum.err.music_engine.cta_retry"),
+    };
+  }
   if (error.code === "worker_unconfigured") {
     return {
       title: t("hum.err.worker_unconfigured.title"),

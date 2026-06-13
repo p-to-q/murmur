@@ -60,46 +60,29 @@ export function buildSavedSongVibeVersions(song: SavedSong): VibeVersion[] {
   });
 }
 
+/**
+ * Build a fresh batch of remix options from a saved song. Magenta is the only
+ * engine — when the worker is unreachable this returns an empty array and the
+ * caller surfaces a "warming up, retry" message instead of falling back to the
+ * legacy structured synth. (The saved song's preferred vibe is folded into the
+ * Magenta prompt batch rather than steering a structured arrangement.)
+ */
 export async function buildSavedSongRemixVersions(song: SavedSong): Promise<VibeVersion[]> {
+  if (!(await checkMusicEngineAvailable())) {
+    return [];
+  }
   const version = hydrateSavedSongToVersion(song);
-  const preferredVibeId = resolvePreferredSavedSongVibeId(song);
-  const preferredVibeMode =
-    version.editDepth === "reworked"
-      ? "anchor"
-      : version.editDepth === "shaped"
-        ? "boost"
-        : undefined;
   const remixLineage = buildRemixLineage(song);
-  const common = {
+  return createMagentaVersions(version.melody, {
     draftId: song.id,
     originFlowId: `saved-${song.id}`,
     parentSongId: remixLineage.parentSongId,
     rootSongId: remixLineage.rootSongId,
     lineageDepth: remixLineage.lineageDepth,
-    sourceType: "library" as const,
+    sourceType: "library",
     sourceMelodyKind: version.sourceMelodyKind,
-  };
-
-  if (preferredVibeId) {
-    return generateVibeVersions(version.melody, {
-      ...common,
-      preferredVibeId,
-      preferredVibeMode,
-    });
-  }
-
-  if (await checkMusicEngineAvailable()) {
-    return createMagentaVersions(version.melody, {
-      ...common,
-      batchIndex: 0,
-      humBlob: null,
-    });
-  }
-
-  return generateVibeVersions(version.melody, {
-    ...common,
-    preferredVibeId,
-    preferredVibeMode,
+    batchIndex: 0,
+    humBlob: null,
   });
 }
 

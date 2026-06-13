@@ -449,6 +449,13 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
   const handleRemixAgain = () => {
     void buildSavedSongRemixVersions(song).then((versions) => {
+      // Magenta is the only engine — an empty batch means the worker is
+      // unreachable. Keep the user on the song rather than pushing an empty
+      // /vibe, and tell them to retry.
+      if (versions.length === 0) {
+        toast(t("vibe.gen.engine_warming") || "Music engine is warming up — try again in a moment.");
+        return;
+      }
       setVibeVersions(versions);
       setCurrentDraftId(song.id);
       setCurrentFlowId(`saved-${song.id}`);
