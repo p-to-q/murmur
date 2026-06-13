@@ -1,5 +1,13 @@
 # Payment + Top-up — Feature Spec
 
+> **Status (2026-06):** the web payment provider shipped as **Waffo**, not
+> Stripe — Stripe has been removed from web checkout. This spec predates that
+> decision; wherever it says "Stripe Checkout" or `/api/billing/webhook/stripe`,
+> read **Waffo** and the single `/api/billing/webhook`. The live, implemented
+> flow is documented in [billing-waffo.md](billing-waffo.md). The mobile-IAP /
+> RevenueCat sections below remain forward-looking (Capacitor shells, not yet
+> shipped). The credits model, costs, and SKUs in §2–§4 are still current.
+
 ## 1. Goal
 
 Murmur v2 must support paid features. The user named two new screens:
@@ -76,7 +84,7 @@ export const notesLedger = pgTable("notes_ledger", {
   reason:    varchar("reason", { length: 32 }).notNull(),
   // reason values: "spend:hum" | "spend:llm_edit" | "spend:save" | "spend:export_webm"
   //                "grant:daily_free" | "grant:signup_bonus" | "purchase:topup"
-  externalRef: text("external_ref"),          // Stripe payment_intent_id, WeChat transaction_id, RevenueCat tx id…
+  externalRef: text("external_ref"),          // Waffo orderId, WeChat transaction_id, RevenueCat tx id…
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -85,7 +93,7 @@ export const purchases = pgTable("purchases", {
   id:           text("id").primaryKey(),
   userId:       text("user_id").notNull(),
   provider:     varchar("provider", { length: 32 }).notNull(),
-  // provider: "stripe" | "wechat_pay" | "apple_iap" | "google_play" | "revenuecat"
+  // provider: "waffo" | "wechat_pay" | "apple_iap" | "google_play" | "revenuecat"
   productId:    varchar("product_id", { length: 64 }).notNull(),
   // product id of the SKU bought (e.g. "topup_30_notes")
   amountCents:  integer("amount_cents").notNull(),       // store in smallest unit (cents / 分)
@@ -149,7 +157,7 @@ display rules (App Store tiers, ¥-rounded WeChat tiers).
 
 This is the **provider-handoff** screen, not a checkout itself.
 
-- Web shell: redirects to Stripe Checkout (or WeChat Pay JSAPI flow).
+- Web shell: opens a Waffo checkout URL (or WeChat Pay JSAPI flow in CN).
 - iOS / Android shell: triggers native sheet via RevenueCat, never
   navigates away.
 - 微信 MP shell: invokes `wx.requestPayment` directly.
@@ -185,11 +193,11 @@ New routes (all in `src/app/api/`):
 |---|---|---|
 | `/api/user/balance` | GET | returns `{ notes, planTier, nextRefillAt }` |
 | `/api/billing/skus` | GET | returns SKU table for the requesting region |
-| `/api/billing/checkout` | POST | create Stripe Checkout session (web only) |
-| `/api/billing/wechat-prepay` | POST | create WeChat Pay JSAPI / MP order |
-| `/api/billing/webhook/stripe` | POST | Stripe → ledger write |
-| `/api/billing/webhook/wechat` | POST | WeChat → ledger write |
-| `/api/billing/webhook/revenuecat` | POST | RevenueCat (App Store + Play) → ledger write |
+| `/api/billing/checkout` | POST | create Waffo checkout session (web only) — **shipped** |
+| `/api/billing/webhook` | POST | Waffo `order.completed` → ledger write — **shipped** |
+| `/api/billing/wechat-prepay` | POST | create WeChat Pay JSAPI / MP order (future) |
+| `/api/billing/webhook/wechat` | POST | WeChat → ledger write (future) |
+| `/api/billing/webhook/revenuecat` | POST | RevenueCat (App Store + Play) → ledger write (future) |
 | `/api/billing/refund` | POST | manual op-tool entry (internal) |
 
 All chargeable routes (`/api/transcribe`, `/api/strummer/edit`,
@@ -217,14 +225,16 @@ Current substrate shipped in Phase 4 pre-work:
   `1` note only after a successful classifier response.
 - `POST /api/songs` spends `1` note and inserts the song in one transaction.
 
-Carry-forward: top-up pages, checkout, SKU routes, webhooks, and refill cron
-are still pending.
+Carry-forward: Waffo checkout (`/api/billing/checkout`) and the
+`order.completed` webhook (`/api/billing/webhook`) have since shipped — see
+[billing-waffo.md](billing-waffo.md). The top-up page polish, region-aware SKU
+route, WeChat/RevenueCat channels, and the daily refill cron are still pending.
 
 ## 7. Cross-platform integration (recap)
 
 | Shell | Web flow | Native flow |
 |---|---|---|
-| Web (intl) | Stripe Checkout (Card / Link / Apple Pay web) | n/a |
+| Web (intl) | Waffo checkout (cards / wallets via Waffo) | n/a |
 | Web (CN) | WeChat Pay JSAPI (`MWEB` flow) | n/a |
 | Capacitor iOS | n/a | StoreKit IAP via RevenueCat |
 | Capacitor Android | n/a | Google Play Billing via RevenueCat |
@@ -236,10 +246,10 @@ are still pending.
 - Webhooks into our backend on every event.
 - Handles introductory offers / restore purchases without per-store code.
 
-We **cannot** route iOS digital-good purchases through Stripe — App Store
-review forbids it. The Web SKUs and the IAP SKUs may have **different
-prices** because of Apple's 15-30% cut; honor each store's price card,
-keep the credit grant identical.
+We **cannot** route iOS digital-good purchases through Waffo or any external
+web checkout — App Store review forbids it; iOS must use StoreKit IAP. The Web
+SKUs and the IAP SKUs may have **different prices** because of Apple's 15-30%
+cut; honor each store's price card, keep the credit grant identical.
 
 WeChat Pay (web + MP) is wired without RevenueCat. The webhook signature
 verification follows
@@ -299,7 +309,8 @@ Worth noting: Murmur already has a daily-digest cron stub at
 
 - Server-side rate limits per IP + per userId for unauthenticated /
   guest users.
-- Webhook signature verification mandatory (Stripe, WeChat, RevenueCat).
+- Webhook signature verification mandatory (Waffo `X-Waffo-Signature`, and
+  WeChat / RevenueCat once wired).
 - All ledger writes scoped to a single SQL transaction with
   `SELECT ... FOR UPDATE` on the user row.
 - Refunds never delete ledger rows; they insert negative grants and a
@@ -314,8 +325,8 @@ A downstream agent has shipped payment + top-up when:
 - [ ] `users.notesBalance` + `notesLedger` + `purchases` tables exist
       and are migrated.
 - [ ] `/topup` and `/topup/checkout` routes exist on the web shell.
-- [ ] Stripe webhook → balance increment works end-to-end with at least
-      one real test purchase in Stripe sandbox.
+- [ ] Waffo `order.completed` webhook → balance increment works end-to-end
+      with at least one real test purchase in Waffo test mode.
 - [ ] `/api/transcribe`, `/api/strummer/edit`, `/api/songs` POST all
       respect `402` on insufficient balance and never write business
       output without ledger consumption.

@@ -8,8 +8,12 @@ How the running system is shaped today. v2 docs build on these; v1 docs
 remain the source of truth for everything the v2 docs do not override.
 
 - [architecture.md](architecture.md) — system intent + boundaries
+- [tech-stack.md](tech-stack.md) — current stack + deploy topology (Vercel /
+  RunPod / Waffo / local cloudflared)
 - [music-engine.md](music-engine.md) — chord / bass / drum engines + assemble-song
 - [provider-strategy.md](provider-strategy.md) — Stainer transcription facade
+- [billing-waffo.md](billing-waffo.md) — web payments (Waffo) + idempotent
+  note grants
 - [runtime-surfaces.md](runtime-surfaces.md) — what lives in `src/` and why
 - [judges-guide.md](judges-guide.md) — code + design judge orientation
 - [engineering-principles.md](engineering-principles.md) — philosophy parent
@@ -24,8 +28,8 @@ remain the source of truth for everything the v2 docs do not override.
 The "why" and the "what" of the v2 cutover. Read in this order; each
 builds on the previous.
 
-1. [diagnosis-2026-06.md](diagnosis-2026-06.md) — codebase reality
-   check with file paths.
+1. [diagnosis-2026-06.md](archive/diagnosis-2026-06.md) — codebase
+   reality check with file paths (archived 2026-06 snapshot).
 2. [audio-pipeline-redesign.md](audio-pipeline-redesign.md) —
    server-authoritative hum → score pipeline.
 3. [cross-platform-strategy.md](cross-platform-strategy.md) — Web,
@@ -57,15 +61,22 @@ these on every PR.
 - [observability.md](observability.md) — logs, metrics, traces,
   dashboards.
 
-## 4. Handoff
+## 4. Archive — historical snapshots
 
-- [codex-handoff-prompt.md](codex-handoff-prompt.md) — the full prompt
-  to dispatch the v2 work to Codex. Read by humans before pasting; read
-  by Codex as the working brief.
+Frozen, point-in-time docs from the 2026-06 v2 cutover and earlier
+audits. They record how the system got here; they are **not** current
+truth. Full index in [archive/README.md](archive/README.md). The handoff
+briefs that drove the v2 work live there:
+
+- [codex-handoff-prompt.md](archive/codex-handoff-prompt.md) — the full
+  prompt that dispatched the v2 work to Codex.
+- [handoff-ui-agent.md](archive/handoff-ui-agent.md) — the UI-agent
+  handoff brief.
 
 ## How agents should use this
 
-- Need to **understand current state** → §1 + `diagnosis-2026-06.md`.
+- Need to **understand current state** → §1 + `tech-stack.md`
+  (`archive/diagnosis-2026-06.md` for the file-level 2026-06 snapshot).
 - Need to **decide what to build next** → `execution-roadmap.md`.
 - Need to **implement a page** → `page-contracts.md` + the relevant
   feature doc + `studio-compose-redesign.md` if it's Compose.

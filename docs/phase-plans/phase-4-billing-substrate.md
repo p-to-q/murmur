@@ -2,6 +2,14 @@
 
 Date: 2026-06-03
 
+> **Update (2026-06):** the billing carry-forward below later shipped on
+> **Waffo** (not Stripe) for the web shell — checkout
+> (`/api/billing/checkout`) and the `order.completed` webhook
+> (`/api/billing/webhook`) are live. Stripe was never wired and is out of the
+> plan. Current web billing is documented in
+> [../billing-waffo.md](../billing-waffo.md). The daily refill cron and
+> native-IAP channels remain pending.
+
 ## User / System Problem
 
 The audio worker is now a real server-side compute surface. If transcription
@@ -17,8 +25,8 @@ will fund.
 - The Web app is still the root Next app under `src/`; no app-shell move here.
 - Local demo behavior still matters, but real `/api/transcribe` is now an
   expensive worker path and should be measurable.
-- Stripe, WeChat Pay, RevenueCat, top-up UI, and daily refill jobs remain future
-  stops.
+- Web checkout, WeChat Pay, RevenueCat, top-up UI, and daily refill jobs remain
+  future stops.
 
 ## Stable Behavior
 
@@ -60,8 +68,10 @@ will fund.
 
 - Real provider login and DB-backed session validation still need Phase 3,
   though v1 header identity is now local/demo-only in production settings.
-- `/topup`, `/topup/checkout`, SKU routes, billing webhooks, and daily refill
-  cron are not implemented yet.
+- Web checkout + the billing webhook shipped on Waffo (see
+  [../billing-waffo.md](../billing-waffo.md)). `/topup` page polish, the
+  region-aware SKU route, native-IAP channels, and the daily refill cron are
+  still pending.
 - MeScreen and Studio balance-aware UI are still pending.
 - Full DB-backed API route tests need the test database harness described in
   `docs/testing-strategy.md`.

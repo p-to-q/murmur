@@ -44,6 +44,15 @@ repo rituals:
 These are deliberately common templates with Murmur-specific tuning, so the repo
 inherits familiar operator behavior instead of custom process logic.
 
+Two of these jobs are gated behind repository variables so a fork without GitHub
+Advanced Security does not get red builds it cannot act on. Turn the scans on
+under **Settings → Secrets and variables → Actions → Variables**:
+
+```
+ENABLE_GHAS_CODEQL=true        # enable the CodeQL static-analysis job
+ENABLE_DEPENDENCY_REVIEW=true  # enable the incoming-dependency review gate
+```
+
 The split between `ci.yml` and `audio-acceptance.yml` is intentional:
 
 - PR feedback should stay fast enough to use continuously.
@@ -104,6 +113,24 @@ We are not adding deployment automation until the deploy path is chosen.
 
 That means current automation is strong on validation and hygiene, but neutral
 on delivery target.
+
+## Optional hardening (not yet adopted)
+
+Common GitHub-Actions add-ons we have considered but deliberately not wired, to
+keep the PR gate fast and the workflow set small. Adopt any of them only once the
+failure mode it guards against actually starts biting:
+
+- **PR size gate** — warn or fail on diffs above a line threshold to nudge toward
+  smaller PRs.
+- **Conventional-commit lint** — enforce `type(scope): subject` on PR commits.
+- **Bundle-size budget** — fail when `.next/static` grows past a fixed ceiling.
+- **Tag-triggered release** — generate a changelog and cut a GitHub Release on
+  `v*` tags.
+- **CI failure notification** — post to Slack/Discord when a required workflow
+  fails on `main`.
+
+None of these is load-bearing today; they are written down here so the option set
+is not rediscovered from scratch each time.
 
 ## Ongoing maintenance rhythm
 

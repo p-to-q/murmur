@@ -204,7 +204,7 @@ export const purchases = pgTable(
     id:           text("id").primaryKey(),               // ulid `pur_…`
     userId:       text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     provider:     varchar("provider", { length: 16 }).notNull(),
-    // provider: "stripe" | "wechat_pay" | "apple_iap" | "google_play" | "revenuecat"
+    // provider: "waffo" (web; "stripe" retired) | "wechat_pay" | "apple_iap" | "google_play" | "revenuecat"
     productId:    varchar("product_id", { length: 64 }).notNull(),  // SKU id
     providerRef:  varchar("provider_ref", { length: 128 }).notNull(),  // provider's transaction id
     amountCents:  integer("amount_cents").notNull(),
@@ -226,10 +226,13 @@ export const purchases = pgTable(
 
 Lifecycle:
 
-- `pending` on prepay (Stripe checkout init, WeChat unified order).
+- `pending` on prepay (Waffo checkout init, WeChat unified order).
 - `succeeded` after webhook verification + ledger grant insert.
 - `refunded` after refund webhook + matching negative ledger row.
 - `failed` after provider error event.
+
+The live web write path (Waffo `order.completed` → `purchases` +
+`notes_ledger`) is documented in [billing-waffo.md](billing-waffo.md).
 
 ### 3.6 `songs` (extended)
 
@@ -289,7 +292,7 @@ export const eventsWebhook = pgTable(
     id:          text("id").primaryKey(),  // ulid `evw_…`
     provider:    varchar("provider", { length: 16 }).notNull(),
     providerEventId: varchar("provider_event_id", { length: 128 }).notNull(),
-    routeId:     varchar("route_id", { length: 64 }).notNull(),  // "billing.webhook.stripe"
+    routeId:     varchar("route_id", { length: 64 }).notNull(),  // e.g. "billing.webhook.waffo"
     receivedAt:  timestamp("received_at").notNull().defaultNow(),
     processedAt: timestamp("processed_at"),
     status:      varchar("status", { length: 16 }).notNull(),

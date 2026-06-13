@@ -1,5 +1,13 @@
 # Restore Purchases Implementation
 
+> **Status (2026-06):** the live web billing provider is **Waffo**, and web
+> top-ups are **consumable** note credits — they are *not* part of "restore
+> purchases" (Apple disallows restoring consumables anyway). This document
+> describes the future mobile-IAP restore surface for the Capacitor shells
+> (Apple / Google via RevenueCat), which is **not yet shipped**. Stripe has been
+> removed from web checkout. See [billing-waffo.md](billing-waffo.md) for the
+> current web flow.
+
 ## Overview
 
 The "Restore Purchases" feature allows users to regain access to previously purchased content without paying again. This is a **mandatory requirement** for Apple App Store and recommended for Google Play.
@@ -22,12 +30,14 @@ The "Restore Purchases" feature allows users to regain access to previously purc
 
 ### 1. Multi-Provider Support
 
-Murmur supports multiple payment providers:
-- `stripe` - Web payments (credit cards)
-- `wechat_pay` - WeChat Pay (China)
-- `apple_iap` - Apple In-App Purchases
-- `google_play` - Google Play Billing
-- `revenuecat` - Unified IAP SDK (wraps Apple/Google)
+Murmur's payment providers:
+- `waffo` - Web payments (cards / wallets) — **current web provider** (consumable top-ups; not restored)
+- `apple_iap` - Apple In-App Purchases (future)
+- `google_play` - Google Play Billing (future)
+- `revenuecat` - Unified IAP SDK wrapping Apple/Google (future)
+- `wechat_pay` - WeChat Pay, China (future)
+
+(`stripe` was the prior web provider and has been removed.)
 
 ### 2. Database Schema
 
@@ -37,7 +47,7 @@ See `src/lib/db/schema/purchases.ts`:
 {
   id:           "pur_..."           // ULID
   userId:       "user_123"
-  provider:     "apple_iap" | "google_play" | "stripe" | ...
+  provider:     "waffo" | "apple_iap" | "google_play" | "revenuecat" | "wechat_pay"
   productId:    "notes_100"         // SKU
   providerRef:  "1000000123456789"  // Provider transaction ID
   amountCents:  499
@@ -60,8 +70,8 @@ See `src/lib/db/schema/purchases.ts`:
 [Server: Query payment providers]
     ├── Apple IAP: verifyReceipt() or AppTransaction
     ├── Google Play: purchases.products.get()
-    ├── RevenueCat: GET /v1/subscribers/{userId}
-    └── Stripe: GET /v1/charges?customer={id}
+    └── RevenueCat: GET /v1/subscribers/{userId}
+   (web Waffo top-ups are consumable credits — not restored)
          ↓
 [Compare provider data with local DB]
          ↓
@@ -83,7 +93,8 @@ See `src/lib/db/schema/purchases.ts`:
 - **RevenueCat**: Call REST API `/v1/subscribers/{userId}`
 - **Apple IAP**: Verify receipt or use AppTransaction (StoreKit 2)
 - **Google Play**: Query Google Play Developer API
-- **Stripe**: Query Stripe API for customer charges
+- Web Waffo top-ups are consumable note credits and are intentionally excluded
+  from restore.
 
 ### Phase 3: Reconciliation (TODO)
 - Compare provider data with local DB

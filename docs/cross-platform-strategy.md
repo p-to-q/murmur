@@ -344,19 +344,21 @@ WebView `MediaRecorder`.
 
 ## 9. Payment integration matrix
 
-Detailed in `payment-topup-feature.md`. Cross-platform summary:
+Detailed in `payment-topup-feature.md`; the live web flow is in
+[billing-waffo.md](billing-waffo.md). Cross-platform summary:
 
 | Surface | Payment provider | Notes |
 |---|---|---|
-| Web | Stripe (international) + WeChat Pay JSAPI (China) | dual provider |
-| iOS | **StoreKit IAP via RevenueCat** | App Store mandates StoreKit for digital goods |
-| Android | Google Play Billing via RevenueCat | mirrors iOS |
-| 微信小程序 | 微信支付 (mini-program API) | the only allowed provider in MP |
+| Web | **Waffo** (international) + WeChat Pay JSAPI (China, future) | Stripe retired from web checkout |
+| iOS | **StoreKit IAP via RevenueCat** (future) | App Store mandates StoreKit for digital goods |
+| Android | Google Play Billing via RevenueCat (future) | mirrors iOS |
+| 微信小程序 | 微信支付 (mini-program API, future) | the only allowed provider in MP |
 
-The product needs a unified `entitlement` model on the backend so the
-front-end never asks "which payment provider did the user use" — it asks
-"what is the user's entitlement state right now." RevenueCat handles
-Apple/Google + a webhook into our backend; we layer WeChat Pay on top.
+Waffo is the only provider wired today (web). The product still needs a unified
+`entitlement` model on the backend so the front-end never asks "which payment
+provider did the user use" — it asks "what is the user's entitlement state right
+now." Waffo grants notes via webhook today; RevenueCat (Apple/Google) and WeChat
+Pay layer in on the same ledger as the native shells ship.
 
 ## 10. Acceptance criteria (this phase)
 

@@ -142,7 +142,7 @@ the system, so it has its own design/engineering layer:
 
 See:
 
-- [src/components/song-detail/share-actions.tsx](../src/components/song-detail/share-actions.tsx)
+- [src/components/murmur/share-card-modal.tsx](../src/components/murmur/share-card-modal.tsx)
 - [src/modules/export/render-share-html.ts](../src/modules/export/render-share-html.ts)
 - [src/modules/export/export-video.ts](../src/modules/export/export-video.ts)
 

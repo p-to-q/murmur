@@ -21,37 +21,37 @@ If something here contradicts those, this file wins for "what currently is."
 
 - **Stack:** Next.js 16 (App Router) + React 19 + Bun + Tailwind 4 + Tone.js +
   Drizzle/Postgres. ~12.5k LOC across 117 `.ts/.tsx` files. See
-  [package.json](../package.json).
+  [package.json](../../package.json).
 - **Five-step arc:** `Hum → Vibe → Studio → Gallery → SongDetail`. Entry
-  shell at [src/app/page.tsx](../src/app/page.tsx).
+  shell at [src/app/page.tsx](../../src/app/page.tsx).
 - **Live screens:**
-  [HumScreen](../src/components/screens/HumScreen.tsx),
+  [HumScreen](../../src/components/screens/HumScreen.tsx),
   VersionCardsOverlay（已随死代码清理移除，f856cdb）,
-  [StudioScreen](../src/components/screens/StudioScreen.tsx),
-  [NameScreen](../src/components/screens/NameScreen.tsx),
-  [GalleryScreen](../src/components/screens/GalleryScreen.tsx),
-  [SongDetailScreen](../src/components/screens/SongDetailScreen.tsx),
-  [MeScreen](../src/components/screens/MeScreen.tsx).
+  [StudioScreen](../../src/components/screens/StudioScreen.tsx),
+  [NameScreen](../../src/components/screens/NameScreen.tsx),
+  [GalleryScreen](../../src/components/screens/GalleryScreen.tsx),
+  [SongDetailScreen](../../src/components/screens/SongDetailScreen.tsx),
+  [MeScreen](../../src/components/screens/MeScreen.tsx).
 - **No payment / no top-up / no quota** anywhere. Users table has only
   `id / email / name / avatarUrl / createdAt / updatedAt` —
-  [users.ts](../src/lib/db/schema/users.ts).
+  [users.ts](../../src/lib/db/schema/users.ts).
 - **Auth is a header stub.** `getRequestUser()` reads `x-murmur-user-id` and
   returns `"guest"` if absent —
-  [server-auth.ts](../src/lib/platform/server-auth.ts).
+  [server-auth.ts](../../src/lib/platform/server-auth.ts).
   Anyone can pose as any userId.
 - **Notifications publisher is a stub.** Acknowledged in `architecture.md`.
-- **i18n:** Chinese + English via [src/lib/i18n](../src/lib/i18n).
+- **i18n:** Chinese + English via [src/lib/i18n](../../src/lib/i18n).
   Locale auto-detected, switcher in MeScreen.
 
 ## 2. Audio + arrangement pipeline (today)
 
 The pipeline runs as documented in
-[docs/music-engine.md](./music-engine.md), but the
+[docs/music-engine.md](../music-engine.md), but the
 runtime reality has a few important gaps the doc doesn't surface.
 
 ### 2.1 Capture
 
-[HumScreen.tsx](../src/components/screens/HumScreen.tsx):
+[HumScreen.tsx](../../src/components/screens/HumScreen.tsx):
 
 - 15 s max recording, browser `MediaRecorder` with
   `audio/webm;codecs=opus → audio/webm → audio/mp4` selection.
@@ -64,16 +64,16 @@ runtime reality has a few important gaps the doc doesn't surface.
 
 ### 2.2 Transcription facade
 
-[src/modules/stainer/transcribe.ts](../src/modules/stainer/transcribe.ts):
+[src/modules/stainer/transcribe.ts](../../src/modules/stainer/transcribe.ts):
 
 - This legacy facade now feeds the server-authoritative path instead of
   choosing among browser providers at runtime.
 - The effective default chain today is `web /api/transcribe →
-  [audio-worker.ts](../src/lib/platform/audio-worker.ts) →
-  [workers/audio-engine/main.py](../workers/audio-engine/main.py)`.
+  [audio-worker.ts](../../src/lib/platform/audio-worker.ts) →
+  [workers/audio-engine/main.py](../../workers/audio-engine/main.py)`.
 - Silent fixture substitution is no longer allowed on the main hum path;
   fixtures are reserved for explicit demo / rescue surfaces such as
-  [fixture.ts](../src/modules/stainer/providers/fixture.ts).
+  [fixture.ts](../../src/modules/stainer/providers/fixture.ts).
 - Provider switching moved out of `NEXT_PUBLIC_*` runtime flags and into
   server / worker configuration plus the humming-engine selection logic.
 
@@ -86,7 +86,7 @@ the recommended architecture for new work.
 Two real implementations and two stubs:
 
 - **`browser-yin`** —
-  [pitch-engine.ts](../src/lib/music/pitch-engine.ts).
+  `pitch-engine.ts` (client engine since removed; pitch detection is now server-side).
   Hand-rolled YIN with `YIN_THRESHOLD = 0.20`, frame 2048 / hop 512 at
   44.1 kHz, voice MIDI range C2–C6 (36–84).
   - No HPSS, no harmonic-product spectrum, no octave-jump correction.
@@ -97,8 +97,8 @@ Two real implementations and two stubs:
     instead of throwing**, which directly hands control to fixture downstream
     (see 2.2). This was an Eazo iframe workaround; it now hides errors.
 - **Server audio worker** —
-  [audio-worker.ts](../src/lib/platform/audio-worker.ts) posts multipart
-  audio to [workers/audio-engine/main.py](../workers/audio-engine/main.py),
+  [audio-worker.ts](../../src/lib/platform/audio-worker.ts) posts multipart
+  audio to [workers/audio-engine/main.py](../../workers/audio-engine/main.py),
   which now owns the worker contract and runs the current detector stack.
   - Deploy / CI / hosting notes live with the audio-engine workspace rather
     than the deleted `basic-pitch-service` prototype.
@@ -113,7 +113,7 @@ Two real implementations and two stubs:
 
 ### 2.4 Melody polisher
 
-[melody-polisher.ts](../src/modules/music/melody-polisher.ts).
+[melody-polisher.ts](../../src/modules/music/melody-polisher.ts).
 This is where most of the "musical lawfulness" of the output comes from. It
 does a lot:
 
@@ -123,7 +123,7 @@ does a lot:
 4. Pitch-outlier removal.
 5. 1–3-note contour smoothing.
 6. BPM detection (IOI-mode based) →
-   [rhythm-engine.ts](../src/lib/music/rhythm-engine.ts).
+   [rhythm-engine.ts](../../src/lib/music/rhythm-engine.ts).
 7. 16th-note soft quantize (softness 0.22).
 8. Tonal profile across five modes (major / minor / dorian / phrygian /
    pentatonic), Krumhansl-style scored scale fit + first-note / last-note
@@ -148,13 +148,13 @@ brief.
 
 ### 2.5 Arrangement (Strummer)
 
-- [generate-versions.ts](../src/modules/strummer/generate-versions.ts)
+- [generate-versions.ts](../../src/modules/strummer/generate-versions.ts)
   picks three vibes from six presets (sunset / bedroom / cinematic / party /
   rain / synth — see
-  [vibes.ts](../src/presets/vibes.ts)). Each vibe has
+  [vibes.ts](../../src/presets/vibes.ts)). Each vibe has
   two ensembles; the seeded RNG picks one. Determinism on `version.id`.
 - Chord / bass / drum engines live in
-  [src/lib/music/](../src/lib/music) and produce a
+  [src/lib/music/](../../src/lib/music) and produce a
   unified `AssembledSong` consumed by both the live SimpleSynth preview and
   the offline Tone.js render. This is the cleanest, most-internally-coherent
   part of the system; do **not** rewrite without a forcing reason.
@@ -162,14 +162,14 @@ brief.
 
 ### 2.6 Studio edits
 
-[applyEdit](../src/modules/strummer/apply-edit.ts) is the
+[applyEdit](../../src/modules/strummer/apply-edit.ts) is the
 single mutation surface for `ArrangementState`. 28 allowlisted EditTokens
 covering mood / drums / bass / strings / tempo / instrument swaps / preset
 shifts / restore. LLM classifier at
-[/api/strummer/edit](../src/app/api/strummer/edit/route.ts)
+[/api/strummer/edit](../../src/app/api/strummer/edit/route.ts)
 asks deepseek to pick ≤3 tokens, validates output against `ALL_EDIT_TOKENS`.
 Falls back to a Chinese+English rule parser
-([parsePromptToToken](../src/modules/strummer/apply-edit.ts))
+([parsePromptToToken](../../src/modules/strummer/apply-edit.ts))
 if the LLM is unavailable.
 
 This design is clean. The product-level complaint about Studio (see §3) is
@@ -179,11 +179,11 @@ larger than the mechanism deserves.
 ### 2.7 Save / export
 
 - Save goes Studio → NameScreen → `/api/songs` (POST), persisting
-  [songs.ts](../src/lib/db/schema/songs.ts) row with
+  [songs.ts](../../src/lib/db/schema/songs.ts) row with
   `arrangementState` + `visualConfig` JSON blobs + a base64 `mp3DataUrl`.
 - Export surface on SongDetailScreen offers MP3 / share-HTML / poster PNG /
   audio-backed WebM. Render code in
-  [src/modules/export/](../src/modules/export).
+  [src/modules/export/](../../src/modules/export).
 - **`mp3DataUrl` is stored as a base64 data URL inside Postgres.** A 30 s
   mono MP3 at 128 kbps is ~480 KB; base64 → ~640 KB. Hundred saves per user
   → ~64 MB of JSON-column rows. This will not scale; needs object storage
@@ -198,7 +198,7 @@ larger than the mechanism deserves.
 
 ## 3. Studio / Compose UX reality
 
-[StudioScreen.tsx](../src/components/screens/StudioScreen.tsx)
+[StudioScreen.tsx](../../src/components/screens/StudioScreen.tsx)
 currently shows, on one page:
 
 - Header (back, title + vibe + BPM, restore).
@@ -206,13 +206,13 @@ currently shows, on one page:
 - Overview panel (4 meta pills: vibe / key / BPM / melody instrument).
 - **AurisPanel** — text input + 9 chips arranged in 3 groups
   (balance / color / motion) +
-  [AurisPanel](../src/components/studio/auris-panel.tsx).
+  [AurisPanel](../../src/components/studio/auris-panel.tsx).
 - **TrackMixer** — 6 instrument rows, each a toggle + 0–100% slider
-  ([track-mixer.tsx](../src/components/studio/track-mixer.tsx)).
+  ([track-mixer.tsx](../../src/components/studio/track-mixer.tsx)).
 - **SceneGrid** — 5 mood cards (warm / cinematic / minimal / lush /
   brighter) with particle accents
-  ([scene-grid.tsx](../src/components/studio/scene-grid.tsx)
-  + [scene-presets.ts](../src/components/studio/scene-presets.ts)).
+  ([scene-grid.tsx](../../src/components/studio/scene-grid.tsx)
+  + [scene-presets.ts](../../src/components/studio/scene-presets.ts)).
 - Save CTA.
 
 Counted: **~28 interactive surfaces** on one screen, before any save / back /
@@ -238,7 +238,7 @@ ships against that intent.
 
 ## 5. State + persistence
 
-[murmur-store.ts](../src/lib/store/murmur-store.ts) is
+[murmur-store.ts](../../src/lib/store/murmur-store.ts) is
 in-memory zustand with no persistence. Implications:
 
 - A user who refreshes between "vibes generated" and "save" loses
@@ -289,7 +289,7 @@ in-memory zustand with no persistence. Implications:
 4. There is no rate limit / quota / abuse-protection on `/api/strummer/edit`
    — anyone with the public route can burn the OpenAI quota.
 5. There are no integration tests on the audio pipeline. The verification
-   log in [verification.md](./verification.md) is
+   log in [verification.md](../verification.md) is
    manual + UI-only.
 6. The Python worker has no deployment story. It is documented as a real
    provider but cannot be reached in production.
