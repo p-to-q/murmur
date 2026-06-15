@@ -216,7 +216,8 @@ bun run waffo:reconcile          # read-only GraphQL check against local DB
 
 For unattended monitoring, hit `GET /api/billing/cron/reconcile` with
 `Authorization: Bearer $CRON_SECRET`. That route reuses the same read-only
-reconciliation logic and returns a JSON report with summary + issues.
+reconciliation logic and returns a JSON report with summary + issues. Vercel
+cron runs it once daily so Hobby previews stay deployable.
 
 `waffo:bootstrap`
 ([scripts/waffo-bootstrap.ts](../scripts/waffo-bootstrap.ts)) is idempotent on
@@ -232,9 +233,9 @@ GraphQL in read-only mode. It checks recent succeeded payments against local
 matching `notes_ledger.reason = "purchase:topup"` row. It also reports
 successful refunds that do not have an observed `refund:topup` ledger row in
 the checked window. Refund matching checks both the merchant refund-ticket ref
-and the provider refund id fallback. It exits non-zero only for hard
-payment/grant mismatches; refund gaps are warnings until every refund is
-created through a Murmur-owned ticket flow.
+and the webhook's event/order fallback refs. It exits non-zero only for hard
+payment/grant mismatches; refund gaps are warnings until every refund is created
+through a Murmur-owned ticket flow.
 
 ## Extension points
 

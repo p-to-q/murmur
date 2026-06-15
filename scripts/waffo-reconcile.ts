@@ -1,25 +1,15 @@
 import { config as loadEnv } from "dotenv";
 import { resolve } from "node:path";
 import { reconcileWaffoBilling } from "@/lib/billing/waffo-reconcile";
+import { resolveWaffoPrivateKey } from "@/lib/platform/waffo-server";
 
 const ROOT = resolve(import.meta.dir, "..");
 loadEnv({ path: resolve(ROOT, ".env.local") });
 loadEnv({ path: resolve(ROOT, ".env") });
 
-function resolvePrivateKey(): string | null {
-  const inline = process.env.WAFFO_PRIVATE_KEY?.trim();
-  if (inline) return inline;
-
-  const fromBase64 = process.env.WAFFO_PRIVATE_KEY_BASE64?.trim();
-  if (!fromBase64) return null;
-
-  const decoded = Buffer.from(fromBase64, "base64").toString("utf-8");
-  return decoded.includes("BEGIN") ? decoded : fromBase64;
-}
-
 async function main() {
   const merchantId = process.env.WAFFO_MERCHANT_ID?.trim();
-  const privateKey = resolvePrivateKey();
+  const privateKey = resolveWaffoPrivateKey();
   if (!merchantId || !privateKey) {
     throw new Error("Set WAFFO_MERCHANT_ID and WAFFO_PRIVATE_KEY in .env.local first.");
   }

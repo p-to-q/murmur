@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { reconcileWaffoBilling } from "@/lib/billing/waffo-reconcile";
 import { log } from "@/lib/observability/log";
+import { resolveWaffoPrivateKey } from "@/lib/platform/waffo-server";
 
 export const runtime = "nodejs";
 
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
   }
 
   const merchantId = process.env.WAFFO_MERCHANT_ID?.trim();
-  const privateKey = resolvePrivateKey();
+  const privateKey = resolveWaffoPrivateKey();
   if (!merchantId || !privateKey) {
     return NextResponse.json(
       { error: "waffo_not_configured" },
@@ -62,17 +63,6 @@ export async function GET(request: NextRequest) {
       { status: 500 },
     );
   }
-}
-
-function resolvePrivateKey(): string | null {
-  const inline = process.env.WAFFO_PRIVATE_KEY?.trim();
-  if (inline) return inline;
-
-  const fromBase64 = process.env.WAFFO_PRIVATE_KEY_BASE64?.trim();
-  if (!fromBase64) return null;
-
-  const decoded = Buffer.from(fromBase64, "base64").toString("utf-8");
-  return decoded.includes("BEGIN") ? decoded : fromBase64;
 }
 
 function parseLimit(request: NextRequest): number | undefined {

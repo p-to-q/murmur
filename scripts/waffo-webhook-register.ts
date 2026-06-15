@@ -3,22 +3,14 @@
 import { config as loadEnv } from "dotenv";
 import { resolve } from "node:path";
 import { WaffoPancake, WebhookEventType } from "@waffo/pancake-ts";
+import { resolveWaffoPrivateKey } from "@/lib/platform/waffo-server";
 
 const ROOT = resolve(import.meta.dir, "..");
 loadEnv({ path: resolve(ROOT, ".env.local") });
 
-function resolvePrivateKey(): string | null {
-  const inline = process.env.WAFFO_PRIVATE_KEY?.trim();
-  if (inline) return inline;
-  const fromBase64 = process.env.WAFFO_PRIVATE_KEY_BASE64?.trim();
-  if (!fromBase64) return null;
-  const decoded = Buffer.from(fromBase64, "base64").toString("utf-8");
-  return decoded.includes("BEGIN") ? decoded : fromBase64;
-}
-
 const storeId = process.env.WAFFO_STORE_ID?.trim();
 const merchantId = process.env.WAFFO_MERCHANT_ID?.trim();
-const privateKey = resolvePrivateKey();
+const privateKey = resolveWaffoPrivateKey();
 const webhookUrl =
   process.env.WAFFO_WEBHOOK_URL?.trim() ||
   "https://murmur.ptoq.io/api/billing/webhook";

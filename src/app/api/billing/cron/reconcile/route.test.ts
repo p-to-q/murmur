@@ -5,20 +5,21 @@ let cronSecret = "cron_test";
 let merchantId: string | null = "merchant_test";
 let privateKey: string | null = "private_test";
 const reconcileInputs: Array<{ merchantId: string; privateKey: string; limit?: number }> = [];
+let reconcileSummary = {
+  checkedAt: "2026-06-15T18:00:00.000Z",
+  paymentsChecked: 2,
+  refundsChecked: 1,
+  localPurchasesMatched: 2,
+  issueCount: 0,
+  errorCount: 0,
+  warnCount: 0,
+};
 
 mock.module("@/lib/billing/waffo-reconcile", () => ({
   reconcileWaffoBilling: mock(async (input: { merchantId: string; privateKey: string; limit?: number }) => {
     reconcileInputs.push(input);
     return {
-      summary: {
-        checkedAt: "2026-06-15T18:00:00.000Z",
-        paymentsChecked: 2,
-        refundsChecked: 1,
-        localPurchasesMatched: 2,
-        issueCount: 0,
-        errorCount: 0,
-        warnCount: 0,
-      },
+      summary: reconcileSummary,
       issues: [],
     };
   }),
@@ -31,6 +32,15 @@ beforeEach(() => {
   merchantId = "merchant_test";
   privateKey = "private_test";
   reconcileInputs.length = 0;
+  reconcileSummary = {
+    checkedAt: "2026-06-15T18:00:00.000Z",
+    paymentsChecked: 2,
+    refundsChecked: 1,
+    localPurchasesMatched: 2,
+    issueCount: 0,
+    errorCount: 0,
+    warnCount: 0,
+  };
 });
 
 function buildRequest(headers: Record<string, string> = {}, url = "http://test.local/api/billing/cron/reconcile"): NextRequest {
@@ -82,6 +92,24 @@ describe("GET /api/billing/cron/reconcile", () => {
       privateKey: "private_test",
       limit: 20,
     });
+  });
+
+  it("returns 207 when reconciliation finds mismatches", async () => {
+    process.env.CRON_SECRET = cronSecret;
+    process.env.WAFFO_MERCHANT_ID = merchantId;
+    process.env.WAFFO_PRIVATE_KEY = privateKey;
+    reconcileSummary = {
+      ...reconcileSummary,
+      issueCount: 1,
+      errorCount: 1,
+      warnCount: 0,
+    };
+
+    const response = await GET(
+      buildRequest({ authorization: "Bearer cron_test" }, "http://test.local/api/billing/cron/reconcile"),
+    );
+
+    expect(response.status).toBe(207);
   });
 
   it("returns 500 when limit is invalid", async () => {

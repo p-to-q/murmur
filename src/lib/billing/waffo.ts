@@ -1,5 +1,7 @@
 import { WaffoPancake } from "@waffo/pancake-ts";
 
+import { resolveWaffoPrivateKey } from "@/lib/platform/waffo-server";
+
 /**
  * Server-only Waffo Pancake client. Lazily constructed so builds and local dev
  * without credentials keep working — routes treat `null` as not configured.
@@ -7,23 +9,11 @@ import { WaffoPancake } from "@waffo/pancake-ts";
 
 let cachedClient: WaffoPancake | null | undefined;
 
-function resolvePrivateKey(): string | null {
-  const inline = process.env.WAFFO_PRIVATE_KEY?.trim();
-  if (inline) return inline;
-
-  const fromBase64 = process.env.WAFFO_PRIVATE_KEY_BASE64?.trim();
-  if (!fromBase64) return null;
-
-  const decoded = Buffer.from(fromBase64, "base64").toString("utf-8");
-  if (decoded.includes("BEGIN")) return decoded;
-  return fromBase64;
-}
-
 export function getWaffoClient(): WaffoPancake | null {
   if (cachedClient !== undefined) return cachedClient;
 
   const merchantId = process.env.WAFFO_MERCHANT_ID?.trim();
-  const privateKey = resolvePrivateKey();
+  const privateKey = resolveWaffoPrivateKey();
   cachedClient =
     merchantId && privateKey
       ? new WaffoPancake({ merchantId, privateKey })

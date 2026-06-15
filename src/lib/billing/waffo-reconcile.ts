@@ -47,6 +47,7 @@ interface WaffoPayment {
 
 interface WaffoRefund {
   id: string;
+  eventId: string | null;
   orderMerchantExternalId: string | null;
   refundTicketMerchantExternalId: string | null;
 }
@@ -80,6 +81,7 @@ export async function reconcileWaffoBilling(options: WaffoReconcileOptions): Pro
       }
       refunds(limit: $limit, filter: { status: { eq: "succeeded" } }) {
         id
+        eventId
         orderMerchantExternalId
         refundTicketMerchantExternalId
       }
@@ -218,7 +220,10 @@ export async function reconcileWaffoBilling(options: WaffoReconcileOptions): Pro
       refund.refundTicketMerchantExternalId
         ? `waffo-refund:${refund.refundTicketMerchantExternalId}`
         : null,
-      `waffo-refund:${refund.id}`,
+      refund.eventId ? `waffo-refund:${refund.eventId}` : null,
+      refund.orderMerchantExternalId
+        ? `waffo-refund:${refund.orderMerchantExternalId}`
+        : null,
     ].filter(isString);
 
     if (!refund.refundTicketMerchantExternalId) {
