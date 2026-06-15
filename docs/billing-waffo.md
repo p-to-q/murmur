@@ -52,6 +52,7 @@ against local repository truth before opening the external docs.
 | One-time setup (store + product) | [scripts/waffo-bootstrap.ts](../scripts/waffo-bootstrap.ts) |
 | Register webhook endpoint | [scripts/waffo-webhook-register.ts](../scripts/waffo-webhook-register.ts) |
 | Read-only Waffo ↔ local reconciliation | [scripts/waffo-reconcile.ts](../scripts/waffo-reconcile.ts) |
+| Scheduled Waffo reconciliation | [src/app/api/billing/cron/reconcile/route.ts](../src/app/api/billing/cron/reconcile/route.ts) |
 
 ## SKUs
 
@@ -213,6 +214,10 @@ bun run waffo:webhook-register   # register order.completed + refund.succeeded
 bun run waffo:reconcile          # read-only GraphQL check against local DB
 ```
 
+For unattended monitoring, hit `GET /api/billing/cron/reconcile` with
+`Authorization: Bearer $CRON_SECRET`. That route reuses the same read-only
+reconciliation logic and returns a JSON report with summary + issues.
+
 `waffo:bootstrap`
 ([scripts/waffo-bootstrap.ts](../scripts/waffo-bootstrap.ts)) is idempotent on
 the store/product and prints the env lines to paste. `waffo:webhook-register`
@@ -234,8 +239,9 @@ created through a Murmur-owned ticket flow.
 ## Extension points
 
 - **Scheduled GraphQL reconciliation** — `bun run waffo:reconcile` is a manual
-  read-only script today. The next step is a cron wrapper that stores snapshots
-  or pushes anomalies into observability.
+  read-only script today. The same logic now backs
+  `GET /api/billing/cron/reconcile`; the next step is storing snapshots or
+  pushing anomalies into observability.
 - **Refund operations UI** — add a small internal billing view that shows
   purchase status, provider refs, refund ledger rows, and webhook delivery ids.
 - **Refund ticket correlation** — Waffo exposes both `orderMerchantExternalId`

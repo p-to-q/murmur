@@ -9,5 +9,11 @@
       "routePrefix": "/",
       "framework": "nextjs"
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/billing/cron/reconcile",
+      "schedule": "0 */6 * * *"
+    }
+  ]
 }
