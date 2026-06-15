@@ -1,13 +1,12 @@
 "use client";
 import { useEffect } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { Copy, X } from "lucide-react";
-import { toast } from "sonner";
+import { X } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 import { useTranslator } from "@/lib/i18n";
 import { useGoogleSignIn } from "@/lib/hooks/use-google-sign-in";
-import { MurmurMark } from "@/components/murmur/murmur-mark";
 
 interface ShareCardModalProps {
   open: boolean;
@@ -34,24 +33,6 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  const handleCopyLink = async () => {
-    const url = window.location.origin;
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: "MURMUR",
-          text: t("share.tagline"),
-          url,
-        });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      toast.success(t("share.copied"));
-    } catch {
-      toast.error(t("share.copy_failed"));
-    }
-  };
-
   return (
     <AnimatePresence>
       {open && (
@@ -71,22 +52,29 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
             className="relative mx-4 w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              className="relative overflow-hidden rounded-[32px] shadow-2xl"
-              style={{
-                background:
-                  "linear-gradient(148deg, #FF8A5C 0%, #F5C4A8 38%, #E8DCC8 72%, #C8D8E8 100%)",
-                minHeight: "420px",
-              }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/12" />
+            <div className="relative overflow-hidden rounded-[32px] shadow-2xl">
+              <Image
+                src="/images/share-esther-bg.jpg"
+                alt=""
+                width={896}
+                height={1200}
+                priority
+                className="h-[600px] w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/10" />
 
               <div className="absolute left-6 right-6 top-6 flex items-start justify-between">
-                <p className="text-[15px] text-white/90 drop-shadow font-serif-italic">
-                  MURMUR
+                <p className="text-[15px] text-white/90 drop-shadow">
+                  By Estherscanon
                 </p>
-                <div className="flex items-center gap-3">
-                  <MurmurMark size={28} showWord={false} className="drop-shadow" />
+                <div className="flex items-center gap-4">
+                  <Image
+                    src="/brand/murmur-wordmark-source-cropped.png"
+                    alt="MURMUR"
+                    width={154}
+                    height={28}
+                    className="h-7 w-auto brightness-0 invert drop-shadow"
+                  />
                   <button
                     onClick={onClose}
                     aria-label={t("common.cancel")}
@@ -99,24 +87,11 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
 
               <div className="absolute bottom-6 left-6 right-6">
                 <div className="rounded-[28px] bg-white/95 backdrop-blur-xl p-8 shadow-xl">
-                  <h2 className="mb-2 text-center text-[20px] font-medium text-[#1A1A1A] leading-tight">
+                  <h2 className="mb-8 text-center text-[20px] font-medium text-[#1A1A1A] leading-tight">
                     {t("share.tagline")}
                   </h2>
-                  <p className="mb-6 text-center text-[13px] text-[#8C8780]">
-                    {t("nav.share.reward")}
-                  </p>
 
                   <button
-                    type="button"
-                    onClick={() => void handleCopyLink()}
-                    className="mb-3 flex w-full items-center justify-center gap-2 rounded-full border border-[#E5DDD0] bg-white px-6 py-3.5 text-[15px] font-medium text-[#1A1A1A] transition-colors hover:bg-[#F5F1EB]"
-                  >
-                    <Copy className="h-4 w-4" />
-                    {t("share.copy_link")}
-                  </button>
-
-                  <button
-                    type="button"
                     onClick={() => signInWithGoogle("/")}
                     disabled={googleAuthAvailable === false}
                     className="flex w-full items-center justify-center gap-3 rounded-full bg-[#EBEBEB] px-6 py-4 text-[16px] font-medium text-[#1A1A1A] transition-colors hover:bg-[#DCDCDC] disabled:cursor-not-allowed disabled:opacity-50"

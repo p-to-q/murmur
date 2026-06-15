@@ -1,10 +1,9 @@
 "use client";
 
 /**
- * TopupScreen — balance view + package selection.
+ * TopupScreen — asset-style balance view + package selection.
  *
- * Shows the authenticated user's real notes balance and top-up SKUs.
- * Chart / USD mock data removed — only live balance is shown.
+ * Shows live notes balance, top-up summary, and purchasable SKUs.
  */
 
 import { useState, useMemo, useEffect, useCallback } from "react";
@@ -22,6 +21,7 @@ import {
 } from "@murmur/core";
 
 import { useI18nStore, useTranslator } from "@/lib/i18n";
+import { useTopupSurface } from "@/lib/hooks/use-topup-surface";
 import { useUserBalance, fetchUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
@@ -70,6 +70,7 @@ export function TopupScreen() {
   const t = useTranslator();
   const lang = useI18nStore((s) => s.lang);
   const { balance, isLoading, refresh } = useUserBalance();
+  const { data: topupSurface, refresh: refreshTopupSurface } = useTopupSurface();
 
   const [selectedId, setSelectedId] = useState<string>(
     TOPUP_SKUS.find((s) => s.highlight === "popular")?.id ?? TOPUP_SKUS[0]!.id,
@@ -79,6 +80,7 @@ export function TopupScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const notesSpring = useSpring(0, { stiffness: 100, damping: 20 });
+  const balanceUSDSpring = useSpring(0, { stiffness: 100, damping: 20 });
 
   const selected = TOPUP_SKUS.find((s) => s.id === selectedId);
   const customQuote = useMemo(() => getCustomTopupQuote(customAmount), [customAmount]);
@@ -90,7 +92,7 @@ export function TopupScreen() {
     : selected ? topupNotesGranted(selected) : 0;
 
   const currentBalance = balance?.notes ?? 0;
-  const planLabel =
+  const selectedPlanLabel =
     balance?.planTier === "premium" ? t("topup.plan.premium") : t("topup.plan.free");
   const nextRefillLabel = balance?.nextRefillAt
     ? t("topup.next_refill").replace(
@@ -98,6 +100,7 @@ export function TopupScreen() {
         formatRefillTime(balance.nextRefillAt, lang === "zh" ? "zh-CN" : "en-US"),
       )
     : null;
+  const balanceUSD = (topupSurface?.lifetimeTopupCents ?? 0) / 100;
 
   const handleProceed = () => {
     if (selectedId === CUSTOM_TOPUP_ID) {
@@ -114,8 +117,11 @@ export function TopupScreen() {
       animate(notesSpring, 0, { duration: 0.25 }).then(() => {
         animate(notesSpring, value, { duration: 0.5 });
       });
+      animate(balanceUSDSpring, 0, { duration: 0.25 }).then(() => {
+        animate(balanceUSDSpring, balanceUSD, { duration: 0.5 });
+      });
     },
-    [notesSpring],
+    [balanceUSD, balanceUSDSpring, notesSpring],
   );
 
   const handleRefresh = async () => {
@@ -123,7 +129,10 @@ export function TopupScreen() {
     setIsRefreshing(true);
     try {
       await refresh();
-      const result = await fetchUserBalance({ force: true });
+      const [result] = await Promise.all([
+        fetchUserBalance({ force: true }),
+        refreshTopupSurface(),
+      ]);
       if (result.balance) {
         animateBalance(result.balance.notes);
       }
@@ -161,7 +170,11 @@ export function TopupScreen() {
               .replace("{notes}", String(data.totalNotes ?? 0)),
           );
           await refresh();
-          animateBalance(balance?.notes ?? currentBalance);
+          const [result] = await Promise.all([
+            fetchUserBalance({ force: true }),
+            refreshTopupSurface(),
+          ]);
+          animateBalance(result.balance?.notes ?? currentBalance);
         } else {
           toast.info(
             t("topup.restore.found")
@@ -184,9 +197,11 @@ export function TopupScreen() {
 
   useEffect(() => {
     notesSpring.set(currentBalance);
-  }, [currentBalance, notesSpring]);
+    balanceUSDSpring.set(balanceUSD);
+  }, [balanceUSD, balanceUSDSpring, currentBalance, notesSpring]);
 
   const displayNotesBalance = useTransform(notesSpring, (v) => Math.round(v));
+  const displayBalanceUSD = useTransform(balanceUSDSpring, (v) => v.toFixed(2));
   const sliderSpan = SLIDER_MAX_USD - CUSTOM_TOPUP_MIN_USD;
 
   return (
@@ -194,90 +209,76 @@ export function TopupScreen() {
       <PageBackdrop variant="soft" />
 
       <div className="relative z-10 flex min-h-svh flex-col">
-        <div
-          className="flex items-center justify-end px-5 pb-3"
-          style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 20px)" }}
-        >
-          <button
-            onClick={() => void handleRefresh()}
-            disabled={isRefreshing}
-            className="flex h-9 w-9 items-center justify-center disabled:opacity-50"
-            aria-label={t("topup.refresh")}
-          >
-            <RefreshCw className={`h-5 w-5 text-[#8C8780] ${isRefreshing ? "animate-spin" : ""}`} />
-          </button>
-        </div>
-
         <div className="flex-1 px-5 pb-32">
-          <div className="mx-auto max-w-lg">
-            <motion.h2
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.02, duration: 0.5 }}
-              className="text-[18px] font-semibold text-[#8C8780] mb-2"
-            >
-              {t("topup.assets")}
-            </motion.h2>
-
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.04, duration: 0.5 }}
-              className="flex items-start gap-2"
-            >
-              <h1 className="font-serif text-[#1A1A1A] text-[68px] leading-[1.0] tabular-nums tracking-tight">
-                {isLoading ? "—" : <motion.span>{displayNotesBalance}</motion.span>}
-              </h1>
-              <span className="mt-6 text-[18px] text-[#8C8780]">{t("topup.notes")}</span>
-            </motion.div>
-
-            {nextRefillLabel && (
-              <motion.p
+          <div
+            className="mx-auto max-w-lg"
+            style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 20px)" }}
+          >
+            <section>
+              <motion.h2
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.08, duration: 0.5 }}
-                className="mt-2.5 text-[14px] text-[#8C8780]"
+                transition={{ delay: 0.02, duration: 0.5 }}
+                className="text-[18px] font-semibold text-[#8C8780] mb-2"
               >
-                {nextRefillLabel}
-              </motion.p>
-            )}
+                {t("topup.assets")}
+              </motion.h2>
 
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.12, duration: 0.5 }}
-              className="mt-8 grid grid-cols-2 gap-4"
-            >
-              <div className="rounded-[20px] bg-white/60 backdrop-blur-sm border border-[#E5DDD0]/40 px-5 py-5">
-                <p className="text-[11px] text-[#B7AEA1] font-semibold mb-3 tracking-wider uppercase">
-                  {t("topup.balance")}
-                </p>
-                <p className="font-serif text-[#1A1A1A] text-[28px] leading-none tabular-nums">
-                  {isLoading ? "—" : currentBalance}
-                  <span className="text-[14px] font-normal text-[#8C8780] ml-1">{t("topup.notes")}</span>
-                </p>
-              </div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.04, duration: 0.5 }}
+                className="flex items-start gap-2"
+              >
+                <h1 className="font-serif text-[#1A1A1A] text-[68px] leading-[1.0] tabular-nums tracking-tight">
+                  {isLoading ? "—" : <motion.span>{displayNotesBalance}</motion.span>}
+                </h1>
+                <button
+                  onClick={() => void handleRefresh()}
+                  disabled={isRefreshing}
+                  className="mt-1 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-black/5 disabled:opacity-50"
+                  aria-label={t("topup.refresh")}
+                >
+                  <RefreshCw className={`h-4 w-4 text-[#8C8780] ${isRefreshing ? "animate-spin" : ""}`} />
+                </button>
+              </motion.div>
 
-              <div className="rounded-[20px] bg-white/60 backdrop-blur-sm border border-[#E5DDD0]/40 px-5 py-5">
-                <p className="text-[11px] text-[#B7AEA1] font-semibold mb-3 tracking-wider uppercase">
-                  {t("topup.plan_label")}
-                </p>
-                <p className="font-serif text-[#1A1A1A] text-[22px] leading-none">
-                  {planLabel}
-                </p>
-              </div>
-            </motion.div>
+              {nextRefillLabel && (
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.08, duration: 0.5 }}
+                  className="mt-2.5 text-[14px] text-[#8C8780]"
+                >
+                  {nextRefillLabel}
+                </motion.p>
+              )}
 
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.16, duration: 0.5 }}
-              className="mt-5 rounded-[22px] bg-white/50 backdrop-blur-sm border border-[#E5DDD0]/40 px-6 py-8 text-center"
-            >
-              <p className="font-serif-italic text-[14px] text-[#8C8780]">
-                {t("topup.chart.soon")}
-              </p>
-            </motion.div>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.12, duration: 0.5 }}
+                className="mt-8 grid grid-cols-2 gap-4"
+              >
+                <div className="rounded-[20px] bg-white/60 backdrop-blur-sm border border-[#E5DDD0]/40 px-5 py-5">
+                  <p className="text-[11px] text-[#B7AEA1] font-semibold mb-3 tracking-wider uppercase">
+                    {t("topup.balance")}
+                  </p>
+                  <p className="font-serif text-[#1A1A1A] text-[28px] leading-none tabular-nums">
+                    $<motion.span>{displayBalanceUSD}</motion.span>
+                  </p>
+                </div>
+
+                <div className="rounded-[20px] bg-white/60 backdrop-blur-sm border border-[#E5DDD0]/40 px-5 py-5">
+                  <p className="text-[11px] text-[#B7AEA1] font-semibold mb-3 tracking-wider uppercase">
+                    {t("topup.plan_label")}
+                  </p>
+                  <p className="font-serif text-[#1A1A1A] text-[28px] leading-none">
+                    {selectedPlanLabel}
+                  </p>
+                </div>
+              </motion.div>
+            </section>
 
             <motion.div
               initial={{ opacity: 0 }}
@@ -408,7 +409,7 @@ export function TopupScreen() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                   <div className="max-w-[200px] flex-1">
                     <input
                       type="number"
@@ -432,19 +433,41 @@ export function TopupScreen() {
                       className="w-full rounded-[14px] border border-[#E5DDD0] bg-white/60 px-4 py-3 text-[15px] text-[#1A1A1A] tabular-nums placeholder:text-[#C8C0B4] transition-colors focus:border-[#1A1A1A] focus:outline-none"
                     />
                   </div>
-                  <p className="text-[13px] text-[#B7AEA1]">
+                  <p className="text-[13px] leading-none text-[#B7AEA1] sm:whitespace-nowrap">
                     ≈ {Math.floor(customAmount * 20)} {t("topup.notes")}
                   </p>
                 </div>
               </motion.div>
+
+              <div className="mt-6 hidden md:block">
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleProceed}
+                  className="h-12 w-full rounded-full text-[15px] font-semibold text-white transition-all hover:brightness-110"
+                  style={paperTextureStyle}
+                >
+                  {(t("topup.cta") || "买 {notes} 颗 — {price}")
+                    .replace("{notes}", String(displayNotes))
+                    .replace("{price}", displayAmount)}
+                </motion.button>
+
+                <div className="mt-3 flex items-center justify-center gap-3 text-[11px] text-[#8C8780]">
+                  <button
+                    onClick={handleRestorePurchases}
+                    disabled={isRestoring}
+                    className="hover:text-[#1A1A1A] transition-colors disabled:opacity-50"
+                  >
+                    {isRestoring ? t("topup.restoring") : `↻ ${t("topup.restore")}`}
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         </div>
 
         <div
-          className="fixed left-0 right-0 bg-gradient-to-t from-[#F5F1EB] via-[#F5F1EB] to-transparent px-6 pt-6 pb-5"
+          className="fixed left-0 right-0 bg-gradient-to-t from-[#F5F1EB] via-[#F5F1EB] to-transparent px-6 pt-6 pb-5 md:hidden"
           style={{
-            left: "var(--side-nav-w)",
             bottom: "env(safe-area-inset-bottom, 0px)",
           }}
         >
