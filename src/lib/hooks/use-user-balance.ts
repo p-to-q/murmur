@@ -34,7 +34,7 @@ export interface UseUserBalanceResult {
   balance: UserBalance | null;
   isLoading: boolean;
   error: UserBalanceFetchError | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<UserBalanceFetchResult | null>;
 }
 
 const CACHE_TTL_MS = 30_000;
@@ -74,17 +74,17 @@ export async function fetchUserBalance(
     try {
       const response = await request(ROUTE, { method: "GET" });
       if (response.status === 401) {
-        return { ok: false, balance: null, error: "unauthorized" as const };
+        return { ok: false, balance: cachedBalance, error: "unauthorized" as const };
       }
       if (!response.ok) {
-        return { ok: false, balance: null, error: "unavailable" as const };
+        return { ok: false, balance: cachedBalance, error: "unavailable" as const };
       }
       const payload = (await response.json()) as Partial<UserBalance> & {
         error?: string;
         unlimited?: boolean;
       };
       if (typeof payload.notes !== "number") {
-        return { ok: false, balance: null, error: "unavailable" as const };
+        return { ok: false, balance: cachedBalance, error: "unavailable" as const };
       }
       const balance: UserBalance = {
         notes: payload.notes,
@@ -97,7 +97,7 @@ export async function fetchUserBalance(
       publish();
       return { ok: true, balance, error: null };
     } catch {
-      return { ok: false, balance: null, error: "unavailable" as const };
+      return { ok: false, balance: cachedBalance, error: "unavailable" as const };
     } finally {
       inflight = null;
     }
@@ -124,7 +124,8 @@ export function __resetUserBalanceCacheForTesting(): void {
  * For Google users: fetches from API
  */
 export function useUserBalance(): UseUserBalanceResult {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const isSessionLoading = status === "loading";
   const isGoogleUser = !!session?.user;
 
   const [snapshot, setSnapshot] = useState<UserBalance | null>(cachedBalance);
@@ -132,44 +133,59 @@ export function useUserBalance(): UseUserBalanceResult {
   const [isLoading, setIsLoading] = useState<boolean>(cachedBalance === null);
 
   const refresh = useCallback(async () => {
+    if (isSessionLoading) {
+      setIsLoading(cachedBalance === null);
+      return cachedBalance
+        ? { ok: true, balance: cachedBalance, error: null }
+        : null;
+    }
+
     if (!isGoogleUser) {
       const localBalance = getLocalBalance();
-      setSnapshot({
+      const balance: UserBalance = {
         notes: localBalance.notes,
         planTier: "free",
         nextRefillAt: localBalance.nextRefillAt,
         unlimited: false,
-      });
+      };
+      setSnapshot(balance);
+      setError(null);
       setIsLoading(false);
-      return;
+      return { ok: true, balance, error: null };
     }
 
     // Google user: fetch from API
     setIsLoading((prev) => prev || cachedBalance === null);
     const result = await fetchUserBalance({ force: true });
-    setSnapshot(result.balance);
+    setSnapshot((previous) => result.balance ?? previous);
     setError(result.error);
     setIsLoading(false);
-  }, [isGoogleUser]);
+    return result;
+  }, [isGoogleUser, isSessionLoading]);
 
   useEffect(() => {
     let cancelled = false;
+
+    if (isSessionLoading) {
+      return;
+    }
 
     if (!isGoogleUser) {
       // Local Creator: immediate local balance. localStorage can only be
       // read after mount (SSR has none), so this one post-mount render is
       // the hydration-safe pattern, not a cascading-update bug.
       const localBalance = getLocalBalance();
-      if (!cancelled) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+      queueMicrotask(() => {
+        if (cancelled) return;
         setSnapshot({
           notes: localBalance.notes,
           planTier: "free",
           nextRefillAt: localBalance.nextRefillAt,
           unlimited: false,
         });
+        setError(null);
         setIsLoading(false);
-      }
+      });
       return;
     }
 
@@ -183,7 +199,7 @@ export function useUserBalance(): UseUserBalanceResult {
     void (async () => {
       const result = await fetchUserBalance();
       if (cancelled) return;
-      setSnapshot(result.balance);
+      setSnapshot((previous) => result.balance ?? previous);
       setError(result.error);
       setIsLoading(false);
     })();
@@ -192,7 +208,7 @@ export function useUserBalance(): UseUserBalanceResult {
       cancelled = true;
       subscribers.delete(notify);
     };
-  }, [isGoogleUser]);
+  }, [isGoogleUser, isSessionLoading]);
 
   return { balance: snapshot, isLoading, error, refresh };
 }

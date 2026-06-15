@@ -29,8 +29,10 @@ The 8 anchor rules hold. **No change needed** — this is the spine; protect it.
   flow screens.
 - **Trail model** (`nav-items.ts` `TRAIL_ROOTS` + `computeTrail`) — sub-flows
   hang under a destination and accrue (Vibe → Studio → Name stays additive,
-  not replacing). Topup/Checkout hang under Me. **This is the general model**
-  for any future sub-flow (billing, settings all go under Me this way).
+  not replacing). Settings, Payment records, Privacy, Delete account, and
+  Topup/Checkout hang under Me, but Me shows only the currently active child
+  row instead of exposing every account option at once. **This is the general
+  model** for any future account or personal-center sub-flow.
 - **Open polish:** the trail's visual language ("document outline" feel) still
   needs softening — see the user's note; it should read like a sentence
   growing, not a file tree. Tune indentation/separator, not the logic.
@@ -131,7 +133,8 @@ card stack is the least Murmur-feeling screen in the app.
 section rules (like the SideNav manuscript style, scaled up). Identity as a
 quiet line, notes as one big serif number, manifesto as the emotional anchor
 near the bottom. Protect the manifesto copy — it's the best in the product.
-Future billing/settings entries hang here as trail sub-rows (per A2 model).
+Future account entries hang here as trail sub-rows (per A2 model), with
+`/me/<feature>` as the default route shape.
 Priority: **medium-high**.
 
 ### B8. Settings `/me/settings` — 🔴 unverified

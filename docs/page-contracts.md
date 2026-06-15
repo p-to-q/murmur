@@ -66,3 +66,25 @@ Implementation note:
   screen boundary
 - keep transcription / fixture branching inside the client transcription
   facade, not in the view tree
+
+## Me personal-center contract notes
+
+`/me` is the parent territory for account-owned utility pages. The desktop
+sidebar should expose the currently active account page as a second-level row
+under Me, not as a new top-level destination and not as a fully expanded
+account menu:
+
+- `/me/settings` — durable user preferences and local device-facing settings
+- `/me/payments` — note top-up receipts and provider reconciliation state
+- `/me/privacy` — privacy policy, consent, and future privacy controls
+- `/me/delete` — account deletion request and retention/cooldown status
+
+Future personal-center features should prefer `/me/<feature>` unless they are
+part of a focused purchase handoff. Purchase flows may keep `/topup` and
+`/topup/checkout`, but they still belong to the Me trail in navigation because
+they manage account entitlements rather than creation flow.
+
+Compatibility note:
+
+- `/privacy` remains a public compatibility URL, but it redirects to
+  `/me/privacy` so in-app navigation has one canonical personal-center path.

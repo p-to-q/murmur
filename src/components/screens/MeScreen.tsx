@@ -5,8 +5,9 @@
  *
  * Specced in docs/page-redesign.md §8 + docs/page-contracts.md §7.
  *
- * Identity + notes + small editorial moments. Settings / Privacy / Delete
- * live as tertiary footer links; runtime debug strings move to /me/debug.
+ * Identity + notes + small editorial moments. Personal-center utilities
+ * live under /me/* and surface as Me sub-rows in the desktop side nav;
+ * runtime debug strings move to /me/debug.
  *
  * Removed from v1:
  *   - Runtime provider chain debug strings and the StatusRow /
@@ -17,7 +18,7 @@
  * Added:
  *   - Notes card (balance + refill caption + Top up CTA), driven by
  *     `useUserBalance()` (docs/page-contracts.md §11).
- *   - Settings / Privacy / Delete account as tertiary footer.
+ *   - Settings / Payment records / Privacy / Delete account as tertiary footer.
  */
 
 import Link from "next/link";
@@ -288,7 +289,7 @@ export function MeScreen() {
             {t("me.payments") || "Payment records"}
           </Link>
           <span className="text-[#D2C9B6]">·</span>
-          <Link href="/privacy" className="hover:text-[#1A1A1A] transition-colors">
+          <Link href="/me/privacy" className="hover:text-[#1A1A1A] transition-colors">
             {t("me.privacy") || "Privacy"}
           </Link>
           <span className="text-[#D2C9B6]">·</span>

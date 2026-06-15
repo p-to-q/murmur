@@ -396,7 +396,7 @@ export const DICT = {
   "song.export.err":          { zh: "导出失败，请重试", en: "Export failed — please retry" },
 
   // ── Me ─────────────────────────────────────────────────────────────
-  "me.title":              { zh: "我的", en: "Me" },
+  "me.title":              { zh: "我的", en: "Me!" },
   "me.eyebrow":            { zh: "你的", en: "YOURS" },
   "me.sub":                { zh: "一小格只属于你的歌架。", en: "A small shelf of your own." },
   "me.profile.title":      { zh: "当前身份", en: "Profile" },
@@ -542,6 +542,9 @@ export const DICT = {
   "nav.flow.studio":             { zh: "谱室",     en: "Studio" },
   "nav.flow.name":               { zh: "命名",     en: "Name it" },
   "nav.flow.settings":           { zh: "设置",     en: "Settings" },
+  "nav.flow.payment_records":    { zh: "支付记录", en: "Payment records" },
+  "nav.flow.privacy":            { zh: "隐私",     en: "Privacy" },
+  "nav.flow.delete_account":     { zh: "删除账号", en: "Delete account" },
   "nav.flow.topup":              { zh: "补给",     en: "Top up" },
   "nav.flow.checkout":           { zh: "结账",     en: "Checkout" },
 
@@ -572,7 +575,7 @@ export const DICT = {
   "privacy.share.title":   { zh: "分享与第三方", en: "Sharing & third parties" },
   "privacy.share.body":    { zh: "支付由 Waffo 处理；我们不会出售你的个人数据。你主动分享的歌卡片只包含你选择导出的内容。", en: "Payments go through Waffo. We don't sell your data. Shared song cards only include what you choose to export." },
   "privacy.contact.title": { zh: "联系我们", en: "Contact" },
-  "privacy.contact.body":  { zh: "如有隐私相关问题，请通过应用内设置或 support@murmur.app 联系我们。", en: "Questions about privacy? Reach us via in-app settings or support@murmur.app." },
+  "privacy.contact.body":  { zh: "如有隐私相关问题，请通过应用内设置或 hi@ptoq.io 联系我们。", en: "Questions about privacy? Reach us via in-app settings or hi@ptoq.io." },
   "privacy.back":          { zh: "返回", en: "Back" },
 
   // ── Account deletion ───────────────────────────────────────────────
@@ -584,7 +587,7 @@ export const DICT = {
   "delete.steps.2":      { zh: "冷静期结束后，个人资料与关联数据会被永久删除。", en: "After the grace period, your profile and linked data are permanently deleted." },
   "delete.steps.3":      { zh: "已购买的音磅余额不可退款；删除前请先用完或联系支持。", en: "Purchased note balances are non-refundable — use them or contact support before deleting." },
   "delete.cta":          { zh: "发送删除请求", en: "Request deletion" },
-  "delete.cta.pending":  { zh: "删除 API 即将上线。如需立即处理，请发邮件至 support@murmur.app。", en: "The delete API is coming soon. For immediate help, email support@murmur.app." },
+  "delete.cta.pending":  { zh: "删除 API 即将上线。如需立即处理，请发邮件至 hi@ptoq.io。", en: "The delete API is coming soon. For immediate help, email hi@ptoq.io." },
   "delete.back":         { zh: "返回我的", en: "Back to Me" },
 
   // ── Topup extras ───────────────────────────────────────────────────

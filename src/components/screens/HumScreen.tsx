@@ -818,7 +818,7 @@ export function HumScreen() {
                     ease: "easeInOut",
                   }}
                   className={[
-                    "hero-serif text-[#1A1A1A] text-[32px] md:text-[44px] lg:text-[52px] whitespace-pre-line leading-[1.1]",
+                    "hero-serif text-[#1A1A1A] text-[37px] md:text-[49px] lg:text-[57px] xl:text-[52px] whitespace-pre-line leading-[1.1]",
                     idleIndex === 3 || idleIndex === 4 ? "break-keep" : "",
                   ].join(" ")}
                 >
@@ -834,7 +834,7 @@ export function HumScreen() {
                   exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : undefined}
                   transition={{ duration: 0.4 }}
                 >
-                  <h1 className="hero-serif text-[#1A1A1A] text-[32px] md:text-[44px] lg:text-[52px] leading-[1.1]">
+                  <h1 className="hero-serif text-[#1A1A1A] text-[37px] md:text-[49px] lg:text-[57px] xl:text-[52px] leading-[1.1]">
                     {t("hum.recording")}
                   </h1>
                   <div className="flex items-center justify-center xl:justify-start gap-2 mt-4">
@@ -888,7 +888,7 @@ export function HumScreen() {
                       animate={{ opacity: 1 }}
                       exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : undefined}
                       transition={{ duration: 0.3 }}
-                      className="hero-serif text-[#1A1A1A] text-[26px] md:text-[38px] lg:text-[44px] leading-[1.15]"
+                      className="hero-serif text-[#1A1A1A] text-[30px] md:text-[42px] lg:text-[49px] xl:text-[44px] leading-[1.15]"
                     >
                       {processingMessage}
                     </motion.h1>
@@ -903,10 +903,10 @@ export function HumScreen() {
             </div>
 
             {/* ── Right column: the orb ─────────────────────────── */}
-            <div className="relative flex min-h-[calc(min(60vw,320px)+42px)] flex-col items-center justify-center md:min-h-[362px]">
+            <div className="relative flex min-h-[calc(min(55vw,296px)+42px)] flex-col items-center justify-center md:min-h-[338px] xl:min-h-[362px]">
             {/* Orb container — responsive sizing */}
             <div
-              className="relative w-[min(60vw,320px)] h-[min(60vw,320px)]"
+              className="relative h-[min(55vw,296px)] w-[min(55vw,296px)] xl:h-[320px] xl:w-[320px]"
             >
               {/* Rotating conic glow behind the orb */}
               <motion.div
