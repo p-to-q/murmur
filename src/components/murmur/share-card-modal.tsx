@@ -16,7 +16,7 @@ interface ShareCardModalProps {
 export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
   const t = useTranslator();
   const { data: session } = useSession();
-  const { signInWithGoogle, googleAuthAvailable } = useGoogleSignIn();
+  const { signInWithGoogle } = useGoogleSignIn();
 
   useEffect(() => {
     if (session?.user) {
@@ -54,18 +54,22 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
           >
             <div className="relative overflow-hidden rounded-[32px] shadow-2xl">
               <Image
-                src="/images/share-esther-bg.jpg"
+                src="/images/share-murmur-bg.jpg"
                 alt=""
-                width={896}
-                height={1200}
+                width={736}
+                height={1104}
                 priority
-                className="h-[600px] w-full object-cover"
+                className="share-card-photo h-[600px] w-full object-cover object-[center_38%]"
               />
+              <div aria-hidden className="share-card-photo-tone" />
+              <div aria-hidden className="share-card-photo-warmth" />
+              <div aria-hidden className="share-card-photo-grain" />
+              <div aria-hidden className="share-card-photo-dust" />
               <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/10" />
 
               <div className="absolute left-6 right-6 top-6 flex items-start justify-between">
                 <p className="text-[15px] text-white/90 drop-shadow">
-                  {t("share.byline")}
+                  By akira
                 </p>
                 <div className="flex items-center gap-4">
                   <Image
@@ -93,8 +97,7 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
 
                   <button
                     onClick={() => signInWithGoogle("/")}
-                    disabled={googleAuthAvailable === false}
-                    className="flex w-full items-center justify-center gap-3 rounded-full bg-[#EBEBEB] px-6 py-4 text-[16px] font-medium text-[#1A1A1A] transition-colors hover:bg-[#DCDCDC] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex w-full items-center justify-center gap-3 rounded-full bg-[#EBEBEB] px-6 py-4 text-[16px] font-medium text-[#1A1A1A] transition-colors hover:bg-[#DCDCDC]"
                   >
                     <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden>
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -104,12 +107,6 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
                     </svg>
                     {t("share.google")}
                   </button>
-
-                  {googleAuthAvailable === false && (
-                    <p className="mt-3 text-center text-[12px] leading-relaxed text-[#8C8780]">
-                      {t("auth.google_unavailable")}
-                    </p>
-                  )}
                 </div>
               </div>
             </div>
