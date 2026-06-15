@@ -1,11 +1,18 @@
 # music-engine worker
 
-Local HTTP wrapper around [Magenta RealTime 2](https://github.com/magenta/magenta-realtime)
-(MLX backend, Apple Silicon). Murmur's vibe cards call this through
-`/api/music/generate` to turn randomized text prompts — optionally blended
-with the user's hum — into real audio clips.
+Wraps [Magenta RealTime 2](https://github.com/magenta/magenta-realtime) so
+Murmur's vibe cards (`/api/music/generate`) can turn randomized text prompts —
+optionally blended with the user's hum — into real audio clips.
 
-## Setup
+Two frontends share one backend-agnostic core (`engine.py`):
+
+- **`main.py`** — local dev HTTP server (FastAPI, MLX backend on Apple Silicon),
+  run via `bun run dev:music`.
+- **`handler.py`** — production [RunPod Serverless](../../docs/DEPLOY_MUSIC_ENGINE_GPU.md)
+  handler (JAX/CUDA), shipped in the Docker image and deployed with
+  `bun run deploy:music-serverless`.
+
+## Local setup (dev)
 
 ```bash
 bun run setup:music   # uv venv + magenta-rt[mlx] + model download (~4 GB)
@@ -17,12 +24,18 @@ The model (`MAGENTA_MODEL`, default `mrt2_base`) loads once at startup
 ~5 s to generate (faster than real time). Use `mrt2_small` on lower-end
 Apple Silicon.
 
-## Endpoints
+## Endpoints (dev HTTP server)
 
 - `POST /generate` — multipart `prompt`, `duration` (2–30 s), `style_mix`
-  (0–0.8), optional `hum` audio file → `audio/wav` 48 kHz stereo.
+  (0–0.8), optional `melody` JSON, optional `hum` audio file → `audio/wav`
+  48 kHz stereo.
 - `GET /health` — load state; the Next.js app probes this and falls back to
   the legacy Tone.js synth engine when the worker is unreachable.
+
+In production the app instead calls the RunPod endpoint
+(`api.runpod.ai/v2/{id}/run`) with a JSON `{input:{prompt, duration, style_mix,
+melody, hum_b64}}` body and gets back `{output:{audio_b64, …}}`; the proxy
+routes (`src/app/api/music/*`) speak both protocols.
 
 ## Env
 

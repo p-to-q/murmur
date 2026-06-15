@@ -1,4 +1,6 @@
-name: Music engine GPU image
+# Builds the music-engine image (RunPod Serverless handler) and makes the GHCR
+# package public so the serverless endpoint can pull it without registry auth.
+name: Music engine image
 
 on:
   workflow_dispatch:

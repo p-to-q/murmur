@@ -7,16 +7,17 @@ Vercel 上跑的只是 Next.js 壳；真正干活的是两个 Python worker：
 | `workers/audio-engine` | 8001 | 哼唱 → 旋律转谱 | SwiftF0（CPU 即可） |
 | `workers/music-engine` | 8002 | prompt + 哼唱 → 音乐 | Magenta RT2（需要算力） |
 
-Next.js 侧只认四个环境变量（设了 `MUSIC_WORKER_URL` 即启用 Magenta 引擎，
-不设则自动回退 Tone.js 合成）：
+音乐生成有两条线：**生产走 RunPod Serverless**（设 `RUNPOD_SERVERLESS_ENDPOINT_ID`
++ `RUNPOD_API_KEY` 即启用，优先级最高），**本地/旧方案走 HTTP worker**
+（`MUSIC_WORKER_URL`，本地默认 `127.0.0.1:8002`）。两者都没配才回退 Tone.js。
 
 ```
+# 生产音乐（RunPod Serverless，App 用 RUNPOD_API_KEY 作 Bearer 调用端点）
+RUNPOD_SERVERLESS_ENDPOINT_ID=   RUNPOD_API_KEY=
+# 转写 + 本地/旧音乐（HTTP worker，公网必须带 token，Bearer 鉴权，无 token 一律 401）
 AUDIO_WORKER_URL=   AUDIO_WORKER_TOKEN=
 MUSIC_WORKER_URL=   MUSIC_WORKER_TOKEN=
 ```
-
-worker 在公网上必须带 token（`MUSIC_WORKER_TOKEN`/`AUDIO_WORKER_TOKEN`
-环境变量，Bearer 鉴权，无 token 的请求一律 401）。
 
 ---
 
@@ -25,12 +26,12 @@ worker 在公网上必须带 token（`MUSIC_WORKER_TOKEN`/`AUDIO_WORKER_TOKEN`
 | worker | 落脚点 | URL | 拉起方式 |
 | --- | --- | --- | --- |
 | audio-engine（转写） | **Fly.io**，常驻常热 | `https://murmur-audio.fly.dev`（固定不变） | `fly deploy ./workers/audio-engine` |
-| music-engine（音乐） | **RunPod GPU**，按需 | pod 重建会变，部署脚本自动同步 Vercel | `bun run deploy:music-gpu` |
+| music-engine（音乐） | **RunPod Serverless**，闲时缩容到 0 | 端点 id 固定，部署脚本同步 Vercel | `bun run deploy:music-serverless` |
 
-转写已彻底脱离本机 —— `murmur.ptoq.io` 不再依赖 Mac 开机。音乐仍是按需：想用时
-`bun run deploy:music-gpu` 拉起 RunPod pod 并同步 `MUSIC_WORKER_URL`（只碰音乐，
-不会动 Fly 的 `AUDIO_WORKER_URL`）。Fly 端重新部署：`fly deploy ./workers/audio-engine`
-（配置见 `workers/audio-engine/fly.toml`，鉴权 token 是 Fly secret `AUDIO_WORKER_TOKEN`）。
+转写已彻底脱离本机 —— `murmur.ptoq.io` 不再依赖 Mac 开机。音乐走 RunPod Serverless 按需计费：
+`bun run deploy:music-serverless` 创建/更新端点并同步 `RUNPOD_SERVERLESS_ENDPOINT_ID`（只碰音乐，
+不会动 Fly 的 `AUDIO_WORKER_URL`）。端点 id 稳定，重复部署只为换镜像或调伸缩。Fly 端重新部署：
+`fly deploy ./workers/audio-engine`（配置见 `workers/audio-engine/fly.toml`，鉴权 token 是 Fly secret `AUDIO_WORKER_TOKEN`）。
 
 > **方案 A / supervisor 已退役**：两个 worker 都上云后，本机 supervisor + 隧道不再需要。
 > `murmur-supervisor.sh` 已加 guard——直接跑会被拒绝（否则它会把 Vercel 的
@@ -63,31 +64,31 @@ bash scripts/murmur-services.sh uninstall  # 停掉并移除
   （`cloudflared tunnel create murmur-workers`），URL 永久固定，
   连自动同步都不再需要。
 
-## 方案 B（7×24 稳定，推荐生产）：RunPod GPU
+## 方案 B（推荐生产）：RunPod Serverless
 
 **一键部署** — 见 [DEPLOY_MUSIC_ENGINE_GPU.md](./DEPLOY_MUSIC_ENGINE_GPU.md)
 
 ```bash
-RUNPOD_API_KEY=rpa_… VERCEL=1 bun run deploy:music-gpu
+RUNPOD_API_KEY=rpa_… VERCEL=1 bun run deploy:music-serverless
 ```
 
-- JAX/CUDA，不依赖本机 MLX / 隧道
-- 固定 `https://<pod-id>-8002.proxy.runpod.net`
-- 约 $0.3–0.5/h（L4 / 4090）
+- JAX/CUDA，不依赖本机 MLX / 隧道；闲时缩容到 0，按生成秒数计费
+- ~4 GB 模型放网络卷（只下载一次），FlashBoot 加速冷启动
+- App 通过 `https://api.runpod.ai/v2/<endpoint>/run` 调用，`RUNPOD_API_KEY` 鉴权
+- 冷启动有代价：闲置后首个请求 ~20–60 s，太慢自动回退 Tone.js
 
 <details>
-<summary>手动 Docker 步骤（旧）</summary>
+<summary>手动构建镜像（CI 已自动构建并公开）</summary>
 
 ```bash
-cd workers/music-engine
-docker build -t murmur-music-engine .
-docker run --gpus all -p 8002:8002 \
-  -e MUSIC_WORKER_TOKEN=<token> \
-  -v magenta-models:/root/Documents/Magenta \
-  murmur-music-engine
+docker buildx build --platform linux/amd64 \
+  -t ghcr.io/p-to-q/murmur-music-engine:latest \
+  workers/music-engine --push
 ```
 
-> audio-engine 是纯 CPU 的，可继续走本机隧道或单独 VPS。
+> 镜像 ENTRYPOINT 跑的是 RunPod serverless handler（连 RunPod 作业队列），
+> 不是 HTTP 服务——直接 `docker run` 不会监听 :8002。本地调试用 `bun run dev:music`。
+> audio-engine 是纯 CPU 的，走 Fly.io 常驻。
 
 </details>
 
