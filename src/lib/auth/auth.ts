@@ -4,6 +4,7 @@ import { db } from "@/lib/db/client";
 import { users, externalIdentities } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { ulid } from "ulid";
+import { GRANTS } from "@murmur/core";
 import {
   googleOAuthProviderOptions,
   isGoogleOAuthConfigured,
@@ -60,6 +61,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             name: user.name || user.email.split("@")[0],
             avatarUrl: user.image,
             regionId: "intl",
+            notesBalance: GRANTS.signup_bonus,
             planTier: "free",
           });
 

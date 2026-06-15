@@ -33,14 +33,15 @@ describe("resolveEntitlement", () => {
     });
   });
 
-  it("allows authenticated users to save when they have enough notes", () => {
+  it("allows authenticated users to save for free but gates paid actions by balance", () => {
     expect(resolveEntitlement(freeUser, 0)).toMatchObject({
-      canHum: true,
+      canHum: false,
       canSave: true,
-      canLlmEdit: true,
-      canExportWebm: true,
+      canLlmEdit: false,
+      canExportWebm: false,
       canTopUp: true,
       canDeleteAccount: true,
+      remainingNotes: 0,
     });
   });
 });

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveRequestAuth } from "@/lib/auth";
 import { getDevBalanceFallback, shouldUseDevBalanceFallback } from "@/lib/billing/dev-balance";
 import { nextNotesRefillAt } from "@/lib/billing/notes-clock";
-import { isAuthenticatedSession } from "@/lib/billing/session-billing";
 import { getNotesBalance } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 
@@ -29,13 +28,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const unlimited = isAuthenticatedSession(auth);
-
     return NextResponse.json({
-      notes: unlimited ? Number.POSITIVE_INFINITY : balance.notes,
+      notes: balance.notes,
       planTier: balance.planTier,
       nextRefillAt: nextNotesRefillAt().toISOString(),
-      unlimited,
+      unlimited: false,
     });
   } catch (error) {
     if (shouldUseDevBalanceFallback({ host: getRequestHostname(request) })) {

@@ -18,6 +18,7 @@ export interface UserBalance {
   notes: number;
   planTier: "free" | "premium";
   nextRefillAt: string;
+  /** Reserved for a future premium tier; current launch pricing returns false. */
   unlimited?: boolean;
 }
 
@@ -82,11 +83,11 @@ export async function fetchUserBalance(
         error?: string;
         unlimited?: boolean;
       };
-      if (typeof payload.notes !== "number" && !payload.unlimited) {
+      if (typeof payload.notes !== "number") {
         return { ok: false, balance: null, error: "unavailable" as const };
       }
       const balance: UserBalance = {
-        notes: payload.unlimited ? Number.POSITIVE_INFINITY : payload.notes!,
+        notes: payload.notes,
         planTier: payload.planTier === "premium" ? "premium" : "free",
         nextRefillAt: payload.nextRefillAt ?? new Date().toISOString(),
         unlimited: payload.unlimited === true,

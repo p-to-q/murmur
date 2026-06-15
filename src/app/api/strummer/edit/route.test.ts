@@ -161,34 +161,49 @@ afterEach(() => {
 });
 
 describe("POST /api/strummer/edit", () => {
-  it("returns filtered tokens without spending for signed-in users", async () => {
+  it("returns filtered tokens after spending one note for signed-in users", async () => {
     const response = await POST(buildRequest());
 
     expect(response.status).toBe(200);
-    expect(callOrder).toEqual(["ai"]);
-    expect(lastSpendInputs).toHaveLength(0);
+    expect(callOrder).toEqual(["spend", "ai"]);
+    expect(lastSpendInputs).toHaveLength(1);
+    expect(lastSpendInputs[0]?.reason).toBe("spend:llm_edit");
+    expect(lastSpendInputs[0]?.cost).toBe(1);
     const body = await response.json() as { tokens: string[] };
     expect(body.tokens).toEqual(["warmer", "less_drums"]);
   });
 
-  it("does not refund when the model fails for signed-in users", async () => {
+  it("refunds the note when the model fails for signed-in users", async () => {
     nextAiThrows = new Error("provider offline");
 
     const response = await POST(buildRequest("make it cinematic", "req_llm_fail"));
 
     expect(response.status).toBe(502);
-    expect(callOrder).toEqual(["ai"]);
-    expect(lastRefundInputs).toHaveLength(0);
+    expect(callOrder).toEqual(["spend", "ai", "refund"]);
+    expect(lastRefundInputs).toHaveLength(1);
+    expect(lastRefundInputs[0]?.originalLedgerId).toBe("nle_llm");
   });
 
-  it("skips billing entirely for signed-in users on model failure", async () => {
-    nextAiThrows = new Error("provider offline");
+  it("returns 402 before model work when notes are insufficient", async () => {
+    nextBalance = {
+      ok: true,
+      userId: "usr_strummer",
+      notes: 0,
+      planTier: "free",
+      freeNotesGrantedAt: new Date(),
+    };
 
     const response = await POST(buildRequest());
 
-    expect(response.status).toBe(502);
-    expect(callOrder).toEqual(["ai"]);
+    expect(response.status).toBe(402);
+    expect(callOrder).toEqual([]);
+    expect(chatCallCount).toBe(0);
+    expect(lastSpendInputs).toHaveLength(0);
     expect(lastRefundInputs).toHaveLength(0);
+    const body = await response.json() as { error: string; currentBalance: number; cost: number };
+    expect(body.error).toBe("insufficient_notes");
+    expect(body.currentBalance).toBe(0);
+    expect(body.cost).toBe(1);
   });
 
   it("returns 429 before billing or model work when rate-limited", async () => {

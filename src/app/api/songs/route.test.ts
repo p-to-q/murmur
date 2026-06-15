@@ -137,6 +137,8 @@ describe("POST /api/songs", () => {
     const body = await response.json() as Record<string, unknown>;
     expect(body.sourceMelodyKind).toBe("musical");
     expect(body.editDepth).toBe("reworked");
+    expect(createSongMock).toHaveBeenCalledTimes(1);
+    expect(createSongWithSpendMock).toHaveBeenCalledTimes(0);
   });
 
   it("falls back to corrected when the request sends an unknown melody kind", async () => {

@@ -67,6 +67,19 @@ describe("fetchUserBalance", () => {
     expect(result.balance?.planTier).toBe("free");
   });
 
+  it("rejects unlimited-only payloads without a numeric balance", async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse(
+        { unlimited: true, planTier: "free", nextRefillAt: "2026-06-04T16:00:00.000Z" },
+        200,
+      )) as typeof fetch;
+
+    const result = await fetchUserBalance({ force: true });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("unavailable");
+    expect(result.balance).toBeNull();
+  });
+
   it("dedupes concurrent fetches via the in-flight promise", async () => {
     let calls = 0;
     globalThis.fetch = (async () => {

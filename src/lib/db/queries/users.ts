@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "../client";
 import { users, type User } from "../schema/users";
+import { GRANTS } from "@murmur/core";
 
 export async function getUserById(id: string): Promise<User | undefined> {
   const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
@@ -20,7 +21,10 @@ export async function upsertUser(data: {
 }): Promise<User> {
   const rows = await db
     .insert(users)
-    .values(data)
+    .values({
+      ...data,
+      notesBalance: data.id === "guest" ? undefined : GRANTS.signup_bonus,
+    })
     .onConflictDoUpdate({
       target: users.id,
       set: {

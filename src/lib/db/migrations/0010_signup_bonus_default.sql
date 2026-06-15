@@ -1,0 +1,1 @@
+ALTER TABLE "users" ALTER COLUMN "notes_balance" SET DEFAULT 15;

@@ -81,6 +81,24 @@ describe("user balance route helpers", () => {
 });
 
 describe("GET /api/user/balance", () => {
+  it("returns a finite ledger balance for signed-in users", async () => {
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_balance", email: "a@example.com", name: "A", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_balance",
+    };
+
+    const response = await GET(
+      new Request("http://test.local/api/user/balance") as unknown as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { notes?: unknown; unlimited?: unknown };
+    expect(body.notes).toBe(5);
+    expect(body.unlimited).toBe(false);
+  });
+
   it("keeps localhost previews usable when the ledger is unavailable outside dev mode", async () => {
     const prevNode = process.env.NODE_ENV;
     const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
