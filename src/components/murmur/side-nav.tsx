@@ -28,6 +28,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronsLeft, ChevronsRight, LinkIcon } from "lucide-react";
 import { createPortal } from "react-dom";
 
+import { buildShareInviteUrl, getShareInviteUrl } from "@/lib/api/share-links";
+import { copyShareInviteLink } from "@/lib/platform/share-invite";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
 import { versionPreview } from "@/lib/music/version-preview";
@@ -412,10 +414,37 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
 /* ── ShareCardModal portal — must be outside <aside> to cover full viewport ── */
 export function SideNavWithModal() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareInviteUrl, setShareInviteUrl] = useState<string | null>(null);
+  const t = useTranslator();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let cancelled = false;
+
+    void getShareInviteUrl(window.location.origin).then((url) => {
+      if (!cancelled) setShareInviteUrl(url);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleShareClick = () => {
+    setShareModalOpen(true);
+    const fallbackUrl =
+      typeof window === "undefined"
+        ? ""
+        : buildShareInviteUrl(window.location.origin);
+    void copyShareInviteLink(shareInviteUrl ?? fallbackUrl, {
+      copied: t("share.copied"),
+      copyFailed: t("share.copy_failed"),
+    });
+  };
 
   return (
     <>
-      <SideNavInner onShareClick={() => setShareModalOpen(true)} />
+      <SideNavInner onShareClick={handleShareClick} />
       <ShareCardModal open={shareModalOpen} onClose={() => setShareModalOpen(false)} />
     </>
   );

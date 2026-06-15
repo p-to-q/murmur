@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from "next";
-// Only the weights actually used: 300 carries the zh hero-serif styles and
-// 400 is body text. Nothing pairs the Chinese face with bold, so 700 stays
-// out — each weight is a large set of CJK woff2 subsets.
+// Keep the original Traditional Chinese WenKai as the visual lead, with the
+// Simplified Chinese face available only as missing-glyph fallback.
 import "@fontsource/lxgw-wenkai-tc/300.css";
 import "@fontsource/lxgw-wenkai-tc/400.css";
+import "./fonts/lxgw-wenkai-gb-screen-300.css";
 import { Instrument_Serif } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";
@@ -14,6 +14,7 @@ import { AudioUnlock } from "@/components/murmur/audio-unlock";
 import { I18nHydrator } from "@/lib/i18n";
 import { cn } from "@/utils/utils";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { FontHydrator } from "@/components/murmur/font-hydrator";
 
 const SITE_URL =
   process.env.MURMUR_APP_URL ||
@@ -101,6 +102,8 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
+      data-lang="zh"
+      data-fonts="loading"
       suppressHydrationWarning
       className={cn(
         "h-full antialiased font-sans",
@@ -114,6 +117,7 @@ export default function RootLayout({
       >
         <AuthProvider>
           <I18nHydrator />
+          <FontHydrator />
           {/* Desktop sidebar (md+) — mobile hides via internal media query */}
           <SideNav />
           {/* Main content area:

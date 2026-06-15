@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "murmur",
@@ -9,12 +8,13 @@
         "@aws-sdk/s3-request-presigner": "^3.1063.0",
         "@base-ui/react": "^1.5.0",
         "@breezystack/lamejs": "^1.2.7",
-        "@fontsource/lxgw-wenkai-tc": "^5.2.9",
+        "@fontsource/lxgw-wenkai-tc": "5.2.9",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@react-spring/web": "^10.1.0",
         "@waffo/pancake-ts": "^0.11.0",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
+        "cn-fontsource-lxgw-wen-kai-gb-screen": "1.0.6",
         "dotenv": "^17.4.2",
         "drizzle-orm": "^0.45.2",
         "framer-motion": "^12.40.0",
@@ -696,6 +696,8 @@
     "cliui": ["cliui@8.0.1", "", { "dependencies": { "string-width": "^4.2.0", "strip-ansi": "^6.0.1", "wrap-ansi": "^7.0.0" } }, "sha512-BSeNnyus75C4//NQ9gQt1/csTXyo/8Sb+afLAkzAptFuMsod9HFokGNudZpi/oQV73hnVK+sR+5PVRMd+Dr7YQ=="],
 
     "clsx": ["clsx@2.1.1", "", {}, "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA=="],
+
+    "cn-fontsource-lxgw-wen-kai-gb-screen": ["cn-fontsource-lxgw-wen-kai-gb-screen@1.0.6", "", {}, "sha512-NBHrehcM9K16bUHOERYyYAvVHfOz7bMbpBxU5Kh3/JAgP+XBlgVyTM/JYcF1Ji6Xk++rk33UvELcFmaUoJYvkA=="],
 
     "code-block-writer": ["code-block-writer@13.0.3", "", {}, "sha512-Oofo0pq3IKnsFtuHqSF7TqBfr71aeyZDVJ0HpmqB7FBM2qEigL0iPONSCZSO9pE9dZTAxANe5XHG9Uy0YMv8cg=="],
 

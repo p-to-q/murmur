@@ -38,3 +38,31 @@ If you are implementing or reviewing a screen:
 
 If we restore explicit per-page contracts, keep this filename and expand it
 instead of creating another parallel page-spec document.
+
+## Hum page contract notes
+
+The current Hum landing surface is intentionally split into one macro stage
+with two locked sub-boxes:
+
+- the headline block keeps a fixed reserved height so rotating idle copy does
+  not nudge the orb
+- the orb column keeps a fixed visual footprint so hover / press / recording
+  scale changes stay centered
+
+Interaction rules that should remain true:
+
+- the white orb uses press-and-hold for live recording
+- idle hover expands the orb slightly; recording state keeps the smaller held
+  scale
+- demo melody is explicit, not a hidden fallback from live capture
+- billing / note exhaustion should preserve a clear recovery path instead of
+  collapsing into generic retry copy
+- browser recording failures should surface as a quiet card with a stable
+  retry or demo action
+
+Implementation note:
+
+- keep recording cleanup, audio stream teardown, and timer clearing inside the
+  screen boundary
+- keep transcription / fixture branching inside the client transcription
+  facade, not in the view tree

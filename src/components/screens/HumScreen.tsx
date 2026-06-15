@@ -45,13 +45,12 @@ import { MurmurMark } from "@/components/murmur/murmur-mark";
 import { formatHumSupportCode } from "@/lib/observability/support-code";
 
 const MAX_DURATION = 15;
-// Idle headline rotation interval (ms)
 const IDLE_ROTATE_INTERVAL = 9000;
 const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
 const ENABLE_HUM_ENTRANCE_MOTION = true;
 
-// 未登录访客每台设备每天 DAILY_REFILL 枚音磅（见 balance-manager）；用完后弹出登录墙。
-// 登录后 server 端跳过扣费，无限创作。
+// Guest quota stays local and action-time gated. Signed-in users are
+// server-authoritative and skip the local counter.
 
 /**
  * Surface variants the Hum screen knows how to render. The router below
@@ -65,6 +64,27 @@ type HumErrorVariant =
   | "insufficient"
   | "rate_limited"
   | "unavailable";
+
+type CapturePhase = "idle" | "starting";
+type Translator = ReturnType<typeof useTranslator>;
+
+type HumErrorCopy = {
+  title: string;
+  detail: string;
+  retry: string;
+  demo: string;
+};
+
+type HumRecoveryAction =
+  | { kind: "demo"; label: string }
+  | { kind: "record"; label: string; requiresGuestGate: boolean }
+  | { kind: "topup"; label: string }
+  | { kind: "dismiss"; label: string };
+
+interface HumRecoveryPlan {
+  primary: HumRecoveryAction;
+  secondary: HumRecoveryAction | null;
+}
 
 interface HumErrorState {
   variant: HumErrorVariant;
@@ -85,6 +105,44 @@ class MusicEngineUnavailableError extends Error {
     super("music engine unavailable");
     this.name = "MusicEngineUnavailableError";
   }
+}
+
+function clearIntervalRef(
+  ref: { current: ReturnType<typeof setInterval> | null },
+) {
+  if (ref.current) {
+    clearInterval(ref.current);
+    ref.current = null;
+  }
+}
+
+function clearTimeoutRef(
+  ref: { current: ReturnType<typeof setTimeout> | null },
+) {
+  if (ref.current) {
+    clearTimeout(ref.current);
+    ref.current = null;
+  }
+}
+
+function stopMediaStream(stream: MediaStream | null) {
+  stream?.getTracks().forEach((track) => track.stop());
+}
+
+function mediaRecorderOptions(): MediaRecorderOptions {
+  if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+    return { mimeType: "audio/webm;codecs=opus" };
+  }
+  if (MediaRecorder.isTypeSupported("audio/webm")) {
+    return { mimeType: "audio/webm" };
+  }
+  if (MediaRecorder.isTypeSupported("audio/mp4")) {
+    return { mimeType: "audio/mp4" };
+  }
+  // Some browsers support MediaRecorder but return false for every explicit
+  // type. Let the browser choose its native container instead of rejecting
+  // an otherwise usable microphone path.
+  return {};
 }
 
 function variantForCode(code: TranscribeRequestErrorCode): HumErrorVariant {
@@ -141,14 +199,19 @@ export function HumScreen() {
   const [showLoginWall, setShowLoginWall] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const unmountingRef = useRef(false);
+  const activeStreamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const msgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const msgIdxRef = useRef(0);
   const heardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startPhaseRef = useRef<CapturePhase>("idle");
+  const cancelPendingStartRef = useRef(false);
 
-  // Audio-reactive aurora — AnalyserNode drives amplitude (0-1)
+  // Audio-reactive aurora. The analyser drives amplitude only while capture
+  // is active; the refs below are reset together by stopAudioAnalyser.
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number>(0);
@@ -177,12 +240,9 @@ export function HumScreen() {
     levelStateRef.current = next;
     setLevelState(next);
 
-    // When state becomes "heard", show message for 1 second then hide
     if (next === "heard") {
+      clearTimeoutRef(heardTimeoutRef);
       setShowHeardMessage(true);
-      if (heardTimeoutRef.current) {
-        clearTimeout(heardTimeoutRef.current);
-      }
       heardTimeoutRef.current = setTimeout(() => {
         setShowHeardMessage(false);
       }, 1000);
@@ -211,11 +271,26 @@ export function HumScreen() {
   );
 
   useEffect(() => {
+    unmountingRef.current = false;
     resetFlow();
 
     return () => {
-      // Clean up audio analyser RAF loop on unmount
+      unmountingRef.current = true;
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.ondataavailable = null;
+        mediaRecorderRef.current.onstop = null;
+        if (mediaRecorderRef.current.state !== "inactive") {
+          mediaRecorderRef.current.stop();
+        }
+        mediaRecorderRef.current = null;
+      }
       cancelAnimationFrame(rafRef.current);
+      clearIntervalRef(timerRef);
+      clearIntervalRef(msgTimerRef);
+      clearIntervalRef(idleTimerRef);
+      clearTimeoutRef(heardTimeoutRef);
+      stopMediaStream(activeStreamRef.current);
+      activeStreamRef.current = null;
       if (audioCtxRef.current) {
         audioCtxRef.current.close().catch(() => {});
       }
@@ -227,17 +302,17 @@ export function HumScreen() {
     prefetchMusicEngineStatus();
   }, []);
 
-  // Rotate idle headlines
+  // Rotate idle headlines only while the landing state is truly quiet.
   useEffect(() => {
     if (recordingState !== "idle" || humError) {
-      if (idleTimerRef.current) clearInterval(idleTimerRef.current);
+      clearIntervalRef(idleTimerRef);
       return;
     }
     idleTimerRef.current = setInterval(() => {
       setIdleIndex((i) => (i + 1) % IDLE_HEADLINES.length);
     }, IDLE_ROTATE_INTERVAL);
     return () => {
-      if (idleTimerRef.current) clearInterval(idleTimerRef.current);
+      clearIntervalRef(idleTimerRef);
     };
   }, [recordingState, humError, IDLE_HEADLINES.length]);
 
@@ -245,7 +320,7 @@ export function HumScreen() {
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
     }
-    if (timerRef.current) clearInterval(timerRef.current);
+    clearIntervalRef(timerRef);
   }, []);
 
   useEffect(() => {
@@ -253,6 +328,7 @@ export function HumScreen() {
   }, [recordingTime, stopRecording]);
 
   const tickMessages = () => {
+    clearIntervalRef(msgTimerRef);
     msgIdxRef.current = 0;
     setProcessingMessage(PROCESSING_MSGS[0] ?? "");
     msgTimerRef.current = setInterval(() => {
@@ -261,7 +337,7 @@ export function HumScreen() {
     }, 900);
   };
   const stopMessages = () => {
-    if (msgTimerRef.current) clearInterval(msgTimerRef.current);
+    clearIntervalRef(msgTimerRef);
   };
 
   // Action-time guest gate. Returns false (and raises the login wall) once a
@@ -473,6 +549,8 @@ export function HumScreen() {
     quietSinceRef.current = null;
     heardSignalRef.current = false;
     recordingStartedAtRef.current = null;
+    clearTimeoutRef(heardTimeoutRef);
+    setShowHeardMessage(false);
     maxRmsRef.current = 0.08;
     setInputLevelState("idle");
     if (audioCtxRef.current) {
@@ -483,6 +561,11 @@ export function HumScreen() {
   }, [amplitudeMv, setInputLevelState]);
 
   const startRecording = async () => {
+    if (startPhaseRef.current !== "idle" || recordingState !== "idle") {
+      return;
+    }
+    startPhaseRef.current = "starting";
+    cancelPendingStartRef.current = false;
     startAudioContext();
     setHumError(null);
     setInputLevelState("idle");
@@ -493,12 +576,12 @@ export function HumScreen() {
     recordingStartedAtRef.current = null;
 
     try {
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+        throw new Error("Browser recording APIs are unavailable");
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : MediaRecorder.isTypeSupported("audio/webm")
-          ? "audio/webm"
-          : "audio/mp4";
+      activeStreamRef.current = stream;
+      const recorderOptions = mediaRecorderOptions();
 
       // Set up audio analyser for aurora reactivity
       const audioCtx = new AudioContext();
@@ -531,15 +614,30 @@ export function HumScreen() {
       };
       rafRef.current = requestAnimationFrame(tick);
 
-      const recorder = new MediaRecorder(stream, { mimeType });
+      const recorder = new MediaRecorder(stream, recorderOptions);
+      const recordingType =
+        recorder.mimeType || recorderOptions.mimeType || "application/octet-stream";
       mediaRecorderRef.current = recorder;
+      if (cancelPendingStartRef.current) {
+        stopMediaStream(stream);
+        activeStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        stopAudioAnalyser();
+        return;
+      }
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       recorder.onstop = async () => {
-        stream.getTracks().forEach((tr) => tr.stop());
+        if (unmountingRef.current) {
+          chunksRef.current = [];
+          return;
+        }
+        stopMediaStream(activeStreamRef.current);
+        activeStreamRef.current = null;
         stopAudioAnalyser();
-        const blob = new Blob(chunksRef.current, { type: mimeType });
+        mediaRecorderRef.current = null;
+        const blob = new Blob(chunksRef.current, { type: recordingType });
         await transcribeAndGenerate(blob);
       };
       recorder.start(100);
@@ -549,6 +647,10 @@ export function HumScreen() {
         1000,
       );
     } catch (err) {
+      stopMediaStream(activeStreamRef.current);
+      activeStreamRef.current = null;
+      mediaRecorderRef.current = null;
+      stopAudioAnalyser();
       log("capture.failed", {
         error_code: "mic_unavailable",
         message: err instanceof Error ? err.message : String(err),
@@ -562,8 +664,18 @@ export function HumScreen() {
         currentBalance: null,
         showSupportCode: false,
       });
+    } finally {
+      startPhaseRef.current = "idle";
     }
   };
+
+  const releaseCapture = useCallback(() => {
+    if (startPhaseRef.current === "starting") {
+      cancelPendingStartRef.current = true;
+      return;
+    }
+    stopRecording();
+  }, [stopRecording]);
 
   const updateInputLevel = useCallback((rms: number) => {
     const startedAt = recordingStartedAtRef.current;
@@ -584,6 +696,29 @@ export function HumScreen() {
   const isProcessing = recordingState === "processing";
 
   const errorCopy = humError ? copyForState(humError, t) : null;
+  const recoveryPlan =
+    humError && errorCopy ? recoveryForState(humError, errorCopy, isGuest, t) : null;
+  const handleRecoveryAction = (action: HumRecoveryAction) => {
+    switch (action.kind) {
+      case "topup":
+        router.push("/topup");
+        return;
+      case "demo":
+        startAudioContext();
+        setHumError(null);
+        void transcribeAndGenerate(undefined);
+        return;
+      case "record":
+        if (action.requiresGuestGate && !passGuestGate()) return;
+        startAudioContext();
+        setHumError(null);
+        void startRecording();
+        return;
+      case "dismiss":
+        setHumError(null);
+        return;
+    }
+  };
 
   // Ring progress SVG values
   const ringRadius = 140;
@@ -598,8 +733,7 @@ export function HumScreen() {
           CSS drift animations still run; framer-motion adds a reactivity
           layer on top via the `style` prop — seamless composition. */}
       <div className="absolute inset-0 overflow-hidden" aria-hidden>
-        {/* Coral blob — left side. Brand accent, kept soft so it reads as
-            warm light on paper rather than a synthetic mesh gradient. */}
+        {/* Pink/magenta blob — left side */}
         <motion.div
           className="aurora-blob-1 absolute rounded-full"
           style={{
@@ -608,13 +742,13 @@ export function HumScreen() {
             left: "-5%",
             bottom: "10%",
             background:
-              "radial-gradient(ellipse at center, rgba(255,138,92,0.36) 0%, rgba(255,89,36,0.10) 50%, transparent 75%)",
+              "radial-gradient(ellipse at center, rgba(255,105,210,0.38) 0%, rgba(255,80,180,0.12) 50%, transparent 75%)",
             filter: "blur(60px)",
             scale: blob1Scale,
             opacity: blobOpacity,
           }}
         />
-        {/* Warm gold blob — right side */}
+        {/* Yellow/gold blob — right side */}
         <motion.div
           className="aurora-blob-2 absolute rounded-full"
           style={{
@@ -623,13 +757,13 @@ export function HumScreen() {
             right: "-8%",
             top: "8%",
             background:
-              "radial-gradient(ellipse at center, rgba(235,203,139,0.42) 0%, rgba(235,203,139,0.12) 50%, transparent 75%)",
+              "radial-gradient(ellipse at center, rgba(255,224,64,0.18) 0%, rgba(255,200,40,0.05) 50%, transparent 75%)",
             filter: "blur(55px)",
             scale: blob2Scale,
             opacity: blobOpacity,
           }}
         />
-        {/* Dust blue blob — top center, cool counterweight */}
+        {/* Lavender/blue blob — top center */}
         <motion.div
           className="aurora-blob-3 absolute rounded-full"
           style={{
@@ -638,13 +772,13 @@ export function HumScreen() {
             left: "30%",
             top: "-5%",
             background:
-              "radial-gradient(ellipse at center, rgba(167,184,200,0.26) 0%, rgba(201,182,228,0.08) 50%, transparent 75%)",
+              "radial-gradient(ellipse at center, rgba(170,190,255,0.22) 0%, rgba(200,180,240,0.08) 50%, transparent 75%)",
             filter: "blur(50px)",
             scale: blob3Scale,
             opacity: blobOpacity,
           }}
         />
-        {/* Soft lavender — bottom right */}
+        {/* Subtle green iridescence — bottom right */}
         <motion.div
           className="aurora-blob-1 absolute rounded-full"
           style={{
@@ -653,7 +787,7 @@ export function HumScreen() {
             right: "15%",
             bottom: "20%",
             background:
-              "radial-gradient(ellipse at center, rgba(201,182,228,0.18) 0%, transparent 60%)",
+              "radial-gradient(ellipse at center, rgba(140,230,200,0.15) 0%, transparent 60%)",
             filter: "blur(45px)",
             animationDelay: "-8s",
             scale: blob2Scale,
@@ -665,17 +799,14 @@ export function HumScreen() {
       {/* ─── Content layout ──────────────────────────────────────── */}
       <div className="relative z-10 min-h-svh flex flex-col">
         {/* ── Desktop: side-by-side layout / Mobile: stacked ──── */}
-        <div className="flex-1 flex flex-col md:flex-row items-center justify-center px-6 md:px-16 lg:px-24 gap-8 md:gap-12">
-          {/* ── Left column: headline text ────────────────────── */}
-          {/* The inner reserved-height box keeps the headline AND the orb
-              anchored. Its min-height fits the tallest copy (a 3-line idle
-              headline), so swapping idle↔recording↔processing — or rotating
-              headlines — never grows or collapses the column and nudges the
-              orb. Height is content-only; the safe-area padding stays on the
-              outer div so a notch can never change the reserved height. */}
-          <div className="min-w-0 w-full md:w-[520px] md:flex-shrink-0 text-center md:text-left pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
-            <div className="flex flex-col justify-center min-h-[116px] md:min-h-[170px] lg:min-h-[196px]">
-            <AnimatePresence mode="wait">
+        <div className="flex-1 flex items-center justify-center px-6 md:px-16 lg:px-24">
+          <div className="flex w-full max-w-md flex-col items-center justify-center gap-8 md:max-w-[736px] md:flex-row md:gap-6 lg:max-w-[780px]">
+            {/* The stage is one macro block, but the text and orb keep separate
+                locked boxes. The outer max-width controls composition; the inner
+                min-heights protect the orb from headline rotation and async copy. */}
+            <div className="min-w-0 w-full md:w-[384px] md:flex-shrink-0 text-center md:text-left pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
+              <div className="flex flex-col justify-center min-h-[116px] md:min-h-[170px] lg:min-h-[196px]">
+              <AnimatePresence mode="wait">
               {isIdle && !humError && (
                 <motion.h1
                   key={`idle-${idleIndex}`}
@@ -686,7 +817,7 @@ export function HumScreen() {
                     duration: 0.5,
                     ease: "easeInOut",
                   }}
-                  className="hero-serif text-[#1A1A1A] text-[36px] md:text-[52px] lg:text-[60px] whitespace-pre-line leading-[1.1]"
+                  className="hero-serif text-[#1A1A1A] text-[32px] md:text-[44px] lg:text-[52px] whitespace-pre-line leading-[1.1]"
                 >
                   {IDLE_HEADLINES[idleIndex]}
                 </motion.h1>
@@ -700,7 +831,7 @@ export function HumScreen() {
                   exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : undefined}
                   transition={{ duration: 0.4 }}
                 >
-                  <h1 className="hero-serif text-[#1A1A1A] text-[36px] md:text-[52px] lg:text-[60px] leading-[1.1]">
+                  <h1 className="hero-serif text-[#1A1A1A] text-[32px] md:text-[44px] lg:text-[52px] leading-[1.1]">
                     {t("hum.recording")}
                   </h1>
                   <div className="flex items-center justify-center md:justify-start gap-2 mt-4">
@@ -754,7 +885,7 @@ export function HumScreen() {
                       animate={{ opacity: 1 }}
                       exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : undefined}
                       transition={{ duration: 0.3 }}
-                      className="hero-serif text-[#1A1A1A] text-[28px] md:text-[42px] lg:text-[48px] leading-[1.15]"
+                      className="hero-serif text-[#1A1A1A] text-[26px] md:text-[38px] lg:text-[44px] leading-[1.15]"
                     >
                       {processingMessage}
                     </motion.h1>
@@ -764,12 +895,12 @@ export function HumScreen() {
                   </p>
                 </motion.div>
               )}
-            </AnimatePresence>
+              </AnimatePresence>
+              </div>
             </div>
-          </div>
 
-          {/* ── Right column: the orb ─────────────────────────── */}
-          <div className="relative flex flex-col items-center justify-center flex-shrink-0">
+            {/* ── Right column: the orb ─────────────────────────── */}
+            <div className="relative flex flex-col items-center justify-center flex-shrink-0">
             {/* Orb container — responsive sizing */}
             <div
               className="relative"
@@ -784,8 +915,8 @@ export function HumScreen() {
                 style={{
                   inset: "-18%",
                   background: isRecording
-                    ? "conic-gradient(from 0deg, #FF8A5C, #FF5924, #D9421A, #EBCB8B, #FF8A5C)"
-                    : "conic-gradient(from 0deg, #FF8A5C88, #EBCB8B66, #A7B8C844, #FFE6DA66, #C9B6E444, #FF8A5C88)",
+                    ? "conic-gradient(from 0deg, #FF8A5C, #FF5924, #FF69D2, #FFE040, #FF8A5C)"
+                    : "conic-gradient(from 0deg, #FF8A5C88, #FF69D266, #A7B8C844, #FFE04066, #C9B6E444, #FF8A5C88)",
                   filter: glowFilter,
                   scale: glowScale,
                   opacity: glowOpacity,
@@ -837,28 +968,50 @@ export function HumScreen() {
               {/* White orb button */}
               <motion.button
                 onPointerDown={() => {
-                  if (isIdle && !humError) {
+                  if (isIdle && !humError && startPhaseRef.current === "idle") {
+                    cancelPendingStartRef.current = false;
                     if (!passGuestGate()) return;
-                    startAudioContext();
-                    startRecording();
+                    void startRecording();
                   }
                 }}
                 onPointerUp={() => {
-                  if (isRecording) stopRecording();
+                  releaseCapture();
                 }}
                 onPointerLeave={() => {
-                  if (isRecording) stopRecording();
+                  releaseCapture();
+                }}
+                onPointerCancel={() => {
+                  releaseCapture();
+                }}
+                onKeyDown={(e) => {
+                  if (e.repeat) return;
+                  if (
+                    (e.key === " " || e.key === "Enter") &&
+                    isIdle &&
+                    !humError &&
+                    startPhaseRef.current === "idle"
+                  ) {
+                    e.preventDefault();
+                    cancelPendingStartRef.current = false;
+                    if (!passGuestGate()) return;
+                    void startRecording();
+                  }
+                }}
+                onKeyUp={(e) => {
+                  if (e.key === " " || e.key === "Enter") {
+                    e.preventDefault();
+                    releaseCapture();
+                  }
                 }}
                 disabled={isProcessing}
-                // Scale is locked at 1 in every state: a press/record used to
-                // shrink the orb to 0.92 while the glow + progress ring stayed
-                // full size, which read as the inner circle drifting out of the
-                // outer ring. The orb must never resize — press feedback comes
-                // from a size-neutral shadow lift, not a transform.
-                animate={{ scale: 1 }}
+                // Keep the state-driven scale anchored so recording never
+                // drifts out of the glow/ring; idle hover restores the
+                // tactile "grow while held under the cursor" feel.
+                animate={{ scale: isRecording ? 0.92 : 1 }}
                 whileHover={
                   isIdle
                     ? {
+                        scale: 1.05,
                         boxShadow:
                           "0 6px 48px rgba(255,255,255,0.78), 0 0 0 1px rgba(255,255,255,0.92)",
                       }
@@ -992,6 +1145,7 @@ export function HumScreen() {
                 )}
               </AnimatePresence>
             </div>
+            </div>
           </div>
         </div>
 
@@ -1042,70 +1196,11 @@ export function HumScreen() {
                 <p className="text-[#8C8780] text-[13px] leading-relaxed mb-6">
                   {errorCopy.detail}
                 </p>
-                {humError.variant === "insufficient" && !isGuest ? (
-                  /* Out of notes while signed in — the useful action is a
-                     top-up, not another free demo run. */
-                  <button
-                    onClick={() => router.push("/topup")}
-                    className="mm-btn-primary w-full justify-center mb-3"
-                  >
-                    {t("hum.err.insufficient.cta_topup")}
-                  </button>
-                ) : (
-                  /* Re-run the flow. For a warming music engine the same
-                     action re-probes Magenta; the label just stops promising
-                     a "demo melody" that would need the same down engine. */
-                  <button
-                    onClick={() => {
-                      startAudioContext();
-                      setHumError(null);
-                      transcribeAndGenerate(undefined);
-                    }}
-                    className="mm-btn-primary w-full justify-center mb-3"
-                  >
-                    {humError.code === "music_engine_unavailable"
-                      ? errorCopy.retry
-                      : t("hum.mic.cta_example")}
-                  </button>
-                )}
-
-                {/* 如果是 billing_unavailable，显示两个按钮 */}
-                {humError.code === "billing_unavailable" ? (
-                  <div className="flex items-center justify-center gap-6">
-                    <button
-                      onClick={() => {
-                        startAudioContext();
-                        setHumError(null);
-                      }}
-                      className="text-[#8C8780] text-[13px] underline-mm"
-                    >
-                      {errorCopy.retry}
-                    </button>
-                    <button
-                      onClick={() => {
-                        startAudioContext();
-                        setHumError(null);
-                        // 使用示例旋律继续流程（跳过计费）
-                        transcribeAndGenerate(undefined);
-                      }}
-                      className="text-[#8C8780] text-[13px] underline-mm"
-                    >
-                      {errorCopy.demo || "测试使用"}
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => {
-                      startAudioContext();
-                      setHumError(null);
-                      startRecording();
-                    }}
-                    className="text-[#8C8780] text-[13px] underline-mm"
-                  >
-                    {humError.code === "music_engine_unavailable"
-                      ? t("hum.hear.cta_retry")
-                      : errorCopy.retry}
-                  </button>
+                {recoveryPlan && (
+                  <RecoveryActions
+                    plan={recoveryPlan}
+                    onAction={handleRecoveryAction}
+                  />
                 )}
                 {humError.requestId && humError.showSupportCode && (
                   <p className="mt-4 text-[10px] tracking-[0.18em] uppercase text-[#B6B0A4]">
@@ -1181,15 +1276,62 @@ function writeFixtureRescueState(
   );
 }
 
+function RecoveryActions({
+  plan,
+  onAction,
+}: {
+  plan: HumRecoveryPlan;
+  onAction: (action: HumRecoveryAction) => void;
+}) {
+  return (
+    <>
+      <button
+        onClick={() => {
+          onAction(plan.primary);
+        }}
+        className="mm-btn-primary w-full justify-center mb-3"
+      >
+        {plan.primary.label}
+      </button>
+      {plan.secondary ? (
+        <SecondaryRecoveryAction
+          action={plan.secondary}
+          onAction={onAction}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function SecondaryRecoveryAction({
+  action,
+  onAction,
+}: {
+  action: HumRecoveryAction;
+  onAction: (action: HumRecoveryAction) => void;
+}) {
+  return (
+    <button
+      onClick={() => {
+        onAction(action);
+      }}
+      className="text-[#8C8780] text-[13px] underline-mm"
+    >
+      {action.label}
+    </button>
+  );
+}
+
 function copyForState(
   error: HumErrorState,
-  t: (key: Parameters<ReturnType<typeof useTranslator>>[0]) => string,
-): { title: string; detail: string; retry: string; demo?: string } {
+  t: Translator,
+): HumErrorCopy {
   if (error.code === "music_engine_unavailable") {
     return {
       title: t("hum.err.music_engine.title"),
       detail: t("hum.err.music_engine.detail"),
       retry: t("hum.err.music_engine.cta_retry"),
+      demo: t("hum.cta_demo"),
     };
   }
   if (error.code === "worker_unconfigured") {
@@ -1197,6 +1339,7 @@ function copyForState(
       title: t("hum.err.worker_unconfigured.title"),
       detail: t("hum.err.worker_unconfigured.detail"),
       retry: t("hum.err.unavailable.cta_retry"),
+      demo: t("hum.cta_demo"),
     };
   }
   if (error.code === "billing_unavailable") {
@@ -1204,7 +1347,7 @@ function copyForState(
       title: t("hum.err.billing_unavailable.title"),
       detail: t("hum.err.billing_unavailable.detail"),
       retry: t("hum.err.unavailable.cta_retry"),
-      demo: t("hum.cta_demo") || "测试使用", // 添加测试使用按钮
+      demo: t("hum.cta_demo"),
     };
   }
 
@@ -1214,36 +1357,98 @@ function copyForState(
         title: t("hum.mic.title"),
         detail: t("hum.mic.detail"),
         retry: t("hum.mic.cta_retry"),
+        demo: t("hum.cta_demo"),
       };
     case "inaudible":
       return {
         title: t("hum.hear.title"),
         detail: t("hum.hear.detail"),
         retry: t("hum.hear.cta_retry"),
+        demo: t("hum.cta_demo"),
       };
     case "too_short":
       return {
         title: t("hum.err.too_short.title"),
         detail: t("hum.err.too_short.detail"),
         retry: t("hum.err.too_short.cta_retry"),
+        demo: t("hum.cta_demo"),
       };
     case "insufficient":
       return {
         title: t("hum.err.insufficient.title"),
         detail: t("hum.err.insufficient.detail"),
         retry: t("hum.err.insufficient.cta_retry"),
+        demo: t("hum.cta_demo"),
       };
     case "rate_limited":
       return {
         title: t("hum.err.rate_limited.title"),
         detail: t("hum.err.rate_limited.detail"),
         retry: t("hum.err.rate_limited.cta_retry"),
+        demo: t("hum.cta_demo"),
       };
     case "unavailable":
       return {
         title: t("hum.err.unavailable.title"),
         detail: t("hum.err.unavailable.detail"),
         retry: t("hum.err.unavailable.cta_retry"),
+        demo: t("hum.cta_demo"),
       };
   }
+}
+
+function recoveryForState(
+  error: HumErrorState,
+  copy: HumErrorCopy,
+  isGuest: boolean,
+  t: Translator,
+): HumRecoveryPlan {
+  if (error.variant === "insufficient" && !isGuest) {
+    return {
+      primary: {
+        kind: "topup",
+        label: t("hum.err.insufficient.cta_topup"),
+      },
+      secondary: {
+        kind: "demo",
+        label: copy.demo,
+      },
+    };
+  }
+
+  if (error.code === "billing_unavailable") {
+    return {
+      primary: {
+        kind: "demo",
+        label: copy.demo,
+      },
+      secondary: {
+        kind: "dismiss",
+        label: copy.retry,
+      },
+    };
+  }
+
+  if (error.code === "music_engine_unavailable") {
+    return {
+      primary: {
+        kind: "record",
+        label: copy.retry,
+        requiresGuestGate: false,
+      },
+      secondary: null,
+    };
+  }
+
+  return {
+    primary: {
+      kind: "record",
+      label: copy.retry,
+      requiresGuestGate: true,
+    },
+    secondary: {
+      kind: "demo",
+      label: copy.demo,
+    },
+  };
 }
