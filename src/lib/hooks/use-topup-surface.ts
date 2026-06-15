@@ -19,18 +19,21 @@ export function useTopupSurface() {
       if (!response.ok) {
         setData(null);
         setError("unavailable");
-        return;
+        return null;
       }
       const payload = (await response.json()) as Partial<TopupSurfaceData>;
-      setData({
+      const nextData = {
         lifetimeTopupCents: typeof payload.lifetimeTopupCents === "number"
           ? payload.lifetimeTopupCents
           : 0,
-      });
+      };
+      setData(nextData);
       setError(null);
+      return nextData;
     } catch {
       setData(null);
       setError("unavailable");
+      return null;
     } finally {
       setIsLoading(false);
     }

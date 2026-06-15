@@ -27,9 +27,9 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronsLeft, ChevronsRight, LinkIcon } from "lucide-react";
 import { createPortal } from "react-dom";
-import { toast } from "sonner";
 
 import { buildShareInviteUrl, getShareInviteUrl } from "@/lib/api/share-links";
+import { copyShareInviteLink } from "@/lib/platform/share-invite";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
 import { versionPreview } from "@/lib/music/version-preview";
@@ -436,7 +436,10 @@ export function SideNavWithModal() {
       typeof window === "undefined"
         ? ""
         : buildShareInviteUrl(window.location.origin);
-    void copyShareInviteLink(shareInviteUrl ?? fallbackUrl, t);
+    void copyShareInviteLink(shareInviteUrl ?? fallbackUrl, {
+      copied: t("share.copied"),
+      copyFailed: t("share.copy_failed"),
+    });
   };
 
   return (
@@ -445,45 +448,6 @@ export function SideNavWithModal() {
       <ShareCardModal open={shareModalOpen} onClose={() => setShareModalOpen(false)} />
     </>
   );
-}
-
-async function copyShareInviteLink(url: string, t: ReturnType<typeof useTranslator>) {
-  if (!url || typeof window === "undefined") {
-    toast.error(t("share.copy_failed"));
-    return;
-  }
-
-  try {
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(url);
-    } else if (!copyTextWithSelection(url)) {
-      throw new Error("clipboard unavailable");
-    }
-    toast.success(t("share.copied"));
-  } catch {
-    if (copyTextWithSelection(url)) {
-      toast.success(t("share.copied"));
-    } else {
-      toast.error(t("share.copy_failed"));
-    }
-  }
-}
-
-function copyTextWithSelection(text: string): boolean {
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  textarea.style.pointerEvents = "none";
-  document.body.appendChild(textarea);
-  textarea.select();
-
-  try {
-    return document.execCommand("copy");
-  } finally {
-    document.body.removeChild(textarea);
-  }
 }
 
 /* ── Brand glyph — small disc that breathes when audio plays ───────── */

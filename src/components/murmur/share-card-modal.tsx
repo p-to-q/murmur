@@ -65,7 +65,7 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
 
               <div className="absolute left-6 right-6 top-6 flex items-start justify-between">
                 <p className="text-[15px] text-white/90 drop-shadow">
-                  By Estherscanon
+                  {t("share.byline")}
                 </p>
                 <div className="flex items-center gap-4">
                   <Image

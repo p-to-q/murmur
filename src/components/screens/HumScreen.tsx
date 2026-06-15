@@ -199,6 +199,7 @@ export function HumScreen() {
   const [showLoginWall, setShowLoginWall] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const unmountingRef = useRef(false);
   const activeStreamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -270,9 +271,19 @@ export function HumScreen() {
   );
 
   useEffect(() => {
+    unmountingRef.current = false;
     resetFlow();
 
     return () => {
+      unmountingRef.current = true;
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.ondataavailable = null;
+        mediaRecorderRef.current.onstop = null;
+        if (mediaRecorderRef.current.state !== "inactive") {
+          mediaRecorderRef.current.stop();
+        }
+        mediaRecorderRef.current = null;
+      }
       cancelAnimationFrame(rafRef.current);
       clearIntervalRef(timerRef);
       clearIntervalRef(msgTimerRef);
@@ -618,6 +629,10 @@ export function HumScreen() {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       recorder.onstop = async () => {
+        if (unmountingRef.current) {
+          chunksRef.current = [];
+          return;
+        }
         stopMediaStream(activeStreamRef.current);
         activeStreamRef.current = null;
         stopAudioAnalyser();
@@ -967,6 +982,26 @@ export function HumScreen() {
                 }}
                 onPointerCancel={() => {
                   releaseCapture();
+                }}
+                onKeyDown={(e) => {
+                  if (e.repeat) return;
+                  if (
+                    (e.key === " " || e.key === "Enter") &&
+                    isIdle &&
+                    !humError &&
+                    startPhaseRef.current === "idle"
+                  ) {
+                    e.preventDefault();
+                    cancelPendingStartRef.current = false;
+                    if (!passGuestGate()) return;
+                    void startRecording();
+                  }
+                }}
+                onKeyUp={(e) => {
+                  if (e.key === " " || e.key === "Enter") {
+                    e.preventDefault();
+                    releaseCapture();
+                  }
                 }}
                 disabled={isProcessing}
                 // Keep the state-driven scale anchored so recording never

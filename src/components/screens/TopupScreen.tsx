@@ -113,15 +113,15 @@ export function TopupScreen() {
   };
 
   const animateBalance = useCallback(
-    (value: number) => {
+    (notesValue: number, usdValue: number) => {
       animate(notesSpring, 0, { duration: 0.25 }).then(() => {
-        animate(notesSpring, value, { duration: 0.5 });
+        animate(notesSpring, notesValue, { duration: 0.5 });
       });
       animate(balanceUSDSpring, 0, { duration: 0.25 }).then(() => {
-        animate(balanceUSDSpring, balanceUSD, { duration: 0.5 });
+        animate(balanceUSDSpring, usdValue, { duration: 0.5 });
       });
     },
-    [balanceUSD, balanceUSDSpring, notesSpring],
+    [balanceUSDSpring, notesSpring],
   );
 
   const handleRefresh = async () => {
@@ -129,12 +129,15 @@ export function TopupScreen() {
     setIsRefreshing(true);
     try {
       await refresh();
-      const [result] = await Promise.all([
+      const [result, surface] = await Promise.all([
         fetchUserBalance({ force: true }),
         refreshTopupSurface(),
       ]);
       if (result.balance) {
-        animateBalance(result.balance.notes);
+        animateBalance(
+          result.balance.notes,
+          (surface?.lifetimeTopupCents ?? topupSurface?.lifetimeTopupCents ?? 0) / 100,
+        );
       }
     } finally {
       setIsRefreshing(false);
@@ -170,11 +173,14 @@ export function TopupScreen() {
               .replace("{notes}", String(data.totalNotes ?? 0)),
           );
           await refresh();
-          const [result] = await Promise.all([
+          const [result, surface] = await Promise.all([
             fetchUserBalance({ force: true }),
             refreshTopupSurface(),
           ]);
-          animateBalance(result.balance?.notes ?? currentBalance);
+          animateBalance(
+            result.balance?.notes ?? currentBalance,
+            (surface?.lifetimeTopupCents ?? topupSurface?.lifetimeTopupCents ?? 0) / 100,
+          );
         } else {
           toast.info(
             t("topup.restore.found")

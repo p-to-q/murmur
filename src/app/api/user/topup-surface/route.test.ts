@@ -64,10 +64,12 @@ describe("GET /api/user/topup-surface", () => {
   });
 
   it("returns 503 when the topup surface query fails", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     nextSnapshotError = new Error("db unavailable");
 
     const response = await GET(
-      new Request("http://test.local/api/user/topup-surface") as unknown as NextRequest,
+      new Request("https://murmur.app/api/user/topup-surface") as unknown as NextRequest,
     );
 
     expect(response.status).toBe(503);
