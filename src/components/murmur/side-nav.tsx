@@ -147,7 +147,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
     >
       {/* ── Brand row ────────────────────────────────────────────── */}
       <div
-        className={collapsed ? "relative z-10 flex justify-center px-0 mb-2" : "relative z-10 flex items-center justify-between px-7 pr-5 mb-2"}
+        className={collapsed ? "relative z-10 flex justify-center px-0 mb-5" : "relative z-10 flex items-center justify-between px-7 pr-5 mb-2"}
       >
         <button
           onClick={goHome}
@@ -196,7 +196,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
         <button
           onClick={() => setCollapsed(false)}
           aria-label="Expand navigation"
-          className="relative z-10 mt-3 mx-auto text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
+          className="relative z-10 mx-auto text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
         >
           <ChevronsRight className="h-3.5 w-3.5" />
         </button>

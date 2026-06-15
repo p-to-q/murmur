@@ -799,13 +799,13 @@ export function HumScreen() {
       {/* ─── Content layout ──────────────────────────────────────── */}
       <div className="relative z-10 min-h-svh flex flex-col">
         {/* ── Desktop: side-by-side layout / Mobile: stacked ──── */}
-        <div className="flex-1 flex items-center justify-center px-6 md:px-16 lg:px-24">
-          <div className="flex w-full max-w-md flex-col items-center justify-center gap-8 md:max-w-[736px] md:flex-row md:gap-6 lg:max-w-[780px]">
+        <div className="flex-1 flex items-center justify-center px-6 md:px-12 lg:px-14 xl:px-24">
+          <div className="grid w-full max-w-md grid-cols-1 items-center justify-items-center gap-8 xl:max-w-[840px] xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-10">
             {/* The stage is one macro block, but the text and orb keep separate
                 locked boxes. The outer max-width controls composition; the inner
                 min-heights protect the orb from headline rotation and async copy. */}
-            <div className="min-w-0 w-full md:w-[384px] md:flex-shrink-0 text-center md:text-left pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
-              <div className="flex flex-col justify-center min-h-[116px] md:min-h-[170px] lg:min-h-[196px]">
+            <div className="min-w-0 w-full text-center xl:text-left pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
+              <div className="flex flex-col justify-center min-h-[116px] md:min-h-[208px]">
               <AnimatePresence mode="wait">
               {isIdle && !humError && (
                 <motion.h1
@@ -834,7 +834,7 @@ export function HumScreen() {
                   <h1 className="hero-serif text-[#1A1A1A] text-[32px] md:text-[44px] lg:text-[52px] leading-[1.1]">
                     {t("hum.recording")}
                   </h1>
-                  <div className="flex items-center justify-center md:justify-start gap-2 mt-4">
+                  <div className="flex items-center justify-center xl:justify-start gap-2 mt-4">
                     <span className="w-2 h-2 rounded-full bg-[#FF5924] animate-pulse" />
                     <span className="text-[#8C8780] text-[13px] tabular-nums tracking-[0.12em] font-mono">
                       {String(recordingTime).padStart(2, "0")}s /{" "}
@@ -900,14 +900,10 @@ export function HumScreen() {
             </div>
 
             {/* ── Right column: the orb ─────────────────────────── */}
-            <div className="relative flex flex-col items-center justify-center flex-shrink-0">
+            <div className="relative flex min-h-[calc(min(60vw,320px)+42px)] flex-col items-center justify-center md:min-h-[362px]">
             {/* Orb container — responsive sizing */}
             <div
-              className="relative"
-              style={{
-                width: "min(60vw, 320px)",
-                height: "min(60vw, 320px)",
-              }}
+              className="relative w-[min(60vw,320px)] h-[min(60vw,320px)]"
             >
               {/* Rotating conic glow behind the orb */}
               <motion.div
