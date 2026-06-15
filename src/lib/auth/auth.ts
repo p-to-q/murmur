@@ -1,16 +1,17 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import { CallbackRouteError } from "@auth/core/errors";
 import { db } from "@/lib/db/client";
 import { users, externalIdentities } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { ulid } from "ulid";
-import { GRANTS } from "@murmur/core";
 import {
   googleOAuthProviderOptions,
   isGoogleOAuthConfigured,
 } from "@/lib/auth/google-config";
 import { resolveAuthSecret } from "@/lib/auth/env";
 import { assertProductionAuthConfig } from "@/lib/auth/assert-config";
+import { upsertGoogleUser } from "@/lib/db/queries/users";
+import { log } from "@/lib/observability/log";
 
 /**
  * Google OAuth is optional: without credentials the provider list is empty,
@@ -41,55 +42,46 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     async signIn({ user, account }) {
+      // Benign validation rejections: returning false routes to
+      // /auth/error?error=AccessDenied ("you cancelled"), which is the right
+      // UX for these non-error cases (wrong provider / missing email).
       if (!account || account.provider !== "google" || !user.email) return false;
 
       const googleId = account.providerAccountId;
       if (!googleId) return false;
 
       try {
-        const [existingIdentity] = await db
-          .select()
-          .from(externalIdentities)
-          .where(eq(externalIdentities.externalId, googleId))
-          .limit(1);
-
-        if (!existingIdentity) {
-          const newUserId = ulid();
-          await db.insert(users).values({
-            id: newUserId,
-            email: user.email,
-            name: user.name || user.email.split("@")[0],
-            avatarUrl: user.image,
-            regionId: "intl",
-            notesBalance: GRANTS.signup_bonus,
-            planTier: "free",
-          });
-
-          await db.insert(externalIdentities).values({
-            id: `eid_${ulid()}`,
-            userId: newUserId,
-            provider: "google",
-            externalId: googleId,
-            metadata: {
-              email: user.email,
-              name: user.name,
-            },
-          });
-        } else {
-          await db
-            .update(users)
-            .set({
-              name: user.name || undefined,
-              avatarUrl: user.image || undefined,
-              updatedAt: new Date(),
-            })
-            .where(eq(users.id, existingIdentity.userId));
+        const { created } = await upsertGoogleUser({
+          googleId,
+          email: user.email,
+          name: user.name ?? null,
+          image: user.image ?? null,
+        });
+        if (created) {
+          log(
+            "auth.user_provisioned",
+            { provider: "google" },
+            { route: "/api/auth/callback/google", shell: "web" },
+          );
         }
-
         return true;
       } catch (error) {
-        console.error("Sign in error:", error);
-        return false;
+        // Infra/DB failure. Do NOT return false — that maps to the misleading
+        // AccessDenied ("you cancelled"). Log a non-PII summary, then throw an
+        // AuthError whose type is not client-safe so Auth.js routes to
+        // /auth/error?error=Configuration ("server couldn't finish sign-in").
+        log(
+          "auth.signin_failed",
+          {
+            provider: "google",
+            stage: "upsert",
+            err: error instanceof Error ? error.name : "unknown",
+          },
+          { level: "error", route: "/api/auth/callback/google", shell: "web" },
+        );
+        throw new CallbackRouteError("Google sign-in could not be completed", {
+          cause: error instanceof Error ? error : new Error("signIn upsert failed"),
+        });
       }
     },
 
