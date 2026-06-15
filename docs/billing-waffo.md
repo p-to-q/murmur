@@ -5,6 +5,33 @@ checkout, integrated through the `@waffo/pancake-ts` SDK. It funds one-time
 **note top-ups** — the credit balance every chargeable action debits (see
 [payment-topup-feature.md](payment-topup-feature.md) for the credits model).
 
+This doc is also Murmur's local Waffo interface backup. It mirrors the parts of
+the Waffo docs that our code depends on, so future billing work can be reviewed
+against local repository truth before opening the external docs.
+
+## Waffo API facts we rely on
+
+- REST base URL: `https://api.waffo.ai/v1`.
+- GraphQL endpoint: `https://api.waffo.ai/v1/graphql`; GraphQL is read-only
+  for our use and must not replace checkout/webhook mutations.
+- Checkout creation is a REST action exposed by the SDK as
+  `client.checkout.createSession`.
+- `createSession` accepts `productId`, `currency`, optional `priceSnapshot`,
+  `buyerEmail`, `successUrl`, `metadata`, `expiresInSeconds`, `darkMode`, and
+  `orderMerchantExternalId`.
+- `metadata` must be a flat `Record<string, string>`; Murmur stores
+  `userId`, `skuId`, `notesGranted`, `purchaseKind`, and custom amount fields
+  there.
+- `orderMerchantExternalId` is our own order correlation key. Waffo limits it
+  to 128 characters; it appears on order/payment/refund payloads when the API
+  key checkout path is used.
+- Webhook signatures arrive in `X-Waffo-Signature` and must be verified over
+  the **raw request body** with `verifyWebhook(rawBody, signature)`.
+- Webhook event ids are delivery ids. Use `event.id` for delivery
+  de-duplication, and use `data.orderId` as the business order id.
+- Relevant event types today are `order.completed` and `refund.succeeded`.
+  Subscription events are ignored because Murmur sells one-time top-ups only.
+
 > **Stripe has been removed from web checkout.** Older docs and a `@deprecated
 > ResolvedStripeTopupPurchase` alias in
 > [topup-purchase.ts](../src/lib/billing/topup-purchase.ts) are the only Stripe
@@ -24,6 +51,7 @@ checkout, integrated through the `@waffo/pancake-ts` SDK. It funds one-time
 | SKUs + custom-amount quote | [packages/murmur-core/src/payments/cost-table.ts](../packages/murmur-core/src/payments/cost-table.ts) |
 | One-time setup (store + product) | [scripts/waffo-bootstrap.ts](../scripts/waffo-bootstrap.ts) |
 | Register webhook endpoint | [scripts/waffo-webhook-register.ts](../scripts/waffo-webhook-register.ts) |
+| Read-only Waffo ↔ local reconciliation | [scripts/waffo-reconcile.ts](../scripts/waffo-reconcile.ts) |
 
 ## SKUs
 
@@ -68,6 +96,7 @@ POST /api/billing/webhook
    │  • order.completed → resolveWaffoTopupPurchase(order)
    │  • insert purchases row (provider, providerRef = orderId)
    │  • grantNotes(reason "purchase:topup", externalRef = orderId)  ← idempotent
+   │  • refund.succeeded → reverseTopupGrant + purchases.status = refunded
    ▼
    notes balance += notesGranted
 ```
@@ -93,7 +122,8 @@ It returns `{ checkoutUrl, sessionId }`; the client opens `checkoutUrl`.
 
 ### Webhook fulfillment
 
-`POST /api/billing/webhook` (Node runtime) handles `order.completed`:
+`POST /api/billing/webhook` (Node runtime) handles `order.completed` and
+`refund.succeeded`:
 
 1. **Signature** — `verifyWebhook(rawBody, signature)`; missing → 400,
    invalid → 401.
@@ -107,11 +137,18 @@ It returns `{ checkoutUrl, sessionId }`; the client opens `checkoutUrl`.
    `providerRef = orderId`) with `onConflictDoNothing` on
    `(provider, providerRef)`.
 5. **Grant** — `grantNotes({ reason: "purchase:topup", externalRef: orderId })`.
+6. **Refund** — for `refund.succeeded`, find the local purchase by Waffo
+   `orderId`, insert a negative `refund:topup` ledger row through
+   `reverseTopupGrant`, then flip `purchases.status` to `refunded`.
 
 `InvalidTopupPurchaseError` (bad/unknown SKU, amount mismatch, missing
 `userId`) is treated as **non-retryable** — the route returns `200` so Waffo
 stops retrying a payload that will never succeed. Other failures return `500`
 so Waffo retries.
+
+Refunds for unknown local orders are also non-retryable. That is intentional:
+the provider cannot fix a missing local purchase by retrying the same payload,
+and repeated retries would only create noisy failed webhook logs.
 
 ## Idempotency
 
@@ -123,6 +160,14 @@ thanks to three independent guards keyed on the Waffo `orderId`:
 2. `purchases` unique `(provider, providerRef)` — each order is recorded once.
 3. `notes_ledger` idempotency on `(userId, reason, externalRef)` — `grantNotes`
    returns the prior row (`duplicate: true`) instead of granting again.
+
+Refunds use the same pattern. `events_webhook` de-dupes delivery retries,
+`purchases.providerRef` finds the original order, and the refund ledger row uses
+`externalRef = "waffo-refund:<refundTicketMerchantExternalId>"` when Waffo
+supplies the merchant refund-ticket reference. Provider/manual refunds fall back
+to `event.eventId`, then the order id. If the user has already spent some of the
+refunded top-up, Murmur caps the balance at zero and records the actual notes
+recovered in the `refund:topup` ledger row.
 
 See [data-model.md](data-model.md) §3.4 / §3.5 / §3.7 for the table shapes and
 the ledger invariant (`SUM(delta) == users.notesBalance`).
@@ -150,6 +195,7 @@ secrets keep working (`isWaffoConfigured()`).
 | `WAFFO_STORE_ID` | store the webhook is registered against (setup only) |
 | `WAFFO_WEBHOOK_URL` | webhook endpoint to register (defaults to `https://murmur.ptoq.io/api/billing/webhook`) |
 | `WAFFO_WEBHOOK_TEST_MODE` | force test/live webhook; auto-detected from a localhost URL otherwise |
+| `WAFFO_WEBHOOK_PROD_PUBLIC_KEY` / `WAFFO_WEBHOOK_TEST_PUBLIC_KEY` | optional signature verification keys for Waffo key rotation; the SDK also has built-in keys |
 | `MURMUR_APP_URL` | origin used to build the checkout `successUrl` |
 
 `isWaffoConfigured()` requires both a usable client (merchant id + private key)
@@ -162,7 +208,9 @@ One-time, run with credentials in `.env.local`:
 ```bash
 bun run waffo:bootstrap          # create/find "Murmur" store + generic top-up
                                  # product, publish it, print STORE_ID + PRODUCT_ID
-bun run waffo:webhook-register   # register order.completed → the webhook URL
+bun run waffo:webhook-register   # register order.completed + refund.succeeded
+                                 # → the webhook URL
+bun run waffo:reconcile          # read-only GraphQL check against local DB
 ```
 
 `waffo:bootstrap`
@@ -172,10 +220,39 @@ the store/product and prints the env lines to paste. `waffo:webhook-register`
 chooses test vs. live mode from `WAFFO_WEBHOOK_TEST_MODE`, falling back to "test
 if the URL is localhost."
 
+`waffo:reconcile`
+([scripts/waffo-reconcile.ts](../scripts/waffo-reconcile.ts)) uses Waffo
+GraphQL in read-only mode. It checks recent succeeded payments against local
+`purchases.providerRef = Waffo orderId`, `purchases.amountCents`, and the
+matching `notes_ledger.reason = "purchase:topup"` row. It also reports
+successful refunds that do not have an observed `refund:topup` ledger row in
+the checked window. Refund matching checks both the merchant refund-ticket ref
+and the provider refund id fallback. It exits non-zero only for hard
+payment/grant mismatches; refund gaps are warnings until every refund is
+created through a Murmur-owned ticket flow.
+
+## Extension points
+
+- **Scheduled GraphQL reconciliation** — `bun run waffo:reconcile` is a manual
+  read-only script today. The next step is a cron wrapper that stores snapshots
+  or pushes anomalies into observability.
+- **Refund operations UI** — add a small internal billing view that shows
+  purchase status, provider refs, refund ledger rows, and webhook delivery ids.
+- **Refund ticket correlation** — Waffo exposes both `orderMerchantExternalId`
+  and `refundTicketMerchantExternalId`; Murmur should preserve the latter when
+  an internal refund tool creates tickets so reconciliation can hard-check
+  refunds instead of warning on missing local rows.
+- **Region-aware tax / billing detail** — pass `billingDetail` when we have a
+  reliable billing country. Today the hosted checkout collects provider-side
+  details.
+- **Payment method telemetry** — store non-sensitive webhook payment fields
+  (`paymentMethod`, `paymentLast4` if needed for support) in `rawPayload` only;
+  do not copy card data into first-class columns.
+- **Subscriptions** — not supported today. Add a separate product and ledger
+  contract before handling Waffo `subscription.*` events.
+
 ## Deliberately out of scope here
 
-- **Refunds** — the ledger supports `refund:topup`, but there is no Waffo refund
-  webhook handler or op-tool wired yet.
 - **Subscriptions** — top-ups are one-time products only.
 - **Mobile-store IAP** — Apple / Google via RevenueCat is future Capacitor work;
   [restore-purchases.md](restore-purchases.md) tracks the restore surface that

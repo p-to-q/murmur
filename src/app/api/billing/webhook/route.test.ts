@@ -15,6 +15,7 @@ mock.module("@waffo/pancake-ts", () => ({
   verifyWebhook,
   WebhookEventType: {
     OrderCompleted: "order.completed",
+    RefundSucceeded: "refund.succeeded",
   },
 }));
 
@@ -34,8 +35,10 @@ type Row = Record<string, unknown>;
 const eventInserts: Row[] = [];
 const purchaseInserts: Row[] = [];
 const eventUpdates: Row[] = [];
+const purchaseUpdates: Row[] = [];
 let eventInsertConflicts = false;
 let reclaimRow: { id: string; status: string } | null = null;
+let purchaseRow: Row | null = null;
 
 function insertChain(values: Row) {
   const isEventRow = "providerEventId" in values;
@@ -57,14 +60,18 @@ mock.module("@/lib/db/client", () => ({
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: async () => (reclaimRow ? [reclaimRow] : []),
+          limit: async () => {
+            if (purchaseRow) return [purchaseRow];
+            return reclaimRow ? [reclaimRow] : [];
+          },
         }),
       }),
     }),
     update: () => ({
       set: (v: Row) => ({
         where: () => {
-          eventUpdates.push(v);
+          if (v.status === "refunded") purchaseUpdates.push(v);
+          else eventUpdates.push(v);
           return Promise.resolve([]);
         },
       }),
@@ -73,11 +80,21 @@ mock.module("@/lib/db/client", () => ({
 }));
 
 const grantInputs: Row[] = [];
+const reverseInputs: Row[] = [];
 let grantResult: Row = {
   ok: true,
   ledgerId: "nle_test",
   balanceBefore: 5,
   balanceAfter: 135,
+  duplicate: false,
+};
+let reverseResult: Row = {
+  ok: true,
+  ledgerId: "nle_refund",
+  purchaseLedgerId: "nle_purchase",
+  balanceBefore: 135,
+  balanceAfter: 5,
+  amount: 130,
   duplicate: false,
 };
 
@@ -101,6 +118,10 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
   refundNotes: async () => ({
     ok: false as const,
     reason: "original_not_found" as const,
+  }),
+  reverseTopupGrant: mock(async (input: Row) => {
+    reverseInputs.push(input);
+    return reverseResult;
   }),
 }));
 
@@ -137,6 +158,27 @@ function orderCompletedEvent(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function refundSucceededEvent(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "wh_refund_1",
+    eventType: "refund.succeeded",
+    eventId: "RF_test_123",
+    mode: "test",
+    data: {
+      orderId: "ORD_test_123",
+      buyerEmail: "buyer@test.local",
+      currency: "USD",
+      amount: "5.99",
+      taxAmount: "0.00",
+      productName: "Murmur Notes Top-up",
+      refundStatus: "succeeded",
+      refundReason: "requested_by_customer",
+      refundTicketMerchantExternalId: "REF_ticket_123",
+      ...overrides,
+    },
+  };
+}
+
 beforeEach(() => {
   waffoConfigured = true;
   nextEvent = orderCompletedEvent();
@@ -146,12 +188,24 @@ beforeEach(() => {
   eventInserts.length = 0;
   purchaseInserts.length = 0;
   eventUpdates.length = 0;
+  purchaseUpdates.length = 0;
   grantInputs.length = 0;
+  reverseInputs.length = 0;
+  purchaseRow = null;
   grantResult = {
     ok: true,
     ledgerId: "nle_test",
     balanceBefore: 5,
     balanceAfter: 135,
+    duplicate: false,
+  };
+  reverseResult = {
+    ok: true,
+    ledgerId: "nle_refund",
+    purchaseLedgerId: "nle_purchase",
+    balanceBefore: 135,
+    balanceAfter: 5,
+    amount: 130,
     duplicate: false,
   };
   verifyWebhook.mockClear();
@@ -258,6 +312,50 @@ describe("POST /api/billing/webhook", () => {
         skuId: "topup_custom",
         customAmountUsd: 12,
       },
+    });
+  });
+
+  it("reverses notes and marks purchases refunded for refund.succeeded", async () => {
+    nextEvent = refundSucceededEvent();
+    purchaseRow = {
+      id: "pur_test",
+      userId: "usr_buyer",
+      productId: "topup_120_notes",
+      notesGranted: 130,
+      status: "succeeded",
+    };
+
+    const response = await POST(buildRequest());
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { refunded?: number };
+    expect(body.refunded).toBe(130);
+
+    expect(reverseInputs).toHaveLength(1);
+    expect(reverseInputs[0]).toMatchObject({
+      userId: "usr_buyer",
+      orderId: "ORD_test_123",
+      notesGranted: 130,
+      refundExternalRef: "waffo-refund:REF_ticket_123",
+    });
+
+    expect(purchaseUpdates.at(-1)).toMatchObject({ status: "refunded" });
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
+  it("falls back to the refund event id when no refund ticket ref is present", async () => {
+    nextEvent = refundSucceededEvent({ refundTicketMerchantExternalId: undefined });
+    purchaseRow = {
+      id: "pur_test",
+      userId: "usr_buyer",
+      productId: "topup_120_notes",
+      notesGranted: 130,
+      status: "succeeded",
+    };
+
+    const response = await POST(buildRequest());
+    expect(response.status).toBe(200);
+    expect(reverseInputs[0]).toMatchObject({
+      refundExternalRef: "waffo-refund:RF_test_123",
     });
   });
 

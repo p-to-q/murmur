@@ -40,7 +40,7 @@ await client.webhooks.add({
   storeId,
   channel: "http",
   url: webhookUrl,
-  events: [WebhookEventType.OrderCompleted],
+  events: [WebhookEventType.OrderCompleted, WebhookEventType.RefundSucceeded],
   testMode,
 });
 console.log(`✓ Webhook registered (testMode=${testMode}): ${webhookUrl}`);

@@ -88,6 +88,21 @@ export type RefundNotesResult =
       reason: "original_not_found" | "original_not_a_spend" | "user_not_found";
     };
 
+export type ReverseTopupGrantResult =
+  | {
+      ok: true;
+      ledgerId: string;
+      purchaseLedgerId: string;
+      balanceBefore: number;
+      balanceAfter: number;
+      amount: number;
+      duplicate: boolean;
+    }
+  | {
+      ok: false;
+      reason: "purchase_grant_not_found" | "user_not_found";
+    };
+
 export type SpendNotesInput = {
   userId: string;
   cost: number;
@@ -112,6 +127,14 @@ export type RefundNotesInput = {
    * narrower reason if you ever need to slice ledger queries by it.
    */
   reason?: GrantReason;
+  metadata?: Record<string, unknown>;
+};
+
+export type ReverseTopupGrantInput = {
+  userId: string;
+  orderId: string;
+  notesGranted: number;
+  refundExternalRef: string;
   metadata?: Record<string, unknown>;
 };
 
@@ -363,6 +386,90 @@ export async function refundNotes(input: RefundNotesInput): Promise<RefundNotesR
       balanceBefore: user.notesBalance,
       balanceAfter: decision.balanceAfter,
       amount: decision.amount,
+      duplicate: false,
+    };
+  });
+}
+
+/**
+ * Reverse a provider-confirmed top-up after a successful provider refund.
+ *
+ * Unlike `refundNotes`, which refunds a negative spend row, this writes a
+ * negative `refund:topup` row to offset the original positive
+ * `purchase:topup` grant. The original grant remains immutable.
+ */
+export async function reverseTopupGrant(
+  input: ReverseTopupGrantInput,
+): Promise<ReverseTopupGrantResult> {
+  const amount = normalizePositiveNotes(input.notesGranted, "notesGranted");
+
+  return db.transaction(async (tx) => {
+    const [purchaseGrant] = await tx
+      .select({ id: notesLedger.id, delta: notesLedger.delta })
+      .from(notesLedger)
+      .where(
+        and(
+          eq(notesLedger.userId, input.userId),
+          eq(notesLedger.reason, "purchase:topup"),
+          eq(notesLedger.externalRef, input.orderId),
+        ),
+      )
+      .limit(1);
+
+    if (!purchaseGrant || purchaseGrant.delta <= 0) {
+      return { ok: false, reason: "purchase_grant_not_found" };
+    }
+
+    const user = await lockUserRow(tx, input.userId);
+    if (!user) return { ok: false, reason: "user_not_found" };
+
+    const existingRefund = await findIdempotentLedger(
+      tx,
+      input.userId,
+      "refund:topup",
+      input.refundExternalRef,
+    );
+
+    if (existingRefund) {
+      const reversedAmount = Math.abs(existingRefund.delta);
+      return {
+        ok: true,
+        ledgerId: existingRefund.id,
+        purchaseLedgerId: purchaseGrant.id,
+        balanceBefore: user.notesBalance,
+        balanceAfter: user.notesBalance,
+        amount: reversedAmount,
+        duplicate: true,
+      };
+    }
+
+    const balanceAfter = Math.max(0, user.notesBalance - amount);
+    const reversedAmount = user.notesBalance - balanceAfter;
+    const ledgerId = createLedgerId();
+    await tx.insert(notesLedger).values({
+      id: ledgerId,
+      userId: input.userId,
+      delta: -reversedAmount,
+      reason: "refund:topup",
+      externalRef: input.refundExternalRef,
+      metadata: {
+        ...(input.metadata ?? {}),
+        refunds: purchaseGrant.id,
+        orderId: input.orderId,
+      },
+    });
+    await tx
+      .update(users)
+      .set({ notesBalance: balanceAfter, updatedAt: new Date() })
+      .where(eq(users.id, input.userId));
+
+    return {
+      ok: true,
+      ledgerId,
+      purchaseLedgerId: purchaseGrant.id,
+      balanceBefore: user.notesBalance,
+      balanceAfter,
+      amount: reversedAmount,
       duplicate: false,
     };
   });

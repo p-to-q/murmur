@@ -175,8 +175,9 @@ Invariants:
 
 - The sum of `delta` over a user's rows == `users.notesBalance`. Always.
   A nightly reconciliation job fails loud if they diverge.
-- No row is ever updated or deleted. Refunds insert a negative grant
-  row that references the original via `externalRef`.
+- No row is ever updated or deleted. Provider top-up refunds insert a
+  negative `refund:topup` row keyed by the provider refund event; failed-spend
+  refunds insert a positive `refund:spend` row keyed by the original spend.
 - Every business action that consumes or grants notes inserts exactly
   one ledger row inside the same SQL transaction as the action itself.
 
@@ -367,7 +368,10 @@ Across tables:
    enforced by the spend/grant helpers; verified nightly.
 2. `purchases.status = "succeeded"` implies exactly one
    `notes_ledger.reason = "purchase:topup"` row with matching
-   `externalRef = purchases.id`.
+   `externalRef = purchases.providerRef` (Waffo `orderId` on web).
+   `purchases.status = "refunded"` implies a matching `refund:topup`
+   ledger row keyed by the provider refund event or, if unavailable, the
+   provider order id.
 3. Every `users` row has ≥1 `external_identities` row (post-bind) or
    none (guest); guests never have one.
 4. `sessions.user_id` points at a row whose `deleted_at IS NULL` at
