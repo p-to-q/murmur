@@ -170,7 +170,7 @@ function call(req: NextRequest): Promise<Response> // dispatches into the route 
 | `POST /api/songs` | (a) inserts row + debits ledger; (b) 402 on insufficient notes; (c) idempotency: same key returns the same row |
 | `GET /api/songs` | (a) returns own songs only; (b) pagination cursor advances |
 | `DELETE /api/songs/[id]` | (a) deletes own; (b) 404 on other user's id |
-| `POST /api/billing/webhook/stripe` | (a) verifies signature; (b) duplicate event id no-ops; (c) creates purchases + ledger rows |
+| `POST /api/billing/webhook` | (a) verifies Waffo signature over raw body; (b) duplicate delivery id no-ops; (c) `order.completed` creates purchases + ledger rows; (d) `refund.succeeded` reverses the top-up and marks the purchase refunded |
 | `POST /api/auth/login/init` + `/callback` | (a) issues session; (b) double-init invalidates prior |
 | `POST /api/account/delete` | (a) soft-marks; (b) revokes sessions; (c) does not delete songs synchronously |
 

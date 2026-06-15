@@ -132,6 +132,7 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
       duplicate: false,
     };
   },
+  reverseTopupGrant: async () => ({ ok: false as const, reason: "purchase_grant_not_found" as const }),
   // Unused here, but every mock of this module must declare the full export
   // surface — bun can't add new export names to an already-created record.
   grantNotes: async () => ({
@@ -141,6 +142,10 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
     balanceAfter: 0,
     duplicate: false,
   }),
+  decideGrant: () => ({ kind: "grant", balanceAfter: 0 }),
+  decideSpend: () => ({ kind: "insufficient", currentBalance: 0 }),
+  decideRefund: () => ({ kind: "original_missing" }),
+  refundReferenceFor: (id: string) => `refund:${id}`,
 }));
 
 class TestAudioWorkerError extends Error {

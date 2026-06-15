@@ -30,6 +30,7 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
   // surface — bun can't add new export names to an already-created record.
   spendNotes: async () => ({ ok: false as const, reason: "user_not_found" as const, currentBalance: 0 }),
   refundNotes: async () => ({ ok: false as const, reason: "original_not_found" as const }),
+  reverseTopupGrant: async () => ({ ok: false as const, reason: "purchase_grant_not_found" as const }),
   grantNotes: async () => ({
     ok: true as const,
     ledgerId: "nle_grant",
@@ -37,6 +38,10 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
     balanceAfter: 0,
     duplicate: false,
   }),
+  decideGrant: () => ({ kind: "grant", balanceAfter: 0 }),
+  decideSpend: () => ({ kind: "insufficient", currentBalance: 0 }),
+  decideRefund: () => ({ kind: "original_missing" }),
+  refundReferenceFor: (id: string) => `refund:${id}`,
 }));
 
 const { GET } = await import("./route");

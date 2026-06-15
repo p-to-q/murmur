@@ -285,6 +285,10 @@ export function MeScreen() {
             {t("me.settings") || "Settings"}
           </Link>
           <span className="text-[#D2C9B6]">·</span>
+          <Link href="/me/payments" className="hover:text-[#1A1A1A] transition-colors">
+            {t("me.payments") || "Payment records"}
+          </Link>
+          <span className="text-[#D2C9B6]">·</span>
           <Link href="/privacy" className="hover:text-[#1A1A1A] transition-colors">
             {t("me.privacy") || "Privacy"}
           </Link>

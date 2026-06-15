@@ -20,7 +20,7 @@ import {
 import { db } from "@/lib/db/client";
 import { eventsWebhook } from "@/lib/db/schema/events-webhook";
 import { purchases } from "@/lib/db/schema/purchases";
-import { grantNotes } from "@/lib/db/queries/notes-ledger";
+import { grantNotes, reverseTopupGrant } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
@@ -167,6 +167,8 @@ async function handleWaffoEvent(
   switch (event.eventType) {
     case WebhookEventType.OrderCompleted:
       return fulfillOrder(event.data);
+    case WebhookEventType.RefundSucceeded:
+      return refundOrder(event);
     default:
       return { ignored: event.eventType };
   }
@@ -249,6 +251,90 @@ async function fulfillOrder(
   return {
     granted: purchase.notesGranted,
     duplicate: grant.duplicate,
+    orderId,
+  };
+}
+
+async function refundOrder(
+  event: WebhookEvent<WebhookEventData>,
+): Promise<Record<string, unknown>> {
+  const data = event.data;
+  const orderId = data.orderId;
+  if (!orderId) {
+    throw new NonRetryableWebhookError("refund.succeeded missing orderId");
+  }
+
+  const [purchase] = await db
+    .select({
+      id: purchases.id,
+      userId: purchases.userId,
+      productId: purchases.productId,
+      notesGranted: purchases.notesGranted,
+      status: purchases.status,
+    })
+    .from(purchases)
+    .where(and(eq(purchases.provider, PROVIDER), eq(purchases.providerRef, orderId)))
+    .limit(1);
+
+  if (!purchase) {
+    throw new NonRetryableWebhookError(
+      `refund.succeeded references unknown Waffo order ${orderId}`,
+    );
+  }
+
+  const refundRef =
+    typeof data.refundTicketMerchantExternalId === "string" && data.refundTicketMerchantExternalId.length > 0
+      ? `waffo-refund:${data.refundTicketMerchantExternalId}`
+      : event.eventId
+        ? `waffo-refund:${event.eventId}`
+        : `waffo-refund:${orderId}`;
+  const reversal = await reverseTopupGrant({
+    userId: purchase.userId,
+    orderId,
+    notesGranted: purchase.notesGranted,
+    refundExternalRef: refundRef,
+    metadata: {
+      provider: PROVIDER,
+      orderId,
+      refundEventId: event.eventId,
+      refundTicketMerchantExternalId: data.refundTicketMerchantExternalId,
+      refundStatus: data.refundStatus,
+      refundReason: data.refundReason,
+      previousPurchaseStatus: purchase.status,
+    },
+  });
+
+  if (!reversal.ok) {
+    throw new Error(
+      `reverseTopupGrant failed for ${purchase.userId} on order ${orderId}: ${reversal.reason}`,
+    );
+  }
+
+  await db
+    .update(purchases)
+    .set({
+      status: "refunded",
+      rawPayload: data as unknown as Record<string, unknown>,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(purchases.provider, PROVIDER), eq(purchases.providerRef, orderId)));
+
+  log(
+    "notes.granted",
+    {
+      amount: -reversal.amount,
+      skuId: purchase.productId,
+      duplicate: reversal.duplicate,
+      orderId,
+      balanceAfter: reversal.balanceAfter,
+      reason: "refund:topup",
+    },
+    { route: ROUTE, userId: purchase.userId },
+  );
+
+  return {
+    refunded: reversal.amount,
+    duplicate: reversal.duplicate,
     orderId,
   };
 }
