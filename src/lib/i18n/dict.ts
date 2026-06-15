@@ -107,8 +107,8 @@ export const DICT = {
   // Dynamic idle headlines — rotate after a few seconds of inactivity
   "hum.idle.h1":       { zh: "脑海里的旋律，\n让它出来。",     en: "That melody\nin your head—\nlet it out." },
   "hum.idle.h2":       { zh: "按住白色圆圈，\n开始哼唱。",     en: "Hold the circle,\nstart humming." },
-  "hum.idle.h3":       { zh: "还没想好？\n随便哼几个音就行。", en: "Not sure yet?\nJust hum a few notes." },
-  "hum.idle.h4":       { zh: "什么调都可以，\n跑调也很好听。", en: "Any key works—\neven off-key\nsounds great." },
+  "hum.idle.h3":       { zh: "还没想好？\n随便哼几个音\n就行。", en: "Not sure yet?\nJust hum a few notes." },
+  "hum.idle.h4":       { zh: "什么调都可以，\n跑调也很好听。", en: "Any key works—\neven off-key sounds great." },
   "hum.idle.h5":       { zh: "闭上眼睛，\n哼出此刻的心情。",   en: "Close your eyes,\nhum how you feel\nright now." },
 
   // CTA pill

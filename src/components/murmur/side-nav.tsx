@@ -586,14 +586,15 @@ function ManuscriptRow({
         {isActive && (
           <motion.span
             layoutId="side-nav-active-marker"
-            className="absolute -left-7 top-1/2 h-9 w-[3px] -translate-y-1/2 rounded-r-[2px] bg-[#FF5924]"
+            className="absolute -left-7 top-1/2 h-9 w-[3px] -translate-y-1/2 overflow-visible"
             initial={false}
-            style={{ borderRadius: "0 2px 2px 0" }}
             transition={{
               layout: { duration: 0.46, ease: [0.16, 1, 0.3, 1] },
             }}
             aria-hidden
-          />
+          >
+            <span className="block h-full w-full rounded-r-[2px] bg-[#FF5924]" />
+          </motion.span>
         )}
         <span
           className={`transition-all duration-200 group-hover:translate-x-[3px] ${

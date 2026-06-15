@@ -800,11 +800,11 @@ export function HumScreen() {
       <div className="relative z-10 min-h-svh flex flex-col">
         {/* ── Desktop: side-by-side layout / Mobile: stacked ──── */}
         <div className="flex-1 flex items-center justify-center px-6 md:px-12 lg:px-14 xl:px-24">
-          <div className="grid w-full max-w-md grid-cols-1 items-center justify-items-center gap-8 xl:max-w-[840px] xl:grid-cols-[minmax(0,1fr)_320px] xl:gap-10">
+          <div className="hum-mirror-stage grid w-full max-w-md grid-cols-1 items-center justify-items-center gap-8">
             {/* The stage is one macro block, but the text and orb keep separate
                 locked boxes. The outer max-width controls composition; the inner
                 min-heights protect the orb from headline rotation and async copy. */}
-            <div className="min-w-0 w-full text-center xl:text-left pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
+            <div className="hum-mirror-copy min-w-0 w-full text-center pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
               <div className="flex flex-col justify-center min-h-[116px] md:min-h-[208px]">
               <AnimatePresence mode="wait">
               {isIdle && !humError && (
@@ -817,7 +817,10 @@ export function HumScreen() {
                     duration: 0.5,
                     ease: "easeInOut",
                   }}
-                  className="hero-serif text-[#1A1A1A] text-[32px] md:text-[44px] lg:text-[52px] whitespace-pre-line leading-[1.1]"
+                  className={[
+                    "hero-serif text-[#1A1A1A] text-[32px] md:text-[44px] lg:text-[52px] whitespace-pre-line leading-[1.1]",
+                    idleIndex === 3 || idleIndex === 4 ? "break-keep" : "",
+                  ].join(" ")}
                 >
                   {IDLE_HEADLINES[idleIndex]}
                 </motion.h1>
