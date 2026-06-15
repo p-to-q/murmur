@@ -24,7 +24,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { ChevronsLeft, ChevronsRight, LinkIcon } from "lucide-react";
 import { createPortal } from "react-dom";
 
@@ -84,6 +84,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const audioActive = isPlaying || auditioningVersionId !== null;
 
   const [slashFlash, setSlashFlash] = useState(false);
+  const [optimisticPath, setOptimisticPath] = useState<string | null>(null);
 
   const [collapsed, setCollapsed] = useSideNavCollapsed();
 
@@ -99,6 +100,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
 
   const goHome = (e: React.MouseEvent) => {
     e.preventDefault();
+    setOptimisticPath("/");
     getPlayer().stop().catch(() => {});
     versionPreview.stop();
     resetFlow();
@@ -115,7 +117,15 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   // Topup + Checkout hang off /me. Settings / billing / privacy will hang
   // off /me too once they ship. The model is general-purpose; see
   // TRAIL_ROOTS in ./nav-items for how a new sub-flow opts in.
-  const trail = computeTrail(pathname);
+  const effectivePath = optimisticPath ?? pathname;
+  const trail = computeTrail(effectivePath);
+
+  useEffect(() => {
+    if (optimisticPath === null) return;
+    if (pathname !== optimisticPath) return;
+    const id = window.setTimeout(() => setOptimisticPath(null), 0);
+    return () => window.clearTimeout(id);
+  }, [pathname, optimisticPath]);
 
   return (
     <aside
@@ -193,14 +203,15 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
       )}
 
       {/* ── Destinations ─────────────────────────────────────────── */}
-      <nav className={collapsed ? "relative z-10 mt-10 px-0 flex flex-col items-center gap-7" : "relative z-10 mt-10 px-7"}>
-        {items.map((item, i) => {
+      <LayoutGroup id={collapsed ? "side-nav-collapsed" : "side-nav-expanded"}>
+        <nav className={collapsed ? "relative z-10 mt-10 px-0 flex flex-col items-center gap-7" : "relative z-10 mt-10 px-7"}>
+          {items.map((item, i) => {
           const isActive =
             trail?.rootHref === item.href
               ? false
               : item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
+                ? effectivePath === "/"
+                : effectivePath.startsWith(item.href);
           const label = t(item.labelKey) || item.fallback;
 
           if (collapsed) {
@@ -208,10 +219,12 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
               <Fragment key={item.href}>
                 <CollapsedDot
                   isActive={isActive}
+                  onPointerDown={() => setOptimisticPath(item.href)}
                   onActivate={(e) => {
                     if (item.href === "/") {
                       goHome(e);
                     } else {
+                      setOptimisticPath(item.href);
                       router.push(item.href);
                     }
                   }}
@@ -253,6 +266,8 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
               ) : (
                 <Link
                   href={item.href}
+                  onPointerDown={() => setOptimisticPath(item.href)}
+                  onClick={() => setOptimisticPath(item.href)}
                   className="block"
                   suppressHydrationWarning
                 >
@@ -264,8 +279,9 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
               )}
             </Fragment>
           );
-        })}
-      </nav>
+          })}
+        </nav>
+      </LayoutGroup>
 
       <div className="flex-1" />
 
@@ -567,11 +583,18 @@ function ManuscriptRow({
           one-third thicker so it reads as a real margin tick rather than a
           hair line. Left side is square (flush with edge), right side is rounded. */}
       <div className="relative flex items-center justify-between gap-3">
-        <span
-          className={`absolute -left-7 top-1/2 -translate-y-1/2 h-9 w-[3px] bg-[#FF5924] transition-opacity duration-300 ${isActive ? "opacity-100" : "opacity-0"}`}
-          style={{ borderRadius: '0 2px 2px 0' }}
-          aria-hidden
-        />
+        {isActive && (
+          <motion.span
+            layoutId="side-nav-active-marker"
+            className="absolute -left-7 top-1/2 h-9 w-[3px] -translate-y-1/2 rounded-r-[2px] bg-[#FF5924]"
+            initial={false}
+            style={{ borderRadius: "0 2px 2px 0" }}
+            transition={{
+              layout: { duration: 0.46, ease: [0.16, 1, 0.3, 1] },
+            }}
+            aria-hidden
+          />
+        )}
         <span
           className={`transition-all duration-200 group-hover:translate-x-[3px] ${
             isActive
@@ -597,15 +620,18 @@ function ManuscriptRow({
 
 function CollapsedDot({
   isActive,
+  onPointerDown,
   onActivate,
   label,
 }: {
   isActive: boolean;
+  onPointerDown: () => void;
   onActivate: (e: React.MouseEvent) => void;
   label: string;
 }) {
   return (
     <button
+      onPointerDown={onPointerDown}
       onClick={onActivate}
       aria-label={label}
       title={label}
