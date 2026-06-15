@@ -41,6 +41,9 @@ export type LogEvent =
   | "user.profile_failed"
   | "notifications.publish_failed"
   | "billing.checkout_failed"
+  | "billing.reconcile_failed"
+  | "billing.reconcile_mismatch"
+  | "billing.reconcile_ok"
   | "billing.webhook_received"
   | "billing.webhook_failed"
   | "storage.local_serve_failed";

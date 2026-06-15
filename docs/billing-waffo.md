@@ -52,6 +52,7 @@ against local repository truth before opening the external docs.
 | One-time setup (store + product) | [scripts/waffo-bootstrap.ts](../scripts/waffo-bootstrap.ts) |
 | Register webhook endpoint | [scripts/waffo-webhook-register.ts](../scripts/waffo-webhook-register.ts) |
 | Read-only Waffo ↔ local reconciliation | [scripts/waffo-reconcile.ts](../scripts/waffo-reconcile.ts) |
+| Scheduled Waffo reconciliation | [src/app/api/billing/cron/reconcile/route.ts](../src/app/api/billing/cron/reconcile/route.ts) |
 
 ## SKUs
 
@@ -213,6 +214,11 @@ bun run waffo:webhook-register   # register order.completed + refund.succeeded
 bun run waffo:reconcile          # read-only GraphQL check against local DB
 ```
 
+For unattended monitoring, hit `GET /api/billing/cron/reconcile` with
+`Authorization: Bearer $CRON_SECRET`. That route reuses the same read-only
+reconciliation logic and returns a JSON report with summary + issues. Vercel
+cron runs it once daily so Hobby previews stay deployable.
+
 `waffo:bootstrap`
 ([scripts/waffo-bootstrap.ts](../scripts/waffo-bootstrap.ts)) is idempotent on
 the store/product and prints the env lines to paste. `waffo:webhook-register`
@@ -227,15 +233,16 @@ GraphQL in read-only mode. It checks recent succeeded payments against local
 matching `notes_ledger.reason = "purchase:topup"` row. It also reports
 successful refunds that do not have an observed `refund:topup` ledger row in
 the checked window. Refund matching checks both the merchant refund-ticket ref
-and the provider refund id fallback. It exits non-zero only for hard
-payment/grant mismatches; refund gaps are warnings until every refund is
-created through a Murmur-owned ticket flow.
+and the webhook's event/order fallback refs. It exits non-zero only for hard
+payment/grant mismatches; refund gaps are warnings until every refund is created
+through a Murmur-owned ticket flow.
 
 ## Extension points
 
 - **Scheduled GraphQL reconciliation** — `bun run waffo:reconcile` is a manual
-  read-only script today. The next step is a cron wrapper that stores snapshots
-  or pushes anomalies into observability.
+  read-only script today. The same logic now backs
+  `GET /api/billing/cron/reconcile`; the next step is storing snapshots or
+  pushing anomalies into observability.
 - **Refund operations UI** — add a small internal billing view that shows
   purchase status, provider refs, refund ledger rows, and webhook delivery ids.
 - **Refund ticket correlation** — Waffo exposes both `orderMerchantExternalId`
