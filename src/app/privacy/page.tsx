@@ -1,9 +1,9 @@
-import { PrivacyScreen } from "@/components/screens/PrivacyScreen";
+import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "Privacy",
 };
 
 export default function PrivacyPage() {
-  return <PrivacyScreen />;
+  redirect("/me/privacy");
 }

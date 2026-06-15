@@ -22,7 +22,7 @@ import {
 
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { useTopupSurface } from "@/lib/hooks/use-topup-surface";
-import { useUserBalance, fetchUserBalance } from "@/lib/hooks/use-user-balance";
+import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
 const SLIDER_MAX_USD = Math.min(100, CUSTOM_TOPUP_MAX_USD);
@@ -128,12 +128,11 @@ export function TopupScreen() {
     if (isRefreshing) return;
     setIsRefreshing(true);
     try {
-      await refresh();
       const [result, surface] = await Promise.all([
-        fetchUserBalance({ force: true }),
+        refresh(),
         refreshTopupSurface(),
       ]);
-      if (result.balance) {
+      if (result?.balance) {
         animateBalance(
           result.balance.notes,
           (surface?.lifetimeTopupCents ?? topupSurface?.lifetimeTopupCents ?? 0) / 100,
@@ -172,13 +171,12 @@ export function TopupScreen() {
               .replace("{count}", String(data.newPurchases))
               .replace("{notes}", String(data.totalNotes ?? 0)),
           );
-          await refresh();
           const [result, surface] = await Promise.all([
-            fetchUserBalance({ force: true }),
+            refresh(),
             refreshTopupSurface(),
           ]);
           animateBalance(
-            result.balance?.notes ?? currentBalance,
+            result?.balance?.notes ?? currentBalance,
             (surface?.lifetimeTopupCents ?? topupSurface?.lifetimeTopupCents ?? 0) / 100,
           );
         } else {

@@ -47,6 +47,27 @@ describe("fetchUserBalance", () => {
     expect(result.balance).toBeNull();
   });
 
+  it("keeps the last successful balance when a forced refresh is unauthorized", async () => {
+    let status = 200;
+    globalThis.fetch = (async () =>
+      status === 200
+        ? jsonResponse(
+            { notes: 5, planTier: "free", nextRefillAt: "2026-06-04T16:00:00.000Z" },
+            200,
+          )
+        : jsonResponse({ error: "unauthorized" }, 401)) as typeof fetch;
+
+    const first = await fetchUserBalance({ force: true });
+    expect(first.ok).toBe(true);
+    expect(first.balance?.notes).toBe(5);
+
+    status = 401;
+    const result = await fetchUserBalance({ force: true });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("unauthorized");
+    expect(result.balance?.notes).toBe(5);
+  });
+
   it("surfaces unavailable on 5xx without throwing", async () => {
     globalThis.fetch = (async () =>
       jsonResponse({ error: "balance_unavailable" }, 503)) as typeof fetch;
