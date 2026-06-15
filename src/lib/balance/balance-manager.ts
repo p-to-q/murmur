@@ -2,9 +2,7 @@
  * Balance management for guest (pre-login) users.
  *
  * Guests receive DAILY_REFILL notes per device per day via localStorage.
- * Signed-in users are temporarily unlimited for the preview; this is not the
- * launch billing model and must be removed or entitlement-gated before paid
- * release.
+ * Signed-in users use the server ledger and receive a one-time signup bonus.
  */
 
 import { COST, DAILY_REFILL } from "@murmur/core";
@@ -64,7 +62,7 @@ export function hasLocalNotes(amount: number = COST.hum): boolean {
 }
 
 /**
- * @deprecated Guests use local balance; signed-in users are unlimited.
+ * @deprecated Guests use local balance; signed-in users fetch the server ledger.
  */
 export async function getCloudBalance(): Promise<BalanceInfo> {
   const response = await fetch("/api/user/balance");
@@ -75,12 +73,12 @@ export async function getCloudBalance(): Promise<BalanceInfo> {
 }
 
 /**
- * @deprecated Use hasLocalNotes for guests; signed-in users are unlimited.
+ * @deprecated Use hasLocalNotes for guests; signed-in users check server balance.
  */
 export async function hasEnoughBalance(
   amount: number,
   isGoogleUser: boolean,
 ): Promise<boolean> {
-  if (isGoogleUser) return true;
+  if (isGoogleUser) return (await getCloudBalance()).notes >= amount;
   return getLocalBalance().notes >= amount;
 }

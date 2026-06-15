@@ -49,7 +49,7 @@ export type NotesReason =
 export const COST: Readonly<Record<CostKey, number>> = Object.freeze({
   hum:          1,
   llm_edit:     1,
-  save:         1,
+  save:         0,
   export_webm:  2,
 });
 
@@ -69,7 +69,7 @@ export const MAX_FREE_BALANCE = 10;
  * docs/payment-topup-feature.md §12 + docs/data-model.md §3.1 backfill.
  */
 export const GRANTS = Object.freeze({
-  signup_bonus: 10,
+  signup_bonus: 15,
   cutover_gift: 50,
 });
 

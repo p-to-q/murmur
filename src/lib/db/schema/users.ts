@@ -9,7 +9,7 @@ export const users = pgTable(
     name: text("name"),
     avatarUrl: text("avatar_url"),
     regionId: varchar("region_id", { length: 8 }).notNull().default("intl"),
-    notesBalance: integer("notes_balance").notNull().default(5),
+    notesBalance: integer("notes_balance").notNull().default(15),
     freeNotesGrantedAt: timestamp("free_notes_granted_at").notNull().defaultNow(),
     planTier: varchar("plan_tier", { length: 32 }).notNull().default("free"),
     createdAt: timestamp("created_at").notNull().defaultNow(),

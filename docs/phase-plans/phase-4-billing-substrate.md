@@ -59,10 +59,9 @@ will fund.
 - Gated `POST /api/strummer/edit` with `COST.llm_edit`:
   - refuses before the LLM call when balance is too low;
   - spends only after a successful LLM classification.
-- Gated `POST /api/songs` with `COST.save`:
-  - inserts the song and ledger spend inside the same DB transaction;
-  - returns `402 insufficient_notes` without writing the song when balance is
-    too low.
+- `POST /api/songs` now follows `COST.save === 0`:
+  - signed-in saves are free and do not write spend rows;
+  - guest cloud saves remain identity-gated before payment.
 
 ## Carry-Forward
 

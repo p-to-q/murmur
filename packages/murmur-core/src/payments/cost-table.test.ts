@@ -17,13 +17,17 @@ import {
 } from "./cost-table";
 
 describe("cost-table", () => {
-  it("defines positive note costs for every action", () => {
-    expect(Object.values(COST).every((value) => value > 0)).toBe(true);
+  it("defines non-negative note costs for every action", () => {
+    expect(Object.values(COST).every((value) => value >= 0)).toBe(true);
+    expect(COST.hum).toBe(1);
+    expect(COST.llm_edit).toBe(1);
+    expect(COST.save).toBe(0);
+    expect(COST.export_webm).toBe(2);
   });
 
   it("exposes the expected refill invariants", () => {
     expect(DAILY_REFILL).toBeLessThanOrEqual(MAX_FREE_BALANCE);
-    expect(GRANTS.signup_bonus).toBeGreaterThan(0);
+    expect(GRANTS.signup_bonus).toBe(15);
   });
 
   it("maps valid cost keys and rejects unknown ones", () => {

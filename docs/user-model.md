@@ -36,7 +36,7 @@ schema (a single `users` row covers all three; the type is computed).
 | Type | Signal | Default behavior |
 |---|---|---|
 | **`guest`** | No session token (Web) / no Apple ID (iOS) / no openid (MP) | Limited surface: Hum + Vibe + Save (gated by quota) + Gallery (read own device storage only). Cannot top up. |
-| **`free`** | Authenticated, `planTier == "free"` | Full surface. 5 free notes / day. |
+| **`free`** | Authenticated, `planTier == "free"` | Full surface. 15 notes once on sign-in, then paid top-up. |
 | **`premium`** | Authenticated, `planTier == "premium"` (reserved for v3) | Full surface. Unlimited core actions. |
 
 `type` is derived by the auth resolver (server-side) and exposed to the
@@ -175,7 +175,7 @@ function resolveEntitlement(user: User, balance: number): Entitlement {
   `useEntitlement()` (a thin wrapper around `useCurrentUser()` +
   `useUserBalance()`), reads the relevant boolean, and either:
   - renders the action enabled, or
-  - renders it as a **"need 1 note → Top up"** affordance that navigates
+  - renders it as a **"need N notes → Top up"** affordance that navigates
     to `/topup`.
 
 - Guest gating routes to `/me` ("Sign in to save") rather than `/topup`.

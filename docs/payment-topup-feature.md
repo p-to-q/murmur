@@ -43,7 +43,8 @@ Two viable models:
   + advanced features" tier without breaking the credit model.
 
 A user has a **credit balance** (`notes` integer). Each chargeable action
-debits that balance. Top-up restores it. Free tier gives a daily refill.
+debits that balance. Top-up restores it. Sign-in grants a one-time welcome
+balance; the guest web preview keeps a small local daily allowance.
 
 ## 3. What costs
 
@@ -52,18 +53,22 @@ debits that balance. Top-up restores it. Free tier gives a daily refill.
 | Hum → ScoredMelody | 1 | server audio worker CPU |
 | Generate 3 vibe versions | 0 | runs client / arrangement engine |
 | Studio LLM edit (Auris) | 1 / call | OpenAI cost passthrough |
-| Save song (persistence + render) | 1 | storage + MP3 render |
+| Save song (persistence) | 0 | saving is retention, not the paywall |
 | Export WebM (audio + video) | 2 | longer render |
 | Export poster PNG | 0 | client-side render |
 | Export share HTML | 0 | client-side render |
 
-Free tier daily allowance:
+Welcome and guest allowance:
 
-- **5 notes per day** auto-refill at server time `00:00 +08:00`.
-- Cap: max 10 unused free notes (incentivizes use, not hoarding).
+- **15 notes once on sign-in** (`grant:signup_bonus`). This is half of the
+  Starter pack, enough for several full tries without undercutting purchase.
+- Guest web preview: **5 local notes per day** per device via localStorage.
+- Future server daily refill can still use `grant:daily_free`, but it should be
+  revisited before launch instead of silently becoming an unlimited-free path.
 
-This gives a free user roughly: 1 new hum + 1 save + 1 LLM edit + 1 spare
-per day. Enough to feel the product; not enough to abuse the LLM endpoint.
+This gives a new signed-in user roughly: several hums, a few LLM edits, and
+free saves. Enough to feel the product; not enough to abuse worker or LLM
+capacity.
 
 ## 4. Data model
 
@@ -73,7 +78,7 @@ Add to [users.ts](../src/lib/db/schema/users.ts):
 
 ```ts
 // users table additions
-notesBalance:      integer("notes_balance").notNull().default(5),
+notesBalance:      integer("notes_balance").notNull().default(15),
 freeNotesGrantedAt: timestamp("free_notes_granted_at").notNull().defaultNow(),
 planTier:          varchar("plan_tier", { length: 32 }).notNull().default("free"),  // free | premium (reserved)
 regionId:          varchar("region_id", { length: 16 }).notNull().default("intl"),  // intl | cn
@@ -182,8 +187,8 @@ webhook**, never client-triggered.
 
 ### 5.3 Where the user is reminded
 
-- Save button on Studio: if `balance < cost.save`, button shows
-  "Save (need 1 note) — Top up" instead of "Save."
+- Save button on Studio: saving is free for signed-in users. If the user is a
+  guest, route them to sign in before cloud save.
 - Hum CTA on HumScreen: gated only when `balance == 0`. Below zero never
   occurs; the API spends in a transaction that checks balance first.
 - MeScreen: balance + "Top up" link at the top of the page (replace the
@@ -229,7 +234,8 @@ Current substrate shipped in Phase 4 pre-work:
   no-voice and worker failures do not consume notes.
 - `POST /api/strummer/edit` checks balance before the LLM call and spends
   `1` note only after a successful classifier response.
-- `POST /api/songs` spends `1` note and inserts the song in one transaction.
+- `POST /api/songs` now uses `COST.save === 0`; signed-in saves do not spend
+  notes, while guest cloud saves remain identity-gated.
 
 Carry-forward: Waffo checkout (`/api/billing/checkout`) and the
 `order.completed` webhook (`/api/billing/webhook`) have since shipped — see
@@ -362,7 +368,7 @@ A downstream agent has shipped payment + top-up when:
 ## 12. Open questions
 
 1. Free-tier abuse: should we tie `notesBalance` to a verified phone
-   number / Apple ID / WeChat openid before granting first 5 notes? Yes
+   number / Apple ID / WeChat openid before granting the first 15 notes? Yes
    on iOS (sign in with Apple) + MP (openid is automatic); web stays
    guest-allowed for now.
 2. SKU price card per region — do we maintain in code or via an admin

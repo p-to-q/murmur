@@ -60,7 +60,7 @@ email / name / avatarUrl / createdAt / updatedAt.
 v2 additions:
 
 ```ts
-notesBalance:       integer("notes_balance").notNull().default(5),
+notesBalance:       integer("notes_balance").notNull().default(15),
 freeNotesGrantedAt: timestamp("free_notes_granted_at").notNull().defaultNow(),
 planTier:           varchar("plan_tier", { length: 16 }).notNull().default("free"),
 regionId:           varchar("region_id", { length: 8 }).notNull().default("intl"),

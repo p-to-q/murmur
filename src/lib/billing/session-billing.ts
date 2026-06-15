@@ -8,18 +8,11 @@ export function isAuthenticatedSession(auth: OkAuth): boolean {
 }
 
 /**
- * Preview-only billing bypass.
+ * Skip ledger spends only for the anonymous guest bucket.
  *
- * This is not the launch pricing contract: signed-in users are temporarily
- * treated as unlimited so the product can be tested without purchase friction.
- * Before paid launch, authenticated free users should spend ledger notes again
- * and only an explicit premium/internal entitlement should bypass billing.
- *
- * Skip ledger spends for:
- * - authenticated users during the preview window
- * - anonymous guest bucket (daily quota enforced client-side per device)
+ * Signed-in users spend server-side notes from the ledger. Guest takes are
+ * quota-gated client-side per device and resolve to the shared guest id.
  */
 export function shouldSkipNotesBilling(auth: OkAuth): boolean {
-  if (isAuthenticatedSession(auth)) return true;
   return auth.source === "guest" && auth.user.id === "guest";
 }

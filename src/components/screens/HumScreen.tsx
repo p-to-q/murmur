@@ -402,7 +402,7 @@ export function HumScreen() {
         writeFixtureRescueState(noteLiveSuccess(readFixtureRescueState()));
         if (isGuest) spendLocalNotes(COST.hum);
       }
-      // A live take debits guest quota locally; signed-in users are unlimited.
+      // A live take debits guest quota locally; signed-in users spend server-side notes.
       if (blob) void refreshBalance();
       setRecordingState("done");
       // Vibe is its own route in v2; hand the journey off so the iris-close

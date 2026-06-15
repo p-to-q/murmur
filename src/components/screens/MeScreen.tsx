@@ -106,23 +106,22 @@ export function MeScreen() {
           <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px] mb-2">
             {isLoading
               ? "—"
-              : isSignedIn || balance?.unlimited
-                ? "∞"
-                : balance?.notes ?? 0}
+              : balance?.notes ?? 0}
           </p>
           <div className="flex items-end justify-between gap-4">
             <p className="flex-1 text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
-              {isSignedIn || balance?.unlimited
+              {balance?.unlimited
                 ? t("me.notes.unlimited")
                 : refillCopy}
             </p>
-            {isSignedIn ? (
-              <span className="text-[13px] text-[#8C8780]">{t("me.notes.signed_in")}</span>
-            ) : (
+            <div className="flex shrink-0 items-center gap-3">
+              {isSignedIn ? (
+                <span className="text-[13px] text-[#8C8780]">{t("me.notes.signed_in")}</span>
+              ) : null}
               <Link href="/topup" className="mm-btn-primary inline-flex shrink-0">
                 {t("me.notes.cta") || "Top up"}
               </Link>
-            )}
+            </div>
           </div>
         </Card>
 
