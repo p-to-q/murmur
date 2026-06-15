@@ -38,17 +38,24 @@ jobs:
           echo "## 📦 Bundle Size Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Check .next/static size
+          # Check non-media static size. Next emits large CJK font shards under
+          # .next/static/media, so those are reported separately below.
           if [ -d .next/static ]; then
-            STATIC_SIZE=$(du -sk .next/static | cut -f1)
+            STATIC_SIZE=$(find .next/static -path .next/static/media -prune -o -type f -print0 | xargs -0 du -k 2>/dev/null | awk '{sum += $1} END {print sum + 0}')
             STATIC_SIZE_MB=$(echo "scale=2; $STATIC_SIZE / 1024" | bc)
             echo "- Static assets: ${STATIC_SIZE_MB} MB" >> $GITHUB_STEP_SUMMARY
 
-            MAX_STATIC_SIZE=30720  # 30MB limit; current static media includes CJK font shards.
+            MAX_STATIC_SIZE=16384  # 16MB for JS/CSS/static. Fonts are excluded because they live in media shards.
             if [ $STATIC_SIZE -gt $MAX_STATIC_SIZE ]; then
-              echo "::error::Static bundle size (${STATIC_SIZE_MB} MB) exceeds limit (30 MB)"
+              echo "::error::Static bundle size (${STATIC_SIZE_MB} MB) exceeds limit (16 MB)"
               exit 1
             fi
+          fi
+
+          if [ -d .next/static/media ]; then
+            MEDIA_SIZE=$(du -sk .next/static/media | cut -f1)
+            MEDIA_SIZE_MB=$(echo "scale=2; $MEDIA_SIZE / 1024" | bc)
+            echo "- Static media/fonts: ${MEDIA_SIZE_MB} MB" >> $GITHUB_STEP_SUMMARY
           fi
 
           # Check individual JS chunks

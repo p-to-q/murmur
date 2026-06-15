@@ -1,9 +1,7 @@
 import type { Metadata, Viewport } from "next";
-// Only the weights actually used: 300 carries the zh hero-serif styles and
-// 400 is body text. Nothing pairs the Chinese face with bold, so 700 stays
-// out — each weight is a large set of CJK woff2 subsets.
-import "@fontsource/lxgw-wenkai-tc/300.css";
-import "@fontsource/lxgw-wenkai-tc/400.css";
+// Use the GB Screen family so simplified Chinese glyphs stay inside one face
+// instead of falling back mid-line while the font shards load.
+import "cn-fontsource-lxgw-wen-kai-gb-screen/font.css";
 import { Instrument_Serif } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";

@@ -817,7 +817,7 @@ export function HumScreen() {
                     duration: 0.5,
                     ease: "easeInOut",
                   }}
-                  className="hero-serif text-[#1A1A1A] text-[36px] md:text-[52px] lg:text-[60px] whitespace-pre-line leading-[1.1]"
+                  className="hero-serif text-[#1A1A1A] text-[32px] md:text-[44px] lg:text-[52px] whitespace-pre-line leading-[1.1]"
                 >
                   {IDLE_HEADLINES[idleIndex]}
                 </motion.h1>
@@ -831,7 +831,7 @@ export function HumScreen() {
                   exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : undefined}
                   transition={{ duration: 0.4 }}
                 >
-                  <h1 className="hero-serif text-[#1A1A1A] text-[36px] md:text-[52px] lg:text-[60px] leading-[1.1]">
+                  <h1 className="hero-serif text-[#1A1A1A] text-[32px] md:text-[44px] lg:text-[52px] leading-[1.1]">
                     {t("hum.recording")}
                   </h1>
                   <div className="flex items-center justify-center md:justify-start gap-2 mt-4">
@@ -885,7 +885,7 @@ export function HumScreen() {
                       animate={{ opacity: 1 }}
                       exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : undefined}
                       transition={{ duration: 0.3 }}
-                      className="hero-serif text-[#1A1A1A] text-[28px] md:text-[42px] lg:text-[48px] leading-[1.15]"
+                      className="hero-serif text-[#1A1A1A] text-[26px] md:text-[38px] lg:text-[44px] leading-[1.15]"
                     >
                       {processingMessage}
                     </motion.h1>

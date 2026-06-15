@@ -71,7 +71,7 @@
 :root {
   --murmur-font-sans: var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --murmur-font-serif: var(--font-instrument-serif), Georgia, "Iowan Old Style", "Times New Roman", Times, serif;
-  --murmur-font-chinese: "LXGW WenKai TC", "PingFang TC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --murmur-font-chinese: "LXGW WenKai GB Screen", "PingFang SC", "PingFang TC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --radius: 0.625rem; /* mymind cards are tight — 10px feels right */
   --background: #F5F1EB;
   --foreground: #1A1A1A;
@@ -197,11 +197,9 @@
   }
   html[data-lang="zh"] .hero-serif {
     font-family: var(--font-chinese);
-    /* LXGW WenKai TC's 300 weight is what gives Chinese hero text the elegant
-       editorial feel; without this override Tailwind cascades 400 and the
-       brush strokes thicken at 48–80 px, reading as a heavy display rather
-       than a magazine headline. */
-    font-weight: 300;
+    /* GB Screen keeps simplified glyphs in one face; 400 stays readable on
+       the first screen while avoiding the thick, overlarge look of 300. */
+    font-weight: 400;
     letter-spacing: 0;
   }
   .hero-serif-italic {
@@ -214,7 +212,7 @@
   html[data-lang="zh"] .hero-serif-italic {
     font-family: var(--font-chinese);
     font-style: normal;
-    font-weight: 300;
+    font-weight: 400;
     letter-spacing: 0;
   }
 
