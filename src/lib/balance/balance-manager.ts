@@ -2,7 +2,9 @@
  * Balance management for guest (pre-login) users.
  *
  * Guests receive DAILY_REFILL notes per device per day via localStorage.
- * Signed-in users have unlimited notes — server skips ledger spends.
+ * Signed-in users are temporarily unlimited for the preview; this is not the
+ * launch billing model and must be removed or entitlement-gated before paid
+ * release.
  */
 
 import { COST, DAILY_REFILL } from "@murmur/core";
