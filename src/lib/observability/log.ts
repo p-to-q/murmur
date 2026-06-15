@@ -13,6 +13,8 @@ export type LogEvent =
   | "auth.me_failed"
   | "auth.logout_failed"
   | "auth.session_revoked"
+  | "auth.signin_failed"
+  | "auth.user_provisioned"
   | "capture.failed"
   | "capture.prepared"
   | "transcribe.requested"
