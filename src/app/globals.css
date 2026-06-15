@@ -71,7 +71,8 @@
 :root {
   --murmur-font-sans: var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --murmur-font-serif: var(--font-instrument-serif), Georgia, "Iowan Old Style", "Times New Roman", Times, serif;
-  --murmur-font-chinese: "LXGW WenKai GB Screen", "PingFang SC", "PingFang TC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --murmur-font-chinese-system: "PingFang SC", "PingFang TC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --murmur-font-chinese: "LXGW WenKai TC", "LXGW WenKai GB Screen 300", var(--murmur-font-chinese-system);
   --radius: 0.625rem; /* mymind cards are tight — 10px feels right */
   --background: #F5F1EB;
   --foreground: #1A1A1A;
@@ -197,9 +198,9 @@
   }
   html[data-lang="zh"] .hero-serif {
     font-family: var(--font-chinese);
-    /* GB Screen keeps simplified glyphs in one face; 400 stays readable on
-       the first screen while avoiding the thick, overlarge look of 300. */
-    font-weight: 400;
+    /* LXGW WenKai TC's 300 weight gives Chinese hero text the lighter
+       editorial feel; GB Screen only fills missing simplified glyphs. */
+    font-weight: 300;
     letter-spacing: 0;
   }
   .hero-serif-italic {
@@ -212,8 +213,12 @@
   html[data-lang="zh"] .hero-serif-italic {
     font-family: var(--font-chinese);
     font-style: normal;
-    font-weight: 400;
+    font-weight: 300;
     letter-spacing: 0;
+  }
+  html[data-lang="zh"][data-fonts="loading"] .hero-serif,
+  html[data-lang="zh"][data-fonts="loading"] .hero-serif-italic {
+    font-family: "LXGW WenKai TC", var(--murmur-font-chinese-system);
   }
 
   .font-chinese-title {
