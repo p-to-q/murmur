@@ -551,3 +551,61 @@
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
+
+/* Share invite photo treatment — reusable for future background swaps.
+   Natural film color with dense grain, dust, and tiny dark specks. */
+.share-card-photo {
+  filter: contrast(1.12) saturate(0.94) sepia(0.06);
+}
+
+.share-card-photo-tone,
+.share-card-photo-warmth,
+.share-card-photo-grain,
+.share-card-photo-dust {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.share-card-photo-tone {
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(255, 245, 224, 0.24), transparent 44%),
+    linear-gradient(180deg, rgba(255, 223, 165, 0.10), rgba(255, 255, 255, 0) 42%);
+  mix-blend-mode: screen;
+}
+
+.share-card-photo-warmth {
+  background: rgba(170, 143, 102, 0.055);
+  mix-blend-mode: color;
+}
+
+.share-card-photo-grain {
+  opacity: 0.18;
+  mix-blend-mode: soft-light;
+  filter: blur(0.9px);
+  background-image:
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.12' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.82'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 260 260' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.46' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.28'/%3E%3C/svg%3E");
+  background-size: 180px 180px, 260px 260px;
+}
+
+.share-card-photo-dust {
+  opacity: 0.24;
+  mix-blend-mode: multiply;
+  filter: blur(0.6px);
+  background-image:
+    radial-gradient(circle at 8% 17%, rgba(26, 20, 13, 0.20) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 22% 8%, rgba(255, 247, 221, 0.26) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 37% 23%, rgba(24, 19, 13, 0.16) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 54% 13%, rgba(255, 246, 218, 0.22) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 71% 28%, rgba(28, 21, 14, 0.18) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 86% 19%, rgba(22, 18, 12, 0.14) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 12% 48%, rgba(33, 25, 15, 0.18) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 31% 58%, rgba(255, 248, 225, 0.20) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 63% 47%, rgba(29, 22, 13, 0.16) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 79% 61%, rgba(255, 246, 220, 0.18) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 19% 82%, rgba(25, 20, 14, 0.20) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 47% 76%, rgba(30, 23, 15, 0.14) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 88% 86%, rgba(27, 21, 13, 0.18) 0 1px, transparent 1.8px);
+  background-size: 132px 168px;
+}
