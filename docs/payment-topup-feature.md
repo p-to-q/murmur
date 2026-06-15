@@ -20,6 +20,12 @@ shell is decided there; this doc specifies the product.
 
 ## 2. Decision: credits, not subscription (v2)
 
+> **Current preview note:** the running app may temporarily treat signed-in
+> users as unlimited so testers can exercise the full creation path without
+> payment friction. That is a pre-launch testing bypass, not the product
+> pricing strategy. The launch model remains credits / Murmur Notes unless a
+> separate premium entitlement is explicitly introduced.
+
 Two viable models:
 
 | Model | Pros | Cons |
