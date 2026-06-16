@@ -149,7 +149,14 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
         window.clearTimeout(cleanupTimerRef.current);
       }
       cleanupTimerRef.current = window.setTimeout(() => {
-        setLayers((prev) => prev.filter((layer) => layer.role === "active"));
+        setLayers((prev) =>
+          prev
+            .filter((layer) => layer.role === "active")
+            .map((layer) => ({
+              ...layer,
+              direction: DIRECTIONS[0],
+            })),
+        );
         setIsMoving(false);
       }, 760);
     }, 3000);
@@ -197,11 +204,12 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
               {layers.map((layer) => {
                 const slideItem = CAROUSEL_SLIDES[layer.slideIndex];
                 const enterDirection = invertDirection(layer.direction);
+                const isTransitioning = layers.length > 1;
                 const transform = layer.role === "exiting"
                   ? isMoving
                     ? translate(layer.direction)
                     : "translate3d(0, 0, 0)"
-                  : isMoving
+                  : !isTransitioning || isMoving
                     ? "translate3d(0, 0, 0)"
                     : translate(enterDirection);
 
