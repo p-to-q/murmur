@@ -45,6 +45,7 @@ const VOLUME_GB = 50;
 const TEMPLATE_NAME = "murmur-music-serverless";
 const ENDPOINT_NAME = "murmur-music-serverless";
 const DEFAULT_DATA_CENTER = "EU-RO-1";
+const REGISTRY_AUTH_NAME = "murmur-ghcr";
 
 const MODEL = process.env.MAGENTA_MODEL?.trim() || "mrt2_base";
 const IMAGE =
@@ -85,10 +86,17 @@ async function main() {
   console.log(`Image: ${IMAGE}`);
   console.log(`Model: ${MODEL} · workersMax=${WORKERS_MAX} · idleTimeout=${IDLE_TIMEOUT}s · scale-to-zero + FlashBoot`);
 
+  const registryAuthId = await ensureRegistryAuth(apiKey);
+  if (registryAuthId) {
+    console.log(`Registry auth: ${registryAuthId.slice(0, 8)}… (private ghcr image)`);
+  } else {
+    console.log("No registry auth resolved — assuming the image is anonymously pullable.");
+  }
+
   const volume = await ensureNetworkVolume(apiKey);
   console.log(`Network volume: ${volume.id} (${volume.name}) in ${volume.dataCenterId}`);
 
-  const templateId = await ensureTemplate(apiKey);
+  const templateId = await ensureTemplate(apiKey, registryAuthId);
   console.log(`Template: ${templateId} (${TEMPLATE_NAME})`);
 
   const endpointId = await ensureEndpoint(apiKey, templateId, volume);
@@ -160,6 +168,67 @@ async function rest<T>(
   return json as T;
 }
 
+type RegistryCred = { id: string; name: string };
+
+async function graphql<T>(
+  apiKey: string,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<T> {
+  const res = await fetch(`https://api.runpod.io/graphql?api_key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query, variables }),
+  });
+  const body = (await res.json()) as { data?: T; errors?: Array<{ message: string }> };
+  if (!res.ok || body.errors?.length) {
+    throw new Error(
+      body.errors?.map((e) => e.message).join("; ") || `RunPod GraphQL HTTP ${res.status}`,
+    );
+  }
+  if (!body.data) throw new Error("RunPod GraphQL returned no data");
+  return body.data;
+}
+
+function ghcrCredentials(): { username: string; password: string } | null {
+  const username = process.env.GHCR_USERNAME?.trim() || process.env.GITHUB_USERNAME?.trim();
+  const password = process.env.GHCR_TOKEN?.trim() || process.env.GITHUB_PACKAGES_TOKEN?.trim();
+  if (!username || !password) return null;
+  return { username, password };
+}
+
+/**
+ * Resolve a RunPod container-registry credential id for the private ghcr image
+ * (the p-to-q org forces packages private, so the serverless endpoint must pull
+ * with auth). Order: explicit RUNPOD_REGISTRY_AUTH_ID → reuse existing
+ * "murmur-ghcr" cred → register one from GHCR_USERNAME+GHCR_TOKEN. Returns
+ * undefined only if no creds exist (then RunPod attempts an anonymous pull).
+ */
+async function ensureRegistryAuth(apiKey: string): Promise<string | undefined> {
+  const explicit = process.env.RUNPOD_REGISTRY_AUTH_ID?.trim();
+  if (explicit) return explicit;
+
+  const ghcr = ghcrCredentials();
+  const data = await graphql<{ myself: { containerRegistryCreds: RegistryCred[] } }>(
+    apiKey,
+    `query { myself { containerRegistryCreds { id name } } }`,
+  );
+  const existing = data.myself.containerRegistryCreds.find((c) => c.name === REGISTRY_AUTH_NAME);
+  if (existing) {
+    if (ghcr) console.log(`Reusing RunPod registry auth "${REGISTRY_AUTH_NAME}".`);
+    return existing.id;
+  }
+  if (!ghcr) return undefined;
+
+  console.log(`Registering RunPod registry auth "${REGISTRY_AUTH_NAME}" for ghcr.io…`);
+  const saved = await graphql<{ saveRegistryAuth: { id: string } }>(
+    apiKey,
+    `mutation($input: SaveRegistryAuthInput!) { saveRegistryAuth(input: $input) { id name } }`,
+    { input: { name: REGISTRY_AUTH_NAME, username: ghcr.username, password: ghcr.password } },
+  );
+  return saved.saveRegistryAuth.id;
+}
+
 async function ensureNetworkVolume(apiKey: string): Promise<NetworkVolume> {
   const explicit = process.env.RUNPOD_NETWORK_VOLUME_ID?.trim();
   const volumes = await rest<NetworkVolume[]>(apiKey, "GET", "/networkvolumes");
@@ -184,7 +253,7 @@ async function ensureNetworkVolume(apiKey: string): Promise<NetworkVolume> {
   });
 }
 
-function templateBody() {
+function templateBody(registryAuthId?: string) {
   const env: Record<string, string> = {
     MAGENTA_BACKEND: "jax",
     MAGENTA_MODEL: MODEL,
@@ -200,20 +269,22 @@ function templateBody() {
     containerDiskInGb: 30,
     env,
   };
-  const registryAuthId = process.env.RUNPOD_REGISTRY_AUTH_ID?.trim();
   if (registryAuthId) body.containerRegistryAuthId = registryAuthId;
   return body;
 }
 
-async function ensureTemplate(apiKey: string): Promise<string> {
+async function ensureTemplate(apiKey: string, registryAuthId?: string): Promise<string> {
   const templates = await rest<Template[]>(apiKey, "GET", "/templates");
   const existing = templates.find((t) => t.name === TEMPLATE_NAME);
-  const body = templateBody();
   if (existing) {
-    await rest(apiKey, "PATCH", `/templates/${existing.id}`, body);
+    // Reuse as-is. RunPod's PATCH /templates rejects the create body ("extra
+    // input keys"), and re-runs need no change: the image is :latest (cold
+    // workers always pull it) and env is already set. To change image/env,
+    // delete the template in the console and redeploy.
+    console.log(`Reusing existing template ${existing.id}.`);
     return existing.id;
   }
-  const created = await rest<Template>(apiKey, "POST", "/templates", body);
+  const created = await rest<Template>(apiKey, "POST", "/templates", templateBody(registryAuthId));
   return created.id;
 }
 
@@ -243,12 +314,13 @@ async function ensureEndpoint(
 ): Promise<string> {
   const endpoints = await rest<Endpoint[]>(apiKey, "GET", "/endpoints");
   const existing = endpoints.find((e) => e.name === ENDPOINT_NAME);
-  const body = endpointBody(templateId, volume);
   if (existing) {
-    await rest(apiKey, "PATCH", `/endpoints/${existing.id}`, body);
+    // Reuse as-is (same reason as the template: PATCH rejects the create body).
+    // To change GPU/scaling, edit the endpoint in the console or delete it first.
+    console.log(`Reusing existing endpoint ${existing.id}.`);
     return existing.id;
   }
-  const created = await rest<Endpoint>(apiKey, "POST", "/endpoints", body);
+  const created = await rest<Endpoint>(apiKey, "POST", "/endpoints", endpointBody(templateId, volume));
   return created.id;
 }
 

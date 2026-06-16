@@ -78,7 +78,7 @@ RUNPOD_API_KEY=rpa_… VERCEL=1 bun run deploy:music-serverless
 - 冷启动有代价：闲置后首个请求 ~20–60 s，太慢自动回退 Tone.js
 
 <details>
-<summary>手动构建镜像（CI 已自动构建并公开）</summary>
+<summary>手动构建镜像（CI 已自动构建；包为 public）</summary>
 
 ```bash
 docker buildx build --platform linux/amd64 \

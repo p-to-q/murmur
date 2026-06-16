@@ -18,8 +18,18 @@
 ### 2. 构建镜像（首次 / 代码更新后）
 
 镜像托管在 GitHub Container Registry，push 到 `main`（改动 `workers/music-engine/**`）后
-自动构建并**置为 public**，或手动触发 Actions → **Music engine image**。Serverless 直接拉公开镜像，
-无需 registry 凭证（私有镜像才需 `RUNPOD_REGISTRY_AUTH_ID`）。
+自动构建，或手动触发 Actions → **Music engine image**。
+
+包**已设为 public**（Serverless 匿名拉取，无需 registry 凭证）。注意：CI 里的「设为 public」
+步骤用默认 `GITHUB_TOKEN` 改组织包可见性会 404 失败（已知、无害，`continue-on-error`）——
+public 是在 org 设置允许 public 包后**手动**点的，一次性、推新版本不会变回私有。
+
+> 若镜像哪天变回私有，配 GHCR PAT（classic，`read:packages`）走 registry 鉴权：
+> ```bash
+> GHCR_USERNAME=<GitHub 用户名>   # PAT 持有者，需对 org 包有读权限
+> GHCR_TOKEN=ghp_xxxx
+> ```
+> 部署脚本会注册成 RunPod 凭证 `murmur-ghcr` 并自动带上；或设 `RUNPOD_REGISTRY_AUTH_ID` 复用。
 
 本地也可：
 
@@ -86,7 +96,7 @@ Serverless 只在 worker 运行时计费（生成 + 冷启动），闲时为 0�
 
 | 现象 | 处理 |
 | --- | --- |
-| `IMAGE_AUTH_ERROR: unauthorized` | 镜像未公开：等 CI 的 "make public" 步骤，或设 `RUNPOD_REGISTRY_AUTH_ID` |
+| `IMAGE_AUTH_ERROR: unauthorized` | 镜像变回私有了：配 `GHCR_USERNAME`+`GHCR_TOKEN`（PAT，read:packages）或 `RUNPOD_REGISTRY_AUTH_ID`，见 §2 |
 | 部署报 GPU/容量不可用 | 换 `RUNPOD_DATA_CENTER_ID` 或 `RUNPOD_GPU_TYPE_ID`（网络卷会把端点锁在其数据中心） |
 | warm-up 超时 | 正常（首次下载 ~4 GB）；端点已创建，首个真实请求会继续下载。看 RunPod 控制台日志 |
 | 首次哼唱回退 Tone.js | 冷启动超过 110 s 路由预算；再哼一次（worker 已热）即走 Magenta |
