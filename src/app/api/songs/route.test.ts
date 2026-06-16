@@ -141,67 +141,6 @@ describe("POST /api/songs", () => {
     expect(createSongWithSpendMock).toHaveBeenCalledTimes(0);
   });
 
-  it("preserves curated artwork metadata inside the saved visual config", async () => {
-    const artwork = {
-      id: "tidal_mineral-met-11129",
-      bucket: "tidal_mineral",
-      title: "Natural Bridge, Bermuda",
-      artist: "Winslow Homer",
-      year: "ca. 1901",
-      source: "met",
-      sourceUrl: "https://www.metmuseum.org/art/collection/search/11129",
-      imagePath: "/artworks/tidal_mineral/met-11129-natural-bridge-bermuda.jpg",
-      license: "Public Domain" as const,
-      crop: { x: 0.48, y: 0.56, scale: 1.04 },
-    };
-
-    const response = await POST(buildRequest({
-      id: "song_artwork",
-      title: "Mineral Tide",
-      vibe: "surf rock",
-      vibeEn: "surf rock",
-      bpm: 96,
-      keySignature: "D",
-      scaleType: "minor",
-      duration: 24,
-      visualConfig: {
-        preset: "warm_particles",
-        gradient: "linear-gradient(135deg, #5A8EAA, #DFE0DA)",
-        particleDensity: 0.5,
-        pulseSource: "melody",
-        visualFacets: {
-          genre: "surf rock",
-          mood: "glowing",
-          instrument: "slide guitar",
-          energy: 0.7,
-        },
-        artwork,
-      },
-      arrangementState: {
-        melody: { enabled: true, intensity: 0.8, originalPattern: "62 64 65", currentPattern: "62 64 65", instrument: "piano", versionHistory: [] },
-        chords: { enabled: true, intensity: 0.7, originalPattern: "gen:surf", currentPattern: "gen:surf", instrument: "felt_piano", versionHistory: [] },
-        strings: { enabled: true, intensity: 0.4, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
-        drums: { enabled: true, intensity: 0.5, originalPattern: "brush", currentPattern: "brush", instrument: "brush_kit", versionHistory: [] },
-        bass: { enabled: true, intensity: 0.5, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
-        texture: { enabled: true, intensity: 0.3, originalPattern: "salt", currentPattern: "salt", instrument: "vinyl_noise", versionHistory: [] },
-      },
-      tags: ["surf rock", "glowing"],
-    }));
-
-    expect(response.status).toBe(200);
-    expect(createdSongs).toHaveLength(1);
-    expect(createdSongs[0]?.visualConfig).toEqual(expect.objectContaining({
-      artwork,
-      visualFacets: expect.objectContaining({
-        genre: "surf rock",
-        mood: "glowing",
-      }),
-    }));
-
-    const body = await response.json() as Record<string, unknown>;
-    expect(body.visualConfig).toEqual(expect.objectContaining({ artwork }));
-  });
-
   it("falls back to corrected when the request sends an unknown melody kind", async () => {
     const response = await POST(buildRequest({
       id: "song_2",

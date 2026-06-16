@@ -53,42 +53,11 @@ export type ArrangementState = {
   texture: TrackState;
 };
 
-export type VisualArtworkCrop = {
-  x: number;
-  y: number;
-  scale: number;
-};
-
-export type VisualArtwork = {
-  id: string;
-  bucket: string;
-  title: string;
-  artist: string;
-  year: string;
-  source: string;
-  sourceUrl: string;
-  imagePath: string;
-  license: "CC0" | "Public Domain";
-  crop: VisualArtworkCrop;
-};
-
-export type VisualFacets = {
-  genre?: string;
-  mood?: string;
-  instrument?: string;
-  scene?: string;
-  energy?: number;
-  bucket?: string;
-};
-
 export type VisualConfig = {
   preset: string;       // e.g. "warm_particles", "soft_gradient"
   gradient: string;     // CSS gradient string
   particleDensity: number; // 0.0–1.0
   pulseSource: "drums" | "melody" | "energy";
-  posterBg?: string;
-  artwork?: VisualArtwork;
-  visualFacets?: VisualFacets;
 };
 
 export type VersionGenerationStatus = "pending" | "ready" | "error";

@@ -17,7 +17,6 @@ import {
   type InstrumentId,
 } from "@murmur/core/music/instrument-ranges";
 import { generateStrummerCode } from "./generate-code";
-import { pickArtworkSelection } from "@/presets/artworks/artwork-matcher";
 
 /**
  * Each vibe gets 2-3 "ensembles" (a coherent set of instruments + bass &
@@ -318,16 +317,7 @@ export function generateVibeVersions(
       gradient:       preset.gradient,
       particleDensity:preset.energy,
       pulseSource:    preset.energy > 0.6 ? "drums" : "melody",
-      visualFacets: {
-        genre: preset.id,
-        mood: preset.tags[0],
-        energy: preset.energy,
-      },
     };
-    visualConfig.artwork = pickArtworkSelection(
-      visualConfig.visualFacets,
-      `${draftId}:${id}:${preset.id}`,
-    );
 
     return {
       id,

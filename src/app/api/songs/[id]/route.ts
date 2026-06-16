@@ -13,9 +13,39 @@ import {
   updateLocalSongForUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
 import { log } from "@/lib/observability/log";
-import { strictArrangementStateSchema, strictVisualConfigSchema } from "../schema";
 
 const ROUTE = "/api/songs/[id]";
+
+const trackStateSchema = z.object({
+  enabled: z.boolean(),
+  intensity: z.number(),
+  originalPattern: z.string(),
+  currentPattern: z.string(),
+  instrument: z.string(),
+  versionHistory: z.array(z.string()),
+  melodyPitchSequence: z.array(z.number()).optional(),
+  chordsTag: z.string().optional(),
+  bassPattern: z.string().optional(),
+  drumsPattern: z.string().optional(),
+  texturePreset: z.string().optional(),
+}).strict();
+
+const arrangementStateSchema = z.object({
+  melody: trackStateSchema,
+  chords: trackStateSchema,
+  strings: trackStateSchema,
+  drums: trackStateSchema,
+  bass: trackStateSchema,
+  texture: trackStateSchema,
+}).strict();
+
+const visualConfigSchema = z.object({
+  preset: z.string().min(1),
+  gradient: z.string().min(1),
+  particleDensity: z.number(),
+  pulseSource: z.enum(["drums", "melody", "energy"]),
+  posterBg: z.string().optional(),
+}).strict();
 
 const updateSongSchema = z.object({
   title: z.string().min(1).optional(),
@@ -32,8 +62,8 @@ const updateSongSchema = z.object({
   editCount: z.number().int().nonnegative().optional(),
   editDepth: z.enum(["fresh", "shaped", "reworked"]).optional(),
   mp3DataUrl: z.string().nullable().optional(),
-  visualConfig: strictVisualConfigSchema.optional(),
-  arrangementState: strictArrangementStateSchema.optional(),
+  visualConfig: visualConfigSchema.optional(),
+  arrangementState: arrangementStateSchema.optional(),
   tags: z.array(z.string()).optional(),
 }).strict();
 

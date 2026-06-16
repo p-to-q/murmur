@@ -3,7 +3,6 @@ import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import { createVibePromptBatch } from "@/lib/music/vibe-prompts";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { log } from "@/lib/observability/log";
-import { pickArtworkSelection } from "@/presets/artworks/artwork-matcher";
 
 /**
  * Magenta RealTime version flow.
@@ -172,11 +171,6 @@ export function createMagentaVersions(
         gradient: spec.gradient,
         particleDensity: spec.energy,
         pulseSource: spec.energy > 0.6 ? "drums" : "melody",
-        visualFacets: spec.visualFacets,
-        artwork: pickArtworkSelection(
-          spec.visualFacets,
-          `${options.draftId}:${options.batchIndex}:${index}:${version.id}`,
-        ),
       } satisfies VibeVersion["visualConfig"],
       generation,
     };
