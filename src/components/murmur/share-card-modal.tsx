@@ -33,14 +33,18 @@ const DIRECTIONS = [
   { x: "-100%", y: 0 }, // from left
 ];
 
+// Get opposite direction for exit animation
+// If new slide enters from bottom, old slide exits to top (and vice versa)
 const getOppositeDirection = (dir: { x: number | string; y: number | string }) => {
-  if (typeof dir.y === "string") {
+  if (typeof dir.y === "string" && dir.y !== "0") {
+    // Vertical movement: flip the sign
     return { x: 0, y: dir.y.startsWith("-") ? dir.y.slice(1) : `-${dir.y}` };
   }
-  if (typeof dir.x === "string") {
+  if (typeof dir.x === "string" && dir.x !== "0") {
+    // Horizontal movement: flip the sign
     return { y: 0, x: dir.x.startsWith("-") ? dir.x.slice(1) : `-${dir.x}` };
   }
-  return dir;
+  return { x: 0, y: 0 };
 };
 
 export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
@@ -97,6 +101,12 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
           >
             <div className="relative overflow-hidden rounded-[32px] shadow-2xl">
               <AnimatePresence initial={false}>
+                {/*
+                  Carousel animation logic:
+                  - New slide enters from enterDirection (random)
+                  - Old slide exits in opposite direction
+                  - Example: new from right → old exits left
+                */}
                 <motion.div
                   key={currentSlide}
                   initial={{ ...enterDirection, scale: 0.95 }}
