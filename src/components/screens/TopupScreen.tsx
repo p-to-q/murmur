@@ -26,6 +26,11 @@ import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
 const SLIDER_MAX_USD = Math.min(100, CUSTOM_TOPUP_MAX_USD);
+const PLAN_LABEL_KEYS: Record<string, string> = {
+  topup_30_notes: "topup.plan.starter",
+  topup_120_notes: "topup.plan.creator",
+  topup_400_notes: "topup.plan.patron",
+};
 
 // Paper texture style for all black elements
 const paperTextureStyle = {
@@ -92,8 +97,12 @@ export function TopupScreen() {
     : selected ? topupNotesGranted(selected) : 0;
 
   const currentBalance = balance?.notes ?? 0;
-  const selectedPlanLabel =
-    balance?.planTier === "premium" ? t("topup.plan.premium") : t("topup.plan.free");
+  const purchasedPlanKey = topupSurface?.latestPlanSkuId
+    ? PLAN_LABEL_KEYS[topupSurface.latestPlanSkuId]
+    : null;
+  const selectedPlanLabel = purchasedPlanKey
+    ? t(purchasedPlanKey)
+    : balance?.planTier === "premium" ? t("topup.plan.premium") : t("topup.plan.free");
   const nextRefillLabel = balance?.nextRefillAt
     ? t("topup.next_refill").replace(
         "{time}",

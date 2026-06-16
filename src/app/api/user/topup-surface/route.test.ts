@@ -9,6 +9,10 @@ let nextAuth: ResolvedRequestAuth = {
   sessionId: "sess_surface",
 };
 let nextSnapshotError: unknown = null;
+let nextSnapshot = {
+  lifetimeTopupCents: 2197,
+  latestPlanSkuId: "topup_120_notes",
+};
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
@@ -17,9 +21,7 @@ mock.module("@/lib/auth", () => ({
 mock.module("@/lib/db/queries/topup-surface", () => ({
   getTopupSurfaceSnapshot: async () => {
     if (nextSnapshotError) throw nextSnapshotError;
-    return {
-      lifetimeTopupCents: 2197,
-    };
+    return nextSnapshot;
   },
 }));
 
@@ -48,6 +50,10 @@ afterEach(() => {
     sessionId: "sess_surface",
   };
   nextSnapshotError = null;
+  nextSnapshot = {
+    lifetimeTopupCents: 2197,
+    latestPlanSkuId: "topup_120_notes",
+  };
 });
 
 describe("GET /api/user/topup-surface", () => {
@@ -59,8 +65,12 @@ describe("GET /api/user/topup-surface", () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       lifetimeTopupCents: number;
+      latestPlanSkuId: string | null;
     };
-    expect(body).toEqual({ lifetimeTopupCents: 2197 });
+    expect(body).toEqual({
+      lifetimeTopupCents: 2197,
+      latestPlanSkuId: "topup_120_notes",
+    });
   });
 
   it("returns 503 when the topup surface query fails", async () => {
@@ -89,9 +99,30 @@ describe("GET /api/user/topup-surface", () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       lifetimeTopupCents: number;
+      latestPlanSkuId: string | null;
     };
     expect(body).toEqual({
       lifetimeTopupCents: 0,
+      latestPlanSkuId: null,
     });
+  });
+
+  it("keeps the plan field empty when there is no fixed plan purchase", async () => {
+    nextSnapshot = {
+      lifetimeTopupCents: 1200,
+      latestPlanSkuId: null,
+    };
+
+    const response = await GET(
+      new Request("http://test.local/api/user/topup-surface") as unknown as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      lifetimeTopupCents: number;
+      latestPlanSkuId: string | null;
+    };
+    expect(body.latestPlanSkuId).toBeNull();
+    expect(body.lifetimeTopupCents).toBe(1200);
   });
 });
