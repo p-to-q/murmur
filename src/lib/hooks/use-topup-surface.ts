@@ -6,6 +6,7 @@ import { request } from "@/lib/api/request";
 
 export interface TopupSurfaceData {
   lifetimeTopupCents: number;
+  latestPlanSkuId: string | null;
 }
 
 export function useTopupSurface() {
@@ -26,6 +27,9 @@ export function useTopupSurface() {
         lifetimeTopupCents: typeof payload.lifetimeTopupCents === "number"
           ? payload.lifetimeTopupCents
           : 0,
+        latestPlanSkuId: typeof payload.latestPlanSkuId === "string"
+          ? payload.latestPlanSkuId
+          : null,
       };
       setData(nextData);
       setError(null);

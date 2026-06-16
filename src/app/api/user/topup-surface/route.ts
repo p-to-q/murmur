@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
       });
       return NextResponse.json(serializeSnapshot({
         lifetimeTopupCents: 0,
+        latestPlanSkuId: null,
       }));
     }
 
@@ -53,11 +54,13 @@ export async function GET(request: NextRequest) {
 
 type SnapshotLike = {
   lifetimeTopupCents: number;
+  latestPlanSkuId: string | null;
 };
 
 function serializeSnapshot(snapshot: SnapshotLike) {
   return {
     lifetimeTopupCents: snapshot.lifetimeTopupCents,
+    latestPlanSkuId: snapshot.latestPlanSkuId,
   };
 }
 
