@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { SongCard } from "./SongCard";
-import type { VisualArtwork } from "@/modules/shared/types";
 
 const CELL_COLORS = [
   "#E8E2D8",
@@ -38,7 +37,6 @@ export interface ActivityHeatmapProps {
     title: string;
     vibe: string;
     gradient?: string;
-    artwork?: VisualArtwork;
     bpm?: number;
     createdAt: string;
   }>;
@@ -242,7 +240,6 @@ export function ActivityHeatmap({
                   title={song.title}
                   vibe={song.vibe}
                   gradient={song.gradient}
-                  artwork={song.artwork}
                   bpm={song.bpm}
                   createdAt={song.createdAt}
                   index={i}

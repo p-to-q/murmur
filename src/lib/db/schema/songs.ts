@@ -33,34 +33,6 @@ export interface ArrangementState {
 }
 
 // VisualConfig: matches src/modules/shared/types.ts VisualConfig exactly
-export interface VisualArtworkCrop {
-  x: number;
-  y: number;
-  scale: number;
-}
-
-export interface VisualArtwork {
-  id: string;
-  bucket: string;
-  title: string;
-  artist: string;
-  year: string;
-  source: string;
-  sourceUrl: string;
-  imagePath: string;
-  license: "CC0" | "Public Domain";
-  crop: VisualArtworkCrop;
-}
-
-export interface VisualFacets {
-  genre?: string;
-  mood?: string;
-  instrument?: string;
-  scene?: string;
-  energy?: number;
-  bucket?: string;
-}
-
 export interface VisualConfig {
   preset: string;              // e.g. "warm_particles"
   gradient: string;            // CSS gradient string (source of truth for colors)
@@ -68,8 +40,6 @@ export interface VisualConfig {
   pulseSource: "drums" | "melody" | "energy";
   // posterBg is derived from gradient at render time — stored for convenience
   posterBg?: string;
-  artwork?: VisualArtwork;
-  visualFacets?: VisualFacets;
 }
 
 export type MelodySelectionKind = "intent" | "corrected" | "musical";
