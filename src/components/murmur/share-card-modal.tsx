@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
@@ -13,10 +13,32 @@ interface ShareCardModalProps {
   onClose: () => void;
 }
 
+const CAROUSEL_SLIDES = [
+  {
+    image: "/images/share-murmur-bg-v2.jpg",
+    bylineKey: "share.byline" as const,
+    objectPosition: "center 38%",
+  },
+  {
+    image: "/images/share-esther-bg-v2.jpg",
+    bylineKey: "share.byline.esther" as const,
+    objectPosition: "center center",
+  },
+];
+
+const DIRECTIONS = [
+  { initial: { y: "100%", x: 0 }, exit: { y: "-100%", x: 0 } }, // bottom to top
+  { initial: { y: "-100%", x: 0 }, exit: { y: "100%", x: 0 } }, // top to bottom
+  { initial: { x: "100%", y: 0 }, exit: { x: "-100%", y: 0 } }, // right to left
+  { initial: { x: "-100%", y: 0 }, exit: { x: "100%", y: 0 } }, // left to right
+];
+
 export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
   const t = useTranslator();
   const { data: session } = useSession();
   const { signInWithGoogle } = useGoogleSignIn();
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [direction, setDirection] = useState(0);
 
   useEffect(() => {
     if (session?.user) {
@@ -32,6 +54,18 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    const interval = setInterval(() => {
+      setDirection(Math.floor(Math.random() * DIRECTIONS.length));
+      setCurrentSlide((prev) => (prev + 1) % CAROUSEL_SLIDES.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [open]);
+
+  const slide = CAROUSEL_SLIDES[currentSlide];
+  const currentDirection = DIRECTIONS[direction];
 
   return (
     <AnimatePresence>
@@ -53,24 +87,49 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative overflow-hidden rounded-[32px] shadow-2xl">
-              <Image
-                src="/images/share-murmur-bg.jpg"
-                alt=""
-                width={736}
-                height={1104}
-                priority
-                className="share-card-photo h-[600px] w-full object-cover object-[center_38%]"
-              />
-              <div aria-hidden className="share-card-photo-tone" />
-              <div aria-hidden className="share-card-photo-warmth" />
-              <div aria-hidden className="share-card-photo-grain" />
-              <div aria-hidden className="share-card-photo-dust" />
-              <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/10" />
+              <AnimatePresence initial={false}>
+                <motion.div
+                  key={currentSlide}
+                  initial={{ ...currentDirection.initial, scale: 0.95 }}
+                  animate={{ x: 0, y: 0, scale: 1 }}
+                  exit={{ ...currentDirection.exit, scale: 1.05 }}
+                  transition={{
+                    duration: 0.7,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                  className="absolute inset-0"
+                >
+                  <Image
+                    src={slide.image}
+                    alt=""
+                    width={736}
+                    height={1104}
+                    priority
+                    className="share-card-photo h-[600px] w-full object-cover"
+                    style={{ objectPosition: slide.objectPosition }}
+                  />
+                  <div aria-hidden className="share-card-photo-tone" />
+                  <div aria-hidden className="share-card-photo-warmth" />
+                  <div aria-hidden className="share-card-photo-grain" />
+                  <div aria-hidden className="share-card-photo-dust" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/10" />
+                </motion.div>
+              </AnimatePresence>
+              <div className="relative h-[600px]" />
 
               <div className="absolute left-6 right-6 top-6 flex items-start justify-between">
-                <p className="text-[15px] text-white/90 drop-shadow">
-                  By akira
-                </p>
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.p
+                    key={`byline-${currentSlide}`}
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    transition={{ duration: 0.3 }}
+                    className="text-[15px] text-white/90 drop-shadow"
+                  >
+                    {t(slide.bylineKey)}
+                  </motion.p>
+                </AnimatePresence>
                 <div className="flex items-center gap-4">
                   <Image
                     src="/brand/murmur-wordmark-source-cropped.png"
