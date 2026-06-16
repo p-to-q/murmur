@@ -20,7 +20,6 @@ export const DICT = {
   "share.google":      { zh: "使用Google登录",    en: "Sign in with Google" },
   "share.byline":      { zh: "By akira", en: "By akira" },
   "share.byline.esther": { zh: "By Estherscanon", en: "By Estherscanon" },
-  "share.tagline.esther": { zh: "把一段哼唱，送给另一个人。", en: "Send someone a song from a hum." },
   "share.copy_link":   { zh: "复制邀请链接",      en: "Copy invite link" },
   "share.copied":      { zh: "邀请链接已复制",    en: "Invite link copied" },
   "share.copy_failed": { zh: "暂时没能复制分享链接", en: "Couldn't copy the share link right now" },

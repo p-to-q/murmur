@@ -17,13 +17,11 @@ const CAROUSEL_SLIDES = [
   {
     image: "/images/share-murmur-bg-v2.jpg",
     bylineKey: "share.byline" as const,
-    taglineKey: "share.tagline" as const,
     objectPosition: "center 38%",
   },
   {
     image: "/images/share-esther-bg-v2.jpg",
     bylineKey: "share.byline.esther" as const,
-    taglineKey: "share.tagline.esther" as const,
     objectPosition: "center center",
   },
 ];
@@ -138,18 +136,9 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
 
               <div className="absolute bottom-6 left-6 right-6">
                 <div className="rounded-[28px] bg-white/95 backdrop-blur-xl p-8 shadow-xl">
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.h2
-                      key={`tagline-${currentSlide}`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.3 }}
-                      className="mb-8 text-center text-[20px] font-medium text-[#1A1A1A] leading-tight"
-                    >
-                      {t(slide.taglineKey)}
-                    </motion.h2>
-                  </AnimatePresence>
+                  <h2 className="mb-8 text-center text-[20px] font-medium text-[#1A1A1A] leading-tight">
+                    {t("share.tagline")}
+                  </h2>
 
                   <button
                     onClick={() => signInWithGoogle("/")}
