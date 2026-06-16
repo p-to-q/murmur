@@ -90,8 +90,8 @@ export function SongCard({
         whileTap={{ scale: 0.97, transition: { duration: 0.1 } }}
         className="group relative block w-full text-left"
       >
-        {/* Cover — circular record */}
-        <div className="relative mx-auto aspect-square w-[92%] overflow-hidden rounded-full bg-[#F5F1EB] shadow-[0_16px_32px_rgba(26,26,26,0.14)] ring-1 ring-[#1A1A1A]/[0.06]">
+        {/* Cover — rounded square with record-label detail */}
+        <div className="relative overflow-hidden rounded-[20px] aspect-square bg-[#F5F1EB] shadow-[0_16px_32px_rgba(26,26,26,0.14)] ring-1 ring-[#1A1A1A]/[0.06]">
           {inView ? (
             <CanvasCoverArt
               songId={id}
@@ -101,12 +101,12 @@ export function SongCard({
               className="w-full h-full"
             />
           ) : (
-            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer" />
+            <div className="absolute inset-0 rounded-[20px] bg-gradient-to-r from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer" />
           )}
 
           {/* Cover zoom on hover */}
           <motion.div
-            className="absolute inset-0 rounded-full pointer-events-none ring-1 ring-white/35"
+            className="absolute inset-0 rounded-[20px] pointer-events-none ring-1 ring-white/35"
             animate={{ scale: isHovered ? 1.035 : 1 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           />
@@ -155,7 +155,7 @@ export function SongCard({
             onDelete();
           }}
           aria-label={`Delete ${title}`}
-          className="absolute top-2 right-4 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A]/35 text-white/90 backdrop-blur-sm transition-all hover:bg-[#1A1A1A]/60 opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+          className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A]/35 text-white/90 backdrop-blur-sm transition-all hover:bg-[#1A1A1A]/60 opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
         >
           <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
             <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />

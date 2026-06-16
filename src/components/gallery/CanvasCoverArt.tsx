@@ -163,7 +163,7 @@ export function CanvasCoverArt({ songId, gradient, vibe, artwork, className }: C
           alt={`${artwork.title} by ${artwork.artist}`}
           fill
           sizes="(max-width: 768px) 42vw, (max-width: 1280px) 28vw, 22vw"
-          className="absolute inset-0 h-full w-full rounded-full transition-opacity duration-500"
+          className="absolute inset-0 h-full w-full rounded-[20px] transition-opacity duration-500"
           style={{
             ...cropStyle(artwork),
             opacity: artworkReady ? 1 : 0,
@@ -174,7 +174,7 @@ export function CanvasCoverArt({ songId, gradient, vibe, artwork, className }: C
       ) : null}
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 h-full w-full rounded-full"
+        className="absolute inset-0 h-full w-full rounded-[20px]"
         style={{
           display: "block",
           mixBlendMode: artworkReady ? "soft-light" : "normal",

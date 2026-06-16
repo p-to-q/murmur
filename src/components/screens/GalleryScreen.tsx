@@ -271,7 +271,7 @@ export function GalleryScreen() {
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
             {Array.from({ length: 6 }, (_, i) => (
               <div key={i} className="animate-pulse">
-                <div className="mx-auto aspect-square w-[92%] rounded-full bg-gradient-to-br from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer shadow-[0_16px_32px_rgba(26,26,26,0.08)]" />
+                <div className="aspect-square rounded-[20px] bg-gradient-to-br from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer shadow-[0_16px_32px_rgba(26,26,26,0.08)]" />
                 <div className="mt-2 h-3 w-2/3 rounded-full bg-[#ECE5D6]" />
               </div>
             ))}
