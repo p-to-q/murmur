@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { LOCAL_CREATOR_FREE_NOTES } from "@murmur/core";
-import { SESSION_COOKIE_NAME, resolveRequestAuth } from "@/lib/auth";
+import {
+  SESSION_COOKIE_NAME,
+  resolveRequestAuth,
+} from "@/lib/platform/server-auth";
 import { createSession } from "@/lib/db/queries/sessions";
 import { createLocalCreatorUser } from "@/lib/db/queries/users";
 import { log } from "@/lib/observability/log";

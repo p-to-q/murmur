@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
-let nextToken: string | null = null;
 let nextAuth: ResolvedRequestAuth = {
   ok: false,
   response: new Response("unauthorized", { status: 401 }),
@@ -10,9 +9,8 @@ let nextAuth: ResolvedRequestAuth = {
 let createdUsers = 0;
 let createdSessions = 0;
 
-mock.module("@/lib/auth", () => ({
+mock.module("@/lib/platform/server-auth", () => ({
   SESSION_COOKIE_NAME: "__murmur_session",
-  getSessionToken: () => nextToken,
   resolveRequestAuth: async () => nextAuth,
 }));
 
@@ -47,7 +45,6 @@ mock.module("@/lib/observability/log", () => ({
 const { POST } = await import("./route");
 
 beforeEach(() => {
-  nextToken = null;
   nextAuth = {
     ok: false,
     response: new Response("unauthorized", { status: 401 }),
