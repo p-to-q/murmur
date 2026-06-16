@@ -29,4 +29,26 @@ describe("auth me payload", () => {
     expect(payload.entitlement.canSave).toBe(true);
     expect(payload.entitlement.canTopUp).toBe(true);
   });
+
+  it("treats Local Creator sessions as owned but not registered accounts", () => {
+    const payload = buildAuthMePayload({
+      user: {
+        id: "lc_01HY",
+        name: "Local Creator",
+        email: null,
+        avatarUrl: null,
+        accountKind: "local_creator",
+      },
+      source: "session",
+      sessionId: "ses_local",
+      balance: { notes: 5, planTier: "free" },
+      now: new Date("2026-06-03T15:30:00.000Z"),
+    });
+
+    expect(payload.authenticated).toBe(false);
+    expect(payload.entitlement.canHum).toBe(true);
+    expect(payload.entitlement.canSave).toBe(true);
+    expect(payload.entitlement.canTopUp).toBe(false);
+    expect(payload.entitlement.canDeleteAccount).toBe(false);
+  });
 });

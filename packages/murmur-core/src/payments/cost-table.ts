@@ -54,7 +54,16 @@ export const COST: Readonly<Record<CostKey, number>> = Object.freeze({
 });
 
 /**
- * Daily free-tier refill quota.
+ * Local Creator one-time preview allowance.
+ *
+ * This pre-login allowance does not refill and does not unlock account-only
+ * billing surfaces. Promotion to a registered account raises the balance to
+ * the normal signup baseline without copying songs.
+ */
+export const LOCAL_CREATOR_FREE_NOTES = 5;
+
+/**
+ * Daily signed-in free-tier refill quota.
  *
  * Logic in the cron job (docs/payment-topup-feature.md §8):
  *   grant(min(DAILY_REFILL, MAX_FREE_BALANCE - currentBalance))

@@ -84,11 +84,12 @@ export function UserBadge() {
             </button>
           )}
           <button
-            onClick={() => {
+            onClick={async () => {
               if (isGoogleUser) {
-                signOut({ callbackUrl: "/" });
+                await authClient.logout();
+                await signOut({ callbackUrl: "/" });
               } else {
-                authClient.logout();
+                await authClient.logout();
               }
               setOpen(false);
             }}

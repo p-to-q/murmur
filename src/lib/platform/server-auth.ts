@@ -4,11 +4,14 @@ import { getSessionByToken } from "@/lib/db/queries/sessions";
 
 export const SESSION_COOKIE_NAME = "__murmur_session";
 
+type AuthRuntimeMode = "production" | "demo" | "local";
+
 const DEFAULT_USER: AppUser = {
   id: "guest",
   email: null,
   name: "Local Creator",
   avatarUrl: null,
+  accountKind: "local_creator",
 };
 
 function readHeader(request: Request, key: string): string | null {
@@ -34,9 +37,8 @@ export function getSessionToken(request: Request): string | null {
 }
 
 export function getRequestUser(request: Request): AppUser {
-  // Phase 3 substrate: real session lookup plugs in here. Until then, never let
-  // v1 local-user headers decide identity in production unless explicitly
-  // enabled for a trusted local/demo environment.
+  // v1 local-user headers are a local/demo convenience only. Production
+  // identity must resolve through resolveRequestAuth() and a DB-backed session.
   if (!isHeaderAuthAllowed()) {
     return DEFAULT_USER;
   }
@@ -54,6 +56,22 @@ export function resolveUserId(request: Request): string {
 }
 
 export function requireAuth(request: Request): AuthResult {
+  if (!areAuthFallbacksAllowed()) {
+    return {
+      ok: false,
+      response: new Response(
+        JSON.stringify({
+          error: "unauthorized",
+          message: "Production routes must use resolveRequestAuth().",
+        }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    };
+  }
+
   return { ok: true, user: getRequestUser(request) };
 }
 
@@ -71,10 +89,17 @@ export type ResolvedRequestAuth =
       response: Response;
     };
 
+export interface ResolveRequestAuthOptions {
+  allowGuestPreview?: boolean;
+}
+
 export async function resolveRequestAuth(
   request: Request,
+  options: ResolveRequestAuthOptions = {},
 ): Promise<ResolvedRequestAuth> {
+  const mode = resolveAuthRuntimeMode();
   const token = getSessionToken(request);
+  let invalidSessionAuth: Extract<ResolvedRequestAuth, { ok: false }> | null = null;
   if (token) {
     let session;
     try {
@@ -88,15 +113,19 @@ export async function resolveRequestAuth(
     }
 
     if (!session) {
-      return authError("unauthorized", "Invalid or expired session", 401);
+      invalidSessionAuth = authError(
+        "unauthorized",
+        "Invalid or expired session",
+        401,
+      );
+    } else {
+      return {
+        ok: true,
+        user: session.user,
+        source: "session",
+        sessionId: session.sessionId,
+      };
     }
-
-    return {
-      ok: true,
-      user: session.user,
-      source: "session",
-      sessionId: session.sessionId,
-    };
   }
 
   // NextAuth (Google) session. The web client signs in through authjs, whose
@@ -116,16 +145,22 @@ export async function resolveRequestAuth(
           email: nextAuthUser.email ?? null,
           name: nextAuthUser.name ?? DEFAULT_USER.name,
           avatarUrl: nextAuthUser.image ?? null,
+          accountKind: "registered",
         },
         source: "session",
         sessionId: null,
       };
     }
   } catch {
-    // authjs not configured / no request scope — fall through to guest.
+    // authjs not configured / no request scope — fall through to auth-mode
+    // fallback handling below. In production that means a clean 401.
   }
 
-  const user = getRequestUser(request);
+  if (!options.allowGuestPreview && !areAuthFallbacksAllowed(mode)) {
+    return invalidSessionAuth ?? authError("unauthorized", "Authentication required", 401);
+  }
+
+  const user = options.allowGuestPreview ? DEFAULT_USER : getRequestUser(request);
   return {
     ok: true,
     user,
@@ -134,14 +169,36 @@ export async function resolveRequestAuth(
   };
 }
 
+export function resolveAuthRuntimeMode(): AuthRuntimeMode {
+  const configured = process.env.MURMUR_AUTH_MODE?.trim().toLowerCase();
+  if (configured === "production" || configured === "prod") return "production";
+  if (configured === "demo") return "demo";
+  if (configured === "local" || configured === "development" || configured === "dev") {
+    return "local";
+  }
+  return "production";
+}
+
+export function areAuthFallbacksAllowed(
+  mode = resolveAuthRuntimeMode(),
+): boolean {
+  return mode !== "production";
+}
+
 export function isHeaderAuthAllowed(): boolean {
+  if (!areAuthFallbacksAllowed()) return false;
+
   const configured = process.env.MURMUR_ALLOW_HEADER_AUTH?.trim().toLowerCase();
   if (configured === "1" || configured === "true") return true;
   if (configured === "0" || configured === "false") return false;
-  return process.env.NODE_ENV !== "production";
+  return resolveAuthRuntimeMode() === "local";
 }
 
-function authError(error: string, message: string, status: number): ResolvedRequestAuth {
+function authError(
+  error: string,
+  message: string,
+  status: number,
+): Extract<ResolvedRequestAuth, { ok: false }> {
   return {
     ok: false,
     response: new Response(JSON.stringify({ error, message }), {

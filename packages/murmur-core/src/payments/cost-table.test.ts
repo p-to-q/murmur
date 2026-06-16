@@ -7,6 +7,7 @@ import {
   CUSTOM_TOPUP_NOTES_PER_USD,
   DAILY_REFILL,
   GRANTS,
+  LOCAL_CREATOR_FREE_NOTES,
   MAX_FREE_BALANCE,
   TOPUP_SKUS,
   asCostKey,
@@ -26,6 +27,7 @@ describe("cost-table", () => {
   });
 
   it("exposes the expected refill invariants", () => {
+    expect(LOCAL_CREATOR_FREE_NOTES).toBe(5);
     expect(DAILY_REFILL).toBeLessThanOrEqual(MAX_FREE_BALANCE);
     expect(GRANTS.signup_bonus).toBe(15);
   });

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { toast } from "sonner";
 
+import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { useTranslator } from "@/lib/i18n";
 
 export function useGoogleSignIn() {
@@ -31,7 +32,10 @@ export function useGoogleSignIn() {
         toast.error(t("auth.google_unavailable"));
         return;
       }
-      void signIn("google", { callbackUrl });
+      void (async () => {
+        await ensureLocalCreatorSession();
+        await signIn("google", { callbackUrl });
+      })();
     },
     [available, t],
   );

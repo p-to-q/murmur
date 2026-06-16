@@ -20,6 +20,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
+import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator } from "@/lib/i18n";
@@ -190,6 +191,10 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     }
 
     try {
+      const hasCreatorSession = await ensureLocalCreatorSession();
+      if (!hasCreatorSession) {
+        throw new Error("Local Creator session unavailable");
+      }
       const response = await fetch("/api/songs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -52,6 +52,7 @@ export async function getSessionByToken(
       email: users.email,
       name: users.name,
       avatarUrl: users.avatarUrl,
+      accountKind: users.accountKind,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
@@ -78,6 +79,7 @@ export async function getSessionByToken(
       email: row.email,
       name: row.name,
       avatarUrl: row.avatarUrl,
+      accountKind: normalizeAccountKind(row.accountKind),
     },
   };
 }
@@ -101,4 +103,8 @@ function createSessionToken(): string {
 
 function createSessionId(): string {
   return `ses_${Date.now().toString(36)}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+}
+
+function normalizeAccountKind(value: string): "local_creator" | "registered" {
+  return value === "local_creator" ? "local_creator" : "registered";
 }

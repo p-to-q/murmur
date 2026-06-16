@@ -93,14 +93,23 @@ flowchart TB
 
 ### 4. Platform concerns
 
-- Auth is currently local-header based and guest-safe.
+- Auth is session-based in production.
+- Local Creator is a lightweight account with a real `users.id`, a Murmur
+  session cookie, and 5 notes once for the current browser. It can own songs,
+  so the Gallery and song detail flows work before registration. It is still
+  not a registered account: top-up, payment, account deletion, and cross-device
+  sync require binding an external identity.
+- When a new user signs in from an unbound Local Creator session, Murmur
+  promotes that existing user row instead of copying songs. The `userId` stays
+  stable, which keeps saved songs, ledger rows, and future exports attached.
+- Local-header identity is local/demo only.
 - Notifications are intentionally stubbed until a real push backend is chosen.
 - Memory events are stored locally for now, which keeps user flows non-blocking.
 
 ## Current constraints
 
-- The platform layer is local-first, not yet backed by a production identity or
-  push system.
+- The platform layer is local-first, but production identity is now
+  session-backed rather than header-backed.
 - Notifications are a stub, useful for wiring but not for delivery guarantees.
 - AI editing depends on `OPENAI_API_KEY` or an equivalent gateway key.
 - Some UI files are still larger than the final target shape and can be split as

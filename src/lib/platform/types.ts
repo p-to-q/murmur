@@ -5,6 +5,7 @@ export interface AppUser {
   email?: string | null;
   name?: string | null;
   avatarUrl?: string | null;
+  accountKind?: "local_creator" | "registered" | null;
 }
 
 export type AuthResult =

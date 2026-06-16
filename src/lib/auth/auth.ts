@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { CallbackRouteError } from "@auth/core/errors";
+import { headers } from "next/headers";
 import { db } from "@/lib/db/client";
 import { users, externalIdentities } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -11,6 +12,8 @@ import {
 import { resolveAuthSecret } from "@/lib/auth/env";
 import { assertProductionAuthConfig } from "@/lib/auth/assert-config";
 import { upsertGoogleUser } from "@/lib/db/queries/users";
+import { getSessionByToken } from "@/lib/db/queries/sessions";
+import { getSessionToken } from "@/lib/platform/server-auth";
 import { log } from "@/lib/observability/log";
 
 /**
@@ -51,11 +54,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!googleId) return false;
 
       try {
+        const localCreatorUserId = await resolveCurrentLocalCreatorUserId();
         const { created } = await upsertGoogleUser({
           googleId,
           email: user.email,
           name: user.name ?? null,
           image: user.image ?? null,
+          localCreatorUserId,
         });
         if (created) {
           log(
@@ -131,6 +136,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           session.user.email = user.email || session.user.email;
           session.user.name = user.name || session.user.name;
           session.user.image = user.avatarUrl || session.user.image;
+          session.user.accountKind =
+            user.accountKind === "local_creator" ? "local_creator" : "registered";
           return session;
         }
       }
@@ -161,6 +168,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             session.user.email = user.email || session.user.email;
             session.user.name = user.name || session.user.name;
             session.user.image = user.avatarUrl || session.user.image;
+            session.user.accountKind =
+              user.accountKind === "local_creator" ? "local_creator" : "registered";
           }
         }
       }
@@ -170,3 +179,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   trustHost: true,
 });
+
+async function resolveCurrentLocalCreatorUserId(): Promise<string | null> {
+  try {
+    const headerStore = await headers();
+    const cookie = headerStore.get("cookie");
+    if (!cookie) return null;
+    const token = getSessionToken(
+      new Request("http://murmur.local", { headers: { cookie } }),
+    );
+    if (!token) return null;
+    const session = await getSessionByToken(token);
+    return session?.user.accountKind === "local_creator" ? session.user.id : null;
+  } catch {
+    return null;
+  }
+}
