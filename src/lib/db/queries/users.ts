@@ -3,6 +3,8 @@ import { ulid } from "ulid";
 import { db } from "../client";
 import { users, type User } from "../schema/users";
 import { externalIdentities } from "../schema/external-identities";
+import { notesLedger } from "../schema/notes-ledger";
+import { GRANTS, LOCAL_CREATOR_FREE_NOTES } from "@murmur/core";
 
 export async function getUserById(id: string): Promise<User | undefined> {
   const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
@@ -67,6 +69,26 @@ export interface GoogleProfileInput {
   email: string;
   name: string | null;
   image: string | null;
+  /** Existing Local Creator user from the same browser session, if any. */
+  localCreatorUserId?: string | null;
+}
+
+export async function createLocalCreatorUser(): Promise<User> {
+  const userId = `lc_${ulid()}`;
+  const [user] = await db
+    .insert(users)
+    .values({
+      id: userId,
+      email: null,
+      name: "Local Creator",
+      avatarUrl: null,
+      regionId: "intl",
+      accountKind: "local_creator",
+      notesBalance: LOCAL_CREATOR_FREE_NOTES,
+      planTier: "free",
+    })
+    .returning();
+  return user;
 }
 
 /**
@@ -93,6 +115,7 @@ export async function upsertGoogleUser(
   const email = normalizeEmail(profile.email);
   const name = profile.name?.trim() || email.split("@")[0];
   const avatarUrl = profile.image ?? null;
+  const localCreatorUserId = normalizeLocalCreatorUserId(profile.localCreatorUserId);
 
   // 1) Fast path: identity already exists — just refresh the cached profile.
   const [identity] = await db
@@ -114,7 +137,7 @@ export async function upsertGoogleUser(
     return { userId: identity.userId, created: false };
   }
 
-  // 2) + 3) No identity yet — create or link atomically.
+  // 2) + 3) + 4) No identity yet — create, link, or promote a Local Creator atomically.
   return db.transaction(async (tx) => {
     // Case-insensitive lookup so a pre-existing (possibly mixed-case) row is
     // reused, not duplicated — a duplicate insert would hit users_email_unique.
@@ -136,16 +159,32 @@ export async function upsertGoogleUser(
         .set({ name, avatarUrl, updatedAt: new Date() })
         .where(eq(users.id, userId));
     } else {
-      userId = ulid();
-      created = true;
-      await tx.insert(users).values({
-        id: userId,
-        email,
-        name,
-        avatarUrl,
-        regionId: "intl",
-        planTier: "free",
-      });
+      const localCreator = localCreatorUserId
+        ? await lockPromotableLocalCreator(tx, localCreatorUserId)
+        : null;
+
+      if (localCreator) {
+        userId = localCreator.id;
+        created = false;
+        await promoteLocalCreatorToRegistered(tx, {
+          userId,
+          email,
+          name,
+          avatarUrl,
+        });
+      } else {
+        userId = ulid();
+        created = true;
+        await tx.insert(users).values({
+          id: userId,
+          email,
+          name,
+          avatarUrl,
+          regionId: "intl",
+          accountKind: "registered",
+          planTier: "free",
+        });
+      }
     }
 
     // Insert the identity; tolerate a concurrent first sign-in winning the race.
@@ -182,4 +221,91 @@ export async function upsertGoogleUser(
     }
     return { userId: winner.userId, created: false };
   });
+}
+
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function lockPromotableLocalCreator(
+  tx: DbTransaction,
+  userId: string,
+): Promise<{ id: string } | null> {
+  const [user] = await tx
+    .select({
+      id: users.id,
+      accountKind: users.accountKind,
+      email: users.email,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+    .for("update");
+
+  if (!user || user.accountKind !== "local_creator" || user.email) return null;
+  return { id: user.id };
+}
+
+async function promoteLocalCreatorToRegistered(
+  tx: DbTransaction,
+  input: {
+    userId: string;
+    email: string;
+    name: string;
+    avatarUrl: string | null;
+  },
+): Promise<void> {
+  const targetBalance = GRANTS.signup_bonus;
+  const [current] = await tx
+    .select({ notesBalance: users.notesBalance })
+    .from(users)
+    .where(eq(users.id, input.userId))
+    .limit(1);
+
+  const notesBalance = current?.notesBalance ?? 0;
+  const [existingLedger] = await tx
+    .select({ id: notesLedger.id })
+    .from(notesLedger)
+    .where(eq(notesLedger.userId, input.userId))
+    .limit(1);
+
+  const nextBalance = Math.max(notesBalance, targetBalance);
+  const grantAmount = existingLedger
+    ? Math.max(0, nextBalance - notesBalance)
+    : nextBalance;
+
+  if (grantAmount > 0) {
+    await tx
+      .insert(notesLedger)
+      .values({
+        id: `nle_${ulid()}`,
+        userId: input.userId,
+        delta: grantAmount,
+        reason: "grant:signup_bonus",
+        externalRef: "local_creator_promotion",
+        metadata: {
+          source: "local_creator_promotion",
+          targetBalance,
+          previousBalance: notesBalance,
+        },
+      })
+      .onConflictDoNothing();
+  }
+
+  await tx
+    .update(users)
+    .set({
+      email: input.email,
+      name: input.name,
+      avatarUrl: input.avatarUrl,
+      accountKind: "registered",
+      notesBalance: nextBalance,
+      promotedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, input.userId));
+}
+
+function normalizeLocalCreatorUserId(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.startsWith("lc_") ? trimmed : null;
 }

@@ -14,8 +14,7 @@ import { COST } from "../payments/cost-table";
 /**
  * Runtime user type, derived from the persisted user row.
  *
- * - `guest`    — no session bound to an identity (Web only; iOS / MP do
- *                not have a guest tier).
+ * - `guest`    — no external identity bound yet (Web Local Creator included).
  * - `free`     — authenticated; default plan tier.
  * - `premium`  — RESERVED for v3; the resolver tolerates the value but
  *                no surface depends on it yet.
@@ -34,6 +33,8 @@ export interface EntitlementUser {
   planTier: "free" | "premium";
   /** True when this user is bound to at least one external identity. */
   isAuthenticated: boolean;
+  /** Local Creator has an owner row but is not a registered account. */
+  accountKind?: "local_creator" | "registered" | null;
 }
 
 /**
@@ -76,14 +77,16 @@ export function resolveEntitlement(
 ): Entitlement {
   const type = userType(user);
   const isAuthed = type !== "guest";
+  const isLocalCreator = user?.accountKind === "local_creator";
+  const canSave = Boolean(user) && balance >= COST.save;
 
   return {
     canHum: balance >= COST.hum,
-    canSave: isAuthed && balance >= COST.save,
+    canSave,
     canLlmEdit: balance >= COST.llm_edit,
-    canExportWebm: isAuthed && balance >= COST.export_webm,
-    canTopUp: isAuthed,
-    canDeleteAccount: isAuthed,
+    canExportWebm: isAuthed && !isLocalCreator && balance >= COST.export_webm,
+    canTopUp: isAuthed && !isLocalCreator,
+    canDeleteAccount: isAuthed && !isLocalCreator,
     remainingNotes: balance,
   };
 }

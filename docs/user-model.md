@@ -35,7 +35,7 @@ schema (a single `users` row covers all three; the type is computed).
 
 | Type | Signal | Default behavior |
 |---|---|---|
-| **`guest`** | No session token (Web) / no Apple ID (iOS) / no openid (MP) | Limited surface: Hum + Vibe + Save (gated by quota) + Gallery (read own device storage only). Cannot top up. |
+| **`guest` / Local Creator** | Murmur session with `users.accountKind == "local_creator"`; no external identity yet | Limited local preview: 5 notes once per browser. Can hum, save, reopen, and manage its own songs on this browser. Top-up, purchases, account deletion, cross-device sync, and account-sensitive actions require sign-in. |
 | **`free`** | Authenticated, `planTier == "free"` | Full surface. 15 notes once on sign-in, then paid top-up. |
 | **`premium`** | Authenticated, `planTier == "premium"` (reserved for v3) | Full surface. Unlimited core actions. |
 
@@ -53,10 +53,13 @@ function userType(user: User | null): "guest" | "free" | "premium" {
 ### Why allow guests at all
 
 WeChat MP openid resolution is automatic; iOS / Android can require sign-
-in immediately; only the **Web** shell has a meaningful guest tier — and
-even there, only to lower the "play with it" activation barrier. Guest
-support is one-way: a guest can be promoted to a real user, but a real
-user is never demoted to guest.
+in immediately; only the **Web** shell has a meaningful Local Creator tier —
+and even there, only to lower the "play with it" activation barrier. Guest
+support is intentionally small: 5 notes once per browser, no refill, and a
+login wall once the allowance is spent. Local Creator is still a real owner row
+so saved songs are not stranded in browser storage. Guest support is one-way: a
+Local Creator can be promoted to a real user, but a real user is never demoted
+to guest.
 
 ---
 
@@ -64,7 +67,7 @@ user is never demoted to guest.
 
 | Shell | Primary provider | Fallback | Session medium |
 |---|---|---|---|
-| Web (intl) | Sign in with Apple, Sign in with Google | magic-link email (Stytch / Clerk / Supabase) | `Set-Cookie: __murmur_session` HTTP-only secure |
+| Web (intl) | Sign in with Apple, Sign in with Google | magic-link email (Stytch / Clerk / Supabase) | Murmur opaque session cookie (`__murmur_session`) |
 | Web (cn) | WeChat OAuth, 微信扫码登录 | phone OTP (短信) | same cookie |
 | iOS (Capacitor) | Sign in with Apple **required** (App Store rule) | Apple only | Keychain-backed session token, forwarded as `Authorization: Bearer` |
 | Android (Capacitor) | Google Sign-In | Google only | Encrypted-storage token |
@@ -100,6 +103,13 @@ provider key rotates.
 Server-issued, signed, opaque. **Not** JWTs unless we genuinely need
 audience federation later (v2 doesn't).
 
+Production identity source of truth: `resolveRequestAuth(request)` returns a
+Murmur `users.id` only from a validated Murmur opaque session token/cookie, or
+from the temporary Auth.js Web session bridge while Google login adoption is in
+progress. `guest`, local storage users, and `x-murmur-user-*` headers are
+allowed only in explicit local/demo auth modes and must never gate payment,
+cloud ownership, or account-sensitive actions in production.
+
 ```ts
 type Session = {
   id: string;            // ulid
@@ -120,8 +130,9 @@ Set-Cookie: __murmur_session=<opaque>; HttpOnly; Secure; SameSite=Lax; Path=/; M
 
 Capacitor: shell stores the session token in Keychain / EncryptedSharedPreferences,
 and the API client injects `Authorization: Bearer <token>` on every
-fetch. The same `/api/auth/login` endpoint serves both — cookie OR
-Bearer — and the resolver tries both.
+fetch. Web uses the opaque `__murmur_session` cookie. Auth.js / NextAuth may
+still initiate the login UI, but production API identity is the Murmur session
+resolved by `resolveRequestAuth()`, not the provider session object itself.
 
 ### Session lifecycle
 
@@ -223,16 +234,16 @@ the limitation; do not solve it.
         ┌──────┐
         │  ∅   │       (no row, no session)
         └───┬──┘
-            │  first visit (Web only) — auto-create guest row
-            │  with planTier="free", notesBalance=5
+        │  first visit (Web only) — Local Creator row
+        │  with accountKind="local_creator", 5 notes, and a session cookie
             ▼
         ┌──────┐
-        │guest │       device-only Gallery; can hum, audit, save locally
+        │guest │       browser-bound Gallery; can hum, audit, save
         └───┬──┘
             │  successful signup / signin
             ▼
         ┌──────┐
-        │ free │       full surface; 5/day refill cap 10
+        │ free │       full surface; signup bonus, then paid top-up
         └───┬──┘
             │  successful subscription (v3 — reserved)
             ▼
@@ -248,14 +259,21 @@ the limitation; do not solve it.
 
 Transitions in detail:
 
-- **`∅ → guest` (Web only).** First Web visit with no session and no
-  cookie → server creates a row with `id = ulid()`, `planTier = "free"`,
-  `notesBalance = 5`. Cookie set. The user is technically a "free" row
-  in DB; type derivation marks them as guest until they bind an identity.
-- **`guest → free`.** Sign in with Apple / Google / WeChat. The guest's
-  existing `notesBalance + songs + ledger` migrate to the authenticated
-  identity (single SQL transaction). The guest row is updated, not
-  deleted, so foreign keys remain stable.
+- **`∅ → guest` (Web only).** First Web visit with no Murmur session creates a
+  Local Creator row with `id = "lc_" + ulid()`,
+  `accountKind = "local_creator"`, `planTier = "free"`, and
+  `notesBalance = 5`. A `__murmur_session` cookie binds this browser to the
+  row. The user owns songs, but the account is not registered.
+- **`guest → free`.** Sign in with Apple / Google / WeChat. If the provider
+  identity is new and the current session is an unbound Local Creator, the
+  same `users` row is promoted in one SQL transaction:
+  `accountKind = "registered"`, provider profile fields are filled, and the
+  external identity row is inserted. Songs and ledger rows stay attached
+  because `userId` does not change.
+- **Existing account + Local Creator.** If the external identity already
+  belongs to another registered account, Murmur must not silently merge the
+  current browser's Local Creator songs. The safe follow-up is an explicit
+  "import this browser's local songs" flow with confirmation and idempotency.
 - **`free → premium`.** Reserved. Will be a webhook from the billing
   provider on subscription start.
 - **`* → deleted`.** User requests deletion in `/me`. Confirm modal,
@@ -381,8 +399,8 @@ A downstream agent has shipped this when:
 - [ ] At least one provider (Sign in with Apple OR Google) wired
       end-to-end on the Web shell.
 - [ ] `useCurrentUser()` returns a stable shape across all shells.
-- [ ] Guest → authenticated migration moves the guest's songs +
-      ledger in one transaction.
+- [ ] Local Creator → authenticated promotion preserves the same `userId`,
+      so songs + ledger remain attached without copying.
 - [ ] Logout works on Web + Capacitor; sessions are revoked server-side.
 - [ ] Account-delete flow works end-to-end including the 30-day
       tombstone job.

@@ -12,6 +12,8 @@ type LogLevel = "info" | "warn" | "error";
 export type LogEvent =
   | "auth.me_failed"
   | "auth.logout_failed"
+  | "auth.local_creator_created"
+  | "auth.local_creator_failed"
   | "auth.session_revoked"
   | "auth.signin_failed"
   | "auth.user_provisioned"

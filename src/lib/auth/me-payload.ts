@@ -15,12 +15,15 @@ export interface AuthMePayloadInput {
 }
 
 export function buildAuthMePayload(input: AuthMePayloadInput) {
-  const authenticated = input.source !== "guest";
+  const authenticated =
+    input.source !== "guest" && input.user.accountKind !== "local_creator";
   const entitlementUser = {
     id: input.user.id,
     planTier: input.balance.planTier,
     isAuthenticated: authenticated,
+    accountKind: input.user.accountKind ?? null,
   };
+  const entitlementSubject = input.source === "guest" ? null : entitlementUser;
 
   return {
     user: input.user,
@@ -32,6 +35,6 @@ export function buildAuthMePayload(input: AuthMePayloadInput) {
       planTier: input.balance.planTier,
       nextRefillAt: nextNotesRefillAt(input.now).toISOString(),
     },
-    entitlement: resolveEntitlement(entitlementUser, input.balance.notes),
+    entitlement: resolveEntitlement(entitlementSubject, input.balance.notes),
   };
 }

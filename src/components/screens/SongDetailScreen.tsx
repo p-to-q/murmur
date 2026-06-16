@@ -30,6 +30,7 @@ import { ArrowLeft, MoreHorizontal, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
 
 import { memory } from "@/lib/platform/memory";
+import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { useTranslator } from "@/lib/i18n";
 import { getPlayer, startAudioContext } from "@/lib/music/tone-player";
 import { useMurmurStore } from "@/lib/store/murmur-store";
@@ -85,6 +86,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     let active = true;
     (async () => {
       try {
+        await ensureLocalCreatorSession();
         const res = await fetch(`/api/songs/${songId}`);
         if (!res.ok) {
           if (active) setSong(null);

@@ -33,6 +33,28 @@ describe("resolveEntitlement", () => {
     });
   });
 
+  it("lets Local Creator keep saved work without account-only privileges", () => {
+    expect(
+      resolveEntitlement(
+        {
+          id: "lc_01",
+          planTier: "free",
+          isAuthenticated: false,
+          accountKind: "local_creator",
+        },
+        5,
+      ),
+    ).toMatchObject({
+      canHum: true,
+      canSave: true,
+      canLlmEdit: true,
+      canExportWebm: false,
+      canTopUp: false,
+      canDeleteAccount: false,
+      remainingNotes: 5,
+    });
+  });
+
   it("allows authenticated users to save for free but gates paid actions by balance", () => {
     expect(resolveEntitlement(freeUser, 0)).toMatchObject({
       canHum: false,
