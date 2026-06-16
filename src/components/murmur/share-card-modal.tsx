@@ -31,11 +31,13 @@ const DIRECTIONS = [
   { y: "-100%", x: 0 }, // from top
   { x: "100%", y: 0 }, // from right
   { x: "-100%", y: 0 }, // from left
-];
+] as const;
+
+type SlideDirection = (typeof DIRECTIONS)[number];
 
 // Get opposite direction for exit animation
 // If new slide enters from bottom, old slide exits to top (and vice versa)
-const getOppositeDirection = (dir: { x: number | string; y: number | string }) => {
+const getOppositeDirection = (dir: SlideDirection) => {
   if (typeof dir.y === "string" && dir.y !== "0") {
     // Vertical movement: flip the sign
     return { x: 0, y: dir.y.startsWith("-") ? dir.y.slice(1) : `-${dir.y}` };
@@ -47,12 +49,23 @@ const getOppositeDirection = (dir: { x: number | string; y: number | string }) =
   return { x: 0, y: 0 };
 };
 
+const slideVariants = {
+  enter: (direction: SlideDirection) => ({ ...direction, scale: 0.95 }),
+  center: { x: 0, y: 0, scale: 1 },
+  exit: (direction: SlideDirection) => ({
+    ...getOppositeDirection(direction),
+    scale: 1.05,
+  }),
+};
+
 export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
   const t = useTranslator();
   const { data: session } = useSession();
   const { signInWithGoogle } = useGoogleSignIn();
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [enterDirection, setEnterDirection] = useState(() => DIRECTIONS[0]);
+  const [carousel, setCarousel] = useState({
+    currentSlide: 0,
+    direction: DIRECTIONS[0],
+  });
 
   useEffect(() => {
     if (session?.user) {
@@ -72,12 +85,15 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
   useEffect(() => {
     if (!open) return;
     const interval = setInterval(() => {
-      setEnterDirection(DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)]);
-      setCurrentSlide((prev) => (prev + 1) % CAROUSEL_SLIDES.length);
+      setCarousel((prev) => ({
+        currentSlide: (prev.currentSlide + 1) % CAROUSEL_SLIDES.length,
+        direction: DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)],
+      }));
     }, 3000);
     return () => clearInterval(interval);
   }, [open]);
 
+  const { currentSlide, direction } = carousel;
   const slide = CAROUSEL_SLIDES[currentSlide];
 
   return (
@@ -100,7 +116,7 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative overflow-hidden rounded-[32px] shadow-2xl">
-              <AnimatePresence initial={false}>
+              <AnimatePresence initial={false} custom={direction}>
                 {/*
                   Carousel animation logic:
                   - New slide enters from enterDirection (random)
@@ -109,9 +125,11 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
                 */}
                 <motion.div
                   key={currentSlide}
-                  initial={{ ...enterDirection, scale: 0.95 }}
-                  animate={{ x: 0, y: 0, scale: 1 }}
-                  exit={{ ...getOppositeDirection(enterDirection), scale: 1.05 }}
+                  custom={direction}
+                  variants={slideVariants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
                   transition={{
                     duration: 0.7,
                     ease: [0.22, 1, 0.36, 1],
