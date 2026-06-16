@@ -145,11 +145,13 @@ heal_tunnel() { # name port url
   fi
 }
 
-# ── Cloud music override ───────────────────────────────────────────────
-# When scripts/deploy-music-gpu.ts has provisioned a GPU worker, its URL and
-# token live in .env.workers.cloud. Production must keep pointing at the GPU
-# pod — never at the local Mac tunnel — so sync_vercel uses these instead of
-# the music tunnel whenever the file is present.
+# ── Cloud music override (legacy) ──────────────────────────────────────
+# Legacy: the old RunPod *pod* deploy wrote MUSIC_WORKER_URL/TOKEN to
+# .env.workers.cloud, and sync_vercel used those so prod stayed on the pod
+# rather than the local Mac tunnel. Production music now runs on RunPod
+# Serverless — the app keys off RUNPOD_SERVERLESS_ENDPOINT_ID (in Vercel),
+# which takes precedence over any MUSIC_WORKER_URL — so this override is a
+# harmless no-op there, and only matters for the retired local pod path.
 CLOUD_ENV="$ROOT/.env.workers.cloud"
 cloud_music_url()   { [ -f "$CLOUD_ENV" ] && grep '^MUSIC_WORKER_URL='   "$CLOUD_ENV" | tail -1 | cut -d= -f2-; }
 cloud_music_token() { [ -f "$CLOUD_ENV" ] && grep '^MUSIC_WORKER_TOKEN=' "$CLOUD_ENV" | tail -1 | cut -d= -f2-; }
@@ -274,7 +276,7 @@ case "${1:-}" in
     if grep -qE '^AUDIO_WORKER_URL=.*fly\.dev' "$ENV_FILE" 2>/dev/null && [ "${MURMUR_SUPERVISOR_FORCE:-0}" != "1" ]; then
       echo "⛔ supervisor is retired — audio-engine runs on Fly (murmur-audio.fly.dev), music on RunPod." >&2
       echo "   Starting it would clobber the production AUDIO_WORKER_URL. To bring music up, use:" >&2
-      echo "       bun run deploy:music-gpu" >&2
+      echo "       bun run deploy:music-serverless" >&2
       echo "   Force the legacy local stack anyway: MURMUR_SUPERVISOR_FORCE=1 $0 ${1:-}" >&2
       exit 2
     fi

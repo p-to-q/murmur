@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
-# Boot script for the GPU image: fetch model assets once, then serve.
+# Boot script for the GPU image (RunPod Serverless): bridge the network volume,
+# fetch model assets once, then run the serverless handler.
 set -euo pipefail
 
 MODEL="${MAGENTA_MODEL:-mrt2_base}"
 ASSETS_ROOT="${HOME}/Documents/Magenta"
 ASSETS_DIR="${ASSETS_ROOT}/magenta-rt-v2"
 CHECKPOINT="${ASSETS_DIR}/checkpoints/${MODEL}.safetensors"
-PORT="${PORT:-8002}"
+
+# On RunPod Serverless the network volume mounts at /runpod-volume. Bridge the
+# model asset dir onto it so the ~4 GB download persists across cold starts and
+# workers (fetched once, not per worker). When no volume is attached (e.g. a
+# plain `docker run`), fall through to local ephemeral disk.
+if [ -d /runpod-volume ]; then
+  mkdir -p /runpod-volume/Magenta
+  mkdir -p "$(dirname "$ASSETS_ROOT")"
+  ln -sfn /runpod-volume/Magenta "$ASSETS_ROOT"
+fi
 
 mkdir -p "$ASSETS_ROOT"
 
@@ -40,5 +50,5 @@ if [ ! -f "$CHECKPOINT" ]; then
   exit 1
 fi
 
-echo "[entrypoint] starting uvicorn on 0.0.0.0:${PORT} (backend=${MAGENTA_BACKEND:-jax})"
-exec uvicorn main:app --host 0.0.0.0 --port "${PORT}"
+echo "[entrypoint] starting RunPod serverless handler (backend=${MAGENTA_BACKEND:-jax})"
+exec python -u handler.py

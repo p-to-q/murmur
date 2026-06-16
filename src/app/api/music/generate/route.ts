@@ -3,18 +3,24 @@ import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { log } from "@/lib/observability/log";
-import { getMusicWorkerUrl } from "@/lib/platform/music-worker";
+import {
+  getMusicEngineMode,
+  getMusicServerlessConfig,
+  getMusicWorkerUrl,
+} from "@/lib/platform/music-worker";
+import { RunpodError, runJob } from "@/lib/platform/runpod-serverless";
 
 export const runtime = "nodejs";
-// Generation proxies a 10-30s model call (plus a possible cold model load);
-// don't let the platform's default function timeout cut it off mid-render.
+// Generation proxies a 10-30s model call (plus a possible cold-start / model
+// load on RunPod Serverless); don't let the platform's default function timeout
+// cut it off mid-render.
 export const maxDuration = 120;
 
 const ROUTE = "/api/music/generate";
 // One hum fans out into three clips and rerolls fan out again — the budget
 // is per-clip, so keep it well above the transcribe route's.
 const GENERATE_RATE_LIMIT = { capacity: 30, refillWindowMs: 60_000 };
-// Must stay below maxDuration (120 s): if the worker fetch outlives the
+// Must stay below maxDuration (120 s): if the worker call outlives the
 // function, the platform kills us mid-wait and the client gets an opaque
 // 502 instead of our structured timeout error.
 const WORKER_TIMEOUT_MS = 110_000;
@@ -31,13 +37,39 @@ type MusicRouteError =
   | "worker_http_error"
   | "server_error";
 
+interface GenerateParams {
+  prompt: string;
+  duration: number;
+  styleMix: number;
+  hum: File | null;
+  melody: string;
+}
+
+type GenerateResult =
+  | {
+      ok: true;
+      audio: ArrayBuffer;
+      contentType: string;
+      model: string;
+      generationMs: string;
+      styleMix: string;
+    }
+  | {
+      ok: false;
+      error: MusicRouteError;
+      message: string;
+      status: number;
+      ext?: Record<string, unknown>;
+    };
+
 /**
  * POST /api/music/generate
  *
- * Proxies a clip request to the local Magenta RealTime worker. Multipart in
- * (`prompt`, `duration`, optional `styleMix` + `hum` recording), WAV out.
- * Generation itself is free — the hum that started the flow already spent
- * the note in /api/transcribe.
+ * Proxies a clip request to the Magenta RealTime worker — RunPod Serverless in
+ * production, or the local FastAPI worker in dev (see getMusicEngineMode).
+ * Multipart in (`prompt`, `duration`, optional `styleMix` + `hum` recording +
+ * `melody`), WAV out. Generation itself is free — the hum that started the flow
+ * already spent the note in /api/transcribe.
  */
 export async function POST(request: NextRequest) {
   const startedAt = performance.now();
@@ -65,9 +97,9 @@ export async function POST(request: NextRequest) {
     return rateLimitedResponse(rateLimit, requestId);
   }
 
-  const workerBase = getMusicWorkerUrl();
-  if (!workerBase) {
-    return fail("worker_unconfigured", "MUSIC_WORKER_URL is not configured", 503, {
+  const mode = getMusicEngineMode();
+  if (!mode) {
+    return fail("worker_unconfigured", "music worker is not configured", 503, {
       requestId, userId, startedAt,
     });
   }
@@ -99,8 +131,9 @@ export async function POST(request: NextRequest) {
       Math.max(0, Number.isFinite(styleMixRaw) ? styleMixRaw : 0),
     );
 
-    const hum = formData.get("hum");
-    if (hum instanceof File && hum.size > MAX_HUM_BYTES) {
+    const humValue = formData.get("hum");
+    const hum = humValue instanceof File ? humValue : null;
+    if (hum && hum.size > MAX_HUM_BYTES) {
       return fail("validation_error", "hum recording is too large", 413, {
         requestId, userId, startedAt,
       });
@@ -109,89 +142,47 @@ export async function POST(request: NextRequest) {
     const melodyRaw = formData.get("melody");
     const melody = typeof melodyRaw === "string" ? melodyRaw.trim() : "";
 
-    const workerForm = new FormData();
-    workerForm.append("prompt", prompt);
-    workerForm.append("duration", String(duration));
-    if (melody) {
-      workerForm.append("melody", melody);
-    }
-    if (hum instanceof File && hum.size > 0 && styleMix > 0) {
-      workerForm.append("style_mix", String(styleMix));
-      workerForm.append("hum", hum, hum.name || "hum.webm");
-    }
-
-    const headers = new Headers({ "X-Request-Id": requestId });
-    const token = process.env.MUSIC_WORKER_TOKEN?.trim();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const params: GenerateParams = { prompt, duration, styleMix, hum, melody };
 
     log("music.generate_requested", {
+      mode,
       promptChars: prompt.length,
       duration,
       styleMix,
-      humBytes: hum instanceof File ? hum.size : 0,
+      humBytes: hum ? hum.size : 0,
     }, {
       route: ROUTE, requestId, userId, sessionId: auth.sessionId,
     });
 
-    let workerRes: Response;
-    try {
-      workerRes = await fetch(`${workerBase.replace(/\/+$/, "")}/generate`, {
-        method: "POST",
-        body: workerForm,
-        headers,
-        signal: AbortSignal.timeout(WORKER_TIMEOUT_MS),
+    const result =
+      mode === "serverless"
+        ? await generateViaServerless(params, requestId)
+        : await generateViaHttp(params, requestId);
+
+    if (!result.ok) {
+      return fail(result.error, result.message, result.status, {
+        requestId, userId, startedAt, ext: result.ext,
       });
-    } catch (error) {
-      return fail(
-        "worker_http_error",
-        error instanceof Error ? error.message : "Music worker request failed",
-        502,
-        { requestId, userId, startedAt },
-      );
     }
 
-    if (!workerRes.ok) {
-      // Surface the worker's own error payload in our logs — without it,
-      // "HTTP 500" hides whether generation failed, auth drifted, or the
-      // worker was mid-load.
-      let workerDetail: unknown = null;
-      try {
-        workerDetail = (await workerRes.json()) as unknown;
-      } catch {
-        // non-JSON body (tunnel error pages etc.) — nothing to extract
-      }
-      const unauthorized = workerRes.status === 401 || workerRes.status === 403;
-      return fail(
-        unauthorized ? "worker_unauthorized" : "worker_http_error",
-        unauthorized
-          ? "Music worker rejected our token (MUSIC_WORKER_TOKEN out of sync?)"
-          : `Music worker returned HTTP ${workerRes.status}`,
-        502,
-        {
-          requestId, userId, startedAt,
-          ext: { workerStatus: workerRes.status, workerDetail },
-        },
-      );
-    }
-
-    const audio = await workerRes.arrayBuffer();
     log("music.generate_completed", {
-      bytes: audio.byteLength,
-      generationMs: Number(workerRes.headers.get("x-generation-ms")) || null,
-      model: workerRes.headers.get("x-model"),
-      styleMix: workerRes.headers.get("x-style-mix"),
+      mode,
+      bytes: result.audio.byteLength,
+      generationMs: Number(result.generationMs) || null,
+      model: result.model,
+      styleMix: result.styleMix,
     }, {
       route: ROUTE, requestId, userId, sessionId: auth.sessionId,
       durationMs: Math.round(performance.now() - startedAt),
     });
 
-    return new NextResponse(audio, {
+    return new NextResponse(result.audio, {
       headers: {
-        "Content-Type": workerRes.headers.get("content-type") ?? "audio/wav",
+        "Content-Type": result.contentType,
         "Cache-Control": "no-store",
         "X-Request-Id": requestId,
-        "X-Model": workerRes.headers.get("x-model") ?? "",
-        "X-Generation-Ms": workerRes.headers.get("x-generation-ms") ?? "",
+        "X-Model": result.model,
+        "X-Generation-Ms": result.generationMs,
       },
     });
   } catch (error) {
@@ -200,6 +191,154 @@ export async function POST(request: NextRequest) {
       ext: { message: error instanceof Error ? error.message : String(error) },
     });
   }
+}
+
+/** Production path: invoke the RunPod Serverless endpoint (JSON + base64). */
+async function generateViaServerless(
+  params: GenerateParams,
+  requestId: string,
+): Promise<GenerateResult> {
+  const config = getMusicServerlessConfig();
+  if (!config) {
+    return { ok: false, error: "worker_unconfigured", message: "RunPod endpoint not configured", status: 503 };
+  }
+
+  const input: Record<string, unknown> = {
+    prompt: params.prompt,
+    duration: params.duration,
+    request_id: requestId,
+  };
+  if (params.melody) input.melody = params.melody;
+  if (params.hum && params.hum.size > 0 && params.styleMix > 0) {
+    input.style_mix = params.styleMix;
+    input.hum_b64 = Buffer.from(await params.hum.arrayBuffer()).toString("base64");
+  }
+
+  let output: Record<string, unknown>;
+  try {
+    output = await runJob(config, input, { budgetMs: WORKER_TIMEOUT_MS });
+  } catch (error) {
+    if (error instanceof RunpodError) {
+      return {
+        ok: false,
+        error: error.kind === "unauthorized" ? "worker_unauthorized" : "worker_http_error",
+        message:
+          error.kind === "unauthorized"
+            ? "RunPod rejected our API key (RUNPOD_API_KEY out of sync?)"
+            : error.message,
+        status: 502,
+        ext: { runpodKind: error.kind, runpodDetail: error.detail },
+      };
+    }
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: error instanceof Error ? error.message : "RunPod request failed",
+      status: 502,
+    };
+  }
+
+  const audioB64 = output.audio_b64;
+  if (typeof audioB64 !== "string" || !audioB64) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "RunPod job returned no audio",
+      status: 502,
+      ext: { output },
+    };
+  }
+
+  // Slice out exactly this clip's bytes into a standalone ArrayBuffer: Node
+  // pools small Buffer allocations into a shared backing store, and NextResponse
+  // wants a plain ArrayBuffer (a Buffer is generic over ArrayBufferLike).
+  const decoded = Buffer.from(audioB64, "base64");
+  const audio = decoded.buffer.slice(
+    decoded.byteOffset,
+    decoded.byteOffset + decoded.byteLength,
+  ) as ArrayBuffer;
+
+  return {
+    ok: true,
+    audio,
+    contentType: "audio/wav",
+    model: typeof output.model === "string" ? output.model : "",
+    generationMs: output.generation_ms != null ? String(output.generation_ms) : "",
+    styleMix: typeof output.style_mix === "string" ? output.style_mix : "",
+  };
+}
+
+/** Dev/legacy path: proxy multipart to the HTTP worker (`MUSIC_WORKER_URL`). */
+async function generateViaHttp(
+  params: GenerateParams,
+  requestId: string,
+): Promise<GenerateResult> {
+  const workerBase = getMusicWorkerUrl();
+  if (!workerBase) {
+    return { ok: false, error: "worker_unconfigured", message: "MUSIC_WORKER_URL is not configured", status: 503 };
+  }
+
+  const workerForm = new FormData();
+  workerForm.append("prompt", params.prompt);
+  workerForm.append("duration", String(params.duration));
+  if (params.melody) {
+    workerForm.append("melody", params.melody);
+  }
+  if (params.hum && params.hum.size > 0 && params.styleMix > 0) {
+    workerForm.append("style_mix", String(params.styleMix));
+    workerForm.append("hum", params.hum, params.hum.name || "hum.webm");
+  }
+
+  const headers = new Headers({ "X-Request-Id": requestId });
+  const token = process.env.MUSIC_WORKER_TOKEN?.trim();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  let workerRes: Response;
+  try {
+    workerRes = await fetch(`${workerBase.replace(/\/+$/, "")}/generate`, {
+      method: "POST",
+      body: workerForm,
+      headers,
+      signal: AbortSignal.timeout(WORKER_TIMEOUT_MS),
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: error instanceof Error ? error.message : "Music worker request failed",
+      status: 502,
+    };
+  }
+
+  if (!workerRes.ok) {
+    // Surface the worker's own error payload — without it, "HTTP 500" hides
+    // whether generation failed, auth drifted, or the worker was mid-load.
+    let workerDetail: unknown = null;
+    try {
+      workerDetail = (await workerRes.json()) as unknown;
+    } catch {
+      // non-JSON body (tunnel error pages etc.) — nothing to extract
+    }
+    const unauthorized = workerRes.status === 401 || workerRes.status === 403;
+    return {
+      ok: false,
+      error: unauthorized ? "worker_unauthorized" : "worker_http_error",
+      message: unauthorized
+        ? "Music worker rejected our token (MUSIC_WORKER_TOKEN out of sync?)"
+        : `Music worker returned HTTP ${workerRes.status}`,
+      status: 502,
+      ext: { workerStatus: workerRes.status, workerDetail },
+    };
+  }
+
+  return {
+    ok: true,
+    audio: await workerRes.arrayBuffer(),
+    contentType: workerRes.headers.get("content-type") ?? "audio/wav",
+    model: workerRes.headers.get("x-model") ?? "",
+    generationMs: workerRes.headers.get("x-generation-ms") ?? "",
+    styleMix: workerRes.headers.get("x-style-mix") ?? "",
+  };
 }
 
 function fail(

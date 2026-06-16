@@ -23,9 +23,9 @@ source of truth and links out for the parts that have their own deep docs.
  ┌──────▼───────┐   ┌───────▼───────┐   │            ┌──────▼───────┐   ┌───────▼───────┐
  │ audio-engine │   │ music-engine  │   │            │  PostgreSQL  │   │ Object storage│
  │  (transcribe)│   │ Magenta RT2   │   │            │ + Drizzle ORM│   │  S3 / R2-compat│
- │ FastAPI :8001│   │ FastAPI :8002 │   │            └──────────────┘   └───────────────┘
- │ local Mac +  │   │ RunPod GPU    │   │
- │ cloudflared  │   │ (URL → Vercel)│   │
+ │ FastAPI :8001│   │ dev :8002 /   │   │            └──────────────┘   └───────────────┘
+ │ Fly.io       │   │ RunPod        │   │
+ │              │   │ Serverless    │   │
  └──────────────┘   └───────────────┘   │
                                         │
                                  ┌──────▼───────┐
@@ -34,9 +34,11 @@ source of truth and links out for the parts that have their own deep docs.
                                  └──────────────┘
 ```
 
-The two Python workers speak the same FastAPI contract whether they run on the
-operator's Mac (fronted by a `cloudflared` quick tunnel) or on a RunPod GPU. The
-Next.js app reaches them by URL and falls back gracefully when a worker is
+Both workers share one Python generation core. The audio worker speaks a
+FastAPI HTTP contract on its host; the music worker keeps that same FastAPI
+contract for local dev but runs as a **RunPod Serverless handler** in
+production (JSON + base64 over the RunPod job queue). The Next.js app reaches
+each by its configured transport and falls back gracefully when a worker is
 unreachable.
 
 ## Frontend (web shell)
@@ -92,14 +94,18 @@ probe.
 
 ### `music-engine` — vibe → audio clip (generation)
 
-- Port `:8002`. HTTP wrapper around **Magenta RealTime 2** (`mrt2_base` by
-  default). `POST /generate` takes a text prompt, duration, `style_mix`, and an
-  optional hum file and returns a 48 kHz WAV.
-- **Production runs on a RunPod GPU.** `bun run deploy:music-gpu` builds/boots
-  the pod and syncs its (rotating) URL to Vercel; `RUNPOD_RESUME=1` resumes an
-  exited pod without losing the model volume.
-- **Local dev** uses the MLX backend on Apple Silicon (`bun run dev:music`); the
-  model loads once (~45 s on an M4 Max) and stays resident.
+- **Magenta RealTime 2** (`mrt2_base` by default). Generation takes a text
+  prompt, duration, `style_mix`, optional melody, and an optional hum, and
+  returns a 48 kHz WAV.
+- **Production runs on RunPod Serverless** (scale-to-zero GPU, JAX/CUDA).
+  `bun run deploy:music-serverless` creates/updates a network volume + template
+  + endpoint and syncs the endpoint id to Vercel. The ~4 GB model lives on the
+  network volume (downloaded once); workers cold-start on demand, so the first
+  hum after idle may fall back to Tone.js. See
+  [DEPLOY_MUSIC_ENGINE_GPU.md](DEPLOY_MUSIC_ENGINE_GPU.md).
+- **Local dev** runs the FastAPI server on `:8002` with the MLX backend on
+  Apple Silicon (`bun run dev:music`); the model loads once (~45 s on an
+  M4 Max) and stays resident.
 
 ## Data + storage
 
@@ -123,14 +129,14 @@ bootstrap scripts are in [billing-waffo.md](billing-waffo.md).
 | Layer | Where it runs | How it's deployed |
 |---|---|---|
 | Web + API | Vercel (`murmur.ptoq.io`) | `vercel` CLI (project linked) |
-| Music generation | RunPod GPU pod | `bun run deploy:music-gpu` (syncs URL → Vercel) |
+| Music generation | RunPod Serverless | `bun run deploy:music-serverless` (syncs endpoint id → Vercel) |
 | Audio transcription | Operator Mac + `cloudflared` | `scripts/serve-workers-public.sh --sync-vercel` |
 | Database | Managed Postgres | migrations via Drizzle |
 | Object storage | S3 / R2 bucket | provisioned out-of-band |
 
-Both worker URLs rotate on restart; the `--sync-vercel` / `deploy:music-gpu`
-paths exist so re-pointing the production app is one command, not a manual env
-edit.
+The audio worker's URL can rotate on restart, so `--sync-vercel` re-points
+production in one command. The music serverless endpoint id is stable — re-run
+`deploy:music-serverless` only to ship a new image or change scaling.
 
 ## CI/CD
 

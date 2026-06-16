@@ -289,11 +289,11 @@ cp .env.example .env
 
 **Production**: https://murmur.ptoq.io
 
-**Current architecture**: Next.js frontend on Vercel; transcription (audio-engine) runs locally and is exposed via a cloudflared tunnel; music generation (Magenta RT2) runs on a RunPod GPU; Postgres via Drizzle; billing via Waffo.
+**Current architecture**: Next.js frontend on Vercel; transcription (audio-engine) runs on Fly.io; music generation (Magenta RT2) runs on RunPod Serverless (scale-to-zero GPU); Postgres via Drizzle; billing via Waffo.
 
 For deployment, see:
-- **[docs/DEPLOY_MUSIC_ENGINE.md](./docs/DEPLOY_MUSIC_ENGINE.md)** — canonical deploy guide (Vercel shell + workers + cloudflared)
-- **[docs/DEPLOY_MUSIC_ENGINE_GPU.md](./docs/DEPLOY_MUSIC_ENGINE_GPU.md)** — RunPod GPU music-engine deploy
+- **[docs/DEPLOY_MUSIC_ENGINE.md](./docs/DEPLOY_MUSIC_ENGINE.md)** — canonical deploy guide (Vercel shell + workers)
+- **[docs/DEPLOY_MUSIC_ENGINE_GPU.md](./docs/DEPLOY_MUSIC_ENGINE_GPU.md)** — RunPod Serverless music-engine deploy
 
 ## Learn More
 
