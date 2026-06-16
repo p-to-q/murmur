@@ -1,15 +1,15 @@
-export type ArtworkBucket =
-  | "luminist_air"
-  | "sublime_terrain"
-  | "tidal_mineral"
-  | "pastoral_memory"
-  | "nocturne_metro"
-  | "printed_signal"
-  | "stage_heat"
-  | "interior_reverie"
-  | "hypermodern_void";
+import {
+  VISUAL_ARTWORK_BUCKETS,
+  VISUAL_ARTWORK_SOURCES,
+  type VisualArtworkBucket,
+  type VisualArtworkSource,
+} from "@/modules/shared/types";
 
-export type ArtworkSource = "aic" | "met" | "cma";
+export const ARTWORK_BUCKETS = VISUAL_ARTWORK_BUCKETS;
+export type ArtworkBucket = VisualArtworkBucket;
+
+export const ARTWORK_SOURCES = VISUAL_ARTWORK_SOURCES;
+export type ArtworkSource = VisualArtworkSource;
 
 export type ArtworkCrop = {
   x: number;
@@ -70,6 +70,6 @@ export function toArtworkSelection(entry: ArtworkCatalogEntry): ArtworkSelection
     sourceUrl: entry.sourceUrl,
     imagePath: entry.imagePath,
     license: entry.license,
-    crop: entry.crop,
+    crop: { ...entry.crop },
   };
 }

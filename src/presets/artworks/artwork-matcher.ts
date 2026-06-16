@@ -1,6 +1,6 @@
 import { hashString, mulberry32 } from "@/lib/music/seeded-random";
 import { ARTWORK_CATALOG } from "./catalog";
-import { toArtworkSelection } from "./types";
+import { ARTWORK_BUCKETS, toArtworkSelection } from "./types";
 import type { ArtworkBucket, ArtworkCatalogEntry, ArtworkSelection } from "./types";
 
 type ArtworkMatchFacets = {
@@ -83,20 +83,10 @@ function normalized(value?: string): string {
   return value?.trim().toLowerCase() ?? "";
 }
 
-const ARTWORK_BUCKETS = new Set<ArtworkBucket>([
-  "luminist_air",
-  "sublime_terrain",
-  "tidal_mineral",
-  "pastoral_memory",
-  "nocturne_metro",
-  "printed_signal",
-  "stage_heat",
-  "interior_reverie",
-  "hypermodern_void",
-]);
+const ARTWORK_BUCKET_SET = new Set<ArtworkBucket>(ARTWORK_BUCKETS);
 
 function isArtworkBucket(value: string | undefined): value is ArtworkBucket {
-  return !!value && ARTWORK_BUCKETS.has(value as ArtworkBucket);
+  return !!value && ARTWORK_BUCKET_SET.has(value as ArtworkBucket);
 }
 
 function bucketAffinity(bucket: ArtworkBucket, facets: ArtworkMatchFacets): number {

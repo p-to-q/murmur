@@ -11,8 +11,13 @@ const DATA_DIR = path.join(ROOT, "src", "presets", "artworks");
 const MANIFEST_PATH = path.join(PUBLIC_DIR, "manifest.json");
 const CATALOG_PATH = path.join(DATA_DIR, "catalog.generated.ts");
 
-const TARGET_PER_BUCKET = Number(process.env.MURMUR_ARTWORKS_PER_BUCKET ?? 24);
+const requestedTargetPerBucket = Number(process.env.MURMUR_ARTWORKS_PER_BUCKET ?? 24);
+const TARGET_PER_BUCKET =
+  Number.isInteger(requestedTargetPerBucket) && requestedTargetPerBucket > 0
+    ? requestedTargetPerBucket
+    : 24;
 const IMAGE_WIDTH = 1100;
+const FETCH_TIMEOUT_MS = 30_000;
 
 const BUCKETS = {
   luminist_air: {
@@ -298,15 +303,27 @@ function sourcePage(source, id) {
   return "";
 }
 
-async function fetchJson(url) {
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "MurmurArtworkCurator/1.0 (local development)",
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}: ${url}`);
+async function fetchWithTimeout(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "MurmurArtworkCurator/1.0 (local development)",
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}: ${url}`);
+    }
+    return response;
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+async function fetchJson(url) {
+  const response = await fetchWithTimeout(url);
   return response.json();
 }
 
@@ -397,7 +414,7 @@ function candidateQuality(candidate, bucket, bucketSpec) {
   let score = 0;
 
   const positive = {
-    luminist_air: ["landscape", "lake", "coast", "water", "mist", "moon", "tonal", "kansett", "heade", "inness"],
+    luminist_air: ["landscape", "lake", "coast", "water", "mist", "moon", "tonal", "kensett", "heade", "inness"],
     sublime_terrain: ["mountain", "rock", "valley", "wilderness", "landscape", "bierstadt", "church", "moran", "cole"],
     tidal_mineral: ["sea", "coast", "shore", "wave", "water", "homer", "marine", "rock", "bermuda"],
     pastoral_memory: ["pastoral", "field", "dune", "lake", "landscape", "inness", "richards", "farm", "meadow"],
@@ -477,14 +494,8 @@ function makeEntry(candidate, bucket, bucketSpec, index) {
 }
 
 async function downloadFile(url, filePath) {
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "MurmurArtworkCurator/1.0 (local development)",
-    },
-  });
-  if (!response.ok || !response.body) {
-    throw new Error(`${response.status} ${response.statusText}: ${url}`);
-  }
+  const response = await fetchWithTimeout(url);
+  if (!response.body) throw new Error(`Missing response body: ${url}`);
   await pipeline(response.body, createWriteStream(filePath));
 }
 

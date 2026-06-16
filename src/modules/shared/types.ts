@@ -53,6 +53,24 @@ export type ArrangementState = {
   texture: TrackState;
 };
 
+export const VISUAL_ARTWORK_BUCKETS = [
+  "luminist_air",
+  "sublime_terrain",
+  "tidal_mineral",
+  "pastoral_memory",
+  "nocturne_metro",
+  "printed_signal",
+  "stage_heat",
+  "interior_reverie",
+  "hypermodern_void",
+] as const;
+
+export type VisualArtworkBucket = (typeof VISUAL_ARTWORK_BUCKETS)[number];
+
+export const VISUAL_ARTWORK_SOURCES = ["aic", "met", "cma"] as const;
+
+export type VisualArtworkSource = (typeof VISUAL_ARTWORK_SOURCES)[number];
+
 export type VisualArtworkCrop = {
   x: number;
   y: number;
@@ -61,11 +79,11 @@ export type VisualArtworkCrop = {
 
 export type VisualArtwork = {
   id: string;
-  bucket: string;
+  bucket: VisualArtworkBucket;
   title: string;
   artist: string;
   year: string;
-  source: string;
+  source: VisualArtworkSource;
   sourceUrl: string;
   imagePath: string;
   license: "CC0" | "Public Domain";
@@ -78,7 +96,7 @@ export type VisualFacets = {
   instrument?: string;
   scene?: string;
   energy?: number;
-  bucket?: string;
+  bucket?: VisualArtworkBucket;
 };
 
 export type VisualConfig = {

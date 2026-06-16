@@ -25,6 +25,12 @@ type SongWithMeta = Omit<SongCardType, "visualConfig" | "duration" | "arrangemen
   };
 type SortMode = "newest" | "alpha";
 
+function demoArtwork(id: string) {
+  const artwork = ARTWORK_CATALOG.find((entry) => entry.id === id);
+  if (!artwork) throw new Error(`Missing demo artwork: ${id}`);
+  return artwork;
+}
+
 // Demo songs for empty state — gradients keep their covers on the same
 // rendering path as real songs.
 const DEMO_SONGS: SongWithMeta[] = [
@@ -39,7 +45,7 @@ const DEMO_SONGS: SongWithMeta[] = [
       gradient: "linear-gradient(148deg, #4E5D6E 0%, #8B96A6 48%, #D8D0C4 100%)",
       particleDensity: 0.4,
       pulseSource: "melody",
-      artwork: ARTWORK_CATALOG.find((entry) => entry.id === "nocturne_metro-aic-56905"),
+      artwork: demoArtwork("nocturne_metro-aic-56905"),
     },
   },
   {
@@ -53,7 +59,7 @@ const DEMO_SONGS: SongWithMeta[] = [
       gradient: "linear-gradient(148deg, #5A8EAA 0%, #9DB8C0 48%, #DFE0DA 100%)",
       particleDensity: 0.35,
       pulseSource: "melody",
-      artwork: ARTWORK_CATALOG.find((entry) => entry.id === "nocturne_metro-aic-20684"),
+      artwork: demoArtwork("nocturne_metro-aic-20684"),
     },
   },
   {
@@ -67,7 +73,7 @@ const DEMO_SONGS: SongWithMeta[] = [
       gradient: "linear-gradient(148deg, #A8C8E8 0%, #E8E2F4 48%, #7FA6CC 100%)",
       particleDensity: 0.45,
       pulseSource: "melody",
-      artwork: ARTWORK_CATALOG.find((entry) => entry.id === "sublime_terrain-aic-146701"),
+      artwork: demoArtwork("sublime_terrain-aic-146701"),
     },
   },
 ];

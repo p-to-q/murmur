@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { VISUAL_ARTWORK_BUCKETS, VISUAL_ARTWORK_SOURCES } from "@/modules/shared/types";
 
 export const trackStateSchema = z.object({
   enabled: z.boolean(),
@@ -25,18 +26,18 @@ export const arrangementStateSchema = z.object({
 
 export const visualArtworkSchema = z.object({
   id: z.string().min(1),
-  bucket: z.string().min(1),
+  bucket: z.enum(VISUAL_ARTWORK_BUCKETS),
   title: z.string().min(1),
   artist: z.string().min(1),
   year: z.string().min(1),
-  source: z.string().min(1),
+  source: z.enum(VISUAL_ARTWORK_SOURCES),
   sourceUrl: z.string().min(1),
   imagePath: z.string().min(1),
   license: z.enum(["CC0", "Public Domain"]),
   crop: z.object({
     x: z.number(),
     y: z.number(),
-    scale: z.number(),
+    scale: z.number().min(0.1),
   }),
 });
 
@@ -45,14 +46,14 @@ export const visualFacetsSchema = z.object({
   mood: z.string().optional(),
   instrument: z.string().optional(),
   scene: z.string().optional(),
-  energy: z.number().optional(),
-  bucket: z.string().optional(),
+  energy: z.number().min(0).max(1).optional(),
+  bucket: z.enum(VISUAL_ARTWORK_BUCKETS).optional(),
 });
 
 export const visualConfigSchema = z.object({
   preset: z.string().min(1),
   gradient: z.string().min(1),
-  particleDensity: z.number(),
+  particleDensity: z.number().min(0).max(1),
   pulseSource: z.enum(["drums", "melody", "energy"]),
   posterBg: z.string().optional(),
   artwork: visualArtworkSchema.optional(),
