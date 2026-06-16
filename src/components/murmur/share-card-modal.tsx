@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
@@ -27,57 +27,81 @@ const CAROUSEL_SLIDES = [
 ];
 
 const DIRECTIONS = [
-  { y: "100%", x: 0 }, // from bottom
-  { y: "-100%", x: 0 }, // from top
-  { x: "100%", y: 0 }, // from right
-  { x: "-100%", y: 0 }, // from left
+  { x: 0, y: "-100%" }, // old exits top; new enters from bottom
+  { x: 0, y: "100%" }, // old exits bottom; new enters from top
+  { x: "-100%", y: 0 }, // old exits left; new enters from right
+  { x: "100%", y: 0 }, // old exits right; new enters from left
 ] as const;
 
 type SlideDirection = (typeof DIRECTIONS)[number];
-interface SlideTransition {
-  enter: SlideDirection;
-  exit: { x: number | string; y: number | string };
+interface CarouselLayer {
+  id: number;
+  slideIndex: number;
+  direction: SlideDirection;
+  role: "active" | "exiting";
 }
 
-// Get opposite direction for exit animation
-// If new slide enters from bottom, old slide exits to top (and vice versa)
-const getOppositeDirection = (dir: SlideDirection) => {
-  if (typeof dir.y === "string" && dir.y !== "0") {
-    // Vertical movement: flip the sign
-    return { x: 0, y: dir.y.startsWith("-") ? dir.y.slice(1) : `-${dir.y}` };
-  }
-  if (typeof dir.x === "string" && dir.x !== "0") {
-    // Horizontal movement: flip the sign
-    return { y: 0, x: dir.x.startsWith("-") ? dir.x.slice(1) : `-${dir.x}` };
-  }
-  return { x: 0, y: 0 };
-};
+function invertDirection(direction: SlideDirection): SlideDirection {
+  return {
+    x: typeof direction.x === "string"
+      ? direction.x.startsWith("-")
+        ? direction.x.slice(1)
+        : `-${direction.x}`
+      : 0,
+    y: typeof direction.y === "string"
+      ? direction.y.startsWith("-")
+        ? direction.y.slice(1)
+        : `-${direction.y}`
+      : 0,
+  } as SlideDirection;
+}
 
-const slideVariants = {
-  enter: (transition: SlideTransition) => ({ ...transition.enter, scale: 0.95 }),
-  center: { x: 0, y: 0, scale: 1 },
-  exit: (transition: SlideTransition) => ({
-    ...transition.exit,
-    scale: 1.05,
-  }),
-};
+function randomExitDirection(): SlideDirection {
+  return DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
+}
 
-function randomSlideTransition(): SlideTransition {
-  const enter = DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
-  return { enter, exit: getOppositeDirection(enter) };
+function translate(direction: SlideDirection) {
+  return `translate3d(${direction.x}, ${direction.y}, 0)`;
+}
+
+function preloadShareImages() {
+  if (typeof window === "undefined") return;
+
+  for (const slide of CAROUSEL_SLIDES) {
+    const existing = document.head.querySelector(
+      `link[rel="preload"][as="image"][href="${slide.image}"]`,
+    );
+    if (!existing) {
+      const link = document.createElement("link");
+      link.rel = "preload";
+      link.as = "image";
+      link.href = slide.image;
+      document.head.appendChild(link);
+    }
+
+    const image = new window.Image();
+    image.src = slide.image;
+    image.decode?.().catch(() => {});
+  }
+}
+
+function initialLayer(): CarouselLayer {
+  return {
+    id: 0,
+    slideIndex: 0,
+    direction: DIRECTIONS[0],
+    role: "active",
+  };
 }
 
 export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
   const t = useTranslator();
   const { data: session } = useSession();
   const { signInWithGoogle } = useGoogleSignIn();
-  const [carousel, setCarousel] = useState({
-    currentSlide: 0,
-    transition: {
-      enter: DIRECTIONS[0],
-      exit: getOppositeDirection(DIRECTIONS[0]),
-    },
-  });
+  const animationFrameRef = useRef<number | null>(null);
+  const cleanupTimerRef = useRef<number | null>(null);
+  const [layers, setLayers] = useState<CarouselLayer[]>(() => [initialLayer()]);
+  const [isMoving, setIsMoving] = useState(false);
 
   useEffect(() => {
     if (session?.user) {
@@ -97,31 +121,57 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
   useEffect(() => {
     if (!open) return;
     const interval = setInterval(() => {
-      setCarousel((prev) => ({
-        currentSlide: (prev.currentSlide + 1) % CAROUSEL_SLIDES.length,
-        transition: randomSlideTransition(),
-      }));
+      const exitDirection = randomExitDirection();
+      setIsMoving(false);
+      setLayers((prev) => {
+        const active = prev.find((layer) => layer.role === "active") ?? initialLayer();
+        return [
+          { ...active, direction: exitDirection, role: "exiting" },
+          {
+            id: active.id + 1,
+            slideIndex: (active.slideIndex + 1) % CAROUSEL_SLIDES.length,
+            direction: exitDirection,
+            role: "active",
+          },
+        ];
+      });
+
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+      }
+      animationFrameRef.current = window.requestAnimationFrame(() => {
+        animationFrameRef.current = window.requestAnimationFrame(() => {
+          setIsMoving(true);
+        });
+      });
+
+      if (cleanupTimerRef.current !== null) {
+        window.clearTimeout(cleanupTimerRef.current);
+      }
+      cleanupTimerRef.current = window.setTimeout(() => {
+        setLayers((prev) => prev.filter((layer) => layer.role === "active"));
+        setIsMoving(false);
+      }, 760);
     }, 3000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      if (cleanupTimerRef.current !== null) {
+        window.clearTimeout(cleanupTimerRef.current);
+        cleanupTimerRef.current = null;
+      }
+    };
   }, [open]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    for (const slide of CAROUSEL_SLIDES) {
-      const link = document.createElement("link");
-      link.rel = "preload";
-      link.as = "image";
-      link.href = slide.image;
-      document.head.appendChild(link);
-
-      const image = new window.Image();
-      image.src = slide.image;
-      image.decode?.().catch(() => {});
-    }
+    preloadShareImages();
   }, []);
 
-  const { currentSlide, transition: slideTransition } = carousel;
+  const activeLayer = layers.find((layer) => layer.role === "active") ?? layers[0];
+  const currentSlide = activeLayer.slideIndex;
   const slide = CAROUSEL_SLIDES[currentSlide];
 
   return (
@@ -144,42 +194,45 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative overflow-hidden rounded-[32px] shadow-2xl">
-              <AnimatePresence initial={false} custom={slideTransition}>
-                {/*
-                  Carousel animation logic:
-                  - Each switch stores one random enter/exit pair.
-                  - New slide enters from enter; old slide exits to exit.
-                  - Example: new from right → old exits left
-                */}
-                <motion.div
-                  key={currentSlide}
-                  custom={slideTransition}
-                  variants={slideVariants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  transition={{
-                    duration: 0.7,
-                    ease: [0.22, 1, 0.36, 1],
-                  }}
-                  className="absolute inset-0"
-                >
-                  <Image
-                    src={slide.image}
-                    alt=""
-                    width={736}
-                    height={1104}
-                    priority
-                    className="share-card-photo h-[600px] w-full object-cover"
-                    style={{ objectPosition: slide.objectPosition }}
-                  />
-                  <div aria-hidden className="share-card-photo-tone" />
-                  <div aria-hidden className="share-card-photo-warmth" />
-                  <div aria-hidden className="share-card-photo-grain" />
-                  <div aria-hidden className="share-card-photo-dust" />
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/10" />
-                </motion.div>
-              </AnimatePresence>
+              {layers.map((layer) => {
+                const slideItem = CAROUSEL_SLIDES[layer.slideIndex];
+                const enterDirection = invertDirection(layer.direction);
+                const transform = layer.role === "exiting"
+                  ? isMoving
+                    ? translate(layer.direction)
+                    : "translate3d(0, 0, 0)"
+                  : isMoving
+                    ? "translate3d(0, 0, 0)"
+                    : translate(enterDirection);
+
+                return (
+                  <div
+                    key={`${layer.role}-${layer.id}`}
+                    className="absolute inset-0 will-change-transform"
+                    style={{
+                      transform,
+                      transition: isMoving
+                        ? "transform 700ms cubic-bezier(0.22, 1, 0.36, 1)"
+                        : "none",
+                    }}
+                  >
+                    <Image
+                      src={slideItem.image}
+                      alt=""
+                      width={736}
+                      height={1104}
+                      priority={layer.slideIndex === 0}
+                      className="share-card-photo h-[600px] w-full object-cover"
+                      style={{ objectPosition: slideItem.objectPosition }}
+                    />
+                    <div aria-hidden className="share-card-photo-tone" />
+                    <div aria-hidden className="share-card-photo-warmth" />
+                    <div aria-hidden className="share-card-photo-grain" />
+                    <div aria-hidden className="share-card-photo-dust" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/10" />
+                  </div>
+                );
+              })}
               <div className="relative h-[600px]" />
 
               <div className="absolute left-6 right-6 top-6 flex items-start justify-between">
