@@ -77,14 +77,17 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative overflow-hidden rounded-[32px] shadow-2xl">
-              <AnimatePresence mode="wait" initial={false}>
+              <AnimatePresence initial={false}>
                 <motion.div
                   key={currentSlide}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.5 }}
-                  className="relative"
+                  initial={{ y: "100%", scale: 0.95 }}
+                  animate={{ y: 0, scale: 1 }}
+                  exit={{ y: "-100%", scale: 1.05 }}
+                  transition={{
+                    duration: 0.7,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                  className="absolute inset-0"
                 >
                   <Image
                     src={slide.image}
@@ -102,6 +105,7 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
                   <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/10" />
                 </motion.div>
               </AnimatePresence>
+              <div className="relative h-[600px]" />
 
               <div className="absolute left-6 right-6 top-6 flex items-start justify-between">
                 <AnimatePresence mode="wait" initial={false}>
