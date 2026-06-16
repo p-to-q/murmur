@@ -17,6 +17,13 @@ export type VibePromptSpec = {
   /** English style prompt fed to MusicCoCa. */
   prompt: string;
   tags: string[];
+  visualFacets: {
+    genre: string;
+    mood: string;
+    instrument: string;
+    scene?: string;
+    energy: number;
+  };
   title: string;
   gradient: string;
   energy: number;
@@ -200,6 +207,13 @@ export function createVibePromptBatch(options: {
       label: { zh: genre.zh, en: genre.title },
       prompt: parts.join(", "),
       tags,
+      visualFacets: {
+        genre: genre.en,
+        mood: mood.en,
+        instrument: instrument.en,
+        scene: scene?.en,
+        energy,
+      },
       title: `${capitalize(mood.en)} ${genre.title}`,
       gradient: gradientFor(mood, rng),
       energy,

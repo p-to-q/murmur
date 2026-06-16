@@ -12,6 +12,7 @@ import type { SongCard as SongCardType } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
+import { ARTWORK_CATALOG } from "@/presets/artworks/catalog";
 
 // The gallery only renders light metadata; the heavy SongCard fields
 // (visualConfig, duration, arrangementState) stay optional so demo
@@ -23,6 +24,12 @@ type SongWithMeta = Omit<SongCardType, "visualConfig" | "duration" | "arrangemen
     tags?: string[];
   };
 type SortMode = "newest" | "alpha";
+
+function demoArtwork(id: string) {
+  const artwork = ARTWORK_CATALOG.find((entry) => entry.id === id);
+  if (!artwork) throw new Error(`Missing demo artwork: ${id}`);
+  return artwork;
+}
 
 // Demo songs for empty state — gradients keep their covers on the same
 // rendering path as real songs.
@@ -38,6 +45,7 @@ const DEMO_SONGS: SongWithMeta[] = [
       gradient: "linear-gradient(148deg, #4E5D6E 0%, #8B96A6 48%, #D8D0C4 100%)",
       particleDensity: 0.4,
       pulseSource: "melody",
+      artwork: demoArtwork("nocturne_metro-aic-56905"),
     },
   },
   {
@@ -51,6 +59,7 @@ const DEMO_SONGS: SongWithMeta[] = [
       gradient: "linear-gradient(148deg, #5A8EAA 0%, #9DB8C0 48%, #DFE0DA 100%)",
       particleDensity: 0.35,
       pulseSource: "melody",
+      artwork: demoArtwork("nocturne_metro-aic-20684"),
     },
   },
   {
@@ -64,6 +73,7 @@ const DEMO_SONGS: SongWithMeta[] = [
       gradient: "linear-gradient(148deg, #A8C8E8 0%, #E8E2F4 48%, #7FA6CC 100%)",
       particleDensity: 0.45,
       pulseSource: "melody",
+      artwork: demoArtwork("sublime_terrain-aic-146701"),
     },
   },
 ];
@@ -184,6 +194,7 @@ export function GalleryScreen() {
                 title: s.title,
                 vibe: displayVibe(s),
                 gradient: s.visualConfig?.gradient,
+                artwork: s.visualConfig?.artwork,
                 bpm: s.bpm,
                 createdAt: s.createdAt,
               }))}
@@ -266,7 +277,7 @@ export function GalleryScreen() {
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
             {Array.from({ length: 6 }, (_, i) => (
               <div key={i} className="animate-pulse">
-                <div className="aspect-square rounded-[20px] bg-gradient-to-br from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer" />
+                <div className="aspect-square rounded-[20px] bg-gradient-to-br from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer shadow-[0_16px_32px_rgba(26,26,26,0.08)]" />
                 <div className="mt-2 h-3 w-2/3 rounded-full bg-[#ECE5D6]" />
               </div>
             ))}
@@ -299,6 +310,7 @@ export function GalleryScreen() {
                 title={song.title}
                 vibe={displayVibe(song)}
                 gradient={song.visualConfig?.gradient}
+                artwork={song.visualConfig?.artwork}
                 bpm={song.bpm}
                 createdAt={song.createdAt}
                 index={i}

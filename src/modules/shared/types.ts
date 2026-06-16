@@ -53,11 +53,60 @@ export type ArrangementState = {
   texture: TrackState;
 };
 
+export const VISUAL_ARTWORK_BUCKETS = [
+  "luminist_air",
+  "sublime_terrain",
+  "tidal_mineral",
+  "pastoral_memory",
+  "nocturne_metro",
+  "printed_signal",
+  "stage_heat",
+  "interior_reverie",
+  "hypermodern_void",
+] as const;
+
+export type VisualArtworkBucket = (typeof VISUAL_ARTWORK_BUCKETS)[number];
+
+export const VISUAL_ARTWORK_SOURCES = ["aic", "met", "cma"] as const;
+
+export type VisualArtworkSource = (typeof VISUAL_ARTWORK_SOURCES)[number];
+
+export type VisualArtworkCrop = {
+  x: number;
+  y: number;
+  scale: number;
+};
+
+export type VisualArtwork = {
+  id: string;
+  bucket: VisualArtworkBucket;
+  title: string;
+  artist: string;
+  year: string;
+  source: VisualArtworkSource;
+  sourceUrl: string;
+  imagePath: string;
+  license: "CC0" | "Public Domain";
+  crop: VisualArtworkCrop;
+};
+
+export type VisualFacets = {
+  genre?: string;
+  mood?: string;
+  instrument?: string;
+  scene?: string;
+  energy?: number;
+  bucket?: VisualArtworkBucket;
+};
+
 export type VisualConfig = {
   preset: string;       // e.g. "warm_particles", "soft_gradient"
   gradient: string;     // CSS gradient string
   particleDensity: number; // 0.0–1.0
   pulseSource: "drums" | "melody" | "energy";
+  posterBg?: string;
+  artwork?: VisualArtwork;
+  visualFacets?: VisualFacets;
 };
 
 export type VersionGenerationStatus = "pending" | "ready" | "error";

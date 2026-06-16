@@ -118,6 +118,49 @@ describe("PATCH /api/songs/[id]", () => {
     );
   });
 
+  it("accepts curated artwork metadata when updating visual config", async () => {
+    const visualConfig = {
+      preset: "warm_particles",
+      gradient: "linear-gradient(135deg, #5A8EAA, #DFE0DA)",
+      particleDensity: 0.5,
+      pulseSource: "melody",
+      visualFacets: {
+        genre: "surf rock",
+        mood: "glowing",
+        energy: 0.7,
+      },
+      artwork: {
+        id: "tidal_mineral-met-11129",
+        bucket: "tidal_mineral",
+        title: "Natural Bridge, Bermuda",
+        artist: "Winslow Homer",
+        year: "ca. 1901",
+        source: "met",
+        sourceUrl: "https://www.metmuseum.org/art/collection/search/11129",
+        imagePath: "/artworks/tidal_mineral/met-11129-natural-bridge-bermuda.jpg",
+        license: "Public Domain",
+        crop: { x: 0.48, y: 0.56, scale: 1.04 },
+      },
+    };
+    nextUpdatedSong = {
+      id: "song_owner",
+      userId: "usr_owner",
+      title: "Owned Song",
+      visualConfig,
+    };
+
+    const response = await PATCH(request("PATCH", { visualConfig }), ctx());
+
+    expect(response.status).toBe(200);
+    expect(updateSongForUserMock).toHaveBeenCalledWith(
+      "song_owner",
+      "usr_owner",
+      { visualConfig },
+    );
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.visualConfig).toEqual(visualConfig);
+  });
+
   it("rejects attempts to update protected or unknown fields", async () => {
     const response = await PATCH(
       request("PATCH", {
