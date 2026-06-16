@@ -1,0 +1,794 @@
+[
+  {
+    "bucket": "sublime_terrain",
+    "title": "Cotopaxi",
+    "artist": "Frederic Edwin Church",
+    "year": "1855",
+    "source": "commons",
+    "sourceId": "frederic-edwin-church-cotopaxi-google-art-project",
+    "sourceCollection": "Museum of Fine Arts, Houston / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Frederic_Edwin_Church_-_Cotopaxi_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/f/fb/Frederic_Edwin_Church_-_Cotopaxi_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "volcano",
+      "sublime",
+      "tropical",
+      "distance",
+      "terrain",
+      "cinematic"
+    ],
+    "genreWeights": {
+      "cinematic": 2.8,
+      "epic orchestral": 2.7,
+      "post-rock": 2.1,
+      "ambient": 1.0
+    },
+    "moodWeights": {
+      "mysterious": 2.4,
+      "triumphant": 2.1,
+      "starlit": 1.5,
+      "glowing": 1.6
+    },
+    "energyRange": [
+      0.45,
+      0.95
+    ],
+    "composition": "deep_distance",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.86,
+    "crop": {
+      "x": 0.42,
+      "y": 0.52,
+      "scale": 1.02
+    },
+    "curatorNote": "A volcanic distance field: grand but softened, useful behind cinematic terrain and high-energy emotional builds.",
+    "imagePath": "/artworks/sublime_terrain/commons-church-cotopaxi.jpg",
+    "id": "sublime_terrain-commons-church-cotopaxi",
+    "palette": [
+      "#231C1B",
+      "#514330",
+      "#CBC2AD",
+      "#E3CC9E",
+      "#B5A68F"
+    ],
+    "originalFilename": "commons-church-cotopaxi.jpg",
+    "width": 8322,
+    "height": 5357,
+    "backgroundImagePath": "/background_ready/sublime_terrain/commons-church-cotopaxi-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "luminist_air",
+    "title": "Cliff Walk at Pourville",
+    "artist": "Claude Monet",
+    "year": "1882",
+    "source": "commons",
+    "sourceId": "claude-monet-cliff-walk-pourville-google-art-project",
+    "sourceCollection": "Art Institute of Chicago / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Claude_Monet_-_Cliff_Walk_at_Pourville_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a4/Claude_Monet_-_Cliff_Walk_at_Pourville_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "coast",
+      "air",
+      "wind",
+      "low horizon",
+      "blue",
+      "impressionism"
+    ],
+    "genreWeights": {
+      "ambient": 2.0,
+      "solo piano": 1.5,
+      "dream pop": 1.6,
+      "bossa nova": 1.0
+    },
+    "moodWeights": {
+      "serene": 2.0,
+      "weightless": 2.2,
+      "glowing": 1.8,
+      "nostalgic": 1.0
+    },
+    "energyRange": [
+      0.18,
+      0.62
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.82,
+    "crop": {
+      "x": 0.52,
+      "y": 0.48,
+      "scale": 1.03
+    },
+    "curatorNote": "Wind, sea, and cliff dissolve into a light field; useful when a song wants air without becoming postcard-bright.",
+    "imagePath": "/artworks/luminist_air/commons-monet-cliff-walk-pourville.jpg",
+    "id": "luminist_air-commons-monet-cliff-walk-at-pourville",
+    "palette": [
+      "#80A9BE",
+      "#8B9A8E",
+      "#7B7E6C",
+      "#A2A79B",
+      "#ADB8BB"
+    ],
+    "originalFilename": "commons-monet-cliff-walk-pourville.jpg",
+    "width": 2807,
+    "height": 2251,
+    "backgroundImagePath": "/background_ready/luminist_air/commons-monet-cliff-walk-pourville-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.2,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "interior_reverie",
+    "title": "Interior with Young Woman from Behind",
+    "artist": "Vilhelm Hammershøi",
+    "year": "1904",
+    "source": "commons",
+    "sourceId": "hammershoi-interior-young-woman-from-behind-randers",
+    "sourceCollection": "Randers Kunstmuseum / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Vilhelm_Hammershoi_-_Interieur_mit_Rueckenansicht_einer_Frau_-_1903-1904_-_Randers_Kunstmuseum.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/5/56/Vilhelm_Hammershoi_-_Interieur_mit_Rueckenansicht_einer_Frau_-_1903-1904_-_Randers_Kunstmuseum.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "room",
+      "back figure",
+      "gray",
+      "silence",
+      "interior",
+      "private"
+    ],
+    "genreWeights": {
+      "bedroom": 2.8,
+      "solo piano": 2.2,
+      "lullaby": 1.8,
+      "neo-soul": 1.1
+    },
+    "moodWeights": {
+      "melancholic": 2.6,
+      "serene": 2.3,
+      "cozy": 1.4,
+      "bittersweet": 1.8
+    },
+    "energyRange": [
+      0.05,
+      0.46
+    ],
+    "composition": "interior_depth",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.91,
+    "crop": {
+      "x": 0.48,
+      "y": 0.45,
+      "scale": 1.12
+    },
+    "curatorNote": "An inward room with a turned-away figure; intimate enough for bedroom songs, restrained enough to stay behind the UI.",
+    "imagePath": "/artworks/interior_reverie/commons-hammershoi-interior-young-woman-from-behind.jpg",
+    "id": "interior_reverie-commons-hammersh-i-interior-with-young-woman-from-behin",
+    "palette": [
+      "#3D3639",
+      "#181416",
+      "#6E6B71",
+      "#59555A",
+      "#837E7E"
+    ],
+    "originalFilename": "commons-hammershoi-interior-young-woman-from-behind.jpg",
+    "width": 2470,
+    "height": 2955,
+    "backgroundImagePath": "/background_ready/interior_reverie/commons-hammershoi-interior-young-woman-from-behind-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.2,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "interior_reverie",
+    "title": "Interior with a Reading Young Man",
+    "artist": "Vilhelm Hammershøi",
+    "year": "1898",
+    "source": "commons",
+    "sourceId": "hammershoi-interior-reading-young-man",
+    "sourceCollection": "Hirschsprung Collection / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Vilhelm_Hammersh%C3%B8i_1898_-_Interi%C3%B8r_med_l%C3%A6sende_ung_mand.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/e/ed/Vilhelm_Hammersh%C3%B8i_1898_-_Interi%C3%B8r_med_l%C3%A6sende_ung_mand.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "room",
+      "reading",
+      "gray",
+      "window",
+      "stillness",
+      "private"
+    ],
+    "genreWeights": {
+      "bedroom": 2.4,
+      "solo piano": 2.0,
+      "lullaby": 1.8,
+      "neo-soul": 1.0
+    },
+    "moodWeights": {
+      "melancholic": 2.5,
+      "serene": 2.0,
+      "cozy": 1.3,
+      "bittersweet": 1.7
+    },
+    "energyRange": [
+      0.05,
+      0.42
+    ],
+    "composition": "interior_depth",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.84,
+    "crop": {
+      "x": 0.46,
+      "y": 0.48,
+      "scale": 1.08
+    },
+    "curatorNote": "Spare furniture, pale wall, one quiet reader: good for songs that feel like they were made alone at night.",
+    "imagePath": "/artworks/interior_reverie/commons-hammershoi-interior-reading-young-man.jpg",
+    "id": "interior_reverie-commons-hammersh-i-interior-with-a-reading-young-man",
+    "palette": [
+      "#A0978B",
+      "#161313",
+      "#D9D8D5",
+      "#6F6B67",
+      "#47403B"
+    ],
+    "originalFilename": "commons-hammershoi-interior-reading-young-man.jpg",
+    "width": 1080,
+    "height": 1287,
+    "backgroundImagePath": "/background_ready/interior_reverie/commons-hammershoi-interior-reading-young-man-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.2,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "tidal_mineral",
+    "title": "The Wave",
+    "artist": "Gustave Courbet",
+    "year": "1869",
+    "source": "commons",
+    "sourceId": "gustave-courbet-the-wave-google-art-project",
+    "sourceCollection": "National Galleries of Scotland / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gustave_Courbet_-_The_Wave_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c5/Gustave_Courbet_-_The_Wave_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "wave",
+      "sea",
+      "storm",
+      "mineral",
+      "foam",
+      "pressure"
+    ],
+    "genreWeights": {
+      "breakbeat": 2.4,
+      "surf rock": 2.2,
+      "dub": 1.4,
+      "techno": 1.3
+    },
+    "moodWeights": {
+      "hypnotic": 2.1,
+      "brooding": 2.2,
+      "mysterious": 1.8,
+      "smoky": 0.8
+    },
+    "energyRange": [
+      0.48,
+      0.95
+    ],
+    "composition": "horizontal_mass",
+    "figurePresence": "none",
+    "backgroundFit": 0.87,
+    "crop": {
+      "x": 0.5,
+      "y": 0.52,
+      "scale": 1.0
+    },
+    "curatorNote": "A compressed sheet of dark sea pressure; works for heavier rhythmic music without becoming literal beach imagery.",
+    "imagePath": "/artworks/tidal_mineral/commons-courbet-the-wave.jpg",
+    "id": "tidal_mineral-commons-courbet-the-wave",
+    "palette": [
+      "#838E8F",
+      "#9AA4A3",
+      "#3C4140",
+      "#B3BCB4",
+      "#D0D6CB"
+    ],
+    "originalFilename": "commons-courbet-the-wave.jpg",
+    "width": 4001,
+    "height": 3320,
+    "backgroundImagePath": "/background_ready/tidal_mineral/commons-courbet-the-wave-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "tidal_mineral",
+    "title": "Rough Weather at Étretat",
+    "artist": "Claude Monet",
+    "year": "1883",
+    "source": "commons",
+    "sourceId": "claude-monet-rough-weather-etretat-google-art-project",
+    "sourceCollection": "National Gallery of Victoria / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Claude_Monet_-_Rough_weather_at_%C3%89tretat_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/4/40/Claude_Monet_-_Rough_weather_at_%C3%89tretat_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "cliff",
+      "storm",
+      "foam",
+      "gray",
+      "sea",
+      "motion"
+    ],
+    "genreWeights": {
+      "breakbeat": 2.0,
+      "surf rock": 1.7,
+      "post-rock": 1.8,
+      "ambient electronic": 1.2
+    },
+    "moodWeights": {
+      "brooding": 2.0,
+      "hypnotic": 1.8,
+      "mysterious": 1.7,
+      "weightless": 1.0
+    },
+    "energyRange": [
+      0.38,
+      0.88
+    ],
+    "composition": "diagonal",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.85,
+    "crop": {
+      "x": 0.55,
+      "y": 0.5,
+      "scale": 1.02
+    },
+    "curatorNote": "Cliff and water dissolve into weather; good for high-texture songs where the image should feel like spray and breath.",
+    "imagePath": "/artworks/tidal_mineral/commons-monet-rough-weather-etretat.jpg",
+    "id": "tidal_mineral-commons-monet-rough-weather-at-tretat",
+    "palette": [
+      "#C5C5C4",
+      "#A5A7A7",
+      "#6A6B6A",
+      "#969898",
+      "#8B9195"
+    ],
+    "originalFilename": "commons-monet-rough-weather-etretat.jpg",
+    "width": 4537,
+    "height": 3677,
+    "backgroundImagePath": "/background_ready/tidal_mineral/commons-monet-rough-weather-etretat-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "tidal_mineral",
+    "title": "Fishermen at Sea",
+    "artist": "J. M. W. Turner",
+    "year": "1796",
+    "source": "commons",
+    "sourceId": "turner-fishermen-at-sea-google-art-project",
+    "sourceCollection": "Tate / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Joseph_Mallord_William_Turner_-_Fishermen_at_Sea_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/0/0d/Joseph_Mallord_William_Turner_-_Fishermen_at_Sea_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "moon",
+      "sea",
+      "night",
+      "wave",
+      "boat",
+      "dark water"
+    ],
+    "genreWeights": {
+      "trip hop": 2.0,
+      "dub": 1.8,
+      "ambient": 1.5,
+      "surf rock": 1.2
+    },
+    "moodWeights": {
+      "brooding": 2.6,
+      "mysterious": 2.4,
+      "starlit": 2.1,
+      "smoky": 1.4
+    },
+    "energyRange": [
+      0.22,
+      0.76
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.92,
+    "crop": {
+      "x": 0.5,
+      "y": 0.55,
+      "scale": 1.02
+    },
+    "curatorNote": "Moonlit water as a near-abstract dark field; a bridge between tidal_mineral and nocturne_metro.",
+    "imagePath": "/artworks/tidal_mineral/commons-turner-fishermen-at-sea.jpg",
+    "id": "tidal_mineral-commons-turner-fishermen-at-sea",
+    "palette": [
+      "#151A1A",
+      "#030504",
+      "#505137",
+      "#0C1010",
+      "#080B0B"
+    ],
+    "originalFilename": "commons-turner-fishermen-at-sea.jpg",
+    "width": 2258,
+    "height": 1678,
+    "backgroundImagePath": "/background_ready/tidal_mineral/commons-turner-fishermen-at-sea-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "tidal_mineral",
+    "title": "Waves",
+    "artist": "Gustave Courbet",
+    "year": "ca. 1870",
+    "source": "commons",
+    "sourceId": "gustave-courbet-waves-google-art-project",
+    "sourceCollection": "National Museum of Western Art, Tokyo / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gustave_Courbet_-_Waves_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ac/Gustave_Courbet_-_Waves_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "wave",
+      "sea",
+      "rock",
+      "foam",
+      "green",
+      "mineral"
+    ],
+    "genreWeights": {
+      "breakbeat": 2.2,
+      "surf rock": 2.0,
+      "dub": 1.4,
+      "techno": 1.2
+    },
+    "moodWeights": {
+      "hypnotic": 2.2,
+      "brooding": 1.9,
+      "mysterious": 1.6,
+      "glowing": 0.8
+    },
+    "energyRange": [
+      0.45,
+      0.92
+    ],
+    "composition": "horizontal_mass",
+    "figurePresence": "none",
+    "backgroundFit": 0.86,
+    "crop": {
+      "x": 0.5,
+      "y": 0.55,
+      "scale": 1.0
+    },
+    "curatorNote": "A broader and warmer companion to Courbet’s Wave: sea as a moving wall, not a scenic destination.",
+    "imagePath": "/artworks/tidal_mineral/commons-courbet-waves.jpg",
+    "id": "tidal_mineral-commons-courbet-waves",
+    "palette": [
+      "#9D947E",
+      "#333321",
+      "#B1A58B",
+      "#79765B",
+      "#CAC39E"
+    ],
+    "originalFilename": "commons-courbet-waves.jpg",
+    "width": 3990,
+    "height": 3127,
+    "backgroundImagePath": "/background_ready/tidal_mineral/commons-courbet-waves-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "stage_heat",
+    "title": "Circus Sideshow",
+    "artist": "Georges Seurat",
+    "year": "1887–1888",
+    "source": "commons",
+    "sourceId": "georges-seurat-circus-sideshow-met",
+    "sourceCollection": "The Metropolitan Museum of Art / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Georges_Seurat,_Circus_Sideshow,_1887%E2%80%9388.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/6/68/Georges_Seurat%2C_Circus_Sideshow%2C_1887%E2%80%9388.jpg",
+    "license": "CC0",
+    "rightsNote": "Met Open Access / CC0 via Wikimedia Commons.",
+    "tags": [
+      "stage",
+      "night",
+      "crowd",
+      "music",
+      "public rhythm",
+      "pointillism"
+    ],
+    "genreWeights": {
+      "disco": 2.1,
+      "funk": 1.9,
+      "swing": 2.3,
+      "party": 2.0
+    },
+    "moodWeights": {
+      "playful": 2.3,
+      "euphoric": 1.6,
+      "smoky": 1.6,
+      "hypnotic": 1.3
+    },
+    "energyRange": [
+      0.42,
+      0.88
+    ],
+    "composition": "stage_band",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.85,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.03
+    },
+    "curatorNote": "Public sound before it becomes spectacle: lamps, instruments, crowd rhythm, and enough dark space to hold UI.",
+    "imagePath": "/artworks/stage_heat/commons-seurat-circus-sideshow.jpg",
+    "id": "stage_heat-commons-seurat-circus-sideshow",
+    "palette": [
+      "#716269",
+      "#3D3949",
+      "#917D78",
+      "#524C5C",
+      "#65525D"
+    ],
+    "originalFilename": "commons-seurat-circus-sideshow.jpg",
+    "width": 3875,
+    "height": 2592,
+    "backgroundImagePath": "/background_ready/stage_heat/commons-seurat-circus-sideshow-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "stage_heat",
+    "title": "The Orchestra at the Opera",
+    "artist": "Edgar Degas",
+    "year": "ca. 1870",
+    "source": "commons",
+    "sourceId": "edgar-degas-orchestra-at-the-opera-google-art-project",
+    "sourceCollection": "Musée d’Orsay / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Edgar_Degas_-_The_Orchestra_at_the_Opera_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/8/8a/Edgar_Degas_-_The_Orchestra_at_the_Opera_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "orchestra",
+      "stage",
+      "theatre",
+      "dark",
+      "performance",
+      "public interior"
+    ],
+    "genreWeights": {
+      "swing": 2.4,
+      "funk": 1.2,
+      "disco": 1.0,
+      "jazz": 2.2
+    },
+    "moodWeights": {
+      "smoky": 2.4,
+      "playful": 1.5,
+      "brooding": 1.3,
+      "euphoric": 0.9
+    },
+    "energyRange": [
+      0.32,
+      0.82
+    ],
+    "composition": "interior_depth",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.78,
+    "crop": {
+      "x": 0.48,
+      "y": 0.52,
+      "scale": 1.1
+    },
+    "curatorNote": "A dense public interior for music with brass, swing, or smoky movement; use under a stronger overlay.",
+    "imagePath": "/artworks/stage_heat/commons-degas-orchestra-at-the-opera.jpg",
+    "id": "stage_heat-commons-degas-the-orchestra-at-the-opera",
+    "palette": [
+      "#030304",
+      "#33241A",
+      "#140E0D",
+      "#5F4A36",
+      "#937E64"
+    ],
+    "originalFilename": "commons-degas-orchestra-at-the-opera.jpg",
+    "width": 2472,
+    "height": 3017,
+    "backgroundImagePath": "/background_ready/stage_heat/commons-degas-orchestra-at-the-opera-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "stage_heat",
+    "title": "Masked Ball at the Opera",
+    "artist": "Édouard Manet",
+    "year": "1873",
+    "source": "commons",
+    "sourceId": "edouard-manet-masked-ball-at-the-opera",
+    "sourceCollection": "National Gallery of Art / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:%C3%89douard_manet_-_Masked_Ball_at_the_Opera.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/1/19/%C3%89douard_manet_-_Masked_Ball_at_the_Opera.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "crowd",
+      "opera",
+      "masked",
+      "social",
+      "black",
+      "public rhythm"
+    ],
+    "genreWeights": {
+      "disco": 1.6,
+      "funk": 1.6,
+      "swing": 2.0,
+      "party": 2.4
+    },
+    "moodWeights": {
+      "playful": 2.2,
+      "smoky": 1.9,
+      "euphoric": 1.4,
+      "brooding": 0.8
+    },
+    "energyRange": [
+      0.42,
+      0.92
+    ],
+    "composition": "allover",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.72,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.08
+    },
+    "curatorNote": "Dense, social, black-and-white heat; not subtle enough for every song, but valuable when public rhythm needs a stronger charge.",
+    "imagePath": "/artworks/stage_heat/commons-manet-masked-ball-at-the-opera.jpg",
+    "id": "stage_heat-commons-manet-masked-ball-at-the-opera",
+    "palette": [
+      "#715744",
+      "#D2CFC1",
+      "#111010",
+      "#141212",
+      "#2B211F"
+    ],
+    "originalFilename": "commons-manet-masked-ball-at-the-opera.jpg",
+    "width": 759,
+    "height": 620,
+    "backgroundImagePath": "/background_ready/stage_heat/commons-manet-masked-ball-at-the-opera-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "hypermodern_void",
+    "title": "Cyrtoidea",
+    "artist": "Ernst Haeckel",
+    "year": "1899",
+    "source": "commons",
+    "sourceId": "haeckel-cyrtoidea",
+    "sourceCollection": "Kunstformen der Natur / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Haeckel_Cyrtoidea.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/c/ce/Haeckel_Cyrtoidea.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark; historical scientific plate.",
+    "tags": [
+      "radiolaria",
+      "science",
+      "black",
+      "geometry",
+      "microscopic",
+      "signal"
+    ],
+    "genreWeights": {
+      "minimal techno": 2.6,
+      "ambient electronic": 2.5,
+      "synthwave": 1.6,
+      "vaporwave": 1.4
+    },
+    "moodWeights": {
+      "mysterious": 2.5,
+      "hypnotic": 2.8,
+      "weightless": 1.8,
+      "starlit": 1.5
+    },
+    "energyRange": [
+      0.2,
+      0.82
+    ],
+    "composition": "allover",
+    "figurePresence": "none",
+    "backgroundFit": 0.86,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.05
+    },
+    "curatorNote": "Proto-future biology: not neon, not AI fantasy, but clean dark geometry with enough depth for synth and techno sleeves.",
+    "imagePath": "/artworks/hypermodern_void/commons-haeckel-cyrtoidea.jpg",
+    "id": "hypermodern_void-commons-haeckel-cyrtoidea",
+    "palette": [
+      "#333333",
+      "#191919",
+      "#5C5C5C",
+      "#848484",
+      "#AFAFAF"
+    ],
+    "originalFilename": "commons-haeckel-cyrtoidea.jpg",
+    "width": 2309,
+    "height": 3271,
+    "backgroundImagePath": "/background_ready/hypermodern_void/commons-haeckel-cyrtoidea-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.2,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  }
+]

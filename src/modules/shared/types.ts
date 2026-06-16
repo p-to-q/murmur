@@ -67,7 +67,7 @@ export const VISUAL_ARTWORK_BUCKETS = [
 
 export type VisualArtworkBucket = (typeof VISUAL_ARTWORK_BUCKETS)[number];
 
-export const VISUAL_ARTWORK_SOURCES = ["aic", "met", "cma"] as const;
+export const VISUAL_ARTWORK_SOURCES = ["aic", "met", "cma", "commons", "manual"] as const;
 
 export type VisualArtworkSource = (typeof VISUAL_ARTWORK_SOURCES)[number];
 
@@ -86,8 +86,16 @@ export type VisualArtwork = {
   source: VisualArtworkSource;
   sourceUrl: string;
   imagePath: string;
+  backgroundImagePath?: string;
   license: "CC0" | "Public Domain";
   crop: VisualArtworkCrop;
+  renderTreatment?: {
+    intent?: string;
+    cropFormat?: string;
+    recommendedOverlay?: number;
+    contrast?: string;
+    grain?: string;
+  };
 };
 
 export type VisualFacets = {

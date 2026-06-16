@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Murmur Artwork Import Manifest",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "id",
+      "bucket",
+      "title",
+      "artist",
+      "source",
+      "sourceId",
+      "sourceUrl",
+      "imagePath",
+      "license",
+      "tags",
+      "genreWeights",
+      "moodWeights",
+      "energyRange",
+      "crop",
+      "backgroundFit"
+    ],
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "bucket": {
+        "enum": [
+          "luminist_air",
+          "sublime_terrain",
+          "tidal_mineral",
+          "pastoral_memory",
+          "nocturne_metro",
+          "printed_signal",
+          "stage_heat",
+          "interior_reverie",
+          "hypermodern_void"
+        ]
+      },
+      "title": {
+        "type": "string"
+      },
+      "artist": {
+        "type": "string"
+      },
+      "year": {
+        "type": "string"
+      },
+      "source": {
+        "type": "string"
+      },
+      "sourceId": {
+        "type": "string"
+      },
+      "sourceCollection": {
+        "type": "string"
+      },
+      "sourceUrl": {
+        "type": "string"
+      },
+      "downloadUrl": {
+        "type": "string"
+      },
+      "imagePath": {
+        "type": "string"
+      },
+      "license": {
+        "enum": [
+          "CC0",
+          "Public Domain",
+          "Internal"
+        ]
+      },
+      "rightsNote": {
+        "type": "string"
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "genreWeights": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        }
+      },
+      "moodWeights": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number"
+        }
+      },
+      "energyRange": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": {
+          "type": "number"
+        }
+      },
+      "palette": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "composition": {
+        "type": "string"
+      },
+      "figurePresence": {
+        "type": "string"
+      },
+      "backgroundFit": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "crop": {
+        "type": "object"
+      },
+      "curatorNote": {
+        "type": "string"
+      }
+    }
+  }
+}

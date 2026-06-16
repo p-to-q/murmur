@@ -27,12 +27,24 @@ export type ArtworkCatalogEntry = {
   sourceId: string;
   sourceUrl: string;
   imagePath: string;
+  backgroundImagePath?: string;
   license: "CC0" | "Public Domain";
   tags: string[];
   genreWeights: Record<string, number>;
   moodWeights: Record<string, number>;
   energyRange: [number, number];
   crop: ArtworkCrop;
+  palette?: string[];
+  composition?: string;
+  figurePresence?: string;
+  backgroundFit?: number;
+  renderTreatment?: {
+    intent?: string;
+    cropFormat?: string;
+    recommendedOverlay?: number;
+    contrast?: string;
+    grain?: string;
+  };
   curatorNote: string;
 };
 
@@ -46,8 +58,10 @@ export type ArtworkSelection = Pick<
   | "source"
   | "sourceUrl"
   | "imagePath"
+  | "backgroundImagePath"
   | "license"
   | "crop"
+  | "renderTreatment"
 >;
 
 export type VisualFacets = {
@@ -69,7 +83,9 @@ export function toArtworkSelection(entry: ArtworkCatalogEntry): ArtworkSelection
     source: entry.source,
     sourceUrl: entry.sourceUrl,
     imagePath: entry.imagePath,
+    backgroundImagePath: entry.backgroundImagePath,
     license: entry.license,
     crop: { ...entry.crop },
+    renderTreatment: entry.renderTreatment ? { ...entry.renderTreatment } : undefined,
   };
 }

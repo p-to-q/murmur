@@ -1,0 +1,2633 @@
+[
+  {
+    "bucket": "luminist_air",
+    "rank": 1,
+    "artist": "John Frederick Kensett",
+    "title": "Eaton’s Neck, Long Island",
+    "year": "1872",
+    "fitReason": "quiet coast / low horizon / luminous gray-blue",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "John Frederick Kensett Eaton’s Neck, Long Island public domain image",
+      "John Frederick Kensett Eaton’s Neck, Long Island Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "luminist_air-met-11307",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11307",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 2,
+    "artist": "John Frederick Kensett",
+    "title": "Lake George",
+    "year": "1869",
+    "fitReason": "still water and distant mountain air",
+    "status": "downloaded_v0_2",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "John Frederick Kensett Lake George public domain image",
+      "John Frederick Kensett Lake George Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "luminist_air-met-11311",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11311",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 3,
+    "artist": "John Frederick Kensett",
+    "title": "Beacon Rock, Newport Harbor",
+    "year": "1857",
+    "fitReason": "coastal stone and quiet light",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "John Frederick Kensett Beacon Rock, Newport Harbor public domain image",
+      "John Frederick Kensett Beacon Rock, Newport Harbor Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 4,
+    "artist": "Fitz Henry Lane",
+    "title": "Brace’s Rock, Eastern Point, Gloucester",
+    "year": "1864",
+    "fitReason": "luminist sea and granite stillness",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Fitz Henry Lane Brace’s Rock, Eastern Point, Gloucester public domain image",
+      "Fitz Henry Lane Brace’s Rock, Eastern Point, Gloucester Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 5,
+    "artist": "Fitz Henry Lane",
+    "title": "Boston Harbor",
+    "year": "1854",
+    "fitReason": "harbor air, low contrast, broad sky",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Fitz Henry Lane Boston Harbor public domain image",
+      "Fitz Henry Lane Boston Harbor Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 6,
+    "artist": "Sanford Robinson Gifford",
+    "title": "The Wilderness",
+    "year": "1860s",
+    "fitReason": "soft atmospheric distance",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Sanford Robinson Gifford The Wilderness public domain image",
+      "Sanford Robinson Gifford The Wilderness Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 7,
+    "artist": "Martin Johnson Heade",
+    "title": "Approaching Thunder Storm",
+    "year": "1859",
+    "fitReason": "humid silence before weather",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Martin Johnson Heade Approaching Thunder Storm public domain image",
+      "Martin Johnson Heade Approaching Thunder Storm Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 8,
+    "artist": "William Trost Richards",
+    "title": "Seascape with Distant Lighthouse",
+    "year": "late 19th c.",
+    "fitReason": "clean sea field, low narrative",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "William Trost Richards Seascape with Distant Lighthouse public domain image",
+      "William Trost Richards Seascape with Distant Lighthouse Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 9,
+    "artist": "Charles-François Daubigny",
+    "title": "River Landscape",
+    "year": "19th c.",
+    "fitReason": "slow river and low horizon",
+    "status": "downloaded_v0_2",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Charles-François Daubigny River Landscape public domain image",
+      "Charles-François Daubigny River Landscape Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "pastoral_memory-met-436083",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/436083",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 10,
+    "artist": "Jean-Baptiste-Camille Corot",
+    "title": "Ville-d’Avray",
+    "year": "1860s",
+    "fitReason": "gray-green air and soft reflections",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Jean-Baptiste-Camille Corot Ville-d’Avray public domain image",
+      "Jean-Baptiste-Camille Corot Ville-d’Avray Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 11,
+    "artist": "Claude Monet",
+    "title": "The Cliff Walk at Pourville",
+    "year": "1882",
+    "fitReason": "wind and coast, but still background-fit",
+    "status": "downloaded_v0_5",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Claude Monet The Cliff Walk at Pourville public domain image",
+      "Claude Monet The Cliff Walk at Pourville Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "luminist_air-commons-monet-cliff-walk-at-pourville",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Claude_Monet_-_Cliff_Walk_at_Pourville_-_Google_Art_Project.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 12,
+    "artist": "James McNeill Whistler",
+    "title": "Blue and Silver: Bognor",
+    "year": "1870s",
+    "fitReason": "muted shore as tonal field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "James McNeill Whistler Blue and Silver: Bognor public domain image",
+      "James McNeill Whistler Blue and Silver: Bognor Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 13,
+    "artist": "Ivan Aivazovsky",
+    "title": "Calm Sea",
+    "year": "19th c.",
+    "fitReason": "quiet water, not dramatic wave",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Ivan Aivazovsky Calm Sea public domain image",
+      "Ivan Aivazovsky Calm Sea Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 14,
+    "artist": "Thomas Wilmer Dewing",
+    "title": "Landscape with Figures",
+    "year": "1890s",
+    "fitReason": "pale tonal atmosphere",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Thomas Wilmer Dewing Landscape with Figures public domain image",
+      "Thomas Wilmer Dewing Landscape with Figures Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 15,
+    "artist": "George Inness",
+    "title": "The Lackawanna Valley",
+    "year": "1855",
+    "fitReason": "hazy American landscape",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "George Inness The Lackawanna Valley public domain image",
+      "George Inness The Lackawanna Valley Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 16,
+    "artist": "Albert Pinkham Ryder",
+    "title": "Moonlight Marine",
+    "year": "1880s",
+    "fitReason": "tonal moonwater",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Albert Pinkham Ryder Moonlight Marine public domain image",
+      "Albert Pinkham Ryder Moonlight Marine Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 17,
+    "artist": "Dwight William Tryon",
+    "title": "Early Spring",
+    "year": "1890s",
+    "fitReason": "thin air, soft ground",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Dwight William Tryon Early Spring public domain image",
+      "Dwight William Tryon Early Spring Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 18,
+    "artist": "Winslow Homer",
+    "title": "Eastern Point Light",
+    "year": "1880s",
+    "fitReason": "clear coast and restraint",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Winslow Homer Eastern Point Light public domain image",
+      "Winslow Homer Eastern Point Light Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 19,
+    "artist": "John La Farge",
+    "title": "Paradise Valley",
+    "year": "late 19th c.",
+    "fitReason": "humid luminous distance",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "John La Farge Paradise Valley public domain image",
+      "John La Farge Paradise Valley Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "luminist_air",
+    "rank": 20,
+    "artist": "Hiroshige",
+    "title": "Evening Snow / low river scenes",
+    "year": "19th c.",
+    "fitReason": "flat air and quiet weather",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Hiroshige Evening Snow / low river scenes public domain image",
+      "Hiroshige Evening Snow / low river scenes Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 1,
+    "artist": "Albert Bierstadt",
+    "title": "Alaskan Coast Range",
+    "year": "1889",
+    "fitReason": "seed work: scale and distance",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Albert Bierstadt Alaskan Coast Range public domain image",
+      "Albert Bierstadt Alaskan Coast Range Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "sublime_terrain-manual-saam-1967.136.7",
+    "sourceUrl": "https://americanart.si.edu/artwork/alaskan-coast-range-2058",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 2,
+    "artist": "Albert Bierstadt",
+    "title": "The Rocky Mountains, Lander’s Peak",
+    "year": "1863",
+    "fitReason": "grand mountain myth",
+    "status": "downloaded_v0_3",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Albert Bierstadt The Rocky Mountains, Lander’s Peak public domain image",
+      "Albert Bierstadt The Rocky Mountains, Lander’s Peak Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "sublime_terrain-met-10154",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/10154",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 3,
+    "artist": "Albert Bierstadt",
+    "title": "Among the Sierra Nevada, California",
+    "year": "1868",
+    "fitReason": "lake, mountain, light theatre",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Albert Bierstadt Among the Sierra Nevada, California public domain image",
+      "Albert Bierstadt Among the Sierra Nevada, California Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 4,
+    "artist": "Albert Bierstadt",
+    "title": "Yosemite Valley",
+    "year": "1860s",
+    "fitReason": "vast terrain field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Albert Bierstadt Yosemite Valley public domain image",
+      "Albert Bierstadt Yosemite Valley Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 5,
+    "artist": "Frederic Edwin Church",
+    "title": "Cotopaxi",
+    "year": "1862",
+    "fitReason": "volcanic sublime",
+    "status": "downloaded_v0_5",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Frederic Edwin Church Cotopaxi public domain image",
+      "Frederic Edwin Church Cotopaxi Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "sublime_terrain-commons-church-cotopaxi",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Frederic_Edwin_Church_-_Cotopaxi_-_Google_Art_Project.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 6,
+    "artist": "Frederic Edwin Church",
+    "title": "The Andes of Ecuador",
+    "year": "1855",
+    "fitReason": "panoramic height and cloud",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Frederic Edwin Church The Andes of Ecuador public domain image",
+      "Frederic Edwin Church The Andes of Ecuador Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 7,
+    "artist": "Thomas Moran",
+    "title": "The Grand Canyon of the Yellowstone",
+    "year": "1872",
+    "fitReason": "chromatic canyon scale",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Thomas Moran The Grand Canyon of the Yellowstone public domain image",
+      "Thomas Moran The Grand Canyon of the Yellowstone Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 8,
+    "artist": "Thomas Moran",
+    "title": "Chasm of the Colorado",
+    "year": "1873",
+    "fitReason": "huge geology",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Thomas Moran Chasm of the Colorado public domain image",
+      "Thomas Moran Chasm of the Colorado Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 9,
+    "artist": "Thomas Cole",
+    "title": "A View of the Mountain Pass Called the Notch",
+    "year": "1839",
+    "fitReason": "American romantic pass",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Thomas Cole A View of the Mountain Pass Called the Notch public domain image",
+      "Thomas Cole A View of the Mountain Pass Called the Notch Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 10,
+    "artist": "Thomas Cole",
+    "title": "The Oxbow",
+    "year": "1836",
+    "fitReason": "famous but useful as taxonomy anchor",
+    "status": "downloaded_v0_2",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Thomas Cole The Oxbow public domain image",
+      "Thomas Cole The Oxbow Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "sublime_terrain-met-10497",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/10497",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 11,
+    "artist": "Sanford Robinson Gifford",
+    "title": "Mount Mansfield",
+    "year": "1859",
+    "fitReason": "soft American mountain awe",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Sanford Robinson Gifford Mount Mansfield public domain image",
+      "Sanford Robinson Gifford Mount Mansfield Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 12,
+    "artist": "Jasper Francis Cropsey",
+    "title": "The Valley of Wyoming",
+    "year": "1865",
+    "fitReason": "large warm terrain",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Jasper Francis Cropsey The Valley of Wyoming public domain image",
+      "Jasper Francis Cropsey The Valley of Wyoming Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 13,
+    "artist": "Alexandre Calame",
+    "title": "Swiss Mountain Landscape",
+    "year": "19th c.",
+    "fitReason": "European alpine sublime",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Alexandre Calame Swiss Mountain Landscape public domain image",
+      "Alexandre Calame Swiss Mountain Landscape Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 14,
+    "artist": "Caspar David Friedrich",
+    "title": "The Watzmann",
+    "year": "1824–25",
+    "fitReason": "cold mountain geometry",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Caspar David Friedrich The Watzmann public domain image",
+      "Caspar David Friedrich The Watzmann Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 15,
+    "artist": "Caspar David Friedrich",
+    "title": "Mountain Landscape with Rainbow",
+    "year": "1810",
+    "fitReason": "romantic weather scale",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Caspar David Friedrich Mountain Landscape with Rainbow public domain image",
+      "Caspar David Friedrich Mountain Landscape with Rainbow Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 16,
+    "artist": "Worthington Whittredge",
+    "title": "The Old Hunting Grounds",
+    "year": "1864",
+    "fitReason": "forest depth",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Worthington Whittredge The Old Hunting Grounds public domain image",
+      "Worthington Whittredge The Old Hunting Grounds Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 17,
+    "artist": "Asher B. Durand",
+    "title": "In the Woods",
+    "year": "1855",
+    "fitReason": "forest as cathedral",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Asher B. Durand In the Woods public domain image",
+      "Asher B. Durand In the Woods Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 18,
+    "artist": "Thomas Hill",
+    "title": "Mount Lafayette in Winter",
+    "year": "1870s",
+    "fitReason": "snow mountain scale",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Thomas Hill Mount Lafayette in Winter public domain image",
+      "Thomas Hill Mount Lafayette in Winter Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 19,
+    "artist": "Hermann Herzog",
+    "title": "Yosemite Valley",
+    "year": "19th c.",
+    "fitReason": "sublime terrain candidate",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Hermann Herzog Yosemite Valley public domain image",
+      "Hermann Herzog Yosemite Valley Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "sublime_terrain",
+    "rank": 20,
+    "artist": "John Brett",
+    "title": "The Val d’Aosta",
+    "year": "1858",
+    "fitReason": "geological precision and grandeur",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "John Brett The Val d’Aosta public domain image",
+      "John Brett The Val d’Aosta Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 1,
+    "artist": "Winslow Homer",
+    "title": "Natural Bridge, Bermuda",
+    "year": "1901",
+    "fitReason": "seed work: rock, water, mineral light",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Winslow Homer Natural Bridge, Bermuda public domain image",
+      "Winslow Homer Natural Bridge, Bermuda Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "tidal_mineral-met-11129",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11129",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 2,
+    "artist": "Winslow Homer",
+    "title": "Northeaster",
+    "year": "1895",
+    "fitReason": "wave force, not beach leisure",
+    "status": "downloaded_v0_2",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Winslow Homer Northeaster public domain image",
+      "Winslow Homer Northeaster Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "tidal_mineral-met-11130",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11130",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 3,
+    "artist": "Winslow Homer",
+    "title": "The Fog Warning",
+    "year": "1885",
+    "fitReason": "sea danger and tonal field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Winslow Homer The Fog Warning public domain image",
+      "Winslow Homer The Fog Warning Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 4,
+    "artist": "Winslow Homer",
+    "title": "Bermuda Sky and Sea with Boats",
+    "year": "1899",
+    "fitReason": "watercolor sea and air",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Winslow Homer Bermuda Sky and Sea with Boats public domain image",
+      "Winslow Homer Bermuda Sky and Sea with Boats Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 5,
+    "artist": "Gustave Courbet",
+    "title": "The Wave",
+    "year": "1869",
+    "fitReason": "mineral water pressure",
+    "status": "downloaded_v0_5",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Gustave Courbet The Wave public domain image",
+      "Gustave Courbet The Wave Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "tidal_mineral-commons-courbet-the-wave",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gustave_Courbet_-_The_Wave_-_Google_Art_Project.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 6,
+    "artist": "Gustave Courbet",
+    "title": "The Cliffs at Étretat after the Storm",
+    "year": "1870",
+    "fitReason": "rock/weather mass",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Gustave Courbet The Cliffs at Étretat after the Storm public domain image",
+      "Gustave Courbet The Cliffs at Étretat after the Storm Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 7,
+    "artist": "Claude Monet",
+    "title": "Stormy Sea in Étretat",
+    "year": "1883",
+    "fitReason": "coastal force",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Claude Monet Stormy Sea in Étretat public domain image",
+      "Claude Monet Stormy Sea in Étretat Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 8,
+    "artist": "Claude Monet",
+    "title": "The Manneporte near Étretat",
+    "year": "1886",
+    "fitReason": "arch/rock/water",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Claude Monet The Manneporte near Étretat public domain image",
+      "Claude Monet The Manneporte near Étretat Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 9,
+    "artist": "Paul Signac",
+    "title": "Venice, The Pink Cloud",
+    "year": "1909",
+    "fitReason": "seed work: water and dotted light",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Paul Signac Venice, The Pink Cloud public domain image",
+      "Paul Signac Venice, The Pink Cloud Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "tidal_mineral-manual-signac-venice-pink-cloud-1909",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Paul_Signac_-_Venice,_The_Pink_Cloud,_1909_-_Google_Art_Project.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 10,
+    "artist": "Paul Signac",
+    "title": "Antibes, Evening",
+    "year": "1914",
+    "fitReason": "harbor color field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Paul Signac Antibes, Evening public domain image",
+      "Paul Signac Antibes, Evening Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 11,
+    "artist": "Eugène Boudin",
+    "title": "Trouville Harbor",
+    "year": "19th c.",
+    "fitReason": "harbor weather",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Eugène Boudin Trouville Harbor public domain image",
+      "Eugène Boudin Trouville Harbor Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 12,
+    "artist": "J. M. W. Turner",
+    "title": "Fishermen at Sea",
+    "year": "1796",
+    "fitReason": "moonwater, not too literal",
+    "status": "downloaded_v0_5",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "J. M. W. Turner Fishermen at Sea public domain image",
+      "J. M. W. Turner Fishermen at Sea Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "tidal_mineral-commons-turner-fishermen-at-sea",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Joseph_Mallord_William_Turner_-_Fishermen_at_Sea_-_Google_Art_Project.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 13,
+    "artist": "William Trost Richards",
+    "title": "Seascape",
+    "year": "19th c.",
+    "fitReason": "coastal detail and foam",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "William Trost Richards Seascape public domain image",
+      "William Trost Richards Seascape Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 14,
+    "artist": "Martin Johnson Heade",
+    "title": "Seascape: Sunset",
+    "year": "1860s",
+    "fitReason": "low water, distant mood",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Martin Johnson Heade Seascape: Sunset public domain image",
+      "Martin Johnson Heade Seascape: Sunset Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 15,
+    "artist": "Ivan Aivazovsky",
+    "title": "The Wave",
+    "year": "1889",
+    "fitReason": "high energy tidal candidate",
+    "status": "downloaded_v0_5",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Ivan Aivazovsky The Wave public domain image",
+      "Ivan Aivazovsky The Wave Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "tidal_mineral-commons-courbet-the-wave",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gustave_Courbet_-_The_Wave_-_Google_Art_Project.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 16,
+    "artist": "Hiroshige",
+    "title": "Awa Province, Naruto Whirlpools",
+    "year": "1850s",
+    "fitReason": "graphic sea force",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Hiroshige Awa Province, Naruto Whirlpools public domain image",
+      "Hiroshige Awa Province, Naruto Whirlpools Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 17,
+    "artist": "Hiroshige",
+    "title": "Sea at Satta",
+    "year": "1850s",
+    "fitReason": "flat sea rhythm",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Hiroshige Sea at Satta public domain image",
+      "Hiroshige Sea at Satta Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 18,
+    "artist": "John Sell Cotman",
+    "title": "Greta Bridge / river rocks",
+    "year": "1805",
+    "fitReason": "mineral watercolor logic",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "John Sell Cotman Greta Bridge / river rocks public domain image",
+      "John Sell Cotman Greta Bridge / river rocks Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 19,
+    "artist": "Théodore Rousseau",
+    "title": "Rocky Coast",
+    "year": "19th c.",
+    "fitReason": "stone and water",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Théodore Rousseau Rocky Coast public domain image",
+      "Théodore Rousseau Rocky Coast Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "tidal_mineral",
+    "rank": 20,
+    "artist": "Félix Vallotton",
+    "title": "La Mer / coastal woodcuts",
+    "year": "1890s",
+    "fitReason": "graphic sea field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Félix Vallotton La Mer / coastal woodcuts public domain image",
+      "Félix Vallotton La Mer / coastal woodcuts Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 1,
+    "artist": "Claude Monet",
+    "title": "Haystack, Morning Snow Effect",
+    "year": "1891",
+    "fitReason": "seed work: object-memory in weather",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Claude Monet Haystack, Morning Snow Effect public domain image",
+      "Claude Monet Haystack, Morning Snow Effect Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "pastoral_memory-manual-monet-haystack-morning-snow-effect",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Claude_Monet,_Haystack,_Morning_Snow_Effect_(Meule,_Effet_de_Neige,_le_Matin),_1891,_oil_on_canvas,_65_x_92_cm,_Museum_of_Fine_Arts,_Boston.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 2,
+    "artist": "William Trost Richards",
+    "title": "Lake Squam from Red Hill",
+    "year": "1874",
+    "fitReason": "seed work: hill, lake, memory",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "William Trost Richards Lake Squam from Red Hill public domain image",
+      "William Trost Richards Lake Squam from Red Hill Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "pastoral_memory-met-11897",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11897",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 3,
+    "artist": "Jan Toorop",
+    "title": "Woman Lying in the Dunes near Noordwijk",
+    "year": "1902",
+    "fitReason": "seed work: body dissolving into field",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Jan Toorop Woman Lying in the Dunes near Noordwijk public domain image",
+      "Jan Toorop Woman Lying in the Dunes near Noordwijk Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "pastoral_memory-manual-rawpixel-2681194",
+    "sourceUrl": "https://www.rawpixel.com/image/2681194/free-illustration-image-art-nouveau-woman-field",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 4,
+    "artist": "Claude Monet",
+    "title": "Poppy Field near Argenteuil",
+    "year": "1873",
+    "fitReason": "soft rural memory",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Claude Monet Poppy Field near Argenteuil public domain image",
+      "Claude Monet Poppy Field near Argenteuil Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 5,
+    "artist": "Claude Monet",
+    "title": "The Artist’s Garden at Vétheuil",
+    "year": "1880",
+    "fitReason": "flowered domestic pastoral",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Claude Monet The Artist’s Garden at Vétheuil public domain image",
+      "Claude Monet The Artist’s Garden at Vétheuil Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 6,
+    "artist": "Camille Pissarro",
+    "title": "Orchard in Bloom",
+    "year": "1870s",
+    "fitReason": "village rhythm and haze",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Camille Pissarro Orchard in Bloom public domain image",
+      "Camille Pissarro Orchard in Bloom Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 7,
+    "artist": "Alfred Sisley",
+    "title": "Meadow / riverbank landscapes",
+    "year": "1870s",
+    "fitReason": "cool soft countryside",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Alfred Sisley Meadow / riverbank landscapes public domain image",
+      "Alfred Sisley Meadow / riverbank landscapes Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 8,
+    "artist": "Charles-François Daubigny",
+    "title": "The River at Mantes",
+    "year": "1850s",
+    "fitReason": "quiet river field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Charles-François Daubigny The River at Mantes public domain image",
+      "Charles-François Daubigny The River at Mantes Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 9,
+    "artist": "Jean-François Millet",
+    "title": "Spring",
+    "year": "1868–73",
+    "fitReason": "weathered rural time",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Jean-François Millet Spring public domain image",
+      "Jean-François Millet Spring Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 10,
+    "artist": "Jules Bastien-Lepage",
+    "title": "Hay Making",
+    "year": "1877",
+    "fitReason": "rural labor, avoid strong face crop",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Jules Bastien-Lepage Hay Making public domain image",
+      "Jules Bastien-Lepage Hay Making Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 11,
+    "artist": "George Inness",
+    "title": "The Home of the Heron",
+    "year": "1893",
+    "fitReason": "tonal pastoral depth",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "George Inness The Home of the Heron public domain image",
+      "George Inness The Home of the Heron Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 12,
+    "artist": "Dwight William Tryon",
+    "title": "Autumn",
+    "year": "1890s",
+    "fitReason": "muted field memory",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Dwight William Tryon Autumn public domain image",
+      "Dwight William Tryon Autumn Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 13,
+    "artist": "Anton Mauve",
+    "title": "Changing Pasture",
+    "year": "19th c.",
+    "fitReason": "soft rural animal field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Anton Mauve Changing Pasture public domain image",
+      "Anton Mauve Changing Pasture Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 14,
+    "artist": "Jacob Maris",
+    "title": "Meadow Landscape",
+    "year": "19th c.",
+    "fitReason": "Dutch cloudy lowland",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Jacob Maris Meadow Landscape public domain image",
+      "Jacob Maris Meadow Landscape Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 15,
+    "artist": "Berthe Morisot",
+    "title": "In a Villa at the Seaside / garden works",
+    "year": "1870s",
+    "fitReason": "private outdoor reverie",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Berthe Morisot In a Villa at the Seaside / garden works public domain image",
+      "Berthe Morisot In a Villa at the Seaside / garden works Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 16,
+    "artist": "Odilon Redon",
+    "title": "Trees on a Yellow Background",
+    "year": "early 1900s",
+    "fitReason": "dream pastoral edge",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Odilon Redon Trees on a Yellow Background public domain image",
+      "Odilon Redon Trees on a Yellow Background Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 17,
+    "artist": "Vincent van Gogh",
+    "title": "Wheat Field with Reaper",
+    "year": "1889",
+    "fitReason": "use carefully; famous but atmospheric",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Vincent van Gogh Wheat Field with Reaper public domain image",
+      "Vincent van Gogh Wheat Field with Reaper Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 18,
+    "artist": "Paul Gauguin",
+    "title": "Landscape near Arles",
+    "year": "1888",
+    "fitReason": "colored rural field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Paul Gauguin Landscape near Arles public domain image",
+      "Paul Gauguin Landscape near Arles Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 19,
+    "artist": "John Constable",
+    "title": "Hampstead Heath studies",
+    "year": "1820s",
+    "fitReason": "old weather and grass",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "John Constable Hampstead Heath studies public domain image",
+      "John Constable Hampstead Heath studies Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "pastoral_memory",
+    "rank": 20,
+    "artist": "Winslow Homer",
+    "title": "The Blue Boat / rural watercolor scenes",
+    "year": "1890s",
+    "fitReason": "warm quiet daylight",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Winslow Homer The Blue Boat / rural watercolor scenes public domain image",
+      "Winslow Homer The Blue Boat / rural watercolor scenes Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 1,
+    "artist": "Ippolito Caffi",
+    "title": "Eclipse of the Sun in Venice",
+    "year": "1842",
+    "fitReason": "seed work: public nocturne and water",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Ippolito Caffi Eclipse of the Sun in Venice public domain image",
+      "Ippolito Caffi Eclipse of the Sun in Venice Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "nocturne_metro-manual-caffi-eclipse-1842",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Ippolito_Caffi,_Eclisse_di_sole_alle_Fondamenta_Nove_(1842).jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 2,
+    "artist": "Claude Monet",
+    "title": "Arrival of the Normandy Train, Gare Saint-Lazare",
+    "year": "1877",
+    "fitReason": "seed work: smoke and urban motion",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Claude Monet Arrival of the Normandy Train, Gare Saint-Lazare public domain image",
+      "Claude Monet Arrival of the Normandy Train, Gare Saint-Lazare Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "nocturne_metro-manual-monet-arrival-normandy-train",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Claude_Monet_-_Arrival_of_the_Normandy_Train,_Gare_Saint-Lazare_-_Google_Art_Project.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 3,
+    "artist": "Gustave Caillebotte",
+    "title": "Paris Street; Rainy Day",
+    "year": "1877",
+    "fitReason": "rain street anchor; famous but highly aligned",
+    "status": "downloaded_v0_3",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Gustave Caillebotte Paris Street; Rainy Day public domain image",
+      "Gustave Caillebotte Paris Street; Rainy Day Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "nocturne_metro-commons-caillebotte-paris-street-rainy-day",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gustave_Caillebotte_-_Paris_Street;_Rainy_Day_-_Google_Art_Project.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 4,
+    "artist": "James McNeill Whistler",
+    "title": "Nocturne: Blue and Gold – Southampton Water",
+    "year": "1872",
+    "fitReason": "tonal night water",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "James McNeill Whistler Nocturne: Blue and Gold – Southampton Water public domain image",
+      "James McNeill Whistler Nocturne: Blue and Gold – Southampton Water Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 5,
+    "artist": "James McNeill Whistler",
+    "title": "Nocturne in Black and Gold: The Falling Rocket",
+    "year": "1875",
+    "fitReason": "firework/nocturne field; use carefully",
+    "status": "downloaded_v0_3",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "James McNeill Whistler Nocturne in Black and Gold: The Falling Rocket public domain image",
+      "James McNeill Whistler Nocturne in Black and Gold: The Falling Rocket Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "hypermodern_void-commons-whistler-nocturne-black-gold-falling-rocket",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Whistler-Nocturne_in_black_and_gold.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 6,
+    "artist": "James McNeill Whistler",
+    "title": "Nocturne: Blue and Silver – Chelsea",
+    "year": "1871",
+    "fitReason": "quiet city water",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "James McNeill Whistler Nocturne: Blue and Silver – Chelsea public domain image",
+      "James McNeill Whistler Nocturne: Blue and Silver – Chelsea Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 7,
+    "artist": "Atkinson Grimshaw",
+    "title": "Nightfall down the Thames",
+    "year": "1880s",
+    "fitReason": "wet city gaslight",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Atkinson Grimshaw Nightfall down the Thames public domain image",
+      "Atkinson Grimshaw Nightfall down the Thames Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 8,
+    "artist": "Atkinson Grimshaw",
+    "title": "Boar Lane, Leeds",
+    "year": "1881",
+    "fitReason": "rainy urban glow",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Atkinson Grimshaw Boar Lane, Leeds public domain image",
+      "Atkinson Grimshaw Boar Lane, Leeds Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 9,
+    "artist": "Childe Hassam",
+    "title": "Rainy Day, Fifth Avenue",
+    "year": "1890s",
+    "fitReason": "rain/city/weather",
+    "status": "downloaded_v0_3",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Childe Hassam Rainy Day, Fifth Avenue public domain image",
+      "Childe Hassam Rainy Day, Fifth Avenue Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "nocturne_metro-commons-hassam-rainy-day-fifth-avenue",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Childe_Hassam_-_Rainy_Day,_Fifth_Avenue_-_y1942-62_-_Princeton_University_Art_Museum.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 10,
+    "artist": "Childe Hassam",
+    "title": "Broadway and 42nd Street",
+    "year": "1902",
+    "fitReason": "urban light and motion",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Childe Hassam Broadway and 42nd Street public domain image",
+      "Childe Hassam Broadway and 42nd Street Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 11,
+    "artist": "Colin Campbell Cooper",
+    "title": "View of Wall Street",
+    "year": "early 20th c.",
+    "fitReason": "seed work: bright urban rhythm",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Colin Campbell Cooper View of Wall Street public domain image",
+      "Colin Campbell Cooper View of Wall Street Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "stage_heat-manual-cooper-view-wall-street",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Olin_campbell_cooper_view_of_wall_street022728).jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 12,
+    "artist": "Colin Campbell Cooper",
+    "title": "Flatiron Building",
+    "year": "1900s",
+    "fitReason": "soft skyscraper field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Colin Campbell Cooper Flatiron Building public domain image",
+      "Colin Campbell Cooper Flatiron Building Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 13,
+    "artist": "Camille Pissarro",
+    "title": "Boulevard Montmartre at Night",
+    "year": "1897",
+    "fitReason": "night traffic texture",
+    "status": "downloaded_v0_3",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Camille Pissarro Boulevard Montmartre at Night public domain image",
+      "Camille Pissarro Boulevard Montmartre at Night Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "nocturne_metro-commons-pissarro-boulevard-montmartre-at-night",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Camille_Pissarro,_The_Boulevard_Montmartre_at_Night,_1897.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 14,
+    "artist": "Lesser Ury",
+    "title": "Berlin Street Scene at Night",
+    "year": "1890s",
+    "fitReason": "license to verify; strong mood",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Lesser Ury Berlin Street Scene at Night public domain image",
+      "Lesser Ury Berlin Street Scene at Night Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 15,
+    "artist": "Hiroshige",
+    "title": "Sudden Shower over Shin-Ōhashi Bridge",
+    "year": "1857",
+    "fitReason": "rain geometry",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Hiroshige Sudden Shower over Shin-Ōhashi Bridge public domain image",
+      "Hiroshige Sudden Shower over Shin-Ōhashi Bridge Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 16,
+    "artist": "Hiroshige",
+    "title": "Night View of Saruwaka-machi",
+    "year": "1856",
+    "fitReason": "flat night street",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Hiroshige Night View of Saruwaka-machi public domain image",
+      "Hiroshige Night View of Saruwaka-machi Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 17,
+    "artist": "John Sloan",
+    "title": "Sixth Avenue and Thirtieth Street",
+    "year": "1907",
+    "fitReason": "urban mass; verify rights",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "John Sloan Sixth Avenue and Thirtieth Street public domain image",
+      "John Sloan Sixth Avenue and Thirtieth Street Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 18,
+    "artist": "George Bellows",
+    "title": "New York",
+    "year": "1911",
+    "fitReason": "urban pressure; verify rights",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "George Bellows New York public domain image",
+      "George Bellows New York Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 19,
+    "artist": "Eugène Jansson",
+    "title": "Blue city nocturnes",
+    "year": "1890s",
+    "fitReason": "license to verify; deep blue city",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Eugène Jansson Blue city nocturnes public domain image",
+      "Eugène Jansson Blue city nocturnes Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "nocturne_metro",
+    "rank": 20,
+    "artist": "Henri Rivière",
+    "title": "Paris rain / lithograph city scenes",
+    "year": "1890s",
+    "fitReason": "printed city weather",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Henri Rivière Paris rain / lithograph city scenes public domain image",
+      "Henri Rivière Paris rain / lithograph city scenes Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 1,
+    "artist": "Katsushika Hokusai",
+    "title": "A Realistic Sketchbook by Hokusai",
+    "year": "1814",
+    "fitReason": "seed work: line archive",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Katsushika Hokusai A Realistic Sketchbook by Hokusai public domain image",
+      "Katsushika Hokusai A Realistic Sketchbook by Hokusai Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "printed_signal-met-78790",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/78790",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 2,
+    "artist": "Katsushika Hokusai",
+    "title": "Hawk from Hokusai shashin gafu",
+    "year": "1814",
+    "fitReason": "animal/line/signal",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Katsushika Hokusai Hawk from Hokusai shashin gafu public domain image",
+      "Katsushika Hokusai Hawk from Hokusai shashin gafu Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 3,
+    "artist": "Katsushika Hokusai",
+    "title": "Manga volumes: landscape and plant plates",
+    "year": "1810s",
+    "fitReason": "modular line fields",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Katsushika Hokusai Manga volumes: landscape and plant plates public domain image",
+      "Katsushika Hokusai Manga volumes: landscape and plant plates Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 4,
+    "artist": "Utagawa Hiroshige",
+    "title": "One Hundred Famous Views of Edo: rain plates",
+    "year": "1850s",
+    "fitReason": "weather as graphic system",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Utagawa Hiroshige One Hundred Famous Views of Edo: rain plates public domain image",
+      "Utagawa Hiroshige One Hundred Famous Views of Edo: rain plates Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 5,
+    "artist": "Utagawa Hiroshige",
+    "title": "Plum Garden at Kameido",
+    "year": "1857",
+    "fitReason": "plant geometry",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Utagawa Hiroshige Plum Garden at Kameido public domain image",
+      "Utagawa Hiroshige Plum Garden at Kameido Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 6,
+    "artist": "Utagawa Hiroshige",
+    "title": "Iris Garden at Horikiri",
+    "year": "1857",
+    "fitReason": "flat botanical rhythm",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Utagawa Hiroshige Iris Garden at Horikiri public domain image",
+      "Utagawa Hiroshige Iris Garden at Horikiri Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 7,
+    "artist": "Ogata Kōrin",
+    "title": "Irises / plant pattern studies",
+    "year": "17th–18th c.",
+    "fitReason": "decorative signal",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Ogata Kōrin Irises / plant pattern studies public domain image",
+      "Ogata Kōrin Irises / plant pattern studies Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 8,
+    "artist": "Kitagawa Utamaro",
+    "title": "Insect and plant albums",
+    "year": "18th c.",
+    "fitReason": "fine line and nature",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Kitagawa Utamaro Insect and plant albums public domain image",
+      "Kitagawa Utamaro Insect and plant albums Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 9,
+    "artist": "Kawanabe Kyōsai",
+    "title": "Sketchbooks",
+    "year": "19th c.",
+    "fitReason": "strange hand signal",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Kawanabe Kyōsai Sketchbooks public domain image",
+      "Kawanabe Kyōsai Sketchbooks Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 10,
+    "artist": "Pierre-Joseph Redouté",
+    "title": "Les Roses plates",
+    "year": "1817–24",
+    "fitReason": "botanical quiet",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Pierre-Joseph Redouté Les Roses plates public domain image",
+      "Pierre-Joseph Redouté Les Roses plates Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 11,
+    "artist": "Ernst Haeckel",
+    "title": "Kunstformen der Natur: Radiolaria",
+    "year": "1899–1904",
+    "fitReason": "scientific ornament",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Ernst Haeckel Kunstformen der Natur: Radiolaria public domain image",
+      "Ernst Haeckel Kunstformen der Natur: Radiolaria Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 12,
+    "artist": "Ernst Haeckel",
+    "title": "Kunstformen der Natur: Discomedusae",
+    "year": "1899–1904",
+    "fitReason": "organic signal",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Ernst Haeckel Kunstformen der Natur: Discomedusae public domain image",
+      "Ernst Haeckel Kunstformen der Natur: Discomedusae Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 13,
+    "artist": "Owen Jones",
+    "title": "The Grammar of Ornament plates",
+    "year": "1856",
+    "fitReason": "abstract pattern source",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Owen Jones The Grammar of Ornament plates public domain image",
+      "Owen Jones The Grammar of Ornament plates Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 14,
+    "artist": "Alois Auer",
+    "title": "Nature Printing plates",
+    "year": "1850s",
+    "fitReason": "plant trace system",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Alois Auer Nature Printing plates public domain image",
+      "Alois Auer Nature Printing plates Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 15,
+    "artist": "Anna Atkins",
+    "title": "Photographs of British Algae: cyanotypes",
+    "year": "1843–53",
+    "fitReason": "blue botanical signal",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Anna Atkins Photographs of British Algae: cyanotypes public domain image",
+      "Anna Atkins Photographs of British Algae: cyanotypes Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 16,
+    "artist": "Joris Hoefnagel",
+    "title": "Animalia Rationalia et Insecta plates",
+    "year": "16th c.",
+    "fitReason": "cabinet-of-curiosities signal",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Joris Hoefnagel Animalia Rationalia et Insecta plates public domain image",
+      "Joris Hoefnagel Animalia Rationalia et Insecta plates Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 17,
+    "artist": "Maria Sibylla Merian",
+    "title": "Metamorphosis Insectorum Surinamensium",
+    "year": "1705",
+    "fitReason": "plant/insect narrative line",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Maria Sibylla Merian Metamorphosis Insectorum Surinamensium public domain image",
+      "Maria Sibylla Merian Metamorphosis Insectorum Surinamensium Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 18,
+    "artist": "Mori Yuzan",
+    "title": "Hamonshū wave pattern book",
+    "year": "1903",
+    "fitReason": "wave pattern archive",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Mori Yuzan Hamonshū wave pattern book public domain image",
+      "Mori Yuzan Hamonshū wave pattern book Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 19,
+    "artist": "Kamisaka Sekka",
+    "title": "Momoyogusa pattern plates",
+    "year": "1909–10",
+    "fitReason": "Japanese modern decorative signal",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Kamisaka Sekka Momoyogusa pattern plates public domain image",
+      "Kamisaka Sekka Momoyogusa pattern plates Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "printed_signal",
+    "rank": 20,
+    "artist": "Christopher Dresser",
+    "title": "Botanical diagrams and ornaments",
+    "year": "19th c.",
+    "fitReason": "proto-modern plant geometry",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Christopher Dresser Botanical diagrams and ornaments public domain image",
+      "Christopher Dresser Botanical diagrams and ornaments Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 1,
+    "artist": "Canaletto",
+    "title": "The Piazza San Marco in Venice",
+    "year": "1723–24",
+    "fitReason": "seed work: public rhythm",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Canaletto The Piazza San Marco in Venice public domain image",
+      "Canaletto The Piazza San Marco in Venice Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "stage_heat-manual-canaletto-piazza-san-marco",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Canaletto_-_The_Piazza_San_Marco_in_Venice_-_Google_Art_Project.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 2,
+    "artist": "Colin Campbell Cooper",
+    "title": "View of Wall Street",
+    "year": "early 20th c.",
+    "fitReason": "seed work: bright urban stage",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Colin Campbell Cooper View of Wall Street public domain image",
+      "Colin Campbell Cooper View of Wall Street Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "stage_heat-manual-cooper-view-wall-street",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Olin_campbell_cooper_view_of_wall_street022728).jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 3,
+    "artist": "Georges Seurat",
+    "title": "A Sunday on La Grande Jatte",
+    "year": "1884–86",
+    "fitReason": "public rhythm; famous but taxonomic anchor",
+    "status": "downloaded_v0_2",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Georges Seurat A Sunday on La Grande Jatte public domain image",
+      "Georges Seurat A Sunday on La Grande Jatte Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "stage_heat-commons-seurat-grande-jatte-1884",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:A_Sunday_on_La_Grande_Jatte,_Georges_Seurat,_1884.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 4,
+    "artist": "Georges Seurat",
+    "title": "Circus Sideshow",
+    "year": "1887–88",
+    "fitReason": "night public performance",
+    "status": "downloaded_v0_5",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Georges Seurat Circus Sideshow public domain image",
+      "Georges Seurat Circus Sideshow Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "stage_heat-commons-seurat-circus-sideshow",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Georges_Seurat,_Circus_Sideshow,_1887%E2%80%9388.jpg",
+    "license": "CC0"
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 5,
+    "artist": "Henri de Toulouse-Lautrec",
+    "title": "At the Moulin Rouge",
+    "year": "1892–95",
+    "fitReason": "stage/social heat; watch faces",
+    "status": "downloaded_v0_2",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Henri de Toulouse-Lautrec At the Moulin Rouge public domain image",
+      "Henri de Toulouse-Lautrec At the Moulin Rouge Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "stage_heat-commons-toulouse-lautrec-moulin-rouge-dance",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Henri_de_Toulouse-Lautrec,_French_-_At_the_Moulin_Rouge-_The_Dance_-_Google_Art_Project.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 6,
+    "artist": "Henri de Toulouse-Lautrec",
+    "title": "Jane Avril poster",
+    "year": "1890s",
+    "fitReason": "graphic performance energy",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Henri de Toulouse-Lautrec Jane Avril poster public domain image",
+      "Henri de Toulouse-Lautrec Jane Avril poster Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 7,
+    "artist": "Edgar Degas",
+    "title": "The Orchestra at the Opera",
+    "year": "1870",
+    "fitReason": "stage depth",
+    "status": "downloaded_v0_5",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Edgar Degas The Orchestra at the Opera public domain image",
+      "Edgar Degas The Orchestra at the Opera Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "stage_heat-commons-degas-the-orchestra-at-the-opera",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Edgar_Degas_-_The_Orchestra_at_the_Opera_-_Google_Art_Project.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 8,
+    "artist": "Edgar Degas",
+    "title": "Ballet Rehearsal on Stage",
+    "year": "1874",
+    "fitReason": "movement and public interior",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Edgar Degas Ballet Rehearsal on Stage public domain image",
+      "Edgar Degas Ballet Rehearsal on Stage Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 9,
+    "artist": "Édouard Manet",
+    "title": "Masked Ball at the Opera",
+    "year": "1873",
+    "fitReason": "dense public rhythm",
+    "status": "downloaded_v0_5",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Édouard Manet Masked Ball at the Opera public domain image",
+      "Édouard Manet Masked Ball at the Opera Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "stage_heat-commons-manet-masked-ball-at-the-opera",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:%C3%89douard_manet_-_Masked_Ball_at_the_Opera.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 10,
+    "artist": "Pierre-Auguste Renoir",
+    "title": "Dance at Le Moulin de la Galette",
+    "year": "1876",
+    "fitReason": "too famous but useful mood reference",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Pierre-Auguste Renoir Dance at Le Moulin de la Galette public domain image",
+      "Pierre-Auguste Renoir Dance at Le Moulin de la Galette Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 11,
+    "artist": "Jean Béraud",
+    "title": "Café / boulevard scenes",
+    "year": "1880s",
+    "fitReason": "urban social tempo",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Jean Béraud Café / boulevard scenes public domain image",
+      "Jean Béraud Café / boulevard scenes Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 12,
+    "artist": "William Merritt Chase",
+    "title": "At Mouquin’s",
+    "year": "1905",
+    "fitReason": "restaurant rhythm; verify source",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "William Merritt Chase At Mouquin’s public domain image",
+      "William Merritt Chase At Mouquin’s Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 13,
+    "artist": "Maurice Prendergast",
+    "title": "Central Park / beach crowd watercolors",
+    "year": "1900s",
+    "fitReason": "color crowds as texture",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Maurice Prendergast Central Park / beach crowd watercolors public domain image",
+      "Maurice Prendergast Central Park / beach crowd watercolors Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 14,
+    "artist": "Camille Pissarro",
+    "title": "Boulevard Montmartre, Mardi Gras",
+    "year": "1897",
+    "fitReason": "public rhythm from above",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Camille Pissarro Boulevard Montmartre, Mardi Gras public domain image",
+      "Camille Pissarro Boulevard Montmartre, Mardi Gras Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 15,
+    "artist": "Giovanni Boldini",
+    "title": "In the Café",
+    "year": "1870s",
+    "fitReason": "social flicker",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Giovanni Boldini In the Café public domain image",
+      "Giovanni Boldini In the Café Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 16,
+    "artist": "Mary Cassatt",
+    "title": "In the Loge",
+    "year": "1878",
+    "fitReason": "theatre social field; avoid central face crop",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Mary Cassatt In the Loge public domain image",
+      "Mary Cassatt In the Loge Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 17,
+    "artist": "John Sloan",
+    "title": "The City from Greenwich Village",
+    "year": "1922",
+    "fitReason": "later urban pulse; verify rights",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "John Sloan The City from Greenwich Village public domain image",
+      "John Sloan The City from Greenwich Village Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 18,
+    "artist": "Gustave Caillebotte",
+    "title": "Le Pont de l’Europe",
+    "year": "1876",
+    "fitReason": "urban stage geometry",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Gustave Caillebotte Le Pont de l’Europe public domain image",
+      "Gustave Caillebotte Le Pont de l’Europe Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 19,
+    "artist": "Paul Signac",
+    "title": "The Red Buoy / harbor crowds",
+    "year": "1890s",
+    "fitReason": "bright public color pulse",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Paul Signac The Red Buoy / harbor crowds public domain image",
+      "Paul Signac The Red Buoy / harbor crowds Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "stage_heat",
+    "rank": 20,
+    "artist": "Henri Rivière",
+    "title": "Shadow theatre lithographs",
+    "year": "1890s",
+    "fitReason": "performance as flat signal",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Henri Rivière Shadow theatre lithographs public domain image",
+      "Henri Rivière Shadow theatre lithographs Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 1,
+    "artist": "Sigrid Granfelt",
+    "title": "Reposing Dog",
+    "year": "1894",
+    "fitReason": "seed work: private rest",
+    "status": "downloaded_seed",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Sigrid Granfelt Reposing Dog public domain image",
+      "Sigrid Granfelt Reposing Dog Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "interior_reverie-manual-granfelt-reposing-dog-1894",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sigrid_Granfelt_-_Reposing_Dog_-_A_III_2492_-_Finnish_National_Gallery.jpg",
+    "license": "CC0"
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 2,
+    "artist": "Vincent van Gogh",
+    "title": "The Bedroom",
+    "year": "1889",
+    "fitReason": "famous but aligned; use sparingly",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Vincent van Gogh The Bedroom public domain image",
+      "Vincent van Gogh The Bedroom Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 3,
+    "artist": "Vilhelm Hammershøi",
+    "title": "Interior with Young Woman from Behind",
+    "year": "1904",
+    "fitReason": "quiet room depth; verify image rights",
+    "status": "downloaded_v0_5",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Vilhelm Hammershøi Interior with Young Woman from Behind public domain image",
+      "Vilhelm Hammershøi Interior with Young Woman from Behind Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "interior_reverie-commons-hammersh-i-interior-with-young-woman-from-behin",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Vilhelm_Hammershoi_-_Interieur_mit_Rueckenansicht_einer_Frau_-_1903-1904_-_Randers_Kunstmuseum.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 4,
+    "artist": "Vilhelm Hammershøi",
+    "title": "Sunshine in the Drawing Room",
+    "year": "1910",
+    "fitReason": "interior light field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Vilhelm Hammershøi Sunshine in the Drawing Room public domain image",
+      "Vilhelm Hammershøi Sunshine in the Drawing Room Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 5,
+    "artist": "Carl Holsøe",
+    "title": "Interior with Woman Reading",
+    "year": "late 19th c.",
+    "fitReason": "room reverie",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Carl Holsøe Interior with Woman Reading public domain image",
+      "Carl Holsøe Interior with Woman Reading Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 6,
+    "artist": "Johannes Vermeer",
+    "title": "Woman Reading a Letter",
+    "year": "1660s",
+    "fitReason": "too famous but strong window logic",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Johannes Vermeer Woman Reading a Letter public domain image",
+      "Johannes Vermeer Woman Reading a Letter Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 7,
+    "artist": "Johannes Vermeer",
+    "title": "The Music Lesson",
+    "year": "1660s",
+    "fitReason": "interior and instrument",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Johannes Vermeer The Music Lesson public domain image",
+      "Johannes Vermeer The Music Lesson Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 8,
+    "artist": "Jean-Baptiste-Siméon Chardin",
+    "title": "The House of Cards",
+    "year": "1730s",
+    "fitReason": "quiet tabletop",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Jean-Baptiste-Siméon Chardin The House of Cards public domain image",
+      "Jean-Baptiste-Siméon Chardin The House of Cards Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 9,
+    "artist": "Jean-Baptiste-Siméon Chardin",
+    "title": "Still Life with Copper Pot",
+    "year": "18th c.",
+    "fitReason": "domestic object silence",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Jean-Baptiste-Siméon Chardin Still Life with Copper Pot public domain image",
+      "Jean-Baptiste-Siméon Chardin Still Life with Copper Pot Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 10,
+    "artist": "William Merritt Chase",
+    "title": "Interior of the Artist’s Studio",
+    "year": "1880s",
+    "fitReason": "room as memory field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "William Merritt Chase Interior of the Artist’s Studio public domain image",
+      "William Merritt Chase Interior of the Artist’s Studio Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 11,
+    "artist": "Edmund Charles Tarbell",
+    "title": "In the Orchard / interior women",
+    "year": "1890s",
+    "fitReason": "soft domestic light",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Edmund Charles Tarbell In the Orchard / interior women public domain image",
+      "Edmund Charles Tarbell In the Orchard / interior women Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 12,
+    "artist": "Berthe Morisot",
+    "title": "The Cradle",
+    "year": "1872",
+    "fitReason": "intimate hush; watch central figure",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Berthe Morisot The Cradle public domain image",
+      "Berthe Morisot The Cradle Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 13,
+    "artist": "Mary Cassatt",
+    "title": "Woman with a Pearl Necklace in a Loge",
+    "year": "1879",
+    "fitReason": "public/private threshold",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Mary Cassatt Woman with a Pearl Necklace in a Loge public domain image",
+      "Mary Cassatt Woman with a Pearl Necklace in a Loge Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 14,
+    "artist": "Édouard Vuillard",
+    "title": "Interior, Mother and Sister of the Artist",
+    "year": "1893",
+    "fitReason": "patterned room; rights verify",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Édouard Vuillard Interior, Mother and Sister of the Artist public domain image",
+      "Édouard Vuillard Interior, Mother and Sister of the Artist Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 15,
+    "artist": "Pierre Bonnard",
+    "title": "Dining Room in the Country",
+    "year": "1913",
+    "fitReason": "warm interior; rights verify",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Pierre Bonnard Dining Room in the Country public domain image",
+      "Pierre Bonnard Dining Room in the Country Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 16,
+    "artist": "Gwen John",
+    "title": "A Corner of the Artist’s Room",
+    "year": "1900s",
+    "fitReason": "quiet room; rights verify",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Gwen John A Corner of the Artist’s Room public domain image",
+      "Gwen John A Corner of the Artist’s Room Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 17,
+    "artist": "Henri Fantin-Latour",
+    "title": "Still Life with Flowers",
+    "year": "19th c.",
+    "fitReason": "bedroom/neo-soul stillness",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Henri Fantin-Latour Still Life with Flowers public domain image",
+      "Henri Fantin-Latour Still Life with Flowers Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 18,
+    "artist": "Raphaelle Peale",
+    "title": "Still Life with Cake",
+    "year": "1818",
+    "fitReason": "domestic tabletop field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Raphaelle Peale Still Life with Cake public domain image",
+      "Raphaelle Peale Still Life with Cake Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 19,
+    "artist": "John Singer Sargent",
+    "title": "An Interior in Venice",
+    "year": "1898",
+    "fitReason": "dark room and distant figures",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "John Singer Sargent An Interior in Venice public domain image",
+      "John Singer Sargent An Interior in Venice Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "interior_reverie",
+    "rank": 20,
+    "artist": "James McNeill Whistler",
+    "title": "Harmony in Green and Rose: The Music Room",
+    "year": "1860–61",
+    "fitReason": "interior as tonal composition",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "James McNeill Whistler Harmony in Green and Rose: The Music Room public domain image",
+      "James McNeill Whistler Harmony in Green and Rose: The Music Room Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 1,
+    "artist": "Mikalojus Čiurlionis",
+    "title": "Sonata of the Stars",
+    "year": "1908",
+    "fitReason": "proto-cosmic abstraction; verify source",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Mikalojus Čiurlionis Sonata of the Stars public domain image",
+      "Mikalojus Čiurlionis Sonata of the Stars Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 2,
+    "artist": "Mikalojus Čiurlionis",
+    "title": "Creation of the World cycle",
+    "year": "1905–06",
+    "fitReason": "speculative landscape/void",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Mikalojus Čiurlionis Creation of the World cycle public domain image",
+      "Mikalojus Čiurlionis Creation of the World cycle Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 3,
+    "artist": "Mikalojus Čiurlionis",
+    "title": "The Sea Sonata",
+    "year": "1908",
+    "fitReason": "music/title bridge to abstract field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Mikalojus Čiurlionis The Sea Sonata public domain image",
+      "Mikalojus Čiurlionis The Sea Sonata Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 4,
+    "artist": "Odilon Redon",
+    "title": "The Eye Like a Strange Balloon",
+    "year": "1882",
+    "fitReason": "deep symbolic void",
+    "status": "downloaded_v0_2",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Odilon Redon The Eye Like a Strange Balloon public domain image",
+      "Odilon Redon The Eye Like a Strange Balloon Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "hypermodern_void-commons-redon-eye-like-a-strange-balloon",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:To_Edgar_Poe_(The_Eye,_Like_a_Strange_Balloon,_Mounts_toward_Infinity)_(A_Edgar_Poe_(L%27oeil,_comme_un_ballon_bizarre_se_dirige_vers_l%27infini))_LACMA_AC1997.14.1.1.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 5,
+    "artist": "Odilon Redon",
+    "title": "Noir charcoal dream plates",
+    "year": "1880s",
+    "fitReason": "dark speculative field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Odilon Redon Noir charcoal dream plates public domain image",
+      "Odilon Redon Noir charcoal dream plates Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 6,
+    "artist": "Anna Atkins",
+    "title": "Cyanotype algae plates",
+    "year": "1843–53",
+    "fitReason": "clean blue scientific abstraction",
+    "status": "downloaded_v0_2",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Anna Atkins Cyanotype algae plates public domain image",
+      "Anna Atkins Cyanotype algae plates Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "hypermodern_void-commons-anna-atkins-algae-cyanotype",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Anna_Atkins_algae_cyanotype.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 7,
+    "artist": "Ernst Haeckel",
+    "title": "Radiolaria plates",
+    "year": "1899–1904",
+    "fitReason": "organic geometric void",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Ernst Haeckel Radiolaria plates public domain image",
+      "Ernst Haeckel Radiolaria plates Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 8,
+    "artist": "Ernst Haeckel",
+    "title": "Discomedusae plate",
+    "year": "1899–1904",
+    "fitReason": "deep marine future",
+    "status": "downloaded_v0_2",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Ernst Haeckel Discomedusae plate public domain image",
+      "Ernst Haeckel Discomedusae plate Met AIC Rijksmuseum NGA Cleveland"
+    ],
+    "manifestId": "hypermodern_void-commons-haeckel-discomedusae-8",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Haeckel_Discomedusae_8.jpg",
+    "license": "Public Domain"
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 9,
+    "artist": "August Strindberg",
+    "title": "Celestographs",
+    "year": "1894",
+    "fitReason": "proto-photographic cosmos",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "August Strindberg Celestographs public domain image",
+      "August Strindberg Celestographs Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 10,
+    "artist": "Étienne-Jules Marey",
+    "title": "Smoke trail studies",
+    "year": "1901",
+    "fitReason": "motion, wave, scientific air",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Étienne-Jules Marey Smoke trail studies public domain image",
+      "Étienne-Jules Marey Smoke trail studies Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 11,
+    "artist": "Étienne-Jules Marey",
+    "title": "Chronophotographic plates",
+    "year": "1880s",
+    "fitReason": "body/motion as abstract signal",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Étienne-Jules Marey Chronophotographic plates public domain image",
+      "Étienne-Jules Marey Chronophotographic plates Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 12,
+    "artist": "Eadweard Muybridge",
+    "title": "Animal Locomotion plates",
+    "year": "1887",
+    "fitReason": "sequence and waveform logic",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Eadweard Muybridge Animal Locomotion plates public domain image",
+      "Eadweard Muybridge Animal Locomotion plates Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 13,
+    "artist": "NASA",
+    "title": "Hubble star fields",
+    "year": "modern public-domain science image",
+    "fitReason": "use as non-art future field",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "NASA Hubble star fields public domain image",
+      "NASA Hubble star fields Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 14,
+    "artist": "NASA",
+    "title": "Lunar surface / crater imagery",
+    "year": "public-domain science image",
+    "fitReason": "quiet future geology",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "NASA Lunar surface / crater imagery public domain image",
+      "NASA Lunar surface / crater imagery Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 15,
+    "artist": "USGS",
+    "title": "Topographic map textures",
+    "year": "public-domain data image",
+    "fitReason": "geometric terrain void",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "USGS Topographic map textures public domain image",
+      "USGS Topographic map textures Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 16,
+    "artist": "NOAA",
+    "title": "Cloud satellite imagery",
+    "year": "public-domain science image",
+    "fitReason": "soft atmosphere abstraction",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "NOAA Cloud satellite imagery public domain image",
+      "NOAA Cloud satellite imagery Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 17,
+    "artist": "Smithsonian",
+    "title": "Microscope / glass plate science imagery",
+    "year": "public-domain where available",
+    "fitReason": "deep archival science",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Smithsonian Microscope / glass plate science imagery public domain image",
+      "Smithsonian Microscope / glass plate science imagery Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 18,
+    "artist": "British Library",
+    "title": "Astronomy diagrams from old books",
+    "year": "public domain scans",
+    "fitReason": "old future diagrams",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "British Library Astronomy diagrams from old books public domain image",
+      "British Library Astronomy diagrams from old books Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 19,
+    "artist": "Public Domain Review",
+    "title": "Scientific plates: light/sound/waves",
+    "year": "public-domain scan source",
+    "fitReason": "waveform-adjacent imagery",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Public Domain Review Scientific plates: light/sound/waves public domain image",
+      "Public Domain Review Scientific plates: light/sound/waves Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  },
+  {
+    "bucket": "hypermodern_void",
+    "rank": 20,
+    "artist": "Manual generated",
+    "title": "Murmur spectral field studies",
+    "year": "internal",
+    "fitReason": "self-made clean abstract backgrounds",
+    "status": "candidate_not_downloaded",
+    "rightsStatus": "to_verify_before_download",
+    "suggestedSearchQueries": [
+      "Manual generated Murmur spectral field studies public domain image",
+      "Manual generated Murmur spectral field studies Met AIC Rijksmuseum NGA Cleveland"
+    ]
+  }
+]

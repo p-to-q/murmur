@@ -53,6 +53,30 @@ const labelVariants = {
   }),
 };
 
+function splitTitleForCover(title: string) {
+  const words = title.trim().split(/\s+/).filter(Boolean);
+
+  if (words.length <= 1 || title.length <= 18) {
+    return [title];
+  }
+
+  const midpoint = title.length / 2;
+  let bestSplit = 1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let i = 1; i < words.length; i += 1) {
+    const firstLineLength = words.slice(0, i).join(" ").length;
+    const distance = Math.abs(firstLineLength - midpoint);
+
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestSplit = i;
+    }
+  }
+
+  return [words.slice(0, bestSplit).join(" "), words.slice(bestSplit).join(" ")];
+}
+
 export function SongCard({
   id,
   title,
@@ -72,6 +96,7 @@ export function SongCard({
   const seed = hashString(id);
   const rand = mulberry32(seed);
   const labelRotation = (rand() - 0.5) * 4; // -2 to 2 degrees
+  const titleLines = splitTitleForCover(title);
 
   return (
     <motion.div
@@ -123,16 +148,38 @@ export function SongCard({
             className="absolute bottom-3 left-3 right-3 flex items-center justify-center"
             style={{ transform: `rotate(${labelRotation}deg)` }}
           >
-            <span
-              className="font-serif-italic text-[#1A1A1A] text-[14px] md:text-[16px] leading-tight line-clamp-2 break-words text-center px-2"
-              style={{
-                WebkitTextStroke: "6px white",
-                paintOrder: "stroke fill",
-                filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.10)) blur(0.3px)",
-              } as React.CSSProperties}
+            <svg
+              aria-label={title}
+              className="h-[42px] w-full overflow-visible px-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.10)]"
+              role="img"
+              viewBox="0 0 260 48"
             >
-              {title}
-            </span>
+              {titleLines.map((line, lineIndex) => {
+                const isMultiLine = titleLines.length > 1;
+                const y = isMultiLine ? 18 + lineIndex * 20 : 29;
+                const fontSize = isMultiLine ? 17 : 20;
+
+                return (
+                  <text
+                    key={`${line}-${lineIndex}`}
+                    className="font-serif-italic"
+                    dominantBaseline="middle"
+                    fill="#1A1A1A"
+                    fontSize={fontSize}
+                    paintOrder="stroke fill"
+                    stroke="rgba(255,255,255,0.96)"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    strokeWidth="6"
+                    textAnchor="middle"
+                    x="130"
+                    y={y}
+                  >
+                    {line}
+                  </text>
+                );
+              })}
+            </svg>
           </motion.div>
         </div>
 

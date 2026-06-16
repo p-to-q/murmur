@@ -48,8 +48,16 @@ export interface VisualArtwork {
   source: string;
   sourceUrl: string;
   imagePath: string;
+  backgroundImagePath?: string;
   license: "CC0" | "Public Domain";
   crop: VisualArtworkCrop;
+  renderTreatment?: {
+    intent?: string;
+    cropFormat?: string;
+    recommendedOverlay?: number;
+    contrast?: string;
+    grain?: string;
+  };
 }
 
 export interface VisualFacets {

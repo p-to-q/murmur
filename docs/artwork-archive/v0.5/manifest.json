@@ -1,0 +1,4123 @@
+[
+  {
+    "bucket": "luminist_air",
+    "title": "Eaton’s Neck, Long Island",
+    "artist": "John Frederick Kensett",
+    "year": "1872",
+    "source": "met",
+    "sourceId": "11307",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11307",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/11307/36822/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / public domain image.",
+    "tags": [
+      "luminism",
+      "shore",
+      "still water",
+      "low horizon",
+      "gray blue",
+      "quiet"
+    ],
+    "genreWeights": {
+      "ambient": 2.8,
+      "solo piano": 2.5,
+      "music box": 1.8,
+      "guzheng": 1.2
+    },
+    "moodWeights": {
+      "serene": 2.8,
+      "melancholic": 2.0,
+      "weightless": 2.2,
+      "cozy": 0.8
+    },
+    "energyRange": [
+      0.05,
+      0.5
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "none",
+    "backgroundFit": 0.93,
+    "crop": {
+      "x": 0.5,
+      "y": 0.55,
+      "scale": 1.03
+    },
+    "curatorNote": "Almost no event, just air and water; ideal as a low-energy field behind waveform UI.",
+    "imagePath": "/artworks/luminist_air/met-11307-eatons-neck-long-island.jpg",
+    "id": "luminist_air-met-11307",
+    "palette": [
+      "#8E9588",
+      "#8F968A",
+      "#474231",
+      "#85856E",
+      "#A2A291"
+    ],
+    "originalFilename": "kensett.jpg",
+    "width": 1200,
+    "height": 579,
+    "backgroundImagePath": "/background_ready/luminist_air/met-11307-eatons-neck-long-island-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "luminist_air-met-11309",
+    "bucket": "luminist_air",
+    "title": "Gathering Storm on Long Island Sound",
+    "artist": "John Frederick Kensett",
+    "year": "1872",
+    "source": "met",
+    "sourceId": "11309",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11309",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/11309/38102/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "luminism",
+      "storm",
+      "trees",
+      "sound",
+      "brooding air",
+      "coast"
+    ],
+    "genreWeights": {
+      "ambient": 2.0,
+      "solo piano": 1.8,
+      "post-rock": 1.4
+    },
+    "moodWeights": {
+      "brooding": 2.2,
+      "melancholic": 2.1,
+      "serene": 1.7,
+      "mysterious": 1.5
+    },
+    "energyRange": [
+      0.2,
+      0.68
+    ],
+    "composition": "center_mass",
+    "figurePresence": "none",
+    "backgroundFit": 0.82,
+    "crop": {
+      "x": 0.48,
+      "y": 0.5,
+      "scale": 1.08
+    },
+    "curatorNote": "A darker Kensett for rainy low-energy tracks and suspended tension.",
+    "imagePath": "/artworks/luminist_air/met-11309-gathering-storm-long-island-sound.jpg",
+    "originalFilename": "met-11309-gathering-storm-long-island-sound.jpg",
+    "palette": [
+      "#443325",
+      "#A49986",
+      "#B6A895",
+      "#7E6F56",
+      "#C9B6A1"
+    ],
+    "width": 930,
+    "height": 1200,
+    "backgroundImagePath": "/background_ready/luminist_air/met-11309-gathering-storm-long-island-sound-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "luminist_air-met-11311",
+    "bucket": "luminist_air",
+    "title": "Lake George",
+    "artist": "John Frederick Kensett",
+    "year": "1869",
+    "source": "met",
+    "sourceId": "11311",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11311",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/11311/34368/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "luminism",
+      "lake",
+      "mountain",
+      "still water",
+      "low horizon",
+      "serene"
+    ],
+    "genreWeights": {
+      "ambient": 2.7,
+      "solo piano": 2.4,
+      "music box": 1.6,
+      "folk": 1.0
+    },
+    "moodWeights": {
+      "serene": 2.8,
+      "weightless": 2.0,
+      "melancholic": 1.5
+    },
+    "energyRange": [
+      0.08,
+      0.55
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "none",
+    "backgroundFit": 0.91,
+    "crop": {
+      "x": 0.5,
+      "y": 0.55,
+      "scale": 1.04
+    },
+    "curatorNote": "Broad lake air and mountain haze; a quiet sleeve field for low-energy pieces.",
+    "imagePath": "/artworks/luminist_air/met-11311-lake-george.jpg",
+    "originalFilename": "met-11311-lake-george.jpg",
+    "palette": [
+      "#4B3E2A",
+      "#88816C",
+      "#AFA994",
+      "#C0B9A5",
+      "#CCC6B5"
+    ],
+    "width": 1200,
+    "height": 811,
+    "backgroundImagePath": "/background_ready/luminist_air/met-11311-lake-george-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "luminist_air-met-11314",
+    "bucket": "luminist_air",
+    "title": "Lake George, Free Study",
+    "artist": "John Frederick Kensett",
+    "year": "1872",
+    "source": "met",
+    "sourceId": "11314",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11314",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/11314/36818/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "luminism",
+      "lake",
+      "free study",
+      "turquoise",
+      "tiny boat",
+      "air"
+    ],
+    "genreWeights": {
+      "ambient": 2.6,
+      "solo piano": 2.4,
+      "guzheng": 1.2,
+      "folk": 1.0
+    },
+    "moodWeights": {
+      "serene": 2.7,
+      "weightless": 2.2,
+      "melancholic": 1.4
+    },
+    "energyRange": [
+      0.08,
+      0.52
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.9,
+    "crop": {
+      "x": 0.52,
+      "y": 0.52,
+      "scale": 1.05
+    },
+    "curatorNote": "A spare lake study with enough openness to sit behind title and waveform.",
+    "imagePath": "/artworks/luminist_air/met-11314-lake-george-free-study.jpg",
+    "originalFilename": "met-11314-lake-george-free-study.jpg",
+    "palette": [
+      "#5B7E78",
+      "#B0B8BC",
+      "#7A938F",
+      "#C1B9B3",
+      "#CAC1BA"
+    ],
+    "width": 1200,
+    "height": 829,
+    "backgroundImagePath": "/background_ready/luminist_air/met-11314-lake-george-free-study-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "luminist_air-met-11315",
+    "bucket": "luminist_air",
+    "title": "Lake George, New York",
+    "artist": "John Frederick Kensett",
+    "year": "1872",
+    "source": "met",
+    "sourceId": "11315",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11315",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/11315/38112/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "luminism",
+      "lake",
+      "mist",
+      "monochrome",
+      "atmospheric perspective"
+    ],
+    "genreWeights": {
+      "ambient": 2.8,
+      "solo piano": 2.2,
+      "lullaby": 1.4
+    },
+    "moodWeights": {
+      "serene": 2.9,
+      "weightless": 2.3,
+      "melancholic": 1.6
+    },
+    "energyRange": [
+      0.05,
+      0.45
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "none",
+    "backgroundFit": 0.86,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.06
+    },
+    "curatorNote": "Nearly monochrome lake air; very usable when the song wants low emotional pressure.",
+    "imagePath": "/artworks/luminist_air/met-11315-lake-george-new-york.jpg",
+    "originalFilename": "met-11315-lake-george-new-york.jpg",
+    "palette": [
+      "#ABABAB",
+      "#949494",
+      "#444444",
+      "#B2B2B2",
+      "#BBBBBB"
+    ],
+    "width": 1200,
+    "height": 745,
+    "backgroundImagePath": "/background_ready/luminist_air/met-11315-lake-george-new-york-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "luminist_air-met-11325",
+    "bucket": "luminist_air",
+    "title": "Sunset on the Sea",
+    "artist": "John Frederick Kensett",
+    "year": "1872",
+    "source": "met",
+    "sourceId": "11325",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11325",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/11325/43367/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "luminism",
+      "sunset",
+      "sea",
+      "horizon",
+      "pure light",
+      "minimal"
+    ],
+    "genreWeights": {
+      "ambient": 2.5,
+      "solo piano": 2.2,
+      "dream pop": 1.6
+    },
+    "moodWeights": {
+      "serene": 2.7,
+      "starlit": 1.9,
+      "weightless": 2.0,
+      "glowing": 2.0
+    },
+    "energyRange": [
+      0.08,
+      0.58
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "none",
+    "backgroundFit": 0.94,
+    "crop": {
+      "x": 0.5,
+      "y": 0.48,
+      "scale": 1.03
+    },
+    "curatorNote": "A pure horizon field: almost nothing happens, which is why it works.",
+    "imagePath": "/artworks/luminist_air/met-11325-sunset-on-the-sea.jpg",
+    "originalFilename": "met-11325-sunset-on-the-sea.jpg",
+    "palette": [
+      "#7B6749",
+      "#967346",
+      "#564E37",
+      "#B67931",
+      "#BF8633"
+    ],
+    "width": 1200,
+    "height": 818,
+    "backgroundImagePath": "/background_ready/luminist_air/met-11325-sunset-on-the-sea-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "sublime_terrain",
+    "title": "Alaskan Coast Range",
+    "artist": "Albert Bierstadt",
+    "year": "1889",
+    "source": "manual",
+    "sourceId": "saam-1967.136.7",
+    "sourceCollection": "Smithsonian American Art Museum",
+    "sourceUrl": "https://americanart.si.edu/artwork/alaskan-coast-range-2058",
+    "downloadUrl": "https://ids.si.edu/ids/deliveryService?id=SAAM-1967.136.7_1&max=960",
+    "license": "Public Domain",
+    "rightsNote": "Smithsonian American Art Museum page states the media is in the public domain.",
+    "tags": [
+      "alaska",
+      "mountain",
+      "lake",
+      "glacier",
+      "hudson river school",
+      "sublime"
+    ],
+    "genreWeights": {
+      "cinematic": 2.8,
+      "orchestral": 2.5,
+      "post-rock": 2.2,
+      "ambient": 1.2
+    },
+    "moodWeights": {
+      "triumphant": 2.2,
+      "mysterious": 2.0,
+      "starlit": 1.4,
+      "serene": 1.1
+    },
+    "energyRange": [
+      0.42,
+      0.95
+    ],
+    "composition": "deep_perspective",
+    "figurePresence": "none",
+    "backgroundFit": 0.83,
+    "crop": {
+      "x": 0.5,
+      "y": 0.54,
+      "scale": 1.04
+    },
+    "curatorNote": "A small song set against huge terrain; the core Cursor-like “interface before history” feeling.",
+    "imagePath": "/artworks/sublime_terrain/saam-1967-136-7-alaskan-coast-range.jpg",
+    "id": "sublime_terrain-manual-saam-1967.136.7",
+    "palette": [
+      "#757377",
+      "#8A8483",
+      "#5D5553",
+      "#A9A39C",
+      "#B3AB9D"
+    ],
+    "originalFilename": "bierstadt.jpg",
+    "width": 960,
+    "height": 680,
+    "backgroundImagePath": "/background_ready/sublime_terrain/saam-1967-136-7-alaskan-coast-range-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "sublime_terrain-met-10154",
+    "bucket": "sublime_terrain",
+    "title": "The Rocky Mountains, Lander’s Peak",
+    "artist": "Albert Bierstadt",
+    "year": "1863",
+    "source": "met",
+    "sourceId": "10154",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/10154",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/10154/34358/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "rocky mountains",
+      "frontier",
+      "lake",
+      "waterfall",
+      "large scale",
+      "sublime"
+    ],
+    "genreWeights": {
+      "cinematic": 2.8,
+      "orchestral": 2.5,
+      "post-rock": 2.1
+    },
+    "moodWeights": {
+      "triumphant": 2.3,
+      "glowing": 1.8,
+      "mysterious": 1.5
+    },
+    "energyRange": [
+      0.5,
+      0.98
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.74,
+    "crop": {
+      "x": 0.5,
+      "y": 0.48,
+      "scale": 1.08
+    },
+    "curatorNote": "Canonical and bold, so use sparingly; strong for cinematic peaks and high-energy orchestral outputs.",
+    "imagePath": "/artworks/sublime_terrain/met-10154-rocky-mountains-landers-peak.jpg",
+    "originalFilename": "met-10154-rocky-mountains-landers-peak.jpg",
+    "width": 1200,
+    "height": 719,
+    "palette": [
+      "#5F532D",
+      "#363322",
+      "#BCD4DB",
+      "#D8DDD8",
+      "#A0A7A5"
+    ],
+    "backgroundImagePath": "/background_ready/sublime_terrain/met-10154-rocky-mountains-landers-peak-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "sublime_terrain-met-10481",
+    "bucket": "sublime_terrain",
+    "title": "Heart of the Andes",
+    "artist": "Frederic Edwin Church",
+    "year": "1859",
+    "source": "met",
+    "sourceId": "10481",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/10481",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/10481/33835/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "hudson river school",
+      "andes",
+      "mountain",
+      "waterfall",
+      "botanical detail",
+      "sublime",
+      "panorama"
+    ],
+    "genreWeights": {
+      "cinematic": 2.9,
+      "orchestral": 2.7,
+      "post-rock": 2.2,
+      "ambient": 1.2
+    },
+    "moodWeights": {
+      "triumphant": 2.2,
+      "mysterious": 1.8,
+      "glowing": 1.8,
+      "serene": 1.2
+    },
+    "energyRange": [
+      0.48,
+      0.98
+    ],
+    "composition": "center_mass",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.76,
+    "crop": {
+      "x": 0.5,
+      "y": 0.52,
+      "scale": 1.08
+    },
+    "curatorNote": "Dense but vast; good for songs that need expedition-scale lift without a modern fantasy look.",
+    "imagePath": "/artworks/sublime_terrain/met-10481-heart-of-the-andes.jpg",
+    "originalFilename": "met-10481-heart-of-the-andes.jpg",
+    "width": 1200,
+    "height": 661,
+    "palette": [
+      "#B6B8B7",
+      "#392A0E",
+      "#674F22",
+      "#846E42",
+      "#52441C"
+    ],
+    "backgroundImagePath": "/background_ready/sublime_terrain/met-10481-heart-of-the-andes-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "sublime_terrain-met-10480",
+    "bucket": "sublime_terrain",
+    "title": "The Aegean Sea",
+    "artist": "Frederic Edwin Church",
+    "year": "ca. 1877",
+    "source": "met",
+    "sourceId": "10480",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/10480",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/10480/35016/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "ruins",
+      "rainbow",
+      "sea",
+      "ancient landscape",
+      "storm light",
+      "sublime"
+    ],
+    "genreWeights": {
+      "cinematic": 2.4,
+      "orchestral": 2.1,
+      "post-rock": 1.7,
+      "ambient electronic": 1.5
+    },
+    "moodWeights": {
+      "mysterious": 2.1,
+      "glowing": 2.0,
+      "starlit": 1.7,
+      "brooding": 1.4
+    },
+    "energyRange": [
+      0.38,
+      0.88
+    ],
+    "composition": "diagonal",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.8,
+    "crop": {
+      "x": 0.48,
+      "y": 0.52,
+      "scale": 1.07
+    },
+    "curatorNote": "Ancient weather, sea, and scale; a softer sublime field than the mountain panoramas.",
+    "imagePath": "/artworks/sublime_terrain/met-10480-aegean-sea.jpg",
+    "originalFilename": "met-10480-aegean-sea.jpg",
+    "width": 1200,
+    "height": 761,
+    "palette": [
+      "#27221E",
+      "#76654C",
+      "#45382A",
+      "#988366",
+      "#C1A37C"
+    ],
+    "backgroundImagePath": "/background_ready/sublime_terrain/met-10480-aegean-sea-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "sublime_terrain-met-10482",
+    "bucket": "sublime_terrain",
+    "title": "The Parthenon",
+    "artist": "Frederic Edwin Church",
+    "year": "1871",
+    "source": "met",
+    "sourceId": "10482",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/10482",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/10482/34224/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "ruins",
+      "ancient stone",
+      "gold light",
+      "architecture",
+      "terrain"
+    ],
+    "genreWeights": {
+      "cinematic": 2.0,
+      "orchestral": 1.8,
+      "ambient electronic": 1.3
+    },
+    "moodWeights": {
+      "glowing": 2.0,
+      "mysterious": 1.8,
+      "starlit": 1.2
+    },
+    "energyRange": [
+      0.35,
+      0.85
+    ],
+    "composition": "center_mass",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.7,
+    "crop": {
+      "x": 0.5,
+      "y": 0.52,
+      "scale": 1.08
+    },
+    "curatorNote": "A historical sublime rather than a wilderness sublime; useful for solemn, luminous cinematic pieces.",
+    "imagePath": "/artworks/sublime_terrain/met-10482-parthenon.jpg",
+    "originalFilename": "met-10482-parthenon.jpg",
+    "width": 1200,
+    "height": 742,
+    "palette": [
+      "#6C5638",
+      "#4C351F",
+      "#71705D",
+      "#788271",
+      "#BF9155"
+    ],
+    "backgroundImagePath": "/background_ready/sublime_terrain/met-10482-parthenon-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "sublime_terrain-met-12800",
+    "bucket": "sublime_terrain",
+    "title": "The Belated Party on Mansfield Mountain",
+    "artist": "Jerome B. Thompson",
+    "year": "1858",
+    "source": "met",
+    "sourceId": "12800",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/12800",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/12800/34256/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "mountain",
+      "vista",
+      "figures",
+      "sunset",
+      "new england",
+      "sublime"
+    ],
+    "genreWeights": {
+      "cinematic": 2.0,
+      "orchestral": 1.8,
+      "folk": 1.5,
+      "post-rock": 1.6
+    },
+    "moodWeights": {
+      "nostalgic": 2.0,
+      "serene": 1.8,
+      "triumphant": 1.4
+    },
+    "energyRange": [
+      0.3,
+      0.72
+    ],
+    "composition": "diagonal",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.69,
+    "crop": {
+      "x": 0.54,
+      "y": 0.5,
+      "scale": 1.1
+    },
+    "curatorNote": "More human than the other sublime pieces; useful for songs with folk memory inside a large landscape.",
+    "imagePath": "/artworks/sublime_terrain/met-12800-belated-party-mansfield-mountain.jpg",
+    "originalFilename": "met-12800-belated-party-mansfield-mountain.jpg",
+    "width": 1200,
+    "height": 725,
+    "palette": [
+      "#362C28",
+      "#D2C6BC",
+      "#6A5B46",
+      "#B7A99C",
+      "#E3D5C2"
+    ],
+    "backgroundImagePath": "/background_ready/sublime_terrain/met-12800-belated-party-mansfield-mountain-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "sublime_terrain-met-10497",
+    "bucket": "sublime_terrain",
+    "title": "View from Mount Holyoke, Northampton, Massachusetts, after a Thunderstorm—The Oxbow",
+    "artist": "Thomas Cole",
+    "year": "1836",
+    "source": "met",
+    "sourceId": "10497",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/10497",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/10497/1655152/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "storm",
+      "river",
+      "wilderness",
+      "scale",
+      "american landscape",
+      "sublime"
+    ],
+    "genreWeights": {
+      "cinematic": 2.8,
+      "orchestral": 2.5,
+      "post-rock": 2.1
+    },
+    "moodWeights": {
+      "triumphant": 1.8,
+      "mysterious": 2.0,
+      "brooding": 1.7
+    },
+    "energyRange": [
+      0.45,
+      0.95
+    ],
+    "composition": "diagonal",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.78,
+    "crop": {
+      "x": 0.52,
+      "y": 0.48,
+      "scale": 1.08
+    },
+    "curatorNote": "A weather-split terrain: huge enough for cinematic arcs without becoming a character portrait.",
+    "imagePath": "/artworks/sublime_terrain/met-10497-oxbow.jpg",
+    "originalFilename": "met-10497-oxbow.jpg",
+    "palette": [
+      "#A8A295",
+      "#2E2711",
+      "#817057",
+      "#474125",
+      "#5C4D30"
+    ],
+    "width": 1200,
+    "height": 820,
+    "backgroundImagePath": "/background_ready/sublime_terrain/met-10497-oxbow-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "tidal_mineral",
+    "title": "Venice, The Pink Cloud",
+    "artist": "Paul Signac",
+    "year": "1909",
+    "source": "manual",
+    "sourceId": "signac-venice-pink-cloud-1909",
+    "sourceCollection": "Wikimedia Commons / Google Art Project",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Paul_Signac_-_Venice,_The_Pink_Cloud,_1909_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/1/15/Paul_Signac_-_Venice%2C_The_Pink_Cloud%2C_1909_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons.",
+    "tags": [
+      "venice",
+      "water",
+      "boats",
+      "pointillism",
+      "pink",
+      "glowing"
+    ],
+    "genreWeights": {
+      "bossa nova": 2.0,
+      "surf rock": 1.6,
+      "dub": 1.2,
+      "breakbeat": 0.9,
+      "dream pop": 1.5
+    },
+    "moodWeights": {
+      "glowing": 2.8,
+      "serene": 1.7,
+      "playful": 1.4,
+      "hypnotic": 1.1
+    },
+    "energyRange": [
+      0.28,
+      0.78
+    ],
+    "composition": "allover",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.82,
+    "crop": {
+      "x": 0.5,
+      "y": 0.52,
+      "scale": 1.05
+    },
+    "curatorNote": "A dotted field of water and warm air; bright enough for motion, still restrained as a sleeve.",
+    "imagePath": "/artworks/tidal_mineral/manual-signac-venice-pink-cloud-1909.jpg",
+    "id": "tidal_mineral-manual-signac-venice-pink-cloud-1909",
+    "palette": [
+      "#BFB9BB",
+      "#D9CED1",
+      "#7D8C9A",
+      "#E2D7DA",
+      "#E8E0E0"
+    ],
+    "originalFilename": "signac_venice_pink_cloud.jpg",
+    "width": 3873,
+    "height": 3081,
+    "backgroundImagePath": "/background_ready/tidal_mineral/manual-signac-venice-pink-cloud-1909-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "tidal_mineral-met-11126",
+    "bucket": "tidal_mineral",
+    "title": "Maine Coast",
+    "artist": "Winslow Homer",
+    "year": "1896",
+    "source": "met",
+    "sourceId": "11126",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11126",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/11126/2027876/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "sea",
+      "rock",
+      "coast",
+      "mineral",
+      "wind"
+    ],
+    "genreWeights": {
+      "surf rock": 2.4,
+      "dub": 1.8,
+      "breakbeat": 1.8,
+      "bossa nova": 1.2
+    },
+    "moodWeights": {
+      "brooding": 1.8,
+      "serene": 1.6,
+      "hypnotic": 1.8
+    },
+    "energyRange": [
+      0.35,
+      0.88
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "none",
+    "backgroundFit": 0.83,
+    "crop": {
+      "x": 0.5,
+      "y": 0.53,
+      "scale": 1.06
+    },
+    "curatorNote": "Rock, tide, and gray water without postcard warmth.",
+    "imagePath": "/artworks/tidal_mineral/met-11126-maine-coast.jpg",
+    "originalFilename": "met-11126-maine-coast.jpg",
+    "palette": [
+      "#17110F",
+      "#6B6C63",
+      "#4E4F47",
+      "#7F7D71",
+      "#9E9884"
+    ],
+    "width": 1200,
+    "height": 824,
+    "backgroundImagePath": "/background_ready/tidal_mineral/met-11126-maine-coast-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "tidal_mineral-met-11127",
+    "bucket": "tidal_mineral",
+    "title": "Moonlight, Wood Island Light",
+    "artist": "Winslow Homer",
+    "year": "1894",
+    "source": "met",
+    "sourceId": "11127",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11127",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/11127/44025/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "moonlight",
+      "sea",
+      "coast",
+      "nocturne",
+      "light",
+      "water"
+    ],
+    "genreWeights": {
+      "dub": 2.0,
+      "ambient electronic": 1.9,
+      "surf rock": 1.5,
+      "trip hop": 1.4
+    },
+    "moodWeights": {
+      "starlit": 2.4,
+      "serene": 2.0,
+      "mysterious": 1.8,
+      "brooding": 1.6
+    },
+    "energyRange": [
+      0.18,
+      0.68
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "none",
+    "backgroundFit": 0.88,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.05
+    },
+    "curatorNote": "A nocturne bridge between tidal mineral and night-city moods.",
+    "imagePath": "/artworks/tidal_mineral/met-11127-moonlight-wood-island-light.jpg",
+    "originalFilename": "met-11127-moonlight-wood-island-light.jpg",
+    "palette": [
+      "#3B3936",
+      "#464743",
+      "#20201F",
+      "#585C54",
+      "#89856F"
+    ],
+    "width": 1200,
+    "height": 912,
+    "backgroundImagePath": "/background_ready/tidal_mineral/met-11127-moonlight-wood-island-light-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "tidal_mineral",
+    "title": "Natural Bridge, Bermuda",
+    "artist": "Winslow Homer",
+    "year": "1901",
+    "source": "met",
+    "sourceId": "11129",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11129",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/11129/2030420/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / public domain image.",
+    "tags": [
+      "watercolor",
+      "bermuda",
+      "rock",
+      "coast",
+      "mineral",
+      "glowing"
+    ],
+    "genreWeights": {
+      "surf rock": 2.6,
+      "dub": 2.0,
+      "bossa nova": 1.8,
+      "breakbeat": 1.2
+    },
+    "moodWeights": {
+      "glowing": 2.4,
+      "serene": 1.9,
+      "hypnotic": 1.4,
+      "mysterious": 1.0
+    },
+    "energyRange": [
+      0.32,
+      0.82
+    ],
+    "composition": "diagonal",
+    "figurePresence": "none",
+    "backgroundFit": 0.86,
+    "crop": {
+      "x": 0.48,
+      "y": 0.56,
+      "scale": 1.04
+    },
+    "curatorNote": "Rock, coast, watercolor force, and mineral water mood without beach-tourism softness.",
+    "imagePath": "/artworks/tidal_mineral/met-11129-natural-bridge-bermuda.jpg",
+    "id": "tidal_mineral-met-11129",
+    "palette": [
+      "#55878D",
+      "#BBB9A3",
+      "#48585A",
+      "#7B9995",
+      "#EADEC3"
+    ],
+    "originalFilename": "homer.png",
+    "width": 1200,
+    "height": 839,
+    "backgroundImagePath": "/background_ready/tidal_mineral/met-11129-natural-bridge-bermuda-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "tidal_mineral-met-11130",
+    "bucket": "tidal_mineral",
+    "title": "Northeaster",
+    "artist": "Winslow Homer",
+    "year": "1895; reworked by 1901",
+    "source": "met",
+    "sourceId": "11130",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11130",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/11130/34226/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "sea",
+      "rock",
+      "surf",
+      "foam",
+      "storm",
+      "mineral"
+    ],
+    "genreWeights": {
+      "surf rock": 2.8,
+      "breakbeat": 2.3,
+      "dub": 1.7,
+      "post-rock": 1.8
+    },
+    "moodWeights": {
+      "brooding": 2.2,
+      "hypnotic": 2.0,
+      "mysterious": 1.7
+    },
+    "energyRange": [
+      0.45,
+      0.95
+    ],
+    "composition": "diagonal",
+    "figurePresence": "none",
+    "backgroundFit": 0.8,
+    "crop": {
+      "x": 0.54,
+      "y": 0.5,
+      "scale": 1.08
+    },
+    "curatorNote": "Heavy surf and rock mass for high-pressure coastal rhythm.",
+    "imagePath": "/artworks/tidal_mineral/met-11130-northeaster.jpg",
+    "originalFilename": "met-11130-northeaster.jpg",
+    "palette": [
+      "#7B888D",
+      "#1F272C",
+      "#596B70",
+      "#A0ADB2",
+      "#C4CDD1"
+    ],
+    "width": 1200,
+    "height": 823,
+    "backgroundImagePath": "/background_ready/tidal_mineral/met-11130-northeaster-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "tidal_mineral-met-11138",
+    "bucket": "tidal_mineral",
+    "title": "Shore and Surf, Nassau",
+    "artist": "Winslow Homer",
+    "year": "1899",
+    "source": "met",
+    "sourceId": "11138",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11138",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/11138/2030419/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "watercolor",
+      "shore",
+      "surf",
+      "glowing water",
+      "rock"
+    ],
+    "genreWeights": {
+      "bossa nova": 2.1,
+      "dub": 1.8,
+      "surf rock": 2.0,
+      "afrobeat": 1.4
+    },
+    "moodWeights": {
+      "glowing": 2.3,
+      "serene": 1.8,
+      "hypnotic": 1.7
+    },
+    "energyRange": [
+      0.32,
+      0.82
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "none",
+    "backgroundFit": 0.86,
+    "crop": {
+      "x": 0.52,
+      "y": 0.54,
+      "scale": 1.05
+    },
+    "curatorNote": "Tropical water with mineral restraint; bright, but not vacation-coded.",
+    "imagePath": "/artworks/tidal_mineral/met-11138-shore-and-surf-nassau.jpg",
+    "originalFilename": "met-11138-shore-and-surf-nassau.jpg",
+    "palette": [
+      "#858E87",
+      "#3D4344",
+      "#616E6C",
+      "#90A6A0",
+      "#C4CBBF"
+    ],
+    "width": 1200,
+    "height": 844,
+    "backgroundImagePath": "/background_ready/tidal_mineral/met-11138-shore-and-surf-nassau-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "pastoral_memory-met-435988",
+    "bucket": "pastoral_memory",
+    "title": "Ville-d'Avray",
+    "artist": "Camille Corot",
+    "year": "1870",
+    "source": "met",
+    "sourceId": "435988",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/435988",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/435988/1964329/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "barbizon",
+      "pond",
+      "trees",
+      "pewter sky",
+      "soft memory"
+    ],
+    "genreWeights": {
+      "lo-fi": 2.2,
+      "folk": 2.0,
+      "dream pop": 1.8,
+      "solo piano": 1.6
+    },
+    "moodWeights": {
+      "nostalgic": 2.5,
+      "melancholic": 1.8,
+      "serene": 1.7
+    },
+    "energyRange": [
+      0.12,
+      0.6
+    ],
+    "composition": "center_mass",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.79,
+    "crop": {
+      "x": 0.48,
+      "y": 0.5,
+      "scale": 1.08
+    },
+    "curatorNote": "A dim pond memory with enough branches and haze to hold a lo-fi sleeve.",
+    "imagePath": "/artworks/pastoral_memory/met-435988-corot-ville-davray.jpg",
+    "originalFilename": "met-435988-corot-ville-davray.jpg",
+    "palette": [
+      "#444538",
+      "#797B6D",
+      "#292C21",
+      "#333225",
+      "#1A1A13"
+    ],
+    "width": 1200,
+    "height": 823,
+    "backgroundImagePath": "/background_ready/pastoral_memory/met-435988-corot-ville-davray-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "pastoral_memory-met-436083",
+    "bucket": "pastoral_memory",
+    "title": "A River Landscape with Storks",
+    "artist": "Charles-François Daubigny",
+    "year": "1864",
+    "source": "met",
+    "sourceId": "436083",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/436083",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/436083/2004253/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "barbizon",
+      "river",
+      "storks",
+      "trees",
+      "soft green",
+      "memory"
+    ],
+    "genreWeights": {
+      "lo-fi": 2.0,
+      "folk": 2.2,
+      "dream pop": 1.4,
+      "bluegrass": 1.3
+    },
+    "moodWeights": {
+      "nostalgic": 2.2,
+      "serene": 2.0,
+      "cozy": 1.5
+    },
+    "energyRange": [
+      0.12,
+      0.62
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.84,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.04
+    },
+    "curatorNote": "A soft green river field; the storks are rhythm, not subject.",
+    "imagePath": "/artworks/pastoral_memory/met-436083-daubigny-river-landscape-with-storks.jpg",
+    "originalFilename": "met-436083-daubigny-river-landscape-with-storks.jpg",
+    "palette": [
+      "#938E71",
+      "#25200F",
+      "#1D1C0D",
+      "#0F0C05",
+      "#403B22"
+    ],
+    "width": 1200,
+    "height": 663,
+    "backgroundImagePath": "/background_ready/pastoral_memory/met-436083-daubigny-river-landscape-with-storks-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "pastoral_memory-met-436081",
+    "bucket": "pastoral_memory",
+    "title": "Landscape on a River",
+    "artist": "Charles-François Daubigny",
+    "year": "1863",
+    "source": "met",
+    "sourceId": "436081",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/436081",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/436081/2004966/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "barbizon",
+      "river",
+      "village",
+      "flat sky",
+      "soft field"
+    ],
+    "genreWeights": {
+      "lo-fi": 2.1,
+      "folk": 2.0,
+      "dream pop": 1.6,
+      "bluegrass": 1.2
+    },
+    "moodWeights": {
+      "nostalgic": 2.3,
+      "serene": 1.9,
+      "cozy": 1.4
+    },
+    "energyRange": [
+      0.1,
+      0.58
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "none",
+    "backgroundFit": 0.86,
+    "crop": {
+      "x": 0.5,
+      "y": 0.52,
+      "scale": 1.03
+    },
+    "curatorNote": "Old river weather: low drama, strong background usability.",
+    "imagePath": "/artworks/pastoral_memory/met-436081-daubigny-landscape-on-a-river.jpg",
+    "originalFilename": "met-436081-daubigny-landscape-on-a-river.jpg",
+    "palette": [
+      "#1F1C10",
+      "#535039",
+      "#7B7B66",
+      "#9A9577",
+      "#A9A27F"
+    ],
+    "width": 1200,
+    "height": 680,
+    "backgroundImagePath": "/background_ready/pastoral_memory/met-436081-daubigny-landscape-on-a-river-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "pastoral_memory",
+    "title": "Haystack, Morning Snow Effect",
+    "artist": "Claude Monet",
+    "year": "1891",
+    "source": "manual",
+    "sourceId": "monet-haystack-morning-snow-effect",
+    "sourceCollection": "Museum of Fine Arts, Boston / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Claude_Monet,_Haystack,_Morning_Snow_Effect_(Meule,_Effet_de_Neige,_le_Matin),_1891,_oil_on_canvas,_65_x_92_cm,_Museum_of_Fine_Arts,_Boston.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/4/42/Claude_Monet%2C_Haystack%2C_Morning_Snow_Effect_%28Meule%2C_Effet_de_Neige%2C_le_Matin%29%2C_1891%2C_oil_on_canvas%2C_65_x_92_cm%2C_Museum_of_Fine_Arts%2C_Boston.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons.",
+    "tags": [
+      "snow",
+      "haystack",
+      "morning",
+      "field",
+      "soft",
+      "nostalgic"
+    ],
+    "genreWeights": {
+      "lo-fi": 2.3,
+      "folk": 1.8,
+      "dream pop": 1.9,
+      "solo piano": 1.3
+    },
+    "moodWeights": {
+      "nostalgic": 2.6,
+      "cozy": 1.8,
+      "bittersweet": 1.7,
+      "serene": 1.4
+    },
+    "energyRange": [
+      0.18,
+      0.64
+    ],
+    "composition": "center_mass",
+    "figurePresence": "none",
+    "backgroundFit": 0.8,
+    "crop": {
+      "x": 0.52,
+      "y": 0.55,
+      "scale": 1.05
+    },
+    "curatorNote": "Snow and grain reduced to a soft object-memory; good for quiet loops and pastoral haze.",
+    "imagePath": "/artworks/pastoral_memory/manual-monet-haystack-morning-snow-effect-1891.jpg",
+    "id": "pastoral_memory-manual-monet-haystack-morning-snow-effect",
+    "palette": [
+      "#73809D",
+      "#A9A4AA",
+      "#B8B3B8",
+      "#58515D",
+      "#C7C0C0"
+    ],
+    "originalFilename": "monet_haystack.jpg",
+    "width": 984,
+    "height": 694,
+    "backgroundImagePath": "/background_ready/pastoral_memory/manual-monet-haystack-morning-snow-effect-1891-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "pastoral_memory",
+    "title": "Woman Lying in the Dunes near Noordwijk",
+    "artist": "Jan Toorop",
+    "year": "1902",
+    "source": "manual",
+    "sourceId": "rawpixel-2681194",
+    "sourceCollection": "Rawpixel / original from Rijksmuseum",
+    "sourceUrl": "https://www.rawpixel.com/image/2681194/free-illustration-image-art-nouveau-woman-field",
+    "downloadUrl": "https://images.rawpixel.com/image_social_square/czNmcy1wcml2YXRlL3Jhd3BpeGVsX2ltYWdlcy93ZWJzaXRlX2NvbnRlbnQvbHIvcGRwcm9qZWN0NTliYXRjaDY3LTIwLXBsb3lfMS5qcGc.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Rawpixel page states Public Domain / CC0 license, original from Rijksmuseum.",
+    "tags": [
+      "dunes",
+      "reclining",
+      "field",
+      "pale",
+      "dream",
+      "pastoral",
+      "yellow green"
+    ],
+    "genreWeights": {
+      "dream pop": 2.5,
+      "lo-fi": 2.1,
+      "bedroom": 1.7,
+      "folk": 1.5
+    },
+    "moodWeights": {
+      "dreamy": 2.8,
+      "nostalgic": 1.9,
+      "bittersweet": 1.6,
+      "cozy": 1.2
+    },
+    "energyRange": [
+      0.08,
+      0.48
+    ],
+    "composition": "horizontal_recline",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.78,
+    "crop": {
+      "x": 0.52,
+      "y": 0.54,
+      "scale": 1.04
+    },
+    "curatorNote": "A body nearly dissolved into grass and pale air; intimate but not portrait-led.",
+    "imagePath": "/artworks/pastoral_memory/rawpixel-toorop-woman-lying-dunes-noordwijk-1902.jpg",
+    "id": "pastoral_memory-manual-rawpixel-2681194",
+    "palette": [
+      "#CCD09B",
+      "#B9BF7E",
+      "#D9DCAC",
+      "#D5DDD4",
+      "#E2E4D6"
+    ],
+    "originalFilename": "toorop_woman_dunes_noordwijk.jpg",
+    "width": 1000,
+    "height": 780,
+    "backgroundImagePath": "/background_ready/pastoral_memory/rawpixel-toorop-woman-lying-dunes-noordwijk-1902-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "pastoral_memory",
+    "title": "Lake Squam from Red Hill",
+    "artist": "William Trost Richards",
+    "year": "1874",
+    "source": "met",
+    "sourceId": "11897",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/11897",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/11897/32554/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / public domain image.",
+    "tags": [
+      "lake",
+      "hill",
+      "pastoral",
+      "luminism",
+      "memory",
+      "green"
+    ],
+    "genreWeights": {
+      "folk": 2.2,
+      "lo-fi": 2.0,
+      "dream pop": 1.5,
+      "bluegrass": 1.7
+    },
+    "moodWeights": {
+      "nostalgic": 2.5,
+      "serene": 1.9,
+      "cozy": 1.5,
+      "bittersweet": 1.3
+    },
+    "energyRange": [
+      0.16,
+      0.62
+    ],
+    "composition": "deep_perspective",
+    "figurePresence": "none",
+    "backgroundFit": 0.88,
+    "crop": {
+      "x": 0.5,
+      "y": 0.54,
+      "scale": 1.04
+    },
+    "curatorNote": "A lake remembered from a hill rather than visited; pastoral without postcard sweetness.",
+    "imagePath": "/artworks/pastoral_memory/met-11897-lake-squam-from-red-hill.jpg",
+    "id": "pastoral_memory-met-11897",
+    "palette": [
+      "#81786C",
+      "#A89C93",
+      "#4E4434",
+      "#B4AC9F",
+      "#C8BB9E"
+    ],
+    "originalFilename": "richards.jpg",
+    "width": 1200,
+    "height": 786,
+    "backgroundImagePath": "/background_ready/pastoral_memory/met-11897-lake-squam-from-red-hill-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "nocturne_metro-commons-pissarro-boulevard-montmartre-at-night",
+    "bucket": "nocturne_metro",
+    "title": "The Boulevard Montmartre at Night",
+    "artist": "Camille Pissarro",
+    "year": "1897",
+    "source": "commons",
+    "sourceId": "pissarro-boulevard-montmartre-at-night",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Camille_Pissarro,_The_Boulevard_Montmartre_at_Night,_1897.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/8/82/Camille_Pissarro%2C_The_Boulevard_Montmartre_at_Night%2C_1897.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons; original work is public domain.",
+    "tags": [
+      "night",
+      "boulevard",
+      "street lights",
+      "crowd",
+      "paris",
+      "wet glow"
+    ],
+    "genreWeights": {
+      "trip hop": 2.5,
+      "deep house": 2.4,
+      "city pop": 2.1,
+      "garage": 1.6
+    },
+    "moodWeights": {
+      "smoky": 2.5,
+      "starlit": 2.1,
+      "hypnotic": 1.9,
+      "playful": 1.2
+    },
+    "energyRange": [
+      0.42,
+      0.88
+    ],
+    "composition": "allover",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.86,
+    "crop": {
+      "x": 0.5,
+      "y": 0.52,
+      "scale": 1.07
+    },
+    "curatorNote": "Dense little lights and wet street motion; excellent for night-driving beats.",
+    "imagePath": "/artworks/nocturne_metro/commons-pissarro-boulevard-montmartre-at-night.jpg",
+    "originalFilename": "commons-pissarro-boulevard-montmartre-at-night.jpg",
+    "width": 2400,
+    "height": 1988,
+    "palette": [
+      "#302F3C",
+      "#181C31",
+      "#4B4443",
+      "#71644F",
+      "#958766"
+    ],
+    "backgroundImagePath": "/background_ready/nocturne_metro/commons-pissarro-boulevard-montmartre-at-night-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "nocturne_metro-commons-hassam-rainy-day-fifth-avenue",
+    "bucket": "nocturne_metro",
+    "title": "Rainy Day, Fifth Avenue",
+    "artist": "Childe Hassam",
+    "year": "1916",
+    "source": "commons",
+    "sourceId": "hassam-rainy-day-fifth-avenue",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Childe_Hassam_-_Rainy_Day,_Fifth_Avenue_-_y1942-62_-_Princeton_University_Art_Museum.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/0/0e/Childe_Hassam_-_Rainy_Day%2C_Fifth_Avenue_-_y1942-62_-_Princeton_University_Art_Museum.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons; original work is public domain.",
+    "tags": [
+      "rain",
+      "fifth avenue",
+      "flags",
+      "urban blur",
+      "wet street",
+      "blue red"
+    ],
+    "genreWeights": {
+      "city pop": 2.2,
+      "trip hop": 2.0,
+      "deep house": 1.8,
+      "lo-fi": 1.4
+    },
+    "moodWeights": {
+      "smoky": 2.1,
+      "nostalgic": 2.0,
+      "melancholic": 1.7,
+      "glowing": 1.3
+    },
+    "energyRange": [
+      0.28,
+      0.74
+    ],
+    "composition": "diagonal",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.79,
+    "crop": {
+      "x": 0.52,
+      "y": 0.5,
+      "scale": 1.1
+    },
+    "curatorNote": "Rain as blur and crowd texture; good for urban rain without literal window imagery.",
+    "imagePath": "/artworks/nocturne_metro/commons-hassam-rainy-day-fifth-avenue.jpg",
+    "originalFilename": "commons-hassam-rainy-day-fifth-avenue.jpg",
+    "width": 1682,
+    "height": 2000,
+    "palette": [
+      "#495259",
+      "#2E2E33",
+      "#687982",
+      "#809EA6",
+      "#A7C0BC"
+    ],
+    "backgroundImagePath": "/background_ready/nocturne_metro/commons-hassam-rainy-day-fifth-avenue-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "nocturne_metro",
+    "title": "Arrival of the Normandy Train, Gare Saint-Lazare",
+    "artist": "Claude Monet",
+    "year": "1877",
+    "source": "manual",
+    "sourceId": "monet-arrival-normandy-train",
+    "sourceCollection": "Art Institute of Chicago / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Claude_Monet_-_Arrival_of_the_Normandy_Train,_Gare_Saint-Lazare_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/f/f2/Claude_Monet_-_Arrival_of_the_Normandy_Train%2C_Gare_Saint-Lazare_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons.",
+    "tags": [
+      "train",
+      "station",
+      "smoke",
+      "industrial",
+      "blue green",
+      "motion"
+    ],
+    "genreWeights": {
+      "trip hop": 2.5,
+      "deep house": 1.9,
+      "garage": 1.7,
+      "techno": 1.5
+    },
+    "moodWeights": {
+      "smoky": 2.8,
+      "brooding": 2.1,
+      "hypnotic": 1.8,
+      "mysterious": 1.4
+    },
+    "energyRange": [
+      0.38,
+      0.92
+    ],
+    "composition": "center_mass",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.86,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.08
+    },
+    "curatorNote": "Steam, roof geometry, and blurred crowd movement: rain-city music without literal rain.",
+    "imagePath": "/artworks/nocturne_metro/manual-monet-arrival-normandy-train-gare-saint-lazare-1877.jpg",
+    "id": "nocturne_metro-manual-monet-arrival-normandy-train",
+    "palette": [
+      "#526B6D",
+      "#3C4D53",
+      "#6C8483",
+      "#8A9FA1",
+      "#B1BCBE"
+    ],
+    "originalFilename": "monet_normandy_train.jpg",
+    "width": 5890,
+    "height": 4418,
+    "backgroundImagePath": "/background_ready/nocturne_metro/manual-monet-arrival-normandy-train-gare-saint-lazare-1877-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "nocturne_metro-commons-cooper-broadway-from-post-office-wall-street",
+    "bucket": "nocturne_metro",
+    "title": "Broadway from the Post Office (Wall Street)",
+    "artist": "Colin Campbell Cooper",
+    "year": "ca. 1909",
+    "source": "commons",
+    "sourceId": "cooper-broadway-from-post-office-wall-street",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Colin_Campbell_Cooper,_Broadway_from_the_Post_Office_(Wall_Street).jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/6/67/Colin_Campbell_Cooper%2C_Broadway_from_the_Post_Office_%28Wall_Street%29.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons; original work is public domain.",
+    "tags": [
+      "skyscraper",
+      "wall street",
+      "smoke",
+      "city haze",
+      "vertical",
+      "crowd"
+    ],
+    "genreWeights": {
+      "city pop": 2.4,
+      "deep house": 1.8,
+      "trip hop": 1.7,
+      "synthwave": 1.4
+    },
+    "moodWeights": {
+      "smoky": 2.4,
+      "glowing": 1.8,
+      "brooding": 1.7
+    },
+    "energyRange": [
+      0.35,
+      0.86
+    ],
+    "composition": "center_mass",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.82,
+    "crop": {
+      "x": 0.5,
+      "y": 0.52,
+      "scale": 1.08
+    },
+    "curatorNote": "A hazy urban canyon that extends the Wall Street screenshot seed into a truer metro bucket.",
+    "imagePath": "/artworks/nocturne_metro/commons-cooper-broadway-from-post-office-wall-street.jpg",
+    "originalFilename": "commons-cooper-broadway-from-post-office-wall-street.jpg",
+    "width": 1612,
+    "height": 2400,
+    "palette": [
+      "#A9836C",
+      "#C9BA98",
+      "#4F5053",
+      "#675857",
+      "#846358"
+    ],
+    "backgroundImagePath": "/background_ready/nocturne_metro/commons-cooper-broadway-from-post-office-wall-street-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "nocturne_metro-commons-caillebotte-paris-street-rainy-day",
+    "bucket": "nocturne_metro",
+    "title": "Paris Street; Rainy Day",
+    "artist": "Gustave Caillebotte",
+    "year": "1877",
+    "source": "commons",
+    "sourceId": "caillebotte-paris-street-rainy-day",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gustave_Caillebotte_-_Paris_Street;_Rainy_Day_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/1/17/Gustave_Caillebotte_-_Paris_Street%3B_Rainy_Day_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons; original work is public domain.",
+    "tags": [
+      "rain",
+      "wet street",
+      "urban",
+      "umbrella",
+      "gray sky",
+      "paris"
+    ],
+    "genreWeights": {
+      "trip hop": 2.4,
+      "city pop": 2.1,
+      "deep house": 1.8,
+      "lo-fi": 1.5
+    },
+    "moodWeights": {
+      "smoky": 2.3,
+      "melancholic": 2.1,
+      "brooding": 1.8,
+      "serene": 1.3
+    },
+    "energyRange": [
+      0.28,
+      0.78
+    ],
+    "composition": "diagonal",
+    "figurePresence": "central",
+    "backgroundFit": 0.62,
+    "crop": {
+      "x": 0.49,
+      "y": 0.5,
+      "scale": 1.12
+    },
+    "curatorNote": "Iconic and foreground-heavy, so treat as calibration / low-frequency pick rather than default.",
+    "imagePath": "/artworks/nocturne_metro/commons-caillebotte-paris-street-rainy-day.jpg",
+    "originalFilename": "commons-caillebotte-paris-street-rainy-day.jpg",
+    "width": 2400,
+    "height": 1818,
+    "palette": [
+      "#ABA99F",
+      "#454540",
+      "#817D79",
+      "#C4C4B7",
+      "#E0DAC1"
+    ],
+    "backgroundImagePath": "/background_ready/nocturne_metro/commons-caillebotte-paris-street-rainy-day-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "nocturne_metro",
+    "title": "Eclipse of the Sun in Venice, July 6, 1842",
+    "artist": "Ippolito Caffi",
+    "year": "1842",
+    "source": "manual",
+    "sourceId": "caffi-eclipse-1842",
+    "sourceCollection": "Wikimedia Commons / original institution unknown",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Ippolito_Caffi,_Eclisse_di_sole_alle_Fondamenta_Nove_(1842).jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/5/5b/Ippolito_Caffi%2C_Eclisse_di_sole_alle_Fondamenta_Nove_%281842%29.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons.",
+    "tags": [
+      "eclipse",
+      "venice",
+      "water",
+      "nightlike",
+      "crowd",
+      "cosmic",
+      "nocturne"
+    ],
+    "genreWeights": {
+      "trip hop": 2.2,
+      "deep house": 1.8,
+      "ambient electronic": 2.1,
+      "city pop": 1.4
+    },
+    "moodWeights": {
+      "mysterious": 2.8,
+      "starlit": 2.4,
+      "brooding": 1.8,
+      "serene": 1.1
+    },
+    "energyRange": [
+      0.25,
+      0.78
+    ],
+    "composition": "diagonal",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.9,
+    "crop": {
+      "x": 0.5,
+      "y": 0.48,
+      "scale": 1.06
+    },
+    "curatorNote": "A public cosmic hush: dark water, tiny figures, and a cut of impossible light.",
+    "imagePath": "/artworks/nocturne_metro/manual-caffi-eclipse-sun-venice-1842.jpg",
+    "id": "nocturne_metro-manual-caffi-eclipse-1842",
+    "palette": [
+      "#A5AEB8",
+      "#232724",
+      "#657E8B",
+      "#475E66",
+      "#3D4949"
+    ],
+    "originalFilename": "caffi.jpg",
+    "width": 2988,
+    "height": 1628,
+    "backgroundImagePath": "/background_ready/nocturne_metro/manual-caffi-eclipse-sun-venice-1842-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "nocturne_metro-commons-whistler-nocturne-southampton-water",
+    "bucket": "nocturne_metro",
+    "title": "Nocturne: Blue and Gold—Southampton Water",
+    "artist": "James McNeill Whistler",
+    "year": "1872",
+    "source": "commons",
+    "sourceId": "whistler-nocturne-southampton-water",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:James_McNeill_Whistler_-_Nocturne-_Blue_and_Gold--Southampton_Water_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/9/9e/James_McNeill_Whistler_-_Nocturne-_Blue_and_Gold--Southampton_Water_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons; original work held by the Art Institute of Chicago.",
+    "tags": [
+      "nocturne",
+      "night",
+      "water",
+      "smoky",
+      "blue green",
+      "harbor"
+    ],
+    "genreWeights": {
+      "trip hop": 2.6,
+      "deep house": 2.1,
+      "city pop": 1.6,
+      "ambient electronic": 2.2
+    },
+    "moodWeights": {
+      "smoky": 2.7,
+      "brooding": 2.3,
+      "starlit": 2.2,
+      "serene": 1.7
+    },
+    "energyRange": [
+      0.22,
+      0.72
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "none",
+    "backgroundFit": 0.93,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.04
+    },
+    "curatorNote": "Wet blue-green silence for night drives, rain, and smoky beats.",
+    "imagePath": "/artworks/nocturne_metro/commons-whistler-nocturne-blue-and-gold-southampton-water.jpg",
+    "originalFilename": "commons-whistler-nocturne-blue-and-gold-southampton-water.jpg",
+    "palette": [
+      "#5B6252",
+      "#626B5A",
+      "#6A7361",
+      "#535849",
+      "#747D69"
+    ],
+    "width": 6001,
+    "height": 3969,
+    "backgroundImagePath": "/background_ready/nocturne_metro/commons-whistler-nocturne-blue-and-gold-southampton-water-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "nocturne_metro-commons-grimshaw-boar-lane-leeds",
+    "bucket": "nocturne_metro",
+    "title": "Boar Lane, Leeds",
+    "artist": "John Atkinson Grimshaw",
+    "year": "c. 1881",
+    "source": "commons",
+    "sourceId": "grimshaw-boar-lane-leeds",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:John_Atkinson_Grimshaw_(1836-1893)_-_Boar_Lane,_Leeds_-_LEEAG.PA.2000.0017_-_Leeds_Art_Gallery.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ae/John_Atkinson_Grimshaw_%281836-1893%29_-_Boar_Lane%2C_Leeds_-_LEEAG.PA.2000.0017_-_Leeds_Art_Gallery.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons; original work is public domain.",
+    "tags": [
+      "gaslight",
+      "moon",
+      "night",
+      "wet city",
+      "leeds",
+      "smoke"
+    ],
+    "genreWeights": {
+      "trip hop": 2.4,
+      "deep house": 2.2,
+      "city pop": 1.8,
+      "ambient electronic": 1.4
+    },
+    "moodWeights": {
+      "smoky": 2.7,
+      "brooding": 2.3,
+      "starlit": 2.0,
+      "mysterious": 1.8
+    },
+    "energyRange": [
+      0.25,
+      0.78
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.88,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.04
+    },
+    "curatorNote": "Small source image, but the gaslight atmosphere is very on-brief for nocturne metro.",
+    "imagePath": "/artworks/nocturne_metro/commons-grimshaw-boar-lane-leeds.jpg",
+    "originalFilename": "commons-grimshaw-boar-lane-leeds.jpg",
+    "width": 800,
+    "height": 534,
+    "palette": [
+      "#768963",
+      "#080A08",
+      "#4F4630",
+      "#251F19",
+      "#141612"
+    ],
+    "backgroundImagePath": "/background_ready/nocturne_metro/commons-grimshaw-boar-lane-leeds-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "printed_signal",
+    "title": "A Realistic Sketchbook by Hokusai (Hokusai shashin gafu)",
+    "artist": "Katsushika Hokusai",
+    "year": "1814",
+    "source": "met",
+    "sourceId": "78790",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/78790",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/78790/1400126/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / public domain image.",
+    "tags": [
+      "woodblock",
+      "japan",
+      "line",
+      "sketchbook",
+      "archive",
+      "signal"
+    ],
+    "genreWeights": {
+      "koto": 2.8,
+      "guzheng": 2.1,
+      "gamelan": 1.7,
+      "minimal techno": 1.7,
+      "baroque": 1.0
+    },
+    "moodWeights": {
+      "mysterious": 2.2,
+      "serene": 1.8,
+      "brooding": 1.2,
+      "hypnotic": 1.5
+    },
+    "energyRange": [
+      0.12,
+      0.7
+    ],
+    "composition": "allover",
+    "figurePresence": "none",
+    "backgroundFit": 0.82,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.04
+    },
+    "curatorNote": "A signal from an old image system: line, archive, restraint, and hand-made rhythm.",
+    "imagePath": "/artworks/printed_signal/met-78790-hokusai-shashin-gafu.jpg",
+    "id": "printed_signal-met-78790",
+    "palette": [
+      "#CABDA4",
+      "#DED0B7",
+      "#998F7D",
+      "#EDDDC3",
+      "#DEDEDA"
+    ],
+    "originalFilename": "hokusai.jpg",
+    "width": 1200,
+    "height": 801,
+    "backgroundImagePath": "/background_ready/printed_signal/met-78790-hokusai-shashin-gafu-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "printed_signal-met-49941",
+    "bucket": "printed_signal",
+    "title": "Pines and Waves at Ryūtō",
+    "artist": "Katsushika Hokusai",
+    "year": "ca. 1832",
+    "source": "met",
+    "sourceId": "49941",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/49941",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/49941/140359/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "ukiyo-e",
+      "waves",
+      "pines",
+      "linework",
+      "archive",
+      "water"
+    ],
+    "genreWeights": {
+      "koto": 2.6,
+      "guzheng": 2.2,
+      "gamelan": 1.5,
+      "minimal techno": 1.7
+    },
+    "moodWeights": {
+      "serene": 2.0,
+      "mysterious": 1.9,
+      "hypnotic": 1.8
+    },
+    "energyRange": [
+      0.2,
+      0.72
+    ],
+    "composition": "diagonal",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.82,
+    "crop": {
+      "x": 0.5,
+      "y": 0.53,
+      "scale": 1.07
+    },
+    "curatorNote": "Wave-line intelligence: musical, archival, and not too literal.",
+    "imagePath": "/artworks/printed_signal/met-49941-hokusai-pines-and-waves-ryuto.jpg",
+    "originalFilename": "met-49941-hokusai-pines-and-waves-ryuto.jpg",
+    "palette": [
+      "#CFCDB5",
+      "#5A6973",
+      "#AEAA97",
+      "#EFDBBC",
+      "#FBECD1"
+    ],
+    "width": 1200,
+    "height": 810,
+    "backgroundImagePath": "/background_ready/printed_signal/met-49941-hokusai-pines-and-waves-ryuto-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "printed_signal-met-54095",
+    "bucket": "printed_signal",
+    "title": "The Common Marigold and The Rajoman Flowers",
+    "artist": "Kubo Shunman",
+    "year": "19th century",
+    "source": "met",
+    "sourceId": "54095",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/54095",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/54095/138623/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "surimono",
+      "flowers",
+      "botanical",
+      "linework",
+      "symbol",
+      "archive"
+    ],
+    "genreWeights": {
+      "koto": 2.4,
+      "guzheng": 2.2,
+      "music box": 1.5,
+      "minimal techno": 1.3
+    },
+    "moodWeights": {
+      "serene": 2.3,
+      "weightless": 1.7,
+      "cozy": 1.4
+    },
+    "energyRange": [
+      0.05,
+      0.5
+    ],
+    "composition": "allover",
+    "figurePresence": "none",
+    "backgroundFit": 0.88,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.04
+    },
+    "curatorNote": "A botanical print that reads as delicate notation rather than illustration.",
+    "imagePath": "/artworks/printed_signal/met-54095-kubo-shunman-common-marigold-rajoman-flowers.jpg",
+    "originalFilename": "met-54095-kubo-shunman-common-marigold-rajoman-flowers.jpg",
+    "palette": [
+      "#DCCFC4",
+      "#A59B83",
+      "#CEC1B0",
+      "#E1D3C7",
+      "#E4D6CA"
+    ],
+    "width": 1062,
+    "height": 1200,
+    "backgroundImagePath": "/background_ready/printed_signal/met-54095-kubo-shunman-common-marigold-rajoman-flowers-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "printed_signal-met-55433",
+    "bucket": "printed_signal",
+    "title": "Sudden Shower over Shin-Ōhashi Bridge and Atake",
+    "artist": "Utagawa Hiroshige",
+    "year": "1857",
+    "source": "met",
+    "sourceId": "55433",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/55433",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/55433/134439/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "ukiyo-e",
+      "rain",
+      "bridge",
+      "diagonal lines",
+      "city rain",
+      "print"
+    ],
+    "genreWeights": {
+      "koto": 2.2,
+      "guzheng": 1.8,
+      "minimal techno": 2.0,
+      "breakbeat": 1.5
+    },
+    "moodWeights": {
+      "hypnotic": 2.3,
+      "mysterious": 1.9,
+      "brooding": 1.8
+    },
+    "energyRange": [
+      0.35,
+      0.82
+    ],
+    "composition": "diagonal",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.84,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.08
+    },
+    "curatorNote": "Rain as a graphic system: perfect for line, pulse, and wet-city translation.",
+    "imagePath": "/artworks/printed_signal/met-55433-hiroshige-sudden-shower.jpg",
+    "originalFilename": "met-55433-hiroshige-sudden-shower.jpg",
+    "palette": [
+      "#8F8F85",
+      "#A8AD98",
+      "#645B5A",
+      "#EDD0AA",
+      "#FBE7CB"
+    ],
+    "width": 824,
+    "height": 1200,
+    "backgroundImagePath": "/background_ready/printed_signal/met-55433-hiroshige-sudden-shower-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "printed_signal-met-45321",
+    "bucket": "printed_signal",
+    "title": "View of the Asakusa Kinryūzan Temple from the Azuma Bridge in the Rain",
+    "artist": "Utagawa Hiroshige",
+    "year": "ca. 1840",
+    "source": "met",
+    "sourceId": "45321",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/45321",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/45321/131410/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "ukiyo-e",
+      "rain",
+      "bridge",
+      "temple",
+      "vertical print",
+      "signal"
+    ],
+    "genreWeights": {
+      "koto": 2.4,
+      "guzheng": 2.0,
+      "minimal techno": 1.8,
+      "ambient": 1.3
+    },
+    "moodWeights": {
+      "serene": 2.0,
+      "mysterious": 1.8,
+      "melancholic": 1.7
+    },
+    "energyRange": [
+      0.2,
+      0.68
+    ],
+    "composition": "diagonal",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.78,
+    "crop": {
+      "x": 0.52,
+      "y": 0.5,
+      "scale": 1.1
+    },
+    "curatorNote": "A narrow rain print with enough symbolic weather to support softer rain tracks.",
+    "imagePath": "/artworks/printed_signal/met-45321-hiroshige-asakusa-bridge-rain.jpg",
+    "originalFilename": "met-45321-hiroshige-asakusa-bridge-rain.jpg",
+    "palette": [
+      "#A9AC9D",
+      "#6C5E5B",
+      "#A19385",
+      "#FDF0D9",
+      "#B7B9A5"
+    ],
+    "width": 434,
+    "height": 1200,
+    "backgroundImagePath": "/background_ready/printed_signal/met-45321-hiroshige-asakusa-bridge-rain-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "stage_heat",
+    "title": "The Piazza San Marco in Venice",
+    "artist": "Canaletto",
+    "year": "1723–1724",
+    "source": "manual",
+    "sourceId": "canaletto-piazza-san-marco",
+    "sourceCollection": "Wikimedia Commons / Google Art Project",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Canaletto_-_The_Piazza_San_Marco_in_Venice_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/6/66/Canaletto_-_The_Piazza_San_Marco_in_Venice_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain artwork reproduction on Wikimedia Commons.",
+    "tags": [
+      "piazza",
+      "venice",
+      "public space",
+      "architecture",
+      "crowd",
+      "sun"
+    ],
+    "genreWeights": {
+      "swing": 2.0,
+      "disco": 1.6,
+      "funk": 1.4,
+      "party": 1.5
+    },
+    "moodWeights": {
+      "playful": 2.0,
+      "euphoric": 1.4,
+      "glowing": 1.6,
+      "serene": 0.8
+    },
+    "energyRange": [
+      0.35,
+      0.85
+    ],
+    "composition": "deep_perspective",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.74,
+    "crop": {
+      "x": 0.5,
+      "y": 0.55,
+      "scale": 1.08
+    },
+    "curatorNote": "Public rhythm without a modern club signal: plaza, shadow, tiny figures, warm civic tempo.",
+    "imagePath": "/artworks/stage_heat/manual-canaletto-piazza-san-marco-venice.jpg",
+    "id": "stage_heat-manual-canaletto-piazza-san-marco",
+    "palette": [
+      "#33342C",
+      "#8B9488",
+      "#666857",
+      "#ACAB98",
+      "#C0BFAF"
+    ],
+    "originalFilename": "canaletto_piazza.jpg",
+    "width": 3000,
+    "height": 2097,
+    "backgroundImagePath": "/background_ready/stage_heat/manual-canaletto-piazza-san-marco-venice-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "stage_heat",
+    "title": "View of Wall Street",
+    "artist": "Colin Campbell Cooper",
+    "year": "early 20th century",
+    "source": "manual",
+    "sourceId": "cooper-view-wall-street",
+    "sourceCollection": "Wikimedia Commons / Google Art Project",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Olin_campbell_cooper_view_of_wall_street022728).jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ad/Olin_campbell_cooper_view_of_wall_street022728%29.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons.",
+    "tags": [
+      "city",
+      "wall street",
+      "skyscraper",
+      "impressionism",
+      "daylight",
+      "urban rhythm"
+    ],
+    "genreWeights": {
+      "city pop": 2.3,
+      "disco": 1.4,
+      "funk": 1.2,
+      "deep house": 1.4
+    },
+    "moodWeights": {
+      "glowing": 2.4,
+      "playful": 1.4,
+      "euphoric": 1.2,
+      "starlit": 0.6
+    },
+    "energyRange": [
+      0.42,
+      0.9
+    ],
+    "composition": "vertical_city",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.76,
+    "crop": {
+      "x": 0.5,
+      "y": 0.52,
+      "scale": 1.08
+    },
+    "curatorNote": "A bright city field with soft vertical pressure; useful for public rhythm without party clichés.",
+    "imagePath": "/artworks/stage_heat/manual-cooper-view-of-wall-street.jpg",
+    "id": "stage_heat-manual-cooper-view-wall-street",
+    "palette": [
+      "#85A39E",
+      "#7F8F87",
+      "#ABA584",
+      "#686A6A",
+      "#BDB995"
+    ],
+    "originalFilename": "cooper_wall_street.jpg",
+    "width": 2568,
+    "height": 3200,
+    "backgroundImagePath": "/background_ready/stage_heat/manual-cooper-view-of-wall-street-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "stage_heat-commons-degas-rehearsal-ballet-onstage",
+    "bucket": "stage_heat",
+    "title": "The Rehearsal of the Ballet Onstage",
+    "artist": "Edgar Degas",
+    "year": "ca. 1874",
+    "source": "commons",
+    "sourceId": "degas-rehearsal-ballet-onstage",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:The_Rehearsal_of_the_Ballet_Onstage_MET_DT1565.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/1/10/The_Rehearsal_of_the_Ballet_Onstage_MET_DT1565.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons; original work held by The Met.",
+    "tags": [
+      "stage",
+      "ballet",
+      "rehearsal",
+      "public rhythm",
+      "warm light"
+    ],
+    "genreWeights": {
+      "swing": 2.0,
+      "disco": 1.4,
+      "funk": 1.5,
+      "bedroom": 1.0
+    },
+    "moodWeights": {
+      "playful": 1.8,
+      "nostalgic": 1.8,
+      "cozy": 1.2
+    },
+    "energyRange": [
+      0.3,
+      0.78
+    ],
+    "composition": "diagonal",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.78,
+    "crop": {
+      "x": 0.52,
+      "y": 0.5,
+      "scale": 1.07
+    },
+    "curatorNote": "Stage energy softened into rehearsal: movement, but still background-friendly.",
+    "imagePath": "/artworks/stage_heat/commons-degas-rehearsal-ballet-onstage.jpg",
+    "originalFilename": "commons-degas-rehearsal-ballet-onstage.jpg",
+    "palette": [
+      "#716748",
+      "#A4946F",
+      "#2F2B21",
+      "#454534",
+      "#5F4E32"
+    ],
+    "width": 3811,
+    "height": 2842,
+    "backgroundImagePath": "/background_ready/stage_heat/commons-degas-rehearsal-ballet-onstage-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "stage_heat-commons-seurat-grande-jatte-1884",
+    "bucket": "stage_heat",
+    "title": "A Sunday on La Grande Jatte",
+    "artist": "Georges Seurat",
+    "year": "1884",
+    "source": "commons",
+    "sourceId": "seurat-grande-jatte-1884",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:A_Sunday_on_La_Grande_Jatte,_Georges_Seurat,_1884.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/archive/7/7d/20200707010855%21A_Sunday_on_La_Grande_Jatte%2C_Georges_Seurat%2C_1884.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons. Included as a calibration classic; should not dominate defaults.",
+    "tags": [
+      "pointillism",
+      "crowd",
+      "park",
+      "public rhythm",
+      "stage heat"
+    ],
+    "genreWeights": {
+      "disco": 1.9,
+      "funk": 1.7,
+      "swing": 1.8,
+      "party": 1.5
+    },
+    "moodWeights": {
+      "playful": 2.0,
+      "euphoric": 1.5,
+      "serene": 1.4
+    },
+    "energyRange": [
+      0.38,
+      0.85
+    ],
+    "composition": "allover",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.68,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.06
+    },
+    "curatorNote": "A known calibration piece for public rhythm; useful, but not the taste anchor.",
+    "imagePath": "/artworks/stage_heat/commons-seurat-sunday-grande-jatte-1884.jpg",
+    "originalFilename": "commons-seurat-sunday-grande-jatte-1884.jpg",
+    "palette": [
+      "#294333",
+      "#BDBC96",
+      "#87866E",
+      "#63625C",
+      "#554554"
+    ],
+    "width": 2991,
+    "height": 2012,
+    "backgroundImagePath": "/background_ready/stage_heat/commons-seurat-sunday-grande-jatte-1884-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "stage_heat-commons-toulouse-lautrec-moulin-rouge-dance",
+    "bucket": "stage_heat",
+    "title": "At the Moulin Rouge: The Dance",
+    "artist": "Henri de Toulouse-Lautrec",
+    "year": "1889–90",
+    "source": "commons",
+    "sourceId": "toulouse-lautrec-moulin-rouge-dance",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Henri_de_Toulouse-Lautrec,_French_-_At_the_Moulin_Rouge-_The_Dance_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/5/54/Henri_de_Toulouse-Lautrec%2C_French_-_At_the_Moulin_Rouge-_The_Dance_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons.",
+    "tags": [
+      "dance",
+      "cabaret",
+      "crowd",
+      "stage",
+      "warm interior",
+      "public rhythm"
+    ],
+    "genreWeights": {
+      "disco": 2.3,
+      "funk": 2.1,
+      "swing": 2.4,
+      "garage": 1.4
+    },
+    "moodWeights": {
+      "playful": 2.3,
+      "euphoric": 2.0,
+      "smoky": 1.5
+    },
+    "energyRange": [
+      0.45,
+      0.95
+    ],
+    "composition": "center_mass",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.74,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.08
+    },
+    "curatorNote": "Human rhythm without modern party cliché; a stage-image with real heat.",
+    "imagePath": "/artworks/stage_heat/commons-toulouse-lautrec-moulin-rouge-dance.jpg",
+    "originalFilename": "commons-toulouse-lautrec-moulin-rouge-dance.jpg",
+    "palette": [
+      "#3D442A",
+      "#887E4E",
+      "#6B5C37",
+      "#D9A282",
+      "#999260"
+    ],
+    "width": 5889,
+    "height": 4476,
+    "backgroundImagePath": "/background_ready/stage_heat/commons-toulouse-lautrec-moulin-rouge-dance-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "interior_reverie-met-459086",
+    "bucket": "interior_reverie",
+    "title": "Leisure Time in an Elegant Setting",
+    "artist": "Pieter de Hooch",
+    "year": "ca. 1663–65",
+    "source": "met",
+    "sourceId": "459086",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/459086",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/459086/913324/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "interior",
+      "room",
+      "domestic",
+      "window light",
+      "quiet figures"
+    ],
+    "genreWeights": {
+      "bedroom": 2.0,
+      "lullaby": 1.6,
+      "neo-soul": 1.5,
+      "solo piano": 1.7
+    },
+    "moodWeights": {
+      "cozy": 2.2,
+      "serene": 1.8,
+      "nostalgic": 1.8
+    },
+    "energyRange": [
+      0.18,
+      0.65
+    ],
+    "composition": "interior_depth",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.72,
+    "crop": {
+      "x": 0.5,
+      "y": 0.53,
+      "scale": 1.08
+    },
+    "curatorNote": "A quiet interior grid; figures are present, but the room is the real rhythm.",
+    "imagePath": "/artworks/interior_reverie/met-459086-leisure-time-in-an-elegant-setting.jpg",
+    "originalFilename": "met-459086-leisure-time-in-an-elegant-setting.jpg",
+    "palette": [
+      "#241A10",
+      "#110F0B",
+      "#312313",
+      "#3C2C19",
+      "#524A38"
+    ],
+    "width": 1200,
+    "height": 1006,
+    "backgroundImagePath": "/background_ready/interior_reverie/met-459086-leisure-time-in-an-elegant-setting-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "interior_reverie-met-436676",
+    "bucket": "interior_reverie",
+    "title": "Woman with a Water Pitcher, and a Man by a Bed",
+    "artist": "Pieter de Hooch",
+    "year": "ca. 1667–70",
+    "source": "met",
+    "sourceId": "436676",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/436676",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/436676/795701/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "interior",
+      "bed",
+      "doorway",
+      "domestic space",
+      "warm shadow"
+    ],
+    "genreWeights": {
+      "bedroom": 2.0,
+      "neo-soul": 1.5,
+      "solo piano": 1.5,
+      "lullaby": 1.4
+    },
+    "moodWeights": {
+      "cozy": 1.9,
+      "nostalgic": 1.8,
+      "serene": 1.4
+    },
+    "energyRange": [
+      0.15,
+      0.62
+    ],
+    "composition": "interior_depth",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.7,
+    "crop": {
+      "x": 0.52,
+      "y": 0.5,
+      "scale": 1.1
+    },
+    "curatorNote": "A domestic threshold image; usable when cropped as space rather than story.",
+    "imagePath": "/artworks/interior_reverie/met-436676-woman-water-pitcher-man-by-bed.jpg",
+    "originalFilename": "met-436676-woman-water-pitcher-man-by-bed.jpg",
+    "palette": [
+      "#301B0F",
+      "#1B1410",
+      "#3C2513",
+      "#432E19",
+      "#5D4828"
+    ],
+    "width": 1015,
+    "height": 1200,
+    "backgroundImagePath": "/background_ready/interior_reverie/met-436676-woman-water-pitcher-man-by-bed-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "interior_reverie",
+    "title": "Reposing Dog",
+    "artist": "Sigrid Granfelt",
+    "year": "1894",
+    "source": "manual",
+    "sourceId": "granfelt-reposing-dog-1894",
+    "sourceCollection": "Finnish National Gallery / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Sigrid_Granfelt_-_Reposing_Dog_-_A_III_2492_-_Finnish_National_Gallery.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/e/e8/Sigrid_Granfelt_-_Reposing_Dog_-_A_III_2492_-_Finnish_National_Gallery.jpg",
+    "license": "CC0",
+    "rightsNote": "Wikimedia Commons record indicates public domain / CC0 availability.",
+    "tags": [
+      "dog",
+      "rest",
+      "interior",
+      "quiet",
+      "sleep",
+      "cream",
+      "brown"
+    ],
+    "genreWeights": {
+      "bedroom": 2.6,
+      "lullaby": 2.3,
+      "neo-soul": 1.3,
+      "lo-fi": 2.1
+    },
+    "moodWeights": {
+      "cozy": 2.8,
+      "serene": 2.2,
+      "nostalgic": 1.2,
+      "bittersweet": 0.8
+    },
+    "energyRange": [
+      0.05,
+      0.45
+    ],
+    "composition": "diagonal",
+    "figurePresence": "central_animal",
+    "backgroundFit": 0.7,
+    "crop": {
+      "x": 0.52,
+      "y": 0.5,
+      "scale": 1.04
+    },
+    "curatorNote": "A private, almost silent image; useful when Murmur needs warmth without human portrait energy.",
+    "imagePath": "/artworks/interior_reverie/manual-granfelt-reposing-dog-1894.jpg",
+    "id": "interior_reverie-manual-granfelt-reposing-dog-1894",
+    "palette": [
+      "#181815",
+      "#42372C",
+      "#7A664D",
+      "#CBC3B1",
+      "#AFA189"
+    ],
+    "originalFilename": "granfelt_reposing_dog.jpg",
+    "width": 4000,
+    "height": 2695,
+    "backgroundImagePath": "/background_ready/interior_reverie/manual-granfelt-reposing-dog-1894-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "interior_reverie-met-441933",
+    "bucket": "interior_reverie",
+    "title": "Moonlight, Strandgade 30",
+    "artist": "Vilhelm Hammershøi",
+    "year": "1900–1906",
+    "source": "met",
+    "sourceId": "441933",
+    "sourceCollection": "The Metropolitan Museum of Art",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/441933",
+    "downloadUrl": "https://collectionapi.metmuseum.org/api/collection/v1/iiif/441933/802838/main-image",
+    "license": "Public Domain",
+    "rightsNote": "Met Open Access / Public Domain image.",
+    "tags": [
+      "interior",
+      "moonlight",
+      "empty room",
+      "window",
+      "hush"
+    ],
+    "genreWeights": {
+      "bedroom": 2.6,
+      "lullaby": 2.2,
+      "solo piano": 2.1,
+      "ambient": 2.5
+    },
+    "moodWeights": {
+      "serene": 2.8,
+      "melancholic": 2.3,
+      "weightless": 2.0,
+      "cozy": 1.4
+    },
+    "energyRange": [
+      0.05,
+      0.48
+    ],
+    "composition": "interior_depth",
+    "figurePresence": "none",
+    "backgroundFit": 0.96,
+    "crop": {
+      "x": 0.5,
+      "y": 0.52,
+      "scale": 1.03
+    },
+    "curatorNote": "Probably the cleanest interior field in this batch: pure room, pale moon, no narrative drag.",
+    "imagePath": "/artworks/interior_reverie/met-441933-moonlight-strandgade-30.jpg",
+    "originalFilename": "met-441933-moonlight-strandgade-30.jpg",
+    "palette": [
+      "#624E47",
+      "#867067",
+      "#3C2D29",
+      "#55413A",
+      "#4B3B34"
+    ],
+    "width": 1200,
+    "height": 958,
+    "backgroundImagePath": "/background_ready/interior_reverie/met-441933-moonlight-strandgade-30-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "hypermodern_void-commons-anna-atkins-algae-cyanotype",
+    "bucket": "hypermodern_void",
+    "title": "Dictyota dichotoma, in the young state; and in fruit",
+    "artist": "Anna Atkins",
+    "year": "1843–53",
+    "source": "commons",
+    "sourceId": "anna-atkins-algae-cyanotype",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Anna_Atkins_algae_cyanotype.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c4/Anna_Atkins_algae_cyanotype.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain cyanotype image on Wikimedia Commons.",
+    "tags": [
+      "cyanotype",
+      "algae",
+      "blueprint",
+      "botanical signal",
+      "science archive"
+    ],
+    "genreWeights": {
+      "ambient electronic": 2.4,
+      "minimal techno": 1.8,
+      "synthwave": 1.6,
+      "music box": 1.2
+    },
+    "moodWeights": {
+      "weightless": 2.2,
+      "serene": 2.0,
+      "starlit": 1.8,
+      "mysterious": 1.5
+    },
+    "energyRange": [
+      0.05,
+      0.58
+    ],
+    "composition": "allover",
+    "figurePresence": "none",
+    "backgroundFit": 0.9,
+    "crop": {
+      "x": 0.5,
+      "y": 0.52,
+      "scale": 1.06
+    },
+    "curatorNote": "A clean blue scientific ghost: excellent for quiet future-facing sleeves.",
+    "imagePath": "/artworks/hypermodern_void/commons-anna-atkins-algae-cyanotype.jpg",
+    "originalFilename": "commons-anna-atkins-algae-cyanotype.jpg",
+    "palette": [
+      "#083883",
+      "#8AB4E0",
+      "#113A82",
+      "#235096",
+      "#0C2E6F"
+    ],
+    "width": 583,
+    "height": 786,
+    "backgroundImagePath": "/background_ready/hypermodern_void/commons-anna-atkins-algae-cyanotype-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "hypermodern_void-commons-haeckel-discomedusae-8",
+    "bucket": "hypermodern_void",
+    "title": "Discomedusae, plate 8 from Kunstformen der Natur",
+    "artist": "Ernst Haeckel",
+    "year": "1904",
+    "source": "commons",
+    "sourceId": "haeckel-discomedusae-8",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Haeckel_Discomedusae_8.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/d/de/Haeckel_Discomedusae_8.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Identified on Wikimedia Commons as free of known copyright restrictions / Public Domain Mark.",
+    "tags": [
+      "scientific plate",
+      "marine",
+      "organic geometry",
+      "signal",
+      "future nature"
+    ],
+    "genreWeights": {
+      "minimal techno": 2.2,
+      "ambient electronic": 2.0,
+      "gamelan": 1.4,
+      "synthwave": 1.5
+    },
+    "moodWeights": {
+      "hypnotic": 2.5,
+      "mysterious": 1.9,
+      "glowing": 1.7
+    },
+    "energyRange": [
+      0.25,
+      0.85
+    ],
+    "composition": "allover",
+    "figurePresence": "none",
+    "backgroundFit": 0.76,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.1
+    },
+    "curatorNote": "A biological signal field: ornate enough for motion, archival enough for Murmur.",
+    "imagePath": "/artworks/hypermodern_void/commons-haeckel-discomedusae-8.jpg",
+    "originalFilename": "commons-haeckel-discomedusae-8.jpg",
+    "palette": [
+      "#A4918D",
+      "#FEFEFE",
+      "#774743",
+      "#DED2CA",
+      "#FDFEFD"
+    ],
+    "width": 2300,
+    "height": 3300,
+    "backgroundImagePath": "/background_ready/hypermodern_void/commons-haeckel-discomedusae-8-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "hypermodern_void-commons-whistler-nocturne-black-gold-falling-rocket",
+    "bucket": "hypermodern_void",
+    "title": "Nocturne in Black and Gold: The Falling Rocket",
+    "artist": "James McNeill Whistler",
+    "year": "1875",
+    "source": "commons",
+    "sourceId": "whistler-nocturne-black-gold-falling-rocket",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Whistler-Nocturne_in_black_and_gold.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/b/b1/Whistler-Nocturne_in_black_and_gold.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Public domain reproduction on Wikimedia Commons; original work is public domain.",
+    "tags": [
+      "nocturne",
+      "fireworks",
+      "dark field",
+      "abstraction",
+      "smoke",
+      "signal"
+    ],
+    "genreWeights": {
+      "ambient electronic": 2.7,
+      "minimal techno": 2.4,
+      "synthwave": 2.1,
+      "trip hop": 1.8
+    },
+    "moodWeights": {
+      "mysterious": 2.8,
+      "brooding": 2.4,
+      "starlit": 2.2,
+      "hypnotic": 2.0
+    },
+    "energyRange": [
+      0.2,
+      0.82
+    ],
+    "composition": "allover",
+    "figurePresence": "none",
+    "backgroundFit": 0.92,
+    "crop": {
+      "x": 0.5,
+      "y": 0.48,
+      "scale": 1.06
+    },
+    "curatorNote": "Almost a dark signal field: historical, but it behaves like an abstract future background.",
+    "imagePath": "/artworks/hypermodern_void/commons-whistler-nocturne-black-gold-falling-rocket.jpg",
+    "originalFilename": "commons-whistler-nocturne-black-gold-falling-rocket.jpg",
+    "width": 1807,
+    "height": 2400,
+    "palette": [
+      "#314036",
+      "#152219",
+      "#243329",
+      "#3E4D3D",
+      "#646740"
+    ],
+    "backgroundImagePath": "/background_ready/hypermodern_void/commons-whistler-nocturne-black-gold-falling-rocket-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "id": "hypermodern_void-commons-redon-eye-like-a-strange-balloon",
+    "bucket": "hypermodern_void",
+    "title": "To Edgar Poe (The Eye, Like a Strange Balloon, Mounts toward Infinity)",
+    "artist": "Odilon Redon",
+    "year": "1882",
+    "source": "commons",
+    "sourceId": "redon-eye-like-a-strange-balloon",
+    "sourceCollection": "Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:To_Edgar_Poe_(The_Eye,_Like_a_Strange_Balloon,_Mounts_toward_Infinity)_(A_Edgar_Poe_(L%27oeil,_comme_un_ballon_bizarre_se_dirige_vers_l%27infini))_LACMA_AC1997.14.1.1.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/d/de/To_Edgar_Poe_%28The_Eye%2C_Like_a_Strange_Balloon%2C_Mounts_toward_Infinity%29_%28A_Edgar_Poe_%28L%27oeil%2C_comme_un_ballon_bizarre_se_dirige_vers_l%27infini%29%29_LACMA_AC1997.14.1.1.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Released by LACMA as Public Domain High Resolution Image Available; hosted on Wikimedia Commons.",
+    "tags": [
+      "symbolist",
+      "void",
+      "balloon",
+      "eye",
+      "noir",
+      "cosmic"
+    ],
+    "genreWeights": {
+      "synthwave": 2.2,
+      "ambient electronic": 2.5,
+      "minimal techno": 2.0,
+      "vaporwave": 1.5
+    },
+    "moodWeights": {
+      "mysterious": 2.8,
+      "starlit": 2.0,
+      "brooding": 2.2,
+      "weightless": 1.7
+    },
+    "energyRange": [
+      0.18,
+      0.82
+    ],
+    "composition": "center_mass",
+    "figurePresence": "none",
+    "backgroundFit": 0.82,
+    "crop": {
+      "x": 0.5,
+      "y": 0.45,
+      "scale": 1.12
+    },
+    "curatorNote": "A proto-cosmic image: not modern in date, but modern in psychological space.",
+    "imagePath": "/artworks/hypermodern_void/commons-redon-eye-like-a-strange-balloon.jpg",
+    "originalFilename": "commons-redon-eye-like-a-strange-balloon.jpg",
+    "palette": [
+      "#C0BCAA",
+      "#4B473D",
+      "#FAF8F1",
+      "#EBE7D8",
+      "#F3F0E4"
+    ],
+    "width": 1608,
+    "height": 2100,
+    "backgroundImagePath": "/background_ready/hypermodern_void/commons-redon-eye-like-a-strange-balloon-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "sublime_terrain",
+    "title": "Cotopaxi",
+    "artist": "Frederic Edwin Church",
+    "year": "1855",
+    "source": "commons",
+    "sourceId": "frederic-edwin-church-cotopaxi-google-art-project",
+    "sourceCollection": "Museum of Fine Arts, Houston / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Frederic_Edwin_Church_-_Cotopaxi_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/f/fb/Frederic_Edwin_Church_-_Cotopaxi_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "volcano",
+      "sublime",
+      "tropical",
+      "distance",
+      "terrain",
+      "cinematic"
+    ],
+    "genreWeights": {
+      "cinematic": 2.8,
+      "epic orchestral": 2.7,
+      "post-rock": 2.1,
+      "ambient": 1.0
+    },
+    "moodWeights": {
+      "mysterious": 2.4,
+      "triumphant": 2.1,
+      "starlit": 1.5,
+      "glowing": 1.6
+    },
+    "energyRange": [
+      0.45,
+      0.95
+    ],
+    "composition": "deep_distance",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.86,
+    "crop": {
+      "x": 0.42,
+      "y": 0.52,
+      "scale": 1.02
+    },
+    "curatorNote": "A volcanic distance field: grand but softened, useful behind cinematic terrain and high-energy emotional builds.",
+    "imagePath": "/artworks/sublime_terrain/commons-church-cotopaxi.jpg",
+    "id": "sublime_terrain-commons-church-cotopaxi",
+    "palette": [
+      "#231C1B",
+      "#514330",
+      "#CBC2AD",
+      "#E3CC9E",
+      "#B5A68F"
+    ],
+    "originalFilename": "commons-church-cotopaxi.jpg",
+    "width": 8322,
+    "height": 5357,
+    "backgroundImagePath": "/background_ready/sublime_terrain/commons-church-cotopaxi-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "luminist_air",
+    "title": "Cliff Walk at Pourville",
+    "artist": "Claude Monet",
+    "year": "1882",
+    "source": "commons",
+    "sourceId": "claude-monet-cliff-walk-pourville-google-art-project",
+    "sourceCollection": "Art Institute of Chicago / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Claude_Monet_-_Cliff_Walk_at_Pourville_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a4/Claude_Monet_-_Cliff_Walk_at_Pourville_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "coast",
+      "air",
+      "wind",
+      "low horizon",
+      "blue",
+      "impressionism"
+    ],
+    "genreWeights": {
+      "ambient": 2.0,
+      "solo piano": 1.5,
+      "dream pop": 1.6,
+      "bossa nova": 1.0
+    },
+    "moodWeights": {
+      "serene": 2.0,
+      "weightless": 2.2,
+      "glowing": 1.8,
+      "nostalgic": 1.0
+    },
+    "energyRange": [
+      0.18,
+      0.62
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.82,
+    "crop": {
+      "x": 0.52,
+      "y": 0.48,
+      "scale": 1.03
+    },
+    "curatorNote": "Wind, sea, and cliff dissolve into a light field; useful when a song wants air without becoming postcard-bright.",
+    "imagePath": "/artworks/luminist_air/commons-monet-cliff-walk-pourville.jpg",
+    "id": "luminist_air-commons-monet-cliff-walk-at-pourville",
+    "palette": [
+      "#80A9BE",
+      "#8B9A8E",
+      "#7B7E6C",
+      "#A2A79B",
+      "#ADB8BB"
+    ],
+    "originalFilename": "commons-monet-cliff-walk-pourville.jpg",
+    "width": 2807,
+    "height": 2251,
+    "backgroundImagePath": "/background_ready/luminist_air/commons-monet-cliff-walk-pourville-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.2,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "interior_reverie",
+    "title": "Interior with Young Woman from Behind",
+    "artist": "Vilhelm Hammershøi",
+    "year": "1904",
+    "source": "commons",
+    "sourceId": "hammershoi-interior-young-woman-from-behind-randers",
+    "sourceCollection": "Randers Kunstmuseum / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Vilhelm_Hammershoi_-_Interieur_mit_Rueckenansicht_einer_Frau_-_1903-1904_-_Randers_Kunstmuseum.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/5/56/Vilhelm_Hammershoi_-_Interieur_mit_Rueckenansicht_einer_Frau_-_1903-1904_-_Randers_Kunstmuseum.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "room",
+      "back figure",
+      "gray",
+      "silence",
+      "interior",
+      "private"
+    ],
+    "genreWeights": {
+      "bedroom": 2.8,
+      "solo piano": 2.2,
+      "lullaby": 1.8,
+      "neo-soul": 1.1
+    },
+    "moodWeights": {
+      "melancholic": 2.6,
+      "serene": 2.3,
+      "cozy": 1.4,
+      "bittersweet": 1.8
+    },
+    "energyRange": [
+      0.05,
+      0.46
+    ],
+    "composition": "interior_depth",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.91,
+    "crop": {
+      "x": 0.48,
+      "y": 0.45,
+      "scale": 1.12
+    },
+    "curatorNote": "An inward room with a turned-away figure; intimate enough for bedroom songs, restrained enough to stay behind the UI.",
+    "imagePath": "/artworks/interior_reverie/commons-hammershoi-interior-young-woman-from-behind.jpg",
+    "id": "interior_reverie-commons-hammersh-i-interior-with-young-woman-from-behin",
+    "palette": [
+      "#3D3639",
+      "#181416",
+      "#6E6B71",
+      "#59555A",
+      "#837E7E"
+    ],
+    "originalFilename": "commons-hammershoi-interior-young-woman-from-behind.jpg",
+    "width": 2470,
+    "height": 2955,
+    "backgroundImagePath": "/background_ready/interior_reverie/commons-hammershoi-interior-young-woman-from-behind-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.2,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "interior_reverie",
+    "title": "Interior with a Reading Young Man",
+    "artist": "Vilhelm Hammershøi",
+    "year": "1898",
+    "source": "commons",
+    "sourceId": "hammershoi-interior-reading-young-man",
+    "sourceCollection": "Hirschsprung Collection / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Vilhelm_Hammersh%C3%B8i_1898_-_Interi%C3%B8r_med_l%C3%A6sende_ung_mand.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/e/ed/Vilhelm_Hammersh%C3%B8i_1898_-_Interi%C3%B8r_med_l%C3%A6sende_ung_mand.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "room",
+      "reading",
+      "gray",
+      "window",
+      "stillness",
+      "private"
+    ],
+    "genreWeights": {
+      "bedroom": 2.4,
+      "solo piano": 2.0,
+      "lullaby": 1.8,
+      "neo-soul": 1.0
+    },
+    "moodWeights": {
+      "melancholic": 2.5,
+      "serene": 2.0,
+      "cozy": 1.3,
+      "bittersweet": 1.7
+    },
+    "energyRange": [
+      0.05,
+      0.42
+    ],
+    "composition": "interior_depth",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.84,
+    "crop": {
+      "x": 0.46,
+      "y": 0.48,
+      "scale": 1.08
+    },
+    "curatorNote": "Spare furniture, pale wall, one quiet reader: good for songs that feel like they were made alone at night.",
+    "imagePath": "/artworks/interior_reverie/commons-hammershoi-interior-reading-young-man.jpg",
+    "id": "interior_reverie-commons-hammersh-i-interior-with-a-reading-young-man",
+    "palette": [
+      "#A0978B",
+      "#161313",
+      "#D9D8D5",
+      "#6F6B67",
+      "#47403B"
+    ],
+    "originalFilename": "commons-hammershoi-interior-reading-young-man.jpg",
+    "width": 1080,
+    "height": 1287,
+    "backgroundImagePath": "/background_ready/interior_reverie/commons-hammershoi-interior-reading-young-man-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.2,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "tidal_mineral",
+    "title": "The Wave",
+    "artist": "Gustave Courbet",
+    "year": "1869",
+    "source": "commons",
+    "sourceId": "gustave-courbet-the-wave-google-art-project",
+    "sourceCollection": "National Galleries of Scotland / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gustave_Courbet_-_The_Wave_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c5/Gustave_Courbet_-_The_Wave_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "wave",
+      "sea",
+      "storm",
+      "mineral",
+      "foam",
+      "pressure"
+    ],
+    "genreWeights": {
+      "breakbeat": 2.4,
+      "surf rock": 2.2,
+      "dub": 1.4,
+      "techno": 1.3
+    },
+    "moodWeights": {
+      "hypnotic": 2.1,
+      "brooding": 2.2,
+      "mysterious": 1.8,
+      "smoky": 0.8
+    },
+    "energyRange": [
+      0.48,
+      0.95
+    ],
+    "composition": "horizontal_mass",
+    "figurePresence": "none",
+    "backgroundFit": 0.87,
+    "crop": {
+      "x": 0.5,
+      "y": 0.52,
+      "scale": 1.0
+    },
+    "curatorNote": "A compressed sheet of dark sea pressure; works for heavier rhythmic music without becoming literal beach imagery.",
+    "imagePath": "/artworks/tidal_mineral/commons-courbet-the-wave.jpg",
+    "id": "tidal_mineral-commons-courbet-the-wave",
+    "palette": [
+      "#838E8F",
+      "#9AA4A3",
+      "#3C4140",
+      "#B3BCB4",
+      "#D0D6CB"
+    ],
+    "originalFilename": "commons-courbet-the-wave.jpg",
+    "width": 4001,
+    "height": 3320,
+    "backgroundImagePath": "/background_ready/tidal_mineral/commons-courbet-the-wave-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "tidal_mineral",
+    "title": "Rough Weather at Étretat",
+    "artist": "Claude Monet",
+    "year": "1883",
+    "source": "commons",
+    "sourceId": "claude-monet-rough-weather-etretat-google-art-project",
+    "sourceCollection": "National Gallery of Victoria / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Claude_Monet_-_Rough_weather_at_%C3%89tretat_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/4/40/Claude_Monet_-_Rough_weather_at_%C3%89tretat_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "cliff",
+      "storm",
+      "foam",
+      "gray",
+      "sea",
+      "motion"
+    ],
+    "genreWeights": {
+      "breakbeat": 2.0,
+      "surf rock": 1.7,
+      "post-rock": 1.8,
+      "ambient electronic": 1.2
+    },
+    "moodWeights": {
+      "brooding": 2.0,
+      "hypnotic": 1.8,
+      "mysterious": 1.7,
+      "weightless": 1.0
+    },
+    "energyRange": [
+      0.38,
+      0.88
+    ],
+    "composition": "diagonal",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.85,
+    "crop": {
+      "x": 0.55,
+      "y": 0.5,
+      "scale": 1.02
+    },
+    "curatorNote": "Cliff and water dissolve into weather; good for high-texture songs where the image should feel like spray and breath.",
+    "imagePath": "/artworks/tidal_mineral/commons-monet-rough-weather-etretat.jpg",
+    "id": "tidal_mineral-commons-monet-rough-weather-at-tretat",
+    "palette": [
+      "#C5C5C4",
+      "#A5A7A7",
+      "#6A6B6A",
+      "#969898",
+      "#8B9195"
+    ],
+    "originalFilename": "commons-monet-rough-weather-etretat.jpg",
+    "width": 4537,
+    "height": 3677,
+    "backgroundImagePath": "/background_ready/tidal_mineral/commons-monet-rough-weather-etretat-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "tidal_mineral",
+    "title": "Fishermen at Sea",
+    "artist": "J. M. W. Turner",
+    "year": "1796",
+    "source": "commons",
+    "sourceId": "turner-fishermen-at-sea-google-art-project",
+    "sourceCollection": "Tate / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Joseph_Mallord_William_Turner_-_Fishermen_at_Sea_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/0/0d/Joseph_Mallord_William_Turner_-_Fishermen_at_Sea_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "moon",
+      "sea",
+      "night",
+      "wave",
+      "boat",
+      "dark water"
+    ],
+    "genreWeights": {
+      "trip hop": 2.0,
+      "dub": 1.8,
+      "ambient": 1.5,
+      "surf rock": 1.2
+    },
+    "moodWeights": {
+      "brooding": 2.6,
+      "mysterious": 2.4,
+      "starlit": 2.1,
+      "smoky": 1.4
+    },
+    "energyRange": [
+      0.22,
+      0.76
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.92,
+    "crop": {
+      "x": 0.5,
+      "y": 0.55,
+      "scale": 1.02
+    },
+    "curatorNote": "Moonlit water as a near-abstract dark field; a bridge between tidal_mineral and nocturne_metro.",
+    "imagePath": "/artworks/tidal_mineral/commons-turner-fishermen-at-sea.jpg",
+    "id": "tidal_mineral-commons-turner-fishermen-at-sea",
+    "palette": [
+      "#151A1A",
+      "#030504",
+      "#505137",
+      "#0C1010",
+      "#080B0B"
+    ],
+    "originalFilename": "commons-turner-fishermen-at-sea.jpg",
+    "width": 2258,
+    "height": 1678,
+    "backgroundImagePath": "/background_ready/tidal_mineral/commons-turner-fishermen-at-sea-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "tidal_mineral",
+    "title": "Waves",
+    "artist": "Gustave Courbet",
+    "year": "ca. 1870",
+    "source": "commons",
+    "sourceId": "gustave-courbet-waves-google-art-project",
+    "sourceCollection": "National Museum of Western Art, Tokyo / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Gustave_Courbet_-_Waves_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/a/ac/Gustave_Courbet_-_Waves_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "wave",
+      "sea",
+      "rock",
+      "foam",
+      "green",
+      "mineral"
+    ],
+    "genreWeights": {
+      "breakbeat": 2.2,
+      "surf rock": 2.0,
+      "dub": 1.4,
+      "techno": 1.2
+    },
+    "moodWeights": {
+      "hypnotic": 2.2,
+      "brooding": 1.9,
+      "mysterious": 1.6,
+      "glowing": 0.8
+    },
+    "energyRange": [
+      0.45,
+      0.92
+    ],
+    "composition": "horizontal_mass",
+    "figurePresence": "none",
+    "backgroundFit": 0.86,
+    "crop": {
+      "x": 0.5,
+      "y": 0.55,
+      "scale": 1.0
+    },
+    "curatorNote": "A broader and warmer companion to Courbet’s Wave: sea as a moving wall, not a scenic destination.",
+    "imagePath": "/artworks/tidal_mineral/commons-courbet-waves.jpg",
+    "id": "tidal_mineral-commons-courbet-waves",
+    "palette": [
+      "#9D947E",
+      "#333321",
+      "#B1A58B",
+      "#79765B",
+      "#CAC39E"
+    ],
+    "originalFilename": "commons-courbet-waves.jpg",
+    "width": 3990,
+    "height": 3127,
+    "backgroundImagePath": "/background_ready/tidal_mineral/commons-courbet-waves-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "stage_heat",
+    "title": "Circus Sideshow",
+    "artist": "Georges Seurat",
+    "year": "1887–1888",
+    "source": "commons",
+    "sourceId": "georges-seurat-circus-sideshow-met",
+    "sourceCollection": "The Metropolitan Museum of Art / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Georges_Seurat,_Circus_Sideshow,_1887%E2%80%9388.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/6/68/Georges_Seurat%2C_Circus_Sideshow%2C_1887%E2%80%9388.jpg",
+    "license": "CC0",
+    "rightsNote": "Met Open Access / CC0 via Wikimedia Commons.",
+    "tags": [
+      "stage",
+      "night",
+      "crowd",
+      "music",
+      "public rhythm",
+      "pointillism"
+    ],
+    "genreWeights": {
+      "disco": 2.1,
+      "funk": 1.9,
+      "swing": 2.3,
+      "party": 2.0
+    },
+    "moodWeights": {
+      "playful": 2.3,
+      "euphoric": 1.6,
+      "smoky": 1.6,
+      "hypnotic": 1.3
+    },
+    "energyRange": [
+      0.42,
+      0.88
+    ],
+    "composition": "stage_band",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.85,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.03
+    },
+    "curatorNote": "Public sound before it becomes spectacle: lamps, instruments, crowd rhythm, and enough dark space to hold UI.",
+    "imagePath": "/artworks/stage_heat/commons-seurat-circus-sideshow.jpg",
+    "id": "stage_heat-commons-seurat-circus-sideshow",
+    "palette": [
+      "#716269",
+      "#3D3949",
+      "#917D78",
+      "#524C5C",
+      "#65525D"
+    ],
+    "originalFilename": "commons-seurat-circus-sideshow.jpg",
+    "width": 3875,
+    "height": 2592,
+    "backgroundImagePath": "/background_ready/stage_heat/commons-seurat-circus-sideshow-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "stage_heat",
+    "title": "The Orchestra at the Opera",
+    "artist": "Edgar Degas",
+    "year": "ca. 1870",
+    "source": "commons",
+    "sourceId": "edgar-degas-orchestra-at-the-opera-google-art-project",
+    "sourceCollection": "Musée d’Orsay / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Edgar_Degas_-_The_Orchestra_at_the_Opera_-_Google_Art_Project.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/8/8a/Edgar_Degas_-_The_Orchestra_at_the_Opera_-_Google_Art_Project.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "orchestra",
+      "stage",
+      "theatre",
+      "dark",
+      "performance",
+      "public interior"
+    ],
+    "genreWeights": {
+      "swing": 2.4,
+      "funk": 1.2,
+      "disco": 1.0,
+      "jazz": 2.2
+    },
+    "moodWeights": {
+      "smoky": 2.4,
+      "playful": 1.5,
+      "brooding": 1.3,
+      "euphoric": 0.9
+    },
+    "energyRange": [
+      0.32,
+      0.82
+    ],
+    "composition": "interior_depth",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.78,
+    "crop": {
+      "x": 0.48,
+      "y": 0.52,
+      "scale": 1.1
+    },
+    "curatorNote": "A dense public interior for music with brass, swing, or smoky movement; use under a stronger overlay.",
+    "imagePath": "/artworks/stage_heat/commons-degas-orchestra-at-the-opera.jpg",
+    "id": "stage_heat-commons-degas-the-orchestra-at-the-opera",
+    "palette": [
+      "#030304",
+      "#33241A",
+      "#140E0D",
+      "#5F4A36",
+      "#937E64"
+    ],
+    "originalFilename": "commons-degas-orchestra-at-the-opera.jpg",
+    "width": 2472,
+    "height": 3017,
+    "backgroundImagePath": "/background_ready/stage_heat/commons-degas-orchestra-at-the-opera-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "stage_heat",
+    "title": "Masked Ball at the Opera",
+    "artist": "Édouard Manet",
+    "year": "1873",
+    "source": "commons",
+    "sourceId": "edouard-manet-masked-ball-at-the-opera",
+    "sourceCollection": "National Gallery of Art / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:%C3%89douard_manet_-_Masked_Ball_at_the_Opera.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/1/19/%C3%89douard_manet_-_Masked_Ball_at_the_Opera.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark / PD-Art reproduction of public-domain artwork.",
+    "tags": [
+      "crowd",
+      "opera",
+      "masked",
+      "social",
+      "black",
+      "public rhythm"
+    ],
+    "genreWeights": {
+      "disco": 1.6,
+      "funk": 1.6,
+      "swing": 2.0,
+      "party": 2.4
+    },
+    "moodWeights": {
+      "playful": 2.2,
+      "smoky": 1.9,
+      "euphoric": 1.4,
+      "brooding": 0.8
+    },
+    "energyRange": [
+      0.42,
+      0.92
+    ],
+    "composition": "allover",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.72,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.08
+    },
+    "curatorNote": "Dense, social, black-and-white heat; not subtle enough for every song, but valuable when public rhythm needs a stronger charge.",
+    "imagePath": "/artworks/stage_heat/commons-manet-masked-ball-at-the-opera.jpg",
+    "id": "stage_heat-commons-manet-masked-ball-at-the-opera",
+    "palette": [
+      "#715744",
+      "#D2CFC1",
+      "#111010",
+      "#141212",
+      "#2B211F"
+    ],
+    "originalFilename": "commons-manet-masked-ball-at-the-opera.jpg",
+    "width": 759,
+    "height": 620,
+    "backgroundImagePath": "/background_ready/stage_heat/commons-manet-masked-ball-at-the-opera-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.26,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  },
+  {
+    "bucket": "hypermodern_void",
+    "title": "Cyrtoidea",
+    "artist": "Ernst Haeckel",
+    "year": "1899",
+    "source": "commons",
+    "sourceId": "haeckel-cyrtoidea",
+    "sourceCollection": "Kunstformen der Natur / Wikimedia Commons",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Haeckel_Cyrtoidea.jpg",
+    "downloadUrl": "https://upload.wikimedia.org/wikipedia/commons/c/ce/Haeckel_Cyrtoidea.jpg",
+    "license": "Public Domain",
+    "rightsNote": "Wikimedia Commons public domain mark; historical scientific plate.",
+    "tags": [
+      "radiolaria",
+      "science",
+      "black",
+      "geometry",
+      "microscopic",
+      "signal"
+    ],
+    "genreWeights": {
+      "minimal techno": 2.6,
+      "ambient electronic": 2.5,
+      "synthwave": 1.6,
+      "vaporwave": 1.4
+    },
+    "moodWeights": {
+      "mysterious": 2.5,
+      "hypnotic": 2.8,
+      "weightless": 1.8,
+      "starlit": 1.5
+    },
+    "energyRange": [
+      0.2,
+      0.82
+    ],
+    "composition": "allover",
+    "figurePresence": "none",
+    "backgroundFit": 0.86,
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.05
+    },
+    "curatorNote": "Proto-future biology: not neon, not AI fantasy, but clean dark geometry with enough depth for synth and techno sleeves.",
+    "imagePath": "/artworks/hypermodern_void/commons-haeckel-cyrtoidea.jpg",
+    "id": "hypermodern_void-commons-haeckel-cyrtoidea",
+    "palette": [
+      "#333333",
+      "#191919",
+      "#5C5C5C",
+      "#848484",
+      "#AFAFAF"
+    ],
+    "originalFilename": "commons-haeckel-cyrtoidea.jpg",
+    "width": 2309,
+    "height": 3271,
+    "backgroundImagePath": "/background_ready/hypermodern_void/commons-haeckel-cyrtoidea-bg.jpg",
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.2,
+      "contrast": "softened",
+      "grain": "light"
+    }
+  }
+]

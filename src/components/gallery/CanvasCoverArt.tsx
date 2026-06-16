@@ -124,7 +124,11 @@ function cropStyle(artwork?: VisualArtwork): React.CSSProperties | undefined {
 export function CanvasCoverArt({ songId, gradient, vibe, artwork, className }: CanvasCoverArtProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loadedArtworkPath, setLoadedArtworkPath] = useState<string | null>(null);
-  const artworkReady = !!artwork && loadedArtworkPath === artwork.imagePath;
+  const artworkPath = artwork?.backgroundImagePath ?? artwork?.imagePath;
+  const artworkReady = !!artworkPath && loadedArtworkPath === artworkPath;
+  const generatedCoverOpacity = artworkReady
+    ? Math.max(0.42, 0.82 - (artwork?.renderTreatment?.recommendedOverlay ?? 0.22))
+    : 1;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -159,7 +163,7 @@ export function CanvasCoverArt({ songId, gradient, vibe, artwork, className }: C
     <div className={className} style={{ position: "relative", width: "100%", height: "100%" }}>
       {artwork ? (
         <Image
-          src={artwork.imagePath}
+          src={artworkPath ?? artwork.imagePath}
           alt={`${artwork.title} by ${artwork.artist}`}
           fill
           sizes="(max-width: 768px) 42vw, (max-width: 1280px) 28vw, 22vw"
@@ -168,7 +172,7 @@ export function CanvasCoverArt({ songId, gradient, vibe, artwork, className }: C
             ...cropStyle(artwork),
             opacity: artworkReady ? 1 : 0,
           }}
-          onLoad={() => setLoadedArtworkPath(artwork.imagePath)}
+          onLoad={() => setLoadedArtworkPath(artworkPath ?? artwork.imagePath)}
           onError={() => setLoadedArtworkPath(null)}
         />
       ) : null}
@@ -178,7 +182,7 @@ export function CanvasCoverArt({ songId, gradient, vibe, artwork, className }: C
         style={{
           display: "block",
           mixBlendMode: artworkReady ? "soft-light" : "normal",
-          opacity: artworkReady ? 0.58 : 1,
+          opacity: generatedCoverOpacity,
         }}
       />
     </div>

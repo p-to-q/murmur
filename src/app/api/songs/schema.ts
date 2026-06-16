@@ -33,12 +33,20 @@ export const visualArtworkSchema = z.object({
   source: z.enum(VISUAL_ARTWORK_SOURCES),
   sourceUrl: z.string().min(1),
   imagePath: z.string().min(1),
+  backgroundImagePath: z.string().min(1).optional(),
   license: z.enum(["CC0", "Public Domain"]),
   crop: z.object({
     x: z.number(),
     y: z.number(),
     scale: z.number().min(0.1),
   }),
+  renderTreatment: z.object({
+    intent: z.string().optional(),
+    cropFormat: z.string().optional(),
+    recommendedOverlay: z.number().min(0).max(1).optional(),
+    contrast: z.string().optional(),
+    grain: z.string().optional(),
+  }).optional(),
 });
 
 export const visualFacetsSchema = z.object({

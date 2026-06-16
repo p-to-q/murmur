@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
+import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 
 import { useTranslator } from "@/lib/i18n";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
@@ -45,7 +46,7 @@ const DEMO_SONGS: SongWithMeta[] = [
       gradient: "linear-gradient(148deg, #4E5D6E 0%, #8B96A6 48%, #D8D0C4 100%)",
       particleDensity: 0.4,
       pulseSource: "melody",
-      artwork: demoArtwork("nocturne_metro-aic-56905"),
+      artwork: demoArtwork("nocturne_metro-commons-whistler-nocturne-southampton-water"),
     },
   },
   {
@@ -59,7 +60,7 @@ const DEMO_SONGS: SongWithMeta[] = [
       gradient: "linear-gradient(148deg, #5A8EAA 0%, #9DB8C0 48%, #DFE0DA 100%)",
       particleDensity: 0.35,
       pulseSource: "melody",
-      artwork: demoArtwork("nocturne_metro-aic-20684"),
+      artwork: demoArtwork("nocturne_metro-commons-hassam-rainy-day-fifth-avenue"),
     },
   },
   {
@@ -73,7 +74,7 @@ const DEMO_SONGS: SongWithMeta[] = [
       gradient: "linear-gradient(148deg, #A8C8E8 0%, #E8E2F4 48%, #7FA6CC 100%)",
       particleDensity: 0.45,
       pulseSource: "melody",
-      artwork: demoArtwork("sublime_terrain-aic-146701"),
+      artwork: demoArtwork("sublime_terrain-manual-saam-1967.136.7"),
     },
   },
 ];
@@ -100,6 +101,7 @@ export function GalleryScreen() {
     let cancelled = false;
     async function load() {
       try {
+        await ensureLocalCreatorSession({ background: true });
         const res = await fetch("/api/songs");
         if (res.ok) {
           const data = (await res.json()) as SongWithMeta[];

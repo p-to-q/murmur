@@ -1,0 +1,38 @@
+{
+  "luminist_air": {
+    "description": "空气、低地平线、海岸、静止、淡光；用于 ambient / solo piano / 低能量。",
+    "count": 7
+  },
+  "sublime_terrain": {
+    "description": "山、森林、巨大尺度、崇高感；用于 cinematic / orchestral / post-rock。",
+    "count": 8
+  },
+  "tidal_mineral": {
+    "description": "海、岩石、浪、矿物感，不做海滩旅游感；用于 surf rock / dub / bossa / breakbeat。",
+    "count": 10
+  },
+  "pastoral_memory": {
+    "description": "湖、田野、旧天气、柔软回忆；用于 lo-fi / folk / dream pop。",
+    "count": 6
+  },
+  "nocturne_metro": {
+    "description": "夜、水面、雨街、烟雾、城市反光；用于 trip hop / deep house / city pop。",
+    "count": 8
+  },
+  "printed_signal": {
+    "description": "版画、线条、植物、图谱、符号感；用于 koto / guzheng / minimal techno。",
+    "count": 5
+  },
+  "stage_heat": {
+    "description": "人群、舞台、点彩、公共节奏；用于 disco / funk / swing / party energy。",
+    "count": 8
+  },
+  "interior_reverie": {
+    "description": "房间、窗、床、桌子、私密空间；用于 bedroom / lullaby / neo-soul。",
+    "count": 6
+  },
+  "hypermodern_void": {
+    "description": "早期抽象、科学图像、几何、深色未来感；用于 synthwave / techno / vaporwave。",
+    "count": 5
+  }
+}
