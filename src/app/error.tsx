@@ -37,13 +37,14 @@ export default function GlobalError({
           </div>
 
           <p className="mt-7 text-[11px] uppercase tracking-[0.24em] text-[#9A948B]">
-            {t("error.eyebrow")}
+            {t("error.eyebrow") || "MURMUR"}
           </p>
           <h1 className="hero-serif mt-3 text-[38px] leading-[1.04] text-[#1A1A1A] md:text-[58px]">
-            {t("error.title")}
+            {t("error.title") || "That line slipped off-key."}
           </h1>
           <p className="mt-5 max-w-[460px] text-[15px] leading-7 text-[#6F6A63] md:text-[16px]">
-            {t("error.body")}
+            {t("error.body")
+              || "This page briefly lost the beat. Your melody and saved songs are still here — retry this page, or head home and hum a new line."}
           </p>
           {error.digest && (
             <p className="mt-4 rounded-full border border-[#E5DDD0]/70 bg-white/40 px-3 py-1.5 text-[11px] tracking-[0.06em] text-[#9A948B]">
@@ -54,7 +55,7 @@ export default function GlobalError({
           <div className="mt-9 flex w-full max-w-[360px] flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center">
             <button type="button" onClick={reset} className="mm-btn-primary justify-center">
               <RotateCcw className="size-4" aria-hidden="true" />
-              {t("error.retry")}
+              {t("error.retry") || "Try again"}
             </button>
             {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a
@@ -62,7 +63,7 @@ export default function GlobalError({
               className="inline-flex items-center justify-center gap-2 rounded-full border border-[#D8CFBF]/80 bg-white/45 px-5 py-3.5 text-[14px] font-medium text-[#6F6A63] transition-colors hover:border-[#BFB4A2] hover:bg-white/70 hover:text-[#1A1A1A]"
             >
               <Home className="size-4" aria-hidden="true" />
-              {t("error.home")}
+              {t("error.home") || "Back home"}
             </a>
           </div>
         </section>
