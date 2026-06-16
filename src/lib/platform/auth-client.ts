@@ -138,6 +138,7 @@ export const authClient = {
     return currentUser;
   },
   async logout() {
+    await revokeMurmurSession();
     saveUser(DEFAULT_USER);
   },
   async getSessionHeader() {
@@ -153,3 +154,16 @@ export const authClient = {
     };
   },
 };
+
+async function revokeMurmurSession(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+  } catch {
+    // Local/demo logout still clears the local identity below. The server
+    // route revokes the Murmur session when the network is available.
+  }
+}
