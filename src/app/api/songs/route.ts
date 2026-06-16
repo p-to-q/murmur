@@ -13,25 +13,14 @@ import { log } from "@/lib/observability/log";
 import { COST } from "@murmur/core";
 import { deriveEditDepth, normalizeEditCount } from "@/modules/music/edit-depth";
 import { normalizeLineageDepth, resolveParentSongId, resolveRootSongId } from "@/modules/music/lineage";
+import { arrangementStateSchema, visualConfigSchema } from "./schema";
 import type { MelodySelectionKind } from "@/modules/shared/types";
 import type { songs } from "@/lib/db/schema/songs";
 
 const ROUTE = "/api/songs";
 const SONG_CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
 const MELODY_SELECTION_KINDS = new Set<MelodySelectionKind>(["intent", "corrected", "musical"]);
-const trackStateSchema = z.object({
-  enabled: z.boolean(),
-  intensity: z.number(),
-  originalPattern: z.string(),
-  currentPattern: z.string(),
-  instrument: z.string(),
-  versionHistory: z.array(z.string()),
-  melodyPitchSequence: z.array(z.number()).optional(),
-  chordsTag: z.string().optional(),
-  bassPattern: z.string().optional(),
-  drumsPattern: z.string().optional(),
-  texturePreset: z.string().optional(),
-});
+
 const songPayloadSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -48,21 +37,8 @@ const songPayloadSchema = z.object({
   editCount: z.number().int().optional(),
   editDepth: z.enum(["fresh", "shaped", "reworked"]).optional(),
   mp3DataUrl: z.string().nullable().optional(),
-  visualConfig: z.object({
-    preset: z.string().min(1),
-    gradient: z.string().min(1),
-    particleDensity: z.number(),
-    pulseSource: z.enum(["drums", "melody", "energy"]),
-    posterBg: z.string().optional(),
-  }),
-  arrangementState: z.object({
-    melody: trackStateSchema,
-    chords: trackStateSchema,
-    strings: trackStateSchema,
-    drums: trackStateSchema,
-    bass: trackStateSchema,
-    texture: trackStateSchema,
-  }),
+  visualConfig: visualConfigSchema,
+  arrangementState: arrangementStateSchema,
   tags: z.array(z.string()),
 }).passthrough();
 

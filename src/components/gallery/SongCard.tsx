@@ -5,6 +5,7 @@ import { useInView } from "react-intersection-observer";
 import { motion } from "framer-motion";
 import { CanvasCoverArt } from "./CanvasCoverArt";
 import { mulberry32, hashString } from "@/lib/utils/seeded-random";
+import type { VisualArtwork } from "@/modules/shared/types";
 
 export interface SongCardProps {
   id: string;
@@ -13,6 +14,7 @@ export interface SongCardProps {
   /** The song's stored visualConfig gradient — keeps the cover in sync
    *  with the detail page this card opens. */
   gradient?: string;
+  artwork?: VisualArtwork;
   bpm?: number;
   createdAt: string;
   index: number;
@@ -56,6 +58,7 @@ export function SongCard({
   title,
   vibe,
   gradient,
+  artwork,
   bpm,
   index,
   onClick,
@@ -87,32 +90,41 @@ export function SongCard({
         whileTap={{ scale: 0.97, transition: { duration: 0.1 } }}
         className="group relative block w-full text-left"
       >
-        {/* Cover — 1:1 square */}
-        <div className="relative overflow-hidden rounded-[20px] aspect-square bg-[#F5F1EB]">
+        {/* Cover — circular record */}
+        <div className="relative mx-auto aspect-square w-[92%] overflow-hidden rounded-full bg-[#F5F1EB] shadow-[0_16px_32px_rgba(26,26,26,0.14)] ring-1 ring-[#1A1A1A]/[0.06]">
           {inView ? (
-            <CanvasCoverArt songId={id} gradient={gradient} vibe={vibe} className="w-full h-full" />
+            <CanvasCoverArt
+              songId={id}
+              gradient={gradient}
+              vibe={vibe}
+              artwork={artwork}
+              className="w-full h-full"
+            />
           ) : (
-            <div className="absolute inset-0 bg-gradient-to-r from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer" />
+            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer" />
           )}
 
           {/* Cover zoom on hover */}
           <motion.div
-            className="absolute inset-0 pointer-events-none"
-            animate={{ scale: isHovered ? 1.04 : 1 }}
+            className="absolute inset-0 rounded-full pointer-events-none ring-1 ring-white/35"
+            animate={{ scale: isHovered ? 1.035 : 1 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           />
 
-          {/* Sticker label — text-contour white outline, overlapping bottom of cover */}
+          <div className="absolute inset-[42%] rounded-full bg-[#F5F1EB]/70 shadow-[inset_0_1px_5px_rgba(26,26,26,0.16)] ring-1 ring-[#1A1A1A]/10 backdrop-blur-[1px]" />
+          <div className="absolute inset-[48.5%] rounded-full bg-[#1A1A1A]/20" />
+
+          {/* Sticker label — text-contour white outline, overlapping bottom of record */}
           <motion.div
             custom={index}
             variants={labelVariants}
             initial="hidden"
             animate={inView ? "visible" : "hidden"}
-            className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-center"
+            className="absolute bottom-3 left-3 right-3 flex items-center justify-center"
             style={{ transform: `rotate(${labelRotation}deg)` }}
           >
             <span
-              className="font-serif-italic text-[#1A1A1A] text-[15px] md:text-[17px] leading-tight line-clamp-2 break-words text-center px-2"
+              className="font-serif-italic text-[#1A1A1A] text-[14px] md:text-[16px] leading-tight line-clamp-2 break-words text-center px-2"
               style={{
                 WebkitTextStroke: "6px white",
                 paintOrder: "stroke fill",
@@ -143,7 +155,7 @@ export function SongCard({
             onDelete();
           }}
           aria-label={`Delete ${title}`}
-          className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A]/35 text-white/90 backdrop-blur-sm transition-all hover:bg-[#1A1A1A]/60 opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+          className="absolute top-2 right-4 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A]/35 text-white/90 backdrop-blur-sm transition-all hover:bg-[#1A1A1A]/60 opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
         >
           <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
             <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
