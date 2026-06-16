@@ -27,18 +27,28 @@ const CAROUSEL_SLIDES = [
 ];
 
 const DIRECTIONS = [
-  { initial: { y: "100%", x: 0 }, exit: { y: "-100%", x: 0 } }, // bottom to top
-  { initial: { y: "-100%", x: 0 }, exit: { y: "100%", x: 0 } }, // top to bottom
-  { initial: { x: "100%", y: 0 }, exit: { x: "-100%", y: 0 } }, // right to left
-  { initial: { x: "-100%", y: 0 }, exit: { x: "100%", y: 0 } }, // left to right
+  { y: "100%", x: 0 }, // from bottom
+  { y: "-100%", x: 0 }, // from top
+  { x: "100%", y: 0 }, // from right
+  { x: "-100%", y: 0 }, // from left
 ];
+
+const getOppositeDirection = (dir: { x: number | string; y: number | string }) => {
+  if (typeof dir.y === "string") {
+    return { x: 0, y: dir.y.startsWith("-") ? dir.y.slice(1) : `-${dir.y}` };
+  }
+  if (typeof dir.x === "string") {
+    return { y: 0, x: dir.x.startsWith("-") ? dir.x.slice(1) : `-${dir.x}` };
+  }
+  return dir;
+};
 
 export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
   const t = useTranslator();
   const { data: session } = useSession();
   const { signInWithGoogle } = useGoogleSignIn();
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [direction, setDirection] = useState(0);
+  const [enterDirection, setEnterDirection] = useState(() => DIRECTIONS[0]);
 
   useEffect(() => {
     if (session?.user) {
@@ -58,14 +68,13 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
   useEffect(() => {
     if (!open) return;
     const interval = setInterval(() => {
-      setDirection(Math.floor(Math.random() * DIRECTIONS.length));
+      setEnterDirection(DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)]);
       setCurrentSlide((prev) => (prev + 1) % CAROUSEL_SLIDES.length);
     }, 3000);
     return () => clearInterval(interval);
   }, [open]);
 
   const slide = CAROUSEL_SLIDES[currentSlide];
-  const currentDirection = DIRECTIONS[direction];
 
   return (
     <AnimatePresence>
@@ -90,9 +99,9 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
               <AnimatePresence initial={false}>
                 <motion.div
                   key={currentSlide}
-                  initial={{ ...currentDirection.initial, scale: 0.95 }}
+                  initial={{ ...enterDirection, scale: 0.95 }}
                   animate={{ x: 0, y: 0, scale: 1 }}
-                  exit={{ ...currentDirection.exit, scale: 1.05 }}
+                  exit={{ ...getOppositeDirection(enterDirection), scale: 1.05 }}
                   transition={{
                     duration: 0.7,
                     ease: [0.22, 1, 0.36, 1],
