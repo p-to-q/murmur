@@ -554,8 +554,8 @@ export const DICT = {
 
   // ── Global error / loading / 404 ───────────────────────────────────
   "error.eyebrow":       { zh: "MURMUR", en: "MURMUR" },
-  "error.title":         { zh: "这一句走调了。", en: "That line went off-key." },
-  "error.body":          { zh: "页面出了点问题，不过你的旋律都还在。再试一次，或者先回首页哼一句。", en: "Something broke on this page, but your songs are safe. Try again, or hum a new one from home." },
+  "error.title":         { zh: "这一句有点跑调。", en: "That line slipped off-key." },
+  "error.body":          { zh: "页面临时没接上拍子。你刚才的旋律和已保存的小歌都还在，可以重试这一页，或者先回首页重新哼一句。", en: "This page briefly lost the beat. Your melody and saved songs are still here — retry this page, or head home and hum a new line." },
   "error.digest":        { zh: "错误编号 {id}", en: "Error {id}" },
   "error.retry":         { zh: "再试一次", en: "Try again" },
   "error.home":          { zh: "回首页", en: "Back home" },
