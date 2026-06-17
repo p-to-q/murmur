@@ -286,6 +286,28 @@ gets extra treatment:
   developer mode exposes raw i18n tokens, one-shot browser performance
   snapshots, `/api/qa/health`, `/api/qa/i18n`, and the `/me/debug` cockpit.
   The settings page only fetches those diagnostics after the toggle is enabled.
+- **Melo Lab**: `/me/debug/melo-lab?debug=1` is a test-only local diagnostic
+  bench for "the song does not match my hum" reports. It is enabled in local
+  development, or explicitly with `MURMUR_ENABLE_MELO_LAB=1`; its APIs live
+  under `/api/test/melo-lab/*` and only call loopback workers. The lab records
+  or uploads one hum, sends it to the local audio worker, then lets the tester
+  audition the returned JSON layers through one browser-local renderer:
+  `raw` notes, `intent`, `corrected`, and `musical`. Only after one JSON layer
+  sounds close should the tester invoke the local music worker, which isolates
+  final composition / melody-conditioning drift from transcription errors.
+
+Melo Lab interpretation:
+
+- If `raw` already sounds unlike the hum, fix audio-worker pitch/onset
+  extraction before touching composition.
+- If `raw` is close but `intent`, `corrected`, or `musical` gets worse, fix the
+  repair heuristics or the selection policy in `humming-engine`.
+- If one JSON layer sounds close in the local piano/voice renderer but the
+  music-worker output drifts, tune music conditioning (`MAGENTA_CFG_NOTES`,
+  `style_mix`, prompt constraints, or a stronger lead-melody path).
+- Tester handoff should include the exported provider/stage JSON or CSV file,
+  the layer that sounded closest, and one sentence about where the melody first
+  diverged.
 
 ---
 

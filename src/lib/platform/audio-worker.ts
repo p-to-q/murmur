@@ -278,6 +278,9 @@ function getAudioWorkerUrl(): string | null {
 function normalizeProvider(value: string | undefined): TranscriptionProvider {
   const lower = value?.toLowerCase() ?? "";
   if (lower.includes("swift")) return "swiftf0";
+  if (lower.includes("parselmouth") || lower.includes("praat")) return "parselmouth";
+  if (lower.includes("pyin")) return "pyin";
+  if (lower === "yin" || lower.includes("librosa_yin")) return "yin";
   return "pyin";
 }
 

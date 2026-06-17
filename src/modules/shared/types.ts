@@ -189,7 +189,12 @@ export type TranscriptionInput = {
   targetInstrument?: string;
 };
 
-export type TranscriptionProvider = "swiftf0" | "pyin" | "fixture";
+export type TranscriptionProvider =
+  | "swiftf0"
+  | "pyin"
+  | "yin"
+  | "parselmouth"
+  | "fixture";
 
 export type TranscriptionDiagnostics = {
   duration: number;

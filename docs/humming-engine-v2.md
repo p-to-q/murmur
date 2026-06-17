@@ -313,6 +313,57 @@ Saved songs should also carry lightweight branch lineage so the product can
 distinguish an original save from later branches and keep those derivative
 paths legible in future compare/history experiences.
 
+### 7.5 Melo Lab local bench
+
+`/me/debug/melo-lab?debug=1` is the test-only bench for layer-by-layer melody
+diagnosis. It is deliberately local: `/api/test/melo-lab/transcribe` talks only
+to a loopback audio worker, and `/api/test/melo-lab/music` talks only to a
+loopback music worker. This keeps experiments out of billing, RunPod/serverless,
+and the main Hum -> Vibe product path.
+
+The useful listening order is:
+
+1. original recording;
+2. `raw` notes rendered by the browser-local piano/voice synth;
+3. `intent` melody rendered by the same synth;
+4. `corrected` melody rendered by the same synth;
+5. `musical` melody rendered by the same synth;
+6. local music-worker output for the closest JSON layer.
+
+The first layer that stops sounding like the hum names the area to improve. If
+all JSON layers are close and the final worker output drifts, tune melody
+conditioning instead of transcription.
+
+### 7.6 Melody intent model direction
+
+The current `IntentMelody` / `CorrectedMelody` / `MusicalMelody` split is
+heuristic. It can clean pitch jitter, align timing, and strengthen cadences,
+but it is not yet a true intent model.
+
+A stronger intent layer should sit between audio transcription and music
+generation:
+
+```text
+contour frames + raw notes + diagnostics
+  -> candidate melody hypotheses
+  -> ranked intent skeleton
+  -> corrected / musical variants
+  -> generation-conditioned melody
+```
+
+The model does not need to be a large remote LLM. Good local candidates:
+
+- a deterministic hypothesis scorer over several onset/pitch proposals;
+- a small sequence model trained on hummed-contour -> lead-sheet pairs;
+- a dynamic-programming smoother that preserves phrase contour and repeated
+  motifs while snapping only low-confidence notes;
+- an interactive preference loop from exported Melo Lab provider/stage files:
+  "raw closest", "corrected closest", "musical closest", plus divergence notes.
+
+The contract should be explainable. For every changed note, keep a reason such
+as `low_confidence_pitch`, `off_scale_anchor`, `fragmented_onset`, or
+`cadence_resolution`. That lets Melo Lab show not only what changed, but why.
+
 ## 8. Core pipeline
 
 ### 8.1 Input conditioning
