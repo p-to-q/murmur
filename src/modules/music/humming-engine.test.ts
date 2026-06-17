@@ -257,8 +257,9 @@ describe("humming-engine musical layer", () => {
     const melodies = buildTranscriptionMelodies(corrected.notes, corrected);
 
     expect(melodies.corrected.notes).toHaveLength(4);
-    expect(melodies.musical.notes.length).toBeLessThan(melodies.corrected.notes.length);
+    expect(melodies.musical.notes.length).toBeGreaterThanOrEqual(3);
     expect(melodies.musical.duration).toBeGreaterThanOrEqual(melodies.corrected.duration);
+    expect(melodies.musical.notes.some((note) => note.pitch === 61 || note.pitch === 62)).toBe(true);
   });
 
   it("nudges phrase endings toward a more stable cadence target", () => {
@@ -581,6 +582,37 @@ describe("humming-engine musical layer", () => {
     );
     expect(melodies.musical.notes.length).toBeGreaterThanOrEqual(5);
     expect([0, 4, 7]).toContain(melodies.musical.notes.at(-1)?.pitch % 12);
+  });
+
+  it("keeps true short passing tones while removing embedded noise fragments", () => {
+    const corrected = melody(
+      [
+        { pitch: 60, start: 0, duration: 0.24, velocity: 0.72, confidence: 0.9 },
+        { pitch: 62, start: 0.26, duration: 0.1, velocity: 0.7, confidence: 0.66 },
+        { pitch: 64, start: 0.38, duration: 0.24, velocity: 0.73, confidence: 0.88 },
+        { pitch: 67, start: 0.72, duration: 0.32, velocity: 0.74, confidence: 0.9 },
+      ],
+      {
+        bpm: 120,
+        key: "C",
+        scale: "major",
+        contour: "rising",
+      },
+    );
+
+    const melodies = buildTranscriptionMelodies(corrected.notes, corrected, {
+      diagnostics: {
+        duration: 1.12,
+        snr: 12.5,
+        voicedRatio: 0.8,
+        musicFeelScore: 0.58,
+        acceptanceScore: 0.56,
+        onsetFragmentation: 0.28,
+      },
+    });
+
+    expect(melodies.corrected.notes.map((note) => note.pitch)).toContain(62);
+    expect(melodies.musical.notes.map((note) => note.pitch)).toContain(62);
   });
 
   it("keeps the hummed rhythmic skeleton close enough for band-style arrangement conditioning", () => {

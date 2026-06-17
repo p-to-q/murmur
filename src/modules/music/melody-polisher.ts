@@ -100,6 +100,13 @@ function compactNoiseBursts(notes: MelodyNote[]): MelodyNote[] {
       Math.abs(note.pitch - next!.pitch) >= 4;
 
     if (isolated) return false;
+    if (
+      prev &&
+      next &&
+      isSpuriousInteriorFragment(note, prev, next)
+    ) {
+      return false;
+    }
 
     const farFromCenter =
       Math.abs(note.pitch - medianPitch) >= 15 &&
@@ -108,6 +115,40 @@ function compactNoiseBursts(notes: MelodyNote[]): MelodyNote[] {
 
     return !farFromCenter;
   });
+}
+
+function isSpuriousInteriorFragment(
+  note: MelodyNote,
+  prev: MelodyNote,
+  next: MelodyNote,
+): boolean {
+  const short = note.duration <= 0.13;
+  const weak = note.confidence < 0.68;
+  if (!short || !weak) return false;
+
+  const prevGap = note.start - (prev.start + prev.duration);
+  const nextGap = next.start - (note.start + note.duration);
+  const tightlyEmbedded = prevGap <= 0.055 && nextGap <= 0.075;
+  if (!tightlyEmbedded) return false;
+
+  const fromPrev = note.pitch - prev.pitch;
+  const toNext = next.pitch - note.pitch;
+  const sameAnchor = Math.abs(prev.pitch - next.pitch) <= 1;
+  const abruptDetour =
+    sameAnchor && Math.abs(note.pitch - Math.round((prev.pitch + next.pitch) / 2)) >= 2;
+  const passingMotion =
+    Math.sign(fromPrev) === Math.sign(toNext) &&
+    Math.abs(fromPrev) <= 3 &&
+    Math.abs(toNext) <= 3 &&
+    Math.abs(next.pitch - prev.pitch) >= 2;
+
+  if (passingMotion) return false;
+
+  const tinySamePitchSliver =
+    note.duration <= 0.08 &&
+    (Math.abs(note.pitch - prev.pitch) <= 1 || Math.abs(note.pitch - next.pitch) <= 1);
+
+  return abruptDetour || tinySamePitchSliver;
 }
 
 function mergeAdjacentNotes(notes: MelodyNote[]): MelodyNote[] {

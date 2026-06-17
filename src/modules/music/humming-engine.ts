@@ -918,7 +918,8 @@ function buildMusicalMelody(
     beat,
   );
   const compacted = compactOrnamentalBursts(structural, beat);
-  const urgentStabilized = stabilizeUrgentTiming(compacted, beat);
+  const deFragmented = filterSpuriousMusicalFragments(compacted, beat);
+  const urgentStabilized = stabilizeUrgentTiming(deFragmented, beat);
   const relocatedBase = relocateWeakBeatNotes(urgentStabilized, beat);
   const phrases = detectPhrases(relocatedBase, corrected.bpm);
   if (phrases.length <= 1) {
@@ -1043,7 +1044,8 @@ function buildAcceptanceRepairMelody(
     beat,
   );
   const compacted = compactOrnamentalBursts(structural, beat);
-  const urgentStabilized = stabilizeUrgentTiming(compacted, beat);
+  const deFragmented = filterSpuriousMusicalFragments(compacted, beat);
+  const urgentStabilized = stabilizeUrgentTiming(deFragmented, beat);
   const disciplined = disciplineInteriorDurations(urgentStabilized, beat, repairSeverity, melodyIntent);
   const skeletonAligned = alignRhythmicSkeleton(disciplined, beat, repairSeverity, melodyIntent);
   const regularized = regularizeTimingContours(skeletonAligned, beat, repairSeverity);
@@ -1711,6 +1713,17 @@ function snapSonglikePitches(
       phraseEnd ||
       note.duration >= beat * 0.58 ||
       distanceToNearestGrid(note.start, beat / 2) <= beat * 0.08;
+    const expressivePassingTone =
+      prev &&
+      next &&
+      note.duration <= beat * 0.32 &&
+      note.confidence >= 0.56 &&
+      Math.sign(note.pitch - prev.pitch) === Math.sign(next.pitch - note.pitch) &&
+      Math.abs(note.pitch - prev.pitch) <= 3 &&
+      Math.abs(next.pitch - note.pitch) <= 3 &&
+      Math.abs(next.pitch - prev.pitch) >= 2;
+    if (expressivePassingTone) return { ...note };
+
     const shouldRewrite =
       strength >= 0.5 ||
       note.confidence < 0.84 ||
@@ -2285,6 +2298,16 @@ function compactOrnamentalBursts(notes: MelodyNote[], beat: number): MelodyNote[
       next &&
       Math.abs(current.pitch - prev.pitch) <= 2 &&
       Math.abs(next.pitch - current.pitch) <= 2;
+    const passingMotion =
+      prev &&
+      next &&
+      Math.sign(current.pitch - prev.pitch) === Math.sign(next.pitch - current.pitch) &&
+      Math.abs(next.pitch - prev.pitch) >= 2;
+    const confidentPassingMotion =
+      passingMotion &&
+      (current.confidence >= 0.64 ||
+        next.confidence >= 0.78 ||
+        next.duration >= beat * 0.38);
 
     if (
       prev &&
@@ -2292,7 +2315,8 @@ function compactOrnamentalBursts(notes: MelodyNote[], beat: number): MelodyNote[
       shortBurst &&
       lowConfidence &&
       tinyGapToNext &&
-      bridgeBetweenNeighbors
+      bridgeBetweenNeighbors &&
+      !confidentPassingMotion
     ) {
       compacted[compacted.length - 1] = {
         ...prev,
@@ -2310,6 +2334,46 @@ function compactOrnamentalBursts(notes: MelodyNote[], beat: number): MelodyNote[
   }
 
   return compacted;
+}
+
+function filterSpuriousMusicalFragments(notes: MelodyNote[], beat: number): MelodyNote[] {
+  if (notes.length < 3) return notes.map((note) => ({ ...note }));
+
+  return notes.filter((note, index) => {
+    if (index === 0 || index === notes.length - 1) return true;
+
+    const prev = notes[index - 1]!;
+    const next = notes[index + 1]!;
+    const short = note.duration <= beat * 0.28;
+    const weak = note.confidence < 0.74;
+    if (!short || !weak) return true;
+
+    const prevGap = note.start - (prev.start + prev.duration);
+    const nextGap = next.start - (note.start + note.duration);
+    const embedded = prevGap <= beat * 0.1 && nextGap <= beat * 0.12;
+    if (!embedded) return true;
+
+    const strongBeat = distanceToNearestGrid(note.start, beat / 2) <= beat * 0.045;
+    if (strongBeat && note.confidence >= 0.66) return true;
+
+    const fromPrev = note.pitch - prev.pitch;
+    const toNext = next.pitch - note.pitch;
+    const passingMotion =
+      Math.sign(fromPrev) === Math.sign(toNext) &&
+      Math.abs(fromPrev) <= 3 &&
+      Math.abs(toNext) <= 3 &&
+      Math.abs(next.pitch - prev.pitch) >= 2;
+    if (passingMotion && note.confidence >= 0.6) return true;
+
+    const sameAnchor = Math.abs(prev.pitch - next.pitch) <= 1;
+    const detourFromAnchor =
+      Math.abs(note.pitch - Math.round((prev.pitch + next.pitch) / 2)) >= 2;
+    const tinyEcho =
+      note.duration <= beat * 0.18 &&
+      (Math.abs(note.pitch - prev.pitch) <= 1 || Math.abs(note.pitch - next.pitch) <= 1);
+
+    return !(sameAnchor && detourFromAnchor) && !tinyEcho;
+  });
 }
 
 function stabilizeUrgentTiming(notes: MelodyNote[], beat: number): MelodyNote[] {
