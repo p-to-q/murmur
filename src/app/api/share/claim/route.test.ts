@@ -138,9 +138,8 @@ describe("POST /api/share/claim", () => {
       user: {
         id: "guest",
         email: null,
-        name: "Local Creator",
+        name: "Guest",
         avatarUrl: null,
-        accountKind: "local_creator",
       },
       source: "guest",
       sessionId: null,

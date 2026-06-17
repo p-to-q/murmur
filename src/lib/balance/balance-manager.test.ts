@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { getLocalBalance, spendLocalNotes } from "./balance-manager";
 
-const originalLocalStorage = globalThis.localStorage;
+const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(
+  globalThis,
+  "localStorage",
+);
 
 class MemoryStorage implements Storage {
   private values = new Map<string, string>();
@@ -40,10 +43,11 @@ describe("local creator balance", () => {
   });
 
   afterEach(() => {
-    Object.defineProperty(globalThis, "localStorage", {
-      configurable: true,
-      value: originalLocalStorage,
-    });
+    if (originalLocalStorageDescriptor) {
+      Object.defineProperty(globalThis, "localStorage", originalLocalStorageDescriptor);
+    } else {
+      Reflect.deleteProperty(globalThis, "localStorage");
+    }
   });
 
   it("grants exactly five local notes once", () => {

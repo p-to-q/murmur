@@ -35,6 +35,10 @@ import {
   type MeloLabStageId,
   type MeloLabTranscribeResponse,
 } from "@/lib/test/melo-lab-contract";
+import {
+  generateMeloLabMusic,
+  transcribeMeloLabProvider,
+} from "@/lib/test/melo-lab-client";
 
 type PitchProviderId = MeloLabPitchProviderId;
 type StageId = MeloLabStageId;
@@ -118,6 +122,7 @@ function MeloLabContent() {
   const audioUrlRef = useRef<string | null>(null);
   const musicOutputsRef = useRef<Record<string, MusicOutput | null>>({});
   const mountedRef = useRef(true);
+  const transcribeRunIdRef = useRef(0);
 
   const selectedRun = useMemo(
     () =>
@@ -205,6 +210,8 @@ function MeloLabContent() {
   }, [stopStream]);
 
   const transcribeBlob = useCallback(async (blob: Blob) => {
+    const runId = transcribeRunIdRef.current + 1;
+    transcribeRunIdRef.current = runId;
     setStatus("transcribing");
     setError(null);
     resetFeedback();
@@ -215,8 +222,9 @@ function MeloLabContent() {
     });
 
     const outcomes = await Promise.all(
-      PROVIDERS.map((provider) => transcribeProvider(blob, provider.id)),
+      PROVIDERS.map((provider) => transcribeMeloLabProvider(blob, provider.id)),
     );
+    if (!mountedRef.current || transcribeRunIdRef.current !== runId) return;
     setProviderRuns(outcomes);
 
     const firstReady = outcomes.find(isReadyRun);
@@ -334,52 +342,32 @@ function MeloLabContent() {
     setError(null);
     const melodySource = selectedMusicProbe.source;
     try {
-      const form = new FormData();
-      form.append("prompt", prompt);
-      form.append(
-        "duration",
-        String(
-          Math.min(
-            MELO_LAB_MAX_MUSIC_DURATION_SECONDS,
-            Math.max(2, Math.ceil(selectedMelody.duration || 10)),
-          ),
+      const music = await generateMeloLabMusic({
+        prompt,
+        durationSeconds: Math.min(
+          MELO_LAB_MAX_MUSIC_DURATION_SECONDS,
+          Math.max(2, Math.ceil(selectedMelody.duration || 10)),
         ),
-      );
-      form.append("styleMix", String(styleMix));
-      form.append("melody", JSON.stringify(selectedMelody));
-      if (audioBlob && styleMix > 0) {
-        form.append("hum", audioBlob, filenameForBlob(audioBlob));
-      }
-
-      const response = await fetch("/api/test/melo-lab/music", {
-        method: "POST",
-        body: form,
-        cache: "no-store",
+        styleMix,
+        melody: selectedMelody,
+        hum: audioBlob,
       });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as {
-          message?: string;
-          error?: string;
-        };
-        throw new Error(payload.message || payload.error || `HTTP ${response.status}`);
-      }
-      const blob = await response.blob();
       setMusicOutputs((previous) => {
         const old = previous[selectedOutputKey];
         if (old) URL.revokeObjectURL(old.url);
         return {
           ...previous,
           [selectedOutputKey]: {
-            url: URL.createObjectURL(blob),
+            url: URL.createObjectURL(music.blob),
             provider: selectedProvider,
             stage: selectedStage,
             prompt,
             styleMix,
             melodySource,
-            model: response.headers.get("x-model"),
-            generationMs: response.headers.get("x-generation-ms"),
-            melodyConditioned: response.headers.get("x-melody-conditioned"),
-            cfgNotes: response.headers.get("x-cfg-notes"),
+            model: music.model,
+            generationMs: music.generationMs,
+            melodyConditioned: music.melodyConditioned,
+            cfgNotes: music.cfgNotes,
           },
         };
       });
@@ -1462,42 +1450,6 @@ function NoteChips({ pitches }: { pitches: number[] }) {
   );
 }
 
-async function transcribeProvider(
-  blob: Blob,
-  provider: PitchProviderId,
-): Promise<ProviderRun> {
-  const startedAt = performance.now();
-  const form = new FormData();
-  form.append("audio", blob, filenameForBlob(blob));
-  form.append("targetInstrument", "piano");
-  form.append("pitchProvider", provider);
-
-  try {
-    const response = await fetch("/api/test/melo-lab/transcribe", {
-      method: "POST",
-      body: form,
-      cache: "no-store",
-    });
-    const payload = (await response.json()) as unknown;
-    if (!response.ok) {
-      throw new Error(errorMessageFromPayload(payload, response.status));
-    }
-    return {
-      provider,
-      status: "ready",
-      response: payload as MeloLabResponse,
-      elapsedMs: Math.round(performance.now() - startedAt),
-    };
-  } catch (err) {
-    return {
-      provider,
-      status: "error",
-      error: err instanceof Error ? err.message : String(err),
-      elapsedMs: Math.round(performance.now() - startedAt),
-    };
-  }
-}
-
 function isReadyRun(run: ProviderRun): run is ReadyProviderRun {
   return run.status === "ready";
 }
@@ -1762,20 +1714,6 @@ function policyFacts(profile: MelodyIntentProfile): Array<[string, string]> {
   ];
 }
 
-function errorMessageFromPayload(payload: unknown, status: number): string {
-  if (payload && typeof payload === "object") {
-    const record = payload as Record<string, unknown>;
-    if (typeof record.message === "string") return record.message;
-    if (typeof record.error === "string") return record.error;
-    if (record.detail && typeof record.detail === "object") {
-      const detail = record.detail as Record<string, unknown>;
-      if (typeof detail.message === "string") return detail.message;
-      if (typeof detail.error === "string") return detail.error;
-    }
-  }
-  return `HTTP ${status}`;
-}
-
 function renderNotes(
   ctx: AudioContext,
   notes: MelodyNote[],
@@ -1913,13 +1851,6 @@ function averageConfidence(notes: MelodyNote[]): string {
 
 function stageTitle(stage: StageId): string {
   return STAGES.find((item) => item.id === stage)?.title ?? stage;
-}
-
-function filenameForBlob(blob: Blob): string {
-  if (blob.type.includes("webm")) return "hum.webm";
-  if (blob.type.includes("mp4") || blob.type.includes("m4a")) return "hum.m4a";
-  if (blob.type.includes("wav")) return "hum.wav";
-  return "hum.audio";
 }
 
 function mediaRecorderOptions(): MediaRecorderOptions {

@@ -8,15 +8,18 @@ import numpy as np
 
 from audio_engine.detectors import DetectorConfig, DetectorUnavailable, PitchDetection
 
+PARSELMOUTH_MISSING_MESSAGE = (
+    "praat-parselmouth is not installed; install "
+    "workers/audio-engine/requirements-lab.txt"
+)
+
 
 def detect_parselmouth(audio: object, config: DetectorConfig) -> PitchDetection:
     """Detect speech-like hum f0 frames with Praat through Parselmouth."""
     try:
         import parselmouth
     except Exception as exc:
-        raise DetectorUnavailable(
-            "praat-parselmouth is not installed; install workers/audio-engine/requirements-lab.txt",
-        ) from exc
+        raise DetectorUnavailable(PARSELMOUTH_MISSING_MESSAGE) from exc
 
     started = time.perf_counter()
     y = np.asarray(audio, dtype=np.float64)
@@ -28,7 +31,7 @@ def detect_parselmouth(audio: object, config: DetectorConfig) -> PitchDetection:
         pitch_ceiling=config.fmax,
     )
     f0 = np.asarray(pitch.selected_array["frequency"], dtype=np.float64)
-    frame_count = int(len(f0))
+    frame_count = len(f0)
     voiced = np.isfinite(f0) & (f0 > 0)
     confidence = np.where(voiced, 0.72, 0.0).astype(np.float64)
     timestamps = np.arange(frame_count, dtype=np.float32) * time_step
