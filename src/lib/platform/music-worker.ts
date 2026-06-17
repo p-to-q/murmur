@@ -1,11 +1,20 @@
 /**
  * Resolution for the Magenta RealTime music worker transport.
  *
- * Production runs on a RunPod Serverless endpoint (`RUNPOD_SERVERLESS_ENDPOINT_ID`
- * + `RUNPOD_API_KEY`). Local dev talks to the FastAPI worker over HTTP
- * (`bun run dev:music`, default `http://127.0.0.1:8002`); `MUSIC_WORKER_URL`
- * can also point at a legacy HTTP worker. When neither is configured the app
- * stays on the legacy Tone.js synth engine.
+ * Two production transports run side by side and are switchable at runtime:
+ *  - "serverless" — a RunPod Serverless endpoint (`RUNPOD_SERVERLESS_ENDPOINT_ID`
+ *    + `RUNPOD_API_KEY`). Scale-to-zero; cheap when idle but a cold start can run
+ *    minutes — far past the route's wait budget.
+ *  - "http" — a long-lived HTTP worker (`MUSIC_WORKER_URL` + `MUSIC_WORKER_TOKEN`),
+ *    e.g. a RunPod GPU *pod* running the FastAPI server (workers/music-engine/
+ *    main.py), or the local `bun run dev:music` worker on :8002. A warm pod
+ *    answers instantly; stop it when unused to stop paying for the GPU.
+ *
+ * `MUSIC_ENGINE_MODE` picks between them without unconfiguring either:
+ *   "serverless" → force serverless · "http"/"pod" → force the HTTP worker ·
+ *   "auto"/unset → serverless wins when configured, else the HTTP worker.
+ * Flip the env var (+ redeploy) to switch the live transport. When neither
+ * transport is configured the app stays on the legacy Tone.js synth engine.
  */
 
 export type MusicEngineMode = "serverless" | "http";
@@ -31,16 +40,32 @@ export function getMusicWorkerUrl(): string | null {
   return null;
 }
 
+/** Explicit transport preference from `MUSIC_ENGINE_MODE` (default "auto"). */
+function getMusicModePreference(): MusicEngineMode | "auto" {
+  const raw = process.env.MUSIC_ENGINE_MODE?.trim().toLowerCase();
+  if (raw === "serverless") return "serverless";
+  if (raw === "http" || raw === "pod" || raw === "worker") return "http";
+  return "auto"; // "auto", unset, or unrecognized
+}
+
 /**
  * Which transport serves music generation right now?
- *  - "serverless" — RunPod Serverless (prod); wins whenever configured.
- *  - "http"       — direct HTTP worker (local dev default, or legacy URL).
- *  - null         — neither; the app stays on the legacy Tone.js engine.
+ *  - "serverless" — RunPod Serverless.
+ *  - "http"       — long-lived HTTP worker / GPU pod (or local dev on :8002).
+ *  - null         — neither configured; the app stays on the legacy Tone.js engine.
+ *
+ * `MUSIC_ENGINE_MODE` forces a transport; when the forced one isn't configured
+ * we fall back to the other rather than going dark. "auto" (the default)
+ * prefers serverless when configured.
  */
 export function getMusicEngineMode(): MusicEngineMode | null {
-  if (getMusicServerlessConfig()) return "serverless";
-  if (getMusicWorkerUrl()) return "http";
-  return null;
+  const serverless = getMusicServerlessConfig() ? "serverless" : null;
+  const http = getMusicWorkerUrl() ? "http" : null;
+  const preference = getMusicModePreference();
+
+  if (preference === "http") return http ?? serverless;
+  if (preference === "serverless") return serverless ?? http;
+  return serverless ?? http; // auto: serverless wins
 }
 
 /** True when this deployment is wired for Magenta (serverless, dev, or legacy URL). */

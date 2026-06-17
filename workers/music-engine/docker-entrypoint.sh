@@ -50,5 +50,16 @@ if [ ! -f "$CHECKPOINT" ]; then
   exit 1
 fi
 
+# Role decides what the (now model-ready) container runs:
+#   handler — RunPod Serverless queue handler (default; scale-to-zero endpoint).
+#   server  — long-lived FastAPI HTTP worker for a RunPod GPU *pod*, reachable at
+#             https://<podId>-<port>.proxy.runpod.net and driven via MUSIC_WORKER_URL.
+ROLE="${MUSIC_ENGINE_ROLE:-handler}"
+if [ "$ROLE" = "server" ]; then
+  PORT="${MUSIC_ENGINE_PORT:-8002}"
+  echo "[entrypoint] starting FastAPI server on 0.0.0.0:${PORT} (backend=${MAGENTA_BACKEND:-jax})"
+  exec python -u -m uvicorn main:app --host 0.0.0.0 --port "${PORT}"
+fi
+
 echo "[entrypoint] starting RunPod serverless handler (backend=${MAGENTA_BACKEND:-jax})"
 exec python -u handler.py
