@@ -14,7 +14,7 @@ constraints, indexes, and migration order.
 
 ## 1. Conventions
 
-- All tables live in `apps/web/src/lib/db/schema/<entity>.ts`.
+- All tables live in `src/lib/db/schema/<entity>.ts`.
 - One table per file. Re-export in `schema/index.ts`.
 - Primary keys are ulid strings with a type prefix
   (`api-conventions.md` §2).
@@ -64,6 +64,8 @@ notesBalance:       integer("notes_balance").notNull().default(15),
 freeNotesGrantedAt: timestamp("free_notes_granted_at").notNull().defaultNow(),
 planTier:           varchar("plan_tier", { length: 16 }).notNull().default("free"),
 regionId:           varchar("region_id", { length: 8 }).notNull().default("intl"),
+accountKind:        varchar("account_kind", { length: 32 }).notNull().default("registered"),
+promotedAt:         timestamp("promoted_at"),
 deletedAt:          timestamp("deleted_at"),
 consents:           jsonb("consents").$type<Consents>().notNull().default(sql`'{"termsAcceptedAt":null,"privacyAcceptedAt":null,"pipl":null,"marketingOptIn":false}'`),
 ```
@@ -72,12 +74,14 @@ Constraints:
 
 - `planTier IN ("free", "premium")`.
 - `regionId IN ("intl", "cn")`.
+- `accountKind IN ("local_creator", "registered")`.
 - `notesBalance >= 0` (enforced in app; DB check optional).
 
 Indexes (in addition to existing email + createdAt):
 
 - `users_plan_tier_idx ON (plan_tier)`
 - `users_region_id_idx ON (region_id)`
+- `users_account_kind_idx ON (account_kind)`
 - `users_deleted_at_idx ON (deleted_at)` — partial where `deleted_at IS NOT NULL`
 
 Backfill (§v2-0001 → v2-0007):
@@ -157,8 +161,8 @@ export const notesLedger = pgTable(
     reason:      varchar("reason", { length: 32 }).notNull(),
     // reason taxonomy:
     //   "spend:hum" | "spend:llm_edit" | "spend:save" | "spend:export_webm"
-    //   "grant:daily_free" | "grant:signup_bonus" | "grant:cutover_gift"
-    //   "purchase:topup" | "refund:topup" | "manual:op_grant"
+    //   "grant:daily_free" | "grant:signup_bonus" | "grant:cutover_gift" | "grant:referral"
+    //   "purchase:topup" | "refund:topup" | "refund:spend" | "manual:op_grant"
     externalRef: text("external_ref"),                       // provider tx id, song id, etc.
     metadata:    jsonb("metadata").$type<Record<string, unknown>>().notNull().default(sql`'{}'`),
     createdAt:   timestamp("created_at").notNull().defaultNow(),
@@ -181,7 +185,7 @@ Invariants:
 - Every business action that consumes or grants notes inserts exactly
   one ledger row inside the same SQL transaction as the action itself.
 
-Helper in `apps/web/src/lib/db/queries/notes-ledger.ts`:
+Helper in `src/lib/db/queries/notes-ledger.ts`:
 
 ```ts
 async function spendNotes(

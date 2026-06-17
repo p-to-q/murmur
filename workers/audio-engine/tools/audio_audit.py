@@ -766,7 +766,7 @@ def main() -> int:
     parser.add_argument(
       "--provider",
       default="auto",
-      choices=["auto", "pyin", "swiftf0"],
+      choices=["auto", "pyin", "swiftf0", "yin", "parselmouth"],
       help="Pitch provider to audit",
     )
     parser.add_argument(
@@ -777,7 +777,7 @@ def main() -> int:
     parser.add_argument(
       "--all-providers",
       action="store_true",
-      help="Run the audit across auto, swiftf0, and pyin for side-by-side comparison",
+      help="Run the audit across auto, swiftf0, pyin, yin, and parselmouth for side-by-side comparison",
     )
     parser.add_argument(
       "--strict",
@@ -804,7 +804,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    providers = ["auto", "swiftf0", "pyin"] if args.all_providers else [args.provider]
+    providers = ["auto", "swiftf0", "pyin", "yin", "parselmouth"] if args.all_providers else [args.provider]
     runs: list[dict[str, object]] = []
     cases = [] if args.manifest_only else build_cases()
     if args.manifest:

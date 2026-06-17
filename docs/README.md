@@ -11,6 +11,8 @@ remain the source of truth for everything the v2 docs do not override.
 - [tech-stack.md](tech-stack.md) — current stack + deploy topology (Vercel /
   RunPod / Waffo / local cloudflared)
 - [music-engine.md](music-engine.md) — chord / bass / drum engines + assemble-song
+- [melody-intent-and-vocal-card.md](melody-intent-and-vocal-card.md) —
+  melody intent profile + lightweight vocal-card repair direction
 - [provider-strategy.md](provider-strategy.md) — Stainer transcription facade
 - [billing-waffo.md](billing-waffo.md) — web payments (Waffo) + idempotent
   note grants

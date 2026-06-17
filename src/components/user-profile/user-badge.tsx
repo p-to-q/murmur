@@ -25,6 +25,9 @@ export function UserBadge() {
         email: session.user.email || null,
         name: session.user.name || null,
         avatarUrl: session.user.image || null,
+        accountKind:
+          (session.user as { accountKind?: "local_creator" | "registered" }).accountKind
+          ?? "registered",
       } as AppUser)
     : platformUser;
 

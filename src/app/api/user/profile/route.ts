@@ -1,15 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { resolveRequestAuth } from "@/lib/auth";
 import { upsertUser } from "@/lib/db/queries";
 import { log } from "@/lib/observability/log";
 
 /**
  * GET /api/user/profile
- * Reads the local platform user headers and returns the current profile.
- * Also upserts the user into the local DB so user info is always up to date.
+ * Returns the session-resolved profile. Local/demo header identities are
+ * accepted only when the auth resolver explicitly allows fallbacks.
  */
 export async function GET(request: NextRequest) {
-  const auth = requireAuth(request);
+  const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
 
   const { user } = auth;

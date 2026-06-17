@@ -15,6 +15,49 @@ export type CleanMelody = {
   contour: "rising" | "falling" | "wave" | "flat";
 };
 
+export type TonalCandidate = {
+  key: string;
+  scale: CleanMelody["scale"];
+  family: "major" | "minor";
+  confidence: number;
+};
+
+export type MelodyIntentProfile = {
+  skeleton: CleanMelody;
+  tonalCandidates: TonalCandidate[];
+  lockedTonalCandidate: TonalCandidate;
+  stableAnchorPitches: number[];
+  phraseEndingPitches: number[];
+  confidence: number;
+  intentMatch: number;
+  musicalityBias: number;
+  intervalPolicy: {
+    preferredMotion: "stepwise" | "balanced" | "leap-friendly";
+    maxUnpreparedLeap: number;
+    preserveLeapThreshold: number;
+    anchorPitchClasses: number[];
+    cadencePitchClasses: number[];
+  };
+  rhythmPolicy: {
+    beatSeconds: number;
+    gridSeconds: number;
+    minNoteSeconds: number;
+    phraseEndHoldSeconds: number;
+    quantizeStrength: number;
+    phraseBreakSeconds: number;
+    microPauseSeconds: number;
+    sentenceSeparationSeconds: number;
+  };
+  correctionPolicy: {
+    allowedPitchClasses: number[];
+    correctionStrength: number;
+    retuneSpeed: number;
+    timingQuantize: number;
+    vibratoTolerance: number;
+    formantPolicy: "preserve" | "ignore";
+  };
+};
+
 export type TranscriptionMelodies = {
   intent: CleanMelody;
   corrected: CleanMelody;
@@ -189,7 +232,12 @@ export type TranscriptionInput = {
   targetInstrument?: string;
 };
 
-export type TranscriptionProvider = "swiftf0" | "pyin" | "fixture";
+export type TranscriptionProvider =
+  | "swiftf0"
+  | "pyin"
+  | "yin"
+  | "parselmouth"
+  | "fixture";
 
 export type TranscriptionDiagnostics = {
   duration: number;
@@ -209,11 +257,15 @@ export type TranscriptionDiagnostics = {
   firstOnsetLag?: number | null;
   urgentCoherence?: number | null;
   frameCount?: number;
+  decodeMs?: number;
+  trimMs?: number;
   denoiseMs?: number;
   denoiseProvider?: "off" | "deepfilternet";
   denoiseModel?: string | null;
+  providerPitchMs?: number;
   pitchMs?: number;
   polishMs?: number;
+  totalMs?: number;
   workerMs?: number;
   targetInstrument?: string;
   rangeClampApplied?: boolean;
@@ -224,7 +276,12 @@ export type TranscriptionDiagnostics = {
   proposalGlideRatio?: number | null;
   proposalWobbleRatio?: number | null;
   proposalUrgentRatio?: number | null;
+  noteDensity?: number | null;
   hypothesisCandidates?: string;
+  alternateReviewMode?: string;
+  alternateReviewHypotheses?: string;
+  detailPreservingRerank?: string;
+  ensembleScore?: number | null;
   ensembleCandidates?: string;
   ensembleDecision?: string;
   ensembleSelected?: string;
@@ -246,6 +303,7 @@ export type TranscriptionResult = {
   provider: TranscriptionProvider;
   rawNotes: MelodyNote[];
   contour?: TranscriptionContour;
+  melodyIntent?: MelodyIntentProfile;
   melodies: TranscriptionMelodies;
   selectedMelodyKind: MelodySelectionKind;
   cleanMelody: CleanMelody;

@@ -25,6 +25,12 @@ class DetectorSelectionTests(unittest.TestCase):
         with patch.dict(os.environ, {"AUDIO_ENGINE_PITCH_PROVIDER": "swiftf0"}):
             self.assertEqual(configured_pitch_provider(), "swiftf0")
 
+    def test_light_lab_providers_are_supported(self):
+        with patch.dict(os.environ, {"AUDIO_ENGINE_PITCH_PROVIDER": "yin"}):
+            self.assertEqual(configured_pitch_provider(), "yin")
+        with patch.dict(os.environ, {"AUDIO_ENGINE_PITCH_PROVIDER": "parselmouth"}):
+            self.assertEqual(configured_pitch_provider(), "parselmouth")
+
     def test_explicit_swiftf0_provider_fails_loudly_when_unavailable(self):
         swift_module = ModuleType("audio_engine.swift_f0_provider")
         swift_module.detect_swiftf0 = fail_swiftf0
@@ -90,6 +96,44 @@ class DetectorSelectionTests(unittest.TestCase):
 
         self.assertEqual(result.provider, "pyin")
 
+    def test_explicit_yin_provider_uses_yin_detector(self):
+        yin_module = ModuleType("audio_engine.yin_provider")
+        yin_module.detect_yin = return_yin
+
+        with patch.dict("sys.modules", {"audio_engine.yin_provider": yin_module}):
+            result = detect_pitch(
+                object(),
+                DetectorConfig(
+                    provider="yin",
+                    sample_rate=22050,
+                    fmin=75,
+                    fmax=1050,
+                    frame_length=2048,
+                    hop_length=512,
+                ),
+            )
+
+        self.assertEqual(result.provider, "yin")
+
+    def test_explicit_parselmouth_provider_uses_parselmouth_detector(self):
+        parselmouth_module = ModuleType("audio_engine.parselmouth_provider")
+        parselmouth_module.detect_parselmouth = return_parselmouth
+
+        with patch.dict("sys.modules", {"audio_engine.parselmouth_provider": parselmouth_module}):
+            result = detect_pitch(
+                object(),
+                DetectorConfig(
+                    provider="parselmouth",
+                    sample_rate=22050,
+                    fmin=75,
+                    fmax=1050,
+                    frame_length=2048,
+                    hop_length=512,
+                ),
+            )
+
+        self.assertEqual(result.provider, "parselmouth")
+
     def test_unknown_provider_fails_loudly(self):
         with patch.dict(os.environ, {"AUDIO_ENGINE_PITCH_PROVIDER": "mystery"}):
             with self.assertRaisesRegex(DetectorUnavailable, "Unsupported"):
@@ -103,6 +147,34 @@ def fail_swiftf0(_audio, _config):
 def return_empty_pyin(_audio, _config):
     return PitchDetection(
         provider="pyin",
+        timestamps=[],
+        f0=[],
+        voiced=[],
+        confidence=[],
+        diagnostics={},
+        warnings=[],
+        sample_rate=22050,
+        hop_length=512,
+    )
+
+
+def return_yin(_audio, _config):
+    return PitchDetection(
+        provider="yin",
+        timestamps=[],
+        f0=[],
+        voiced=[],
+        confidence=[],
+        diagnostics={},
+        warnings=[],
+        sample_rate=22050,
+        hop_length=512,
+    )
+
+
+def return_parselmouth(_audio, _config):
+    return PitchDetection(
+        provider="parselmouth",
         timestamps=[],
         f0=[],
         voiced=[],

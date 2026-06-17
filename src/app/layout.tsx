@@ -15,10 +15,10 @@ import { I18nHydrator } from "@/lib/i18n";
 import { cn } from "@/utils/utils";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { FontHydrator } from "@/components/murmur/font-hydrator";
+import { ShareReferralTracker } from "@/components/murmur/share-referral-tracker";
+import { getSiteUrl } from "@/lib/site-url";
 
-const SITE_URL =
-  process.env.MURMUR_APP_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+const SITE_URL = getSiteUrl();
 
 const instrumentalSerif = Instrument_Serif({
   subsets: ["latin"],
@@ -118,6 +118,7 @@ export default function RootLayout({
         <AuthProvider>
           <I18nHydrator />
           <FontHydrator />
+          <ShareReferralTracker />
           {/* Desktop sidebar (md+) — mobile hides via internal media query */}
           <SideNav />
           {/* Main content area:

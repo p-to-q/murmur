@@ -145,6 +145,9 @@ export const authClient = {
     return null;
   },
   getRequestHeaders(): Record<string, string> {
+    const mode = process.env.NEXT_PUBLIC_MURMUR_AUTH_MODE?.trim().toLowerCase();
+    if (mode !== "local") return {};
+
     const user = loadUser();
     return {
       "x-murmur-user-id": user.id,

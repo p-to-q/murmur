@@ -384,11 +384,11 @@ function getUserMilestone(songCount: number): {
   };
 }
 
-function useRefillCopy(nextRefillAtIso?: string): string {
+function useRefillCopy(nextRefillAtIso?: string | null): string {
   const t = useTranslator();
   if (!nextRefillAtIso) {
     return (
-      t("me.notes.refill_default") || "5 notes refill every day at midnight."
+      t("me.notes.refill_default") || "Local Creator gets 5 free notes once. Sign in to continue after that."
     );
   }
   const next = new Date(nextRefillAtIso);
@@ -403,14 +403,14 @@ function useRefillCopy(nextRefillAtIso?: string): string {
   const minutes = Math.floor((diffMs % 3_600_000) / 60_000);
   if (hours > 1) {
     return (
-      t("me.notes.refill_in_hours") || "5 more notes in about {hours}h."
+      t("me.notes.refill_in_hours") || "Free notes in about {hours}h."
     ).replace("{hours}", String(hours));
   }
   if (hours === 1) {
-    return t("me.notes.refill_in_1h") || "5 more notes in about an hour.";
+    return t("me.notes.refill_in_1h") || "Free notes in about an hour.";
   }
   return (
-    t("me.notes.refill_in_minutes") || "5 more notes in about {minutes} min."
+    t("me.notes.refill_in_minutes") || "Free notes in about {minutes} min."
   ).replace("{minutes}", String(Math.max(minutes, 1)));
 }
 

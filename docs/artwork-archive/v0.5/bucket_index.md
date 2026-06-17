@@ -2,6 +2,8 @@
 
 Murmur 的图像不是封面海报，而是 seeded emotional field：有艺术史气质、略冷门、友好、安静，能做背景或辅助，不抢唱片、波形和标题。
 
+> Archive-only reference: the `/artworks/...` paths below describe the v0.5 source pack as checked into the archive. They are not a promise about current runtime public paths.
+
 ## luminist_air — 7
 空气、低地平线、海岸、静止、淡光；用于 ambient / solo piano / 低能量。
 
@@ -100,4 +102,3 @@ Murmur 的图像不是封面海报，而是 seeded emotional field：有艺术�
 - **Discomedusae, plate 8 from Kunstformen der Natur** — Ernst Haeckel, 1904 · fit 0.76 · `/artworks/hypermodern_void/commons-haeckel-discomedusae-8.jpg`
 - **Nocturne in Black and Gold: The Falling Rocket** — James McNeill Whistler, 1875 · fit 0.92 · `/artworks/hypermodern_void/commons-whistler-nocturne-black-gold-falling-rocket.jpg`
 - **To Edgar Poe (The Eye, Like a Strange Balloon, Mounts toward Infinity)** — Odilon Redon, 1882 · fit 0.82 · `/artworks/hypermodern_void/commons-redon-eye-like-a-strange-balloon.jpg`
-

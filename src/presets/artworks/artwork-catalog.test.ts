@@ -1,14 +1,54 @@
 import { describe, expect, it } from "bun:test";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { ARTWORK_CATALOG } from "./catalog";
 import { pickArtworkSelection } from "./artwork-matcher";
 
+const EXCLUDED_ARTWORK_IDS = [
+  "sublime_terrain-commons-church-cotopaxi",
+  "nocturne_metro-commons-caillebotte-paris-street-rainy-day",
+] as const;
+
+const RESTORED_ARTWORK_IDS = [
+  "hypermodern_void-aic-65916",
+  "interior_reverie-aic-28560",
+  "nocturne_metro-aic-56905",
+  "printed_signal-aic-33398",
+  "printed_signal-met-37193",
+  "stage_heat-aic-27992",
+  "tidal_mineral-aic-24645",
+] as const;
+
+function publicAssetExists(path: string): boolean {
+  return existsSync(join(process.cwd(), "public", path.replace(/^\//, "")));
+}
+
 describe("artwork catalog", () => {
   it("loads the archived v0.5 seed pack", () => {
-    expect(ARTWORK_CATALOG).toHaveLength(61);
-    expect(new Set(ARTWORK_CATALOG.map((entry) => entry.id)).size).toBe(61);
+    const ids = new Set(ARTWORK_CATALOG.map((entry) => entry.id));
+
+    expect(ARTWORK_CATALOG).toHaveLength(68);
+    expect(ids.size).toBe(68);
     expect(ARTWORK_CATALOG.every((entry) => entry.backgroundImagePath?.startsWith("/background_ready/"))).toBe(true);
-    expect(ARTWORK_CATALOG.some((entry) => entry.id === "sublime_terrain-commons-church-cotopaxi")).toBe(false);
-    expect(ARTWORK_CATALOG.some((entry) => entry.id === "nocturne_metro-commons-caillebotte-paris-street-rainy-day")).toBe(false);
+
+    for (const id of EXCLUDED_ARTWORK_IDS) {
+      expect(ids.has(id)).toBe(false);
+    }
+
+    for (const id of RESTORED_ARTWORK_IDS) {
+      expect(ids.has(id)).toBe(true);
+    }
+  });
+
+  it("keeps active artwork image files wired to public assets", () => {
+    const missingAssets = ARTWORK_CATALOG.flatMap((entry) => {
+      const paths = [entry.imagePath, entry.backgroundImagePath].filter(
+        (path): path is string => Boolean(path),
+      );
+      return paths.filter((path) => !publicAssetExists(path));
+    });
+
+    expect(missingAssets).toEqual([]);
   });
 
   it("returns a persistable artwork selection with background render hints", () => {

@@ -84,7 +84,8 @@ necessary to build, validate, or operate the product.
 
 Current script example:
 
-- `scripts/test-music-gen.ts`
+- `scripts/local-stack-smoke.ts`
+- `scripts/page-contract-smoke.ts`
 
 ## 3. Static assets
 
@@ -94,8 +95,10 @@ These are checked-in files that the app can serve directly.
 
 Examples:
 
-- `public/favicon.svg`
-- brand or icon assets
+- `public/favicon.ico`
+- `public/favicon.png`
+- `public/icon.png`
+- brand, manifest, share-card, or artwork assets
 
 ## 4. Documentation surfaces
 

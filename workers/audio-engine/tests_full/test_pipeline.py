@@ -1134,13 +1134,21 @@ class WorkerPipelineTests(unittest.TestCase):
 
         notes = [
             {"pitch": 67, "start": 0.032, "duration": 0.32, "velocity": 0.826, "confidence": 0.972},
-            {"pitch": 67, "start": 0.464, "duration": 0.272, "velocity": 0.817, "confidence": 0.961},
+            {"pitch": 67, "start": 0.344, "duration": 0.04, "velocity": 0.817, "confidence": 0.961},
             {"pitch": 69, "start": 0.832, "duration": 0.304, "velocity": 0.837, "confidence": 0.985},
             {"pitch": 67, "start": 1.217, "duration": 0.368, "velocity": 0.836, "confidence": 0.983},
         ]
 
         collapsed = collapse_adjacent_same_pitch(notes)
         self.assertEqual([int(note["pitch"]) for note in collapsed], [67, 69, 67])
+
+        repeated_same_pitch = [
+            {"pitch": 67, "start": 0.0, "duration": 0.34, "velocity": 0.82, "confidence": 0.97},
+            {"pitch": 67, "start": 0.42, "duration": 0.3, "velocity": 0.81, "confidence": 0.96},
+            {"pitch": 69, "start": 0.82, "duration": 0.3, "velocity": 0.83, "confidence": 0.98},
+        ]
+        preserved = collapse_adjacent_same_pitch(repeated_same_pitch)
+        self.assertEqual(len(preserved), 3)
 
         detour_notes = [
             {"pitch": 67, "start": 0.16, "duration": 0.24, "velocity": 0.826, "confidence": 0.972},

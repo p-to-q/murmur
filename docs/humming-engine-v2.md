@@ -273,6 +273,13 @@ Typical operations:
 - beat placement cleanup;
 - context-aware note relocation when the original placement is musically weak.
 
+Hard guardrail: even when this layer leans toward a more finished band /
+accompaniment-ready melody, it must still preserve the hum's trace. Opening
+and ending notes, strong-beat anchors, stable long notes, phrase endings, and
+repeated motives should remain close enough that the user can recognize the
+idea they sang. Off-scale or unstable anchors may be corrected to nearby
+musical targets, but "more songlike" must not become an arbitrary rewrite.
+
 Use for:
 
 - "pleasant" mode;
@@ -312,6 +319,84 @@ if it still lived only at the original raw melody branch point.
 Saved songs should also carry lightweight branch lineage so the product can
 distinguish an original save from later branches and keep those derivative
 paths legible in future compare/history experiences.
+
+### 7.5 Melo Lab local bench
+
+`/me/debug/melo-lab?debug=1` is the test-only bench for layer-by-layer melody
+diagnosis. The page can live as a hidden debug-room surface, but its execution
+boundary is local: `/api/test/melo-lab/transcribe` talks only to a loopback
+audio worker, and `/api/test/melo-lab/music` talks only to a loopback music
+worker. This keeps experiments out of billing, RunPod/serverless, and the main
+Hum -> Vibe product path while still leaving room for a small discoverable
+debug surprise.
+
+Packaging rule: Melo Lab may ship as inert UI in a web/client build, but the
+test APIs stay disabled in production unless `MURMUR_ENABLE_MELO_LAB=1` is set,
+and even then they must only resolve `localhost`, `127.0.0.1`, or `::1` worker
+URLs. Do not point these routes at production workers or expose them as part of
+the main user journey.
+
+The shared test contract lives in `src/lib/test/melo-lab-contract.ts`. The page
+and API routes read the same provider list, stage list, prompt defaults, byte
+limits, diagnostic key list, and feedback-packet contract version from that
+file. The same module also exports the compact diagnostics helper so the UI and
+handoff packets cannot drift apart.
+
+The useful listening order is:
+
+1. original recording;
+2. `raw` notes rendered by the browser-local piano/voice synth;
+3. `intent` melody rendered by the same synth;
+4. `corrected` melody rendered by the same synth;
+5. `musical` melody rendered by the same synth;
+6. local music-worker output for the closest JSON layer.
+
+The first layer that stops sounding like the hum names the area to improve. If
+all JSON layers are close and the final worker output drifts, tune melody
+conditioning instead of transcription.
+
+For handoff, Melo Lab exports either per-provider JSON/CSV files or one combined
+feedback packet. The packet includes every provider/stage JSON result, compact
+diagnostics, the tester's closest-layer choice, a 1-5 match score, a divergence
+note, and local music-worker metadata. It intentionally does not embed the
+original hum audio. Use `MELO_LAB_AUDIO_WORKER_URL` and
+`MELO_LAB_MUSIC_WORKER_URL` when the local workers are not on the default
+`127.0.0.1:8001` and `127.0.0.1:8002` ports.
+
+When probing the music worker with the `raw` stage, Melo Lab wraps the raw notes
+in the corrected melody scaffold because the music worker expects full
+`CleanMelody` JSON. Feedback packets label this as
+`raw-notes-with-corrected-melody-scaffold`.
+
+### 7.6 Melody intent model direction
+
+The current `IntentMelody` / `CorrectedMelody` / `MusicalMelody` split is
+heuristic. It can clean pitch jitter, align timing, and strengthen cadences,
+but it is not yet a true intent model.
+
+A stronger intent layer should sit between audio transcription and music
+generation:
+
+```text
+contour frames + raw notes + diagnostics
+  -> candidate melody hypotheses
+  -> ranked intent skeleton
+  -> corrected / musical variants
+  -> generation-conditioned melody
+```
+
+The model does not need to be a large remote LLM. Good local candidates:
+
+- a deterministic hypothesis scorer over several onset/pitch proposals;
+- a small sequence model trained on hummed-contour -> lead-sheet pairs;
+- a dynamic-programming smoother that preserves phrase contour and repeated
+  motifs while snapping only low-confidence notes;
+- an interactive preference loop from exported Melo Lab provider/stage files:
+  "raw closest", "corrected closest", "musical closest", plus divergence notes.
+
+The contract should be explainable. For every changed note, keep a reason such
+as `low_confidence_pitch`, `off_scale_anchor`, `fragmented_onset`, or
+`cadence_resolution`. That lets Melo Lab show not only what changed, but why.
 
 ## 8. Core pipeline
 

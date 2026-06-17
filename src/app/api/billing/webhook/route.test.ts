@@ -103,6 +103,7 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
     grantInputs.push(input);
     return grantResult;
   }),
+  grantNotesInTransaction: mock(async () => grantResult),
   getNotesBalance: async () => ({
     ok: true as const,
     userId: "guest",

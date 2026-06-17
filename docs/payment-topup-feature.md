@@ -44,7 +44,7 @@ Two viable models:
 
 A user has a **credit balance** (`notes` integer). Each chargeable action
 debits that balance. Top-up restores it. Sign-in grants a one-time welcome
-balance; the guest web preview keeps a small local daily allowance.
+balance; the guest web preview keeps a small one-time local allowance.
 
 ## 3. What costs
 
@@ -62,9 +62,9 @@ Welcome and guest allowance:
 
 - **15 notes once on sign-in** (`grant:signup_bonus`). This is half of the
   Starter pack, enough for several full tries without undercutting purchase.
-- Guest web preview: **5 local notes per day** per device via localStorage.
-- Future server daily refill can still use `grant:daily_free`, but it should be
-  revisited before launch instead of silently becoming an unlimited-free path.
+- Guest web preview: **5 local notes once** per device via localStorage.
+- Future server daily refill can still use `grant:daily_free` for signed-in
+  free-tier accounts, but Local Creator does not refill.
 
 This gives a new signed-in user roughly: several hums, a few LLM edits, and
 free saves. Enough to feel the product; not enough to abuse worker or LLM

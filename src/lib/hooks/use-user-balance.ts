@@ -9,15 +9,15 @@ import { getLocalBalance } from "@/lib/balance/balance-manager";
  * Snapshot of the authenticated user's notes balance, as returned by
  * `GET /api/user/balance`.
  *
- * `nextRefillAt` is an ISO 8601 UTC string so the rendering layer can
- * format it for the user's locale. We deliberately keep this shape
+ * `nextRefillAt` is an ISO 8601 UTC string when a refill exists, or null for
+ * Local Creator's one-time preview allowance. We deliberately keep this shape
  * forward-compatible with the v2 contract in `docs/page-contracts.md`
  * §11 (the future shared hook surface).
  */
 export interface UserBalance {
   notes: number;
   planTier: "free" | "premium";
-  nextRefillAt: string;
+  nextRefillAt: string | null;
   /** Reserved for a future premium tier; current launch pricing returns false. */
   unlimited?: boolean;
 }
@@ -89,7 +89,7 @@ export async function fetchUserBalance(
       const balance: UserBalance = {
         notes: payload.notes,
         planTier: payload.planTier === "premium" ? "premium" : "free",
-        nextRefillAt: payload.nextRefillAt ?? new Date().toISOString(),
+        nextRefillAt: typeof payload.nextRefillAt === "string" ? payload.nextRefillAt : null,
         unlimited: payload.unlimited === true,
       };
       cachedBalance = balance;

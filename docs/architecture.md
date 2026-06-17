@@ -54,8 +54,8 @@ flowchart TB
     music["Music + Export Modules"]
     db["Postgres / Drizzle"]
     ai["OpenAI-compatible AI Gateway"]
-    worker["Transcription Worker / Browser Providers"]
-    storage["Browser Storage\nlocalStorage, IndexedDB"]
+    worker["Transcription Worker"]
+    storage["Browser Storage\nlocalStorage"]
 
     user --> app
     app --> ui
@@ -75,7 +75,7 @@ flowchart TB
 ### 1. Capture and transcription
 
 - The user records or loads a melody idea in the Hum flow.
-- Browser-side providers or a remote worker derive note events.
+- The audio worker derives note events through the server transcription route.
 - Murmur normalizes that output before it becomes arrangement input.
 
 ### 2. Arrangement and editing
@@ -95,10 +95,13 @@ flowchart TB
 
 - Auth is session-based in production.
 - Local Creator is a lightweight account with a real `users.id`, a Murmur
-  session cookie, and 5 notes once for the current browser. It can own songs,
-  so the Gallery and song detail flows work before registration. It is still
-  not a registered account: top-up, payment, account deletion, and cross-device
-  sync require binding an external identity.
+  session cookie, and 5 notes once in the Web client for the current browser.
+  The 5-note allowance is a local preview gate, while server preview routes
+  remain rate-limited and skip account-only ledger billing until server-side
+  Local Creator quotas ship. It can own songs, so the Gallery and song detail
+  flows work before registration. It is still not a registered account: top-up,
+  payment, account deletion, and cross-device sync require binding an external
+  identity.
 - When a new user signs in from an unbound Local Creator session, Murmur
   promotes that existing user row instead of copying songs. The `userId` stays
   stable, which keeps saved songs, ledger rows, and future exports attached.

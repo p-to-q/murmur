@@ -445,9 +445,10 @@ def collapse_adjacent_same_pitch(notes: list[dict[str, float | int]]) -> list[di
         previous = collapsed.pop()
         previous_end = float(previous["start"]) + float(previous["duration"])
         gap = max(0.0, float(note["start"]) - previous_end)
-        compact_gap = gap <= 0.14
-        compact_pair = max(float(previous["duration"]), float(note["duration"])) <= 0.36
-        if compact_gap and compact_pair:
+        overlap = float(note["start"]) <= previous_end
+        short_fragment = min(float(previous["duration"]), float(note["duration"])) <= 0.12
+        tiny_gap = gap <= 0.04
+        if overlap or (tiny_gap and short_fragment):
             collapsed.append(merge_note_group([previous, note]))
             continue
         collapsed.extend([previous, dict(note)])
@@ -1504,6 +1505,24 @@ def detect_with_optional_ensemble(y: np.ndarray, configured_provider: str):
             )
             return detection, notes
 
+        if configured_provider not in ("swiftf0", "pyin"):
+            detection.diagnostics["providerRerouted"] = False
+            detection.diagnostics["ensembleDecision"] = "configured_lab_provider"
+            detection.diagnostics["ensembleCandidates"] = ",".join(
+                f"{configured_provider}/{candidate_id}:{candidate_score:.3f}"
+                for candidate_id, _candidate_notes, _candidate_acceptance, candidate_score in note_candidates
+            )
+            detection.diagnostics["ensembleSelected"] = f"{configured_provider}/{selected_hypothesis}"
+            detection.diagnostics["providerPitchMs"] = detection.diagnostics.get("pitchMs")
+            apply_candidate_selection_diagnostics(
+                detection,
+                selected_hypothesis,
+                note_candidates,
+                acceptance,
+                repair_reason=repair_reason,
+            )
+            return detection, notes
+
         alternate_provider = "pyin" if configured_provider == "swiftf0" else "swiftf0"
         reroute_decision = "configured_provider"
         alternate_mode = (
@@ -1750,6 +1769,7 @@ def score_detection_candidate(detection, notes: list[dict[str, float | int]]) ->
 async def transcribe(
     audio: Annotated[UploadFile, File(...)],
     targetInstrument: Annotated[str, Form()] = "piano",
+    pitchProvider: Annotated[str, Form()] = "",
 ):
     started = time.perf_counter()
     decode_ms = 0
@@ -1790,7 +1810,7 @@ async def transcribe(
         peak_dbfs = estimate_peak_dbfs(y)
         clipping_ratio = estimate_clipping_ratio(y)
 
-        configured_provider = configured_pitch_provider()
+        configured_provider = resolve_requested_pitch_provider(pitchProvider)
         detection, notes = detect_with_optional_ensemble(y, configured_provider)
 
         voiced_ratio = (
@@ -1833,6 +1853,7 @@ async def transcribe(
         )
         return {
             "provider": detection.provider,
+            "requestedProvider": configured_provider,
             "rawNotes": notes,
             "contour": build_contour_payload(
                 timestamps=detection.timestamps,
@@ -1869,6 +1890,18 @@ async def transcribe(
     except Exception as exc:
         logger.exception("transcription error")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def resolve_requested_pitch_provider(requested: str) -> str:
+    value = (requested or "").strip().lower()
+    if not value:
+        return configured_pitch_provider()
+    if value in ("auto", "pyin", "swiftf0", "yin", "parselmouth"):
+        return value
+    raise HTTPException(
+        status_code=400,
+        detail={"error": "invalid_pitch_provider", "message": f"Unsupported pitch provider: {requested}"},
+    )
 
 
 @app.get("/health")

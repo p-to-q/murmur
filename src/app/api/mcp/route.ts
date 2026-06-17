@@ -1,10 +1,10 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { NextRequest } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { resolveRequestAuth } from "@/lib/auth";
 import { buildMcpServer } from "@/lib/mcp/server";
 
 async function handleMcpRequest(request: NextRequest): Promise<Response> {
-  const auth = requireAuth(request);
+  const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
 
   const transport = new WebStandardStreamableHTTPServerTransport({

@@ -1,0 +1,6 @@
+# Optional light Melo Lab providers.
+#
+# Keep heavy neural/audio-to-MIDI baselines (Basic Pitch, CREPE/torchcrepe,
+# PENN, RMVPE, PESTO, Essentia) out of this file unless the lab profile is
+# intentionally split. The default lab should stay quick to install locally.
+praat-parselmouth

@@ -26,12 +26,11 @@ v0_5_download_log.json
 artworks/{bucket}/original-files.jpg
 background_ready/{bucket}/square-softened-bg.jpg
 previews/{bucket}_contact_sheet.jpg
-app_integration/murmur-artwork-system.ts
 ```
 
 ## 使用建议
 
-产品中优先使用 `background_ready`，需要高清原图或重新裁切时再用 `artworks`。
+产品中优先使用 `background_ready`，需要高清原图或重新裁切时再用 `artworks`。运行时集成以仓库根目录的 `src/presets/artworks/catalog.ts` 和 `src/presets/artworks/artwork-matcher.ts` 为准；本目录只保留素材 provenance 和人工审美检查材料。
 
 选择逻辑保持：
 

@@ -47,11 +47,13 @@ Prefer works that survive square crop, low contrast, and overlay. Avoid strong
 central portraits, war/violence, religious scenes, nudity, meme-famous images,
 and images whose rights status is unclear.
 
-## Current Archive
+## Current Catalog And Archive
 
 The checked-in pool is now based on `murmur_artwork_seed_pack_v0_5.zip`, dated
 2026-06-17. The import archive contains 63 source entries. The active app
-catalog currently ships 61 entries after two visual-fit exclusions, with:
+catalog currently ships 68 entries: 61 active v0.5 entries plus 7 restored
+open-collection assets that were already present locally and are now wired into
+the runtime catalog, with:
 
 - Active catalog entries in `src/presets/artworks/catalog.ts`.
 - Square background-ready images in `public/background_ready/`.
@@ -59,13 +61,21 @@ catalog currently ships 61 entries after two visual-fit exclusions, with:
 - Source manifests, taxonomy, candidate list, rejection list, seed summary, and
   download log in `docs/artwork-archive/v0.5/`.
 
-Active catalog note: the v0.5 archive contains 63 source entries, while the
-active app catalog currently ships 61. `Cotopaxi`
+Active catalog note: the v0.5 archive contains 63 source entries. `Cotopaxi`
 (`sublime_terrain-commons-church-cotopaxi`) and `Paris Street; Rainy Day`
 (`nocturne_metro-commons-caillebotte-paris-street-rainy-day`) are kept in the
 archive for provenance but excluded from `src/presets/artworks/catalog.ts` and
 `public/` because they read too literal or foreground-heavy for the demo cover
-system.
+system. Seven previously local-but-unwired assets are now active because they
+fit existing buckets and have matching original plus background-ready files:
+
+- `hypermodern_void-aic-65916`
+- `interior_reverie-aic-28560`
+- `nocturne_metro-aic-56905`
+- `printed_signal-aic-33398`
+- `printed_signal-met-37193`
+- `stage_heat-aic-27992`
+- `tidal_mineral-aic-24645`
 
 The archive is intentionally committed as plain files so future agents can audit
 source URLs, rights notes, bucket fit, palette, and render treatment without

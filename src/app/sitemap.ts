@@ -1,7 +1,8 @@
-import { MetadataRoute } from 'next';
+import { getSiteUrl } from "@/lib/site-url";
+import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://murmur.ptoq.io';
+  const baseUrl = getSiteUrl();
   const lastModified = new Date();
 
   return [

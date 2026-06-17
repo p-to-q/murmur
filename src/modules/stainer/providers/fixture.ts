@@ -2,6 +2,7 @@
 import type { TranscriptionInput, TranscriptionResult } from "@/modules/shared/types";
 import { polishMelody } from "@/modules/music/melody-polisher";
 import {
+  buildMelodyIntentProfile,
   buildTranscriptionMelodies,
   chooseGenerationMelodyKind,
 } from "@/modules/music/humming-engine";
@@ -65,12 +66,16 @@ export function buildFixtureTranscriptionResult(
   const safeIndex = ((index % FIXTURE_MELODIES.length) + FIXTURE_MELODIES.length) % FIXTURE_MELODIES.length;
   const rawNotes = FIXTURE_MELODIES[safeIndex]!;
   const cleanMelody = polishMelody(rawNotes);
-  const melodies = buildTranscriptionMelodies(rawNotes, cleanMelody);
-  const selectedMelodyKind = chooseGenerationMelodyKind({ melodies });
+  const melodyIntent = buildMelodyIntentProfile(rawNotes, cleanMelody);
+  const melodies = buildTranscriptionMelodies(rawNotes, cleanMelody, {
+    melodyIntent,
+  });
+  const selectedMelodyKind = chooseGenerationMelodyKind({ melodies, melodyIntent });
 
   return {
     provider: "fixture",
     rawNotes,
+    melodyIntent,
     melodies,
     selectedMelodyKind,
     cleanMelody: melodies.corrected,
