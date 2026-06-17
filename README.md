@@ -236,6 +236,21 @@ Then set `AUDIO_WORKER_URL=http://localhost:8001` in `.env`. Without the
 worker, live recordings return a visible retry/demo error instead of silently
 using a fixture melody.
 
+For local "why does the generated song not match my hum?" work, use Melo Lab:
+
+```bash
+bun run dev:audio
+bun run dev:music # optional, only for final worker-output drift checks
+bun dev
+```
+
+Open `/me/debug/melo-lab?debug=1`. The lab is a hidden debug-room surface: the
+page may be visible, but its test APIs send requests only to loopback workers
+(`MELO_LAB_AUDIO_WORKER_URL`, `MELO_LAB_MUSIC_WORKER_URL`) and never route
+through billing, RunPod/serverless, or the main Hum -> Vibe product path. It
+renders each returned melody JSON layer through the same browser piano/voice
+synth before any music-worker probe.
+
 ## Environment Variables
 
 Copy `.env.example` to `.env`:
@@ -254,8 +269,14 @@ cp .env.example .env
 | `AUDIO_WORKER_TOKEN` | Optional bearer token for Next.js → audio worker calls. |
 | `AUDIO_ENGINE_PITCH_PROVIDER` | Worker pitch detector provider. `auto` uses SwiftF0 first, then pYIN fallback. |
 | `AUDIO_ENGINE_DENOISE_PROVIDER` | Worker denoise provider. `auto` uses DeepFilterNet when optional deps are installed; `deepfilternet` fails loudly if they are missing. |
+| `MURMUR_ENABLE_MELO_LAB` | Explicit production diagnostic flag for the test-only Melo Lab APIs. Local development enables them by default; worker URLs still must be loopback. |
+| `MELO_LAB_AUDIO_WORKER_URL` | Optional loopback audio worker override for `/api/test/melo-lab/transcribe`. Defaults to `http://127.0.0.1:8001`. |
+| `MELO_LAB_MUSIC_WORKER_URL` | Optional loopback music worker override for `/api/test/melo-lab/music`. Defaults to `http://127.0.0.1:8002`. |
 | `DATABASE_URL` | Postgres connection string for Drizzle. |
 | `CRON_SECRET` | Shared secret for the daily digest cron route. |
+| `MURMUR_AUTH_MODE` | Auth runtime mode. Defaults to production-like behavior even on localhost: no session means 401. Set `demo` or `local` only for explicit preview fallback work. |
+| `NEXT_PUBLIC_MURMUR_AUTH_MODE` | Browser-side companion for local header auth. Set to `local` only with `MURMUR_AUTH_MODE=local` when intentionally exercising localStorage user headers. |
+| `MURMUR_ALLOW_HEADER_AUTH` | Local/demo-only legacy switch for `x-murmur-user-*` identity headers. Ignored in production auth mode. |
 | `MURMUR_ALLOW_DEV_BILLING_FALLBACK` | Development-only switch. Defaults to enabled in `next dev`; when enabled, local development bypasses notes spending for hum/save/edit flows. Set to `0` to force real billing even in development. |
 | `MURMUR_DEV_NOTES_BALANCE` | Development-only display balance returned by `/api/user/balance` and `/api/auth/me` when dev billing fallback is enabled. Defaults to `9999`. |
 
@@ -263,6 +284,10 @@ cp .env.example .env
 
 - Authentication, notifications, and AI now go through Murmur's local
   platform adapter under [src/lib/platform](./src/lib/platform).
+- Identity is session-resolved by `resolveRequestAuth()` in production and by
+  default on localhost. Guest/header fallback is available only after opting
+  into `MURMUR_AUTH_MODE=local` or `demo`; `x-murmur-user-*` is never a
+  production identity source.
 - Real recordings go through server `/api/transcribe`; the fixture melody is
   only used when the user explicitly chooses the demo action.
 - In local development, billing fallback is enabled by default. Hum, save, and

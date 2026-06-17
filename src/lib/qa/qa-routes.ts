@@ -74,6 +74,13 @@ export const QA_ROUTE_CONTRACTS: QaRouteContract[] = [
     markers: ["Murmur / Debug", "Loading debug surface"],
   },
   {
+    name: "debug-melo-lab",
+    href: "/me/debug/melo-lab?debug=1",
+    label: "Melo Lab",
+    note: "Test-only local melody diagnostics for audio-worker JSON, repair layers, and local music-worker drift.",
+    markers: ["TEST ONLY / local melo-lab", "Melo Lab"],
+  },
+  {
     name: "settings-developer-mode",
     href: "/me/settings",
     label: "Settings",

@@ -203,8 +203,6 @@ Template (Codex updates `.github/pull_request_template.md`):
 
 Today's v1 surfaces marked deprecated immediately:
 
-- `src/lib/music/stainer.ts` and `src/lib/music/providers/*` (replaced by
-  `packages/murmur-core/...`).
 - `src/modules/stainer/providers/browser-basic-pitch.ts` and
   the old remote worker prototype (replaced by the server pipeline in
   `src/lib/platform/audio-worker.ts` + `workers/audio-engine/main.py`).

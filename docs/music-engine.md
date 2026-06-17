@@ -7,6 +7,8 @@ assembler, two players.
 RAW BLOB (mic / fixture)
   ↓ stainer/transcribe
 RawNote[]              (pitch + start + duration + velocity + confidence)
+  ↓ melody-intent profile
+IntentSkeleton         (tonal candidates + anchors + correction policy)
   ↓ melody-polisher
 CleanMelody            (denoised + pitch-corrected notes + key + scale + bpm + duration + contour)
   ↓ generate-versions
@@ -20,7 +22,37 @@ AssembledSong          (chords + bass + drums + bpm + totalDuration)
 Both players consume the same `AssembledSong`, so the live audition on a
 card and the saved MP3 sound identical.
 
-## 0. melody-polisher — `src/modules/music/melody-polisher.ts`
+## 0. melody-intent profile — `src/modules/music/humming-engine.ts`
+
+Before Murmur decides whether to use the `intent`, `corrected`, or `musical`
+melody, it builds a lightweight intent profile from raw notes, contour
+diagnostics, and the corrected melody.
+
+The profile records:
+
+- ranked key / scale candidates;
+- the locked tonal reading used for correction policy;
+- stable anchor pitches and phrase endings;
+- the rhythmic / pitch trace that the musical layer must still step on after
+  stronger repair;
+- an intent confidence score;
+- vocal-card style repair knobs such as allowed pitch classes, correction
+  strength, retune speed, timing quantize, and vibrato tolerance.
+
+The `musical` melody may smooth weak takes into a more finished line, but it
+now runs a final intent-trace guard before generation. That guard re-checks the
+original skeleton's opening / ending notes, strong-beat anchors, long holds,
+and repeated motives so a band-style arrangement still carries a recognizable
+version of the user's hum instead of an arbitrary prettier melody.
+
+This is the first implementation of the melody-intent model direction described
+in [humming-engine-v2.md](humming-engine-v2.md). It borrows the parameter shape
+of light Auto-Tune / vocal-card systems without adding a real-time DSP
+dependency to the main hum path. See
+[melody-intent-and-vocal-card.md](melody-intent-and-vocal-card.md) for the
+selection rationale.
+
+## 1. melody-polisher — `src/modules/music/melody-polisher.ts`
 
 Before rhythm/chords do anything, Murmur now treats the detected pitches as
 raw material rather than sacred truth:
@@ -43,7 +75,7 @@ This layer is intentionally opinionated: a hummed sketch is allowed to stay a
 little human and imperfect, but it should not produce musically awkward or
 accidentally atonal lead lines downstream.
 
-## 1. rhythm-engine — `src/lib/music/rhythm-engine.ts`
+## 2. rhythm-engine — `src/lib/music/rhythm-engine.ts`
 
 Replaces the old "median-interval × 60" BPM heuristic.
 
@@ -61,7 +93,7 @@ Replaces the old "median-interval × 60" BPM heuristic.
   down. Returns `Phrase[]` with start/end/notes/anchor — used by the chord
   engine to time chord changes against the melody's breathing.
 
-## 2. chord-engine — `src/lib/music/chord-engine.ts`
+## 3. chord-engine — `src/lib/music/chord-engine.ts`
 
 Replaces the old 4-tone-per-vibe fixed table.
 
@@ -79,7 +111,7 @@ Replaces the old 4-tone-per-vibe fixed table.
   phrase is > 4 beats, subdivides into ~4-beat slots). Chord changes happen
   where the melody breathes, not on a fixed clock.
 
-## 3. bass-engine — `src/lib/music/bass-engine.ts`
+## 4. bass-engine — `src/lib/music/bass-engine.ts`
 
 Four pattern styles, each picked per-vibe by the ensemble layer:
 
@@ -93,7 +125,7 @@ Four pattern styles, each picked per-vibe by the ensemble layer:
 Output is `BassNote[]` with absolute times. The synth + the offline renderer
 consume the same array.
 
-## 4. drum-engine — `src/lib/music/drum-engine.ts`
+## 5. drum-engine — `src/lib/music/drum-engine.ts`
 
 - Base patterns: `soft`, `swing`, `four_on_floor`, `four_hi`, `sparse`,
   `slow`, `halftime`. Each is a bar-relative list of (beat, voice, velocity).
@@ -109,7 +141,7 @@ consume the same array.
 Output is `DrumHit[]` — `{ time, type, velocity }`. The synth + renderer map
 `type` to their respective drum voices.
 
-## 5. assemble-song — `src/lib/music/assemble-song.ts`
+## 6. assemble-song — `src/lib/music/assemble-song.ts`
 
 The single function both players call.
 
@@ -123,7 +155,7 @@ Reads `version.melody`, `version.arrangementState`, `version.id` and produces
 ready-to-play event lists. Live preview and offline render are now guaranteed
 to be byte-equivalent.
 
-## 6. SimpleSynth v3 — `src/lib/music/simple-synth.ts`
+## 7. SimpleSynth v3 — `src/lib/music/simple-synth.ts`
 
 Live preview engine. Pure Web Audio, zero deps.
 
@@ -142,7 +174,7 @@ Live preview engine. Pure Web Audio, zero deps.
 
 New API: `synth.play(version, intensityOverride?)`.
 
-## 7. render-mp3 v2 — `src/modules/export/render-mp3.ts`
+## 8. render-mp3 v2 — `src/modules/export/render-mp3.ts`
 
 Offline render with the same arrangement plus Tone.js-grade effects.
 
@@ -154,7 +186,7 @@ Offline render with the same arrangement plus Tone.js-grade effects.
 - Encoded to 128kbps mono MP3 via `@breezystack/lamejs`; WAV fallback;
   audio-skip fallback (song still saves, just no `mp3DataUrl`).
 
-## 8. Ensemble variation — `src/modules/strummer/generate-versions.ts`
+## 9. Ensemble variation — `src/modules/strummer/generate-versions.ts`
 
 Each vibe now has **2 ensembles** (instrument set + bass pattern + drum
 pattern + intensity recipe). Seed picks one per version. Combined with the

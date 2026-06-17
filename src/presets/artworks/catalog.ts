@@ -3624,4 +3624,427 @@ export const ARTWORK_CATALOG = [
     },
     "curatorNote": "Proto-future biology: not neon, not AI fantasy, but clean dark geometry with enough depth for synth and techno sleeves."
   },
+  {
+    "id": "hypermodern_void-aic-65916",
+    "bucket": "hypermodern_void",
+    "title": "Movement",
+    "artist": "Marsden Hartley",
+    "year": "1913",
+    "source": "aic",
+    "sourceId": "65916",
+    "sourceUrl": "https://www.artic.edu/artworks/65916",
+    "imagePath": "/artworks/hypermodern_void/aic-65916-marsden-hartley-movement.jpg",
+    "backgroundImagePath": "/background_ready/hypermodern_void/aic-65916-marsden-hartley-movement-bg.jpg",
+    "license": "CC0",
+    "tags": [
+      "modernism",
+      "cubism",
+      "geometric",
+      "movement",
+      "color field",
+      "signal"
+    ],
+    "genreWeights": {
+      "minimal techno": 2.6,
+      "ambient electronic": 2.2,
+      "synthwave": 2.4,
+      "breakbeat": 1.6,
+      "vaporwave": 1.5
+    },
+    "moodWeights": {
+      "hypnotic": 2.5,
+      "euphoric": 1.8,
+      "mysterious": 1.5,
+      "glowing": 1.6
+    },
+    "energyRange": [
+      0.35,
+      0.95
+    ],
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.03
+    },
+    "palette": [
+      "#393D40",
+      "#924236",
+      "#A59476",
+      "#866C5F",
+      "#D4CBA5"
+    ],
+    "composition": "geometric_allover",
+    "figurePresence": "none",
+    "backgroundFit": 0.84,
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    },
+    "curatorNote": "A compact modernist signal: geometric motion without sci-fi gloss, useful for higher-energy electronic sleeves."
+  },
+  {
+    "id": "interior_reverie-aic-28560",
+    "bucket": "interior_reverie",
+    "title": "The Bedroom",
+    "artist": "Vincent van Gogh",
+    "year": "1889",
+    "source": "aic",
+    "sourceId": "28560",
+    "sourceUrl": "https://www.artic.edu/artworks/28560",
+    "imagePath": "/artworks/interior_reverie/aic-28560-van-gogh-the-bedroom.jpg",
+    "backgroundImagePath": "/background_ready/interior_reverie/aic-28560-van-gogh-the-bedroom-bg.jpg",
+    "license": "CC0",
+    "tags": [
+      "interior",
+      "bedroom",
+      "room",
+      "chair",
+      "window",
+      "domestic"
+    ],
+    "genreWeights": {
+      "lo-fi hip hop": 2.4,
+      "music box lullaby": 2,
+      "solo piano": 1.8,
+      "neo-soul": 1.4,
+      "dream pop instrumental": 1.4
+    },
+    "moodWeights": {
+      "cozy": 2.6,
+      "nostalgic": 2,
+      "bittersweet": 1.6,
+      "serene": 1.5
+    },
+    "energyRange": [
+      0.12,
+      0.62
+    ],
+    "crop": {
+      "x": 0.52,
+      "y": 0.5,
+      "scale": 1.04
+    },
+    "palette": [
+      "#888D87",
+      "#A07D39",
+      "#929F91",
+      "#808071",
+      "#886C34"
+    ],
+    "composition": "interior_depth",
+    "figurePresence": "none",
+    "backgroundFit": 0.72,
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.24,
+      "contrast": "softened",
+      "grain": "light"
+    },
+    "curatorNote": "Very recognizable, but still product-useful as a warm room field for private, low-energy songs."
+  },
+  {
+    "id": "nocturne_metro-aic-56905",
+    "bucket": "nocturne_metro",
+    "title": "Nocturne: Blue and Gold-Southampton Water",
+    "artist": "James McNeill Whistler",
+    "year": "1872",
+    "source": "aic",
+    "sourceId": "56905",
+    "sourceUrl": "https://www.artic.edu/artworks/56905",
+    "imagePath": "/artworks/nocturne_metro/aic-56905-nocturne-blue-and-gold.jpg",
+    "backgroundImagePath": "/background_ready/nocturne_metro/aic-56905-nocturne-blue-and-gold-bg.jpg",
+    "license": "CC0",
+    "tags": [
+      "nocturne",
+      "water",
+      "night",
+      "landscape",
+      "blue gold",
+      "weather"
+    ],
+    "genreWeights": {
+      "trip hop": 2.3,
+      "deep house": 2,
+      "synthwave": 1.8,
+      "ambient electronic": 1.7,
+      "city pop": 1.4
+    },
+    "moodWeights": {
+      "smoky": 2.2,
+      "starlit": 2.3,
+      "melancholic": 2,
+      "mysterious": 1.8
+    },
+    "energyRange": [
+      0.18,
+      0.72
+    ],
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.06
+    },
+    "palette": [
+      "#555950",
+      "#65685F",
+      "#5C6057",
+      "#505249",
+      "#6D7066"
+    ],
+    "composition": "low_horizon",
+    "figurePresence": "none",
+    "backgroundFit": 0.9,
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    },
+    "curatorNote": "Quiet water at night: a softer nocturne option for wet-city and late-room tracks."
+  },
+  {
+    "id": "printed_signal-aic-33398",
+    "bucket": "printed_signal",
+    "title": "Iris, from The Picture Book of Realistic Paintings of Hokusai",
+    "artist": "Katsushika Hokusai",
+    "year": "c. 1814",
+    "source": "aic",
+    "sourceId": "33398",
+    "sourceUrl": "https://www.artic.edu/artworks/33398",
+    "imagePath": "/artworks/printed_signal/aic-33398-hokusai-iris.jpg",
+    "backgroundImagePath": "/background_ready/printed_signal/aic-33398-hokusai-iris-bg.jpg",
+    "license": "CC0",
+    "tags": [
+      "woodblock",
+      "print",
+      "iris",
+      "botanical",
+      "japan",
+      "linework"
+    ],
+    "genreWeights": {
+      "koto and shakuhachi": 2.5,
+      "guzheng meditation": 2.2,
+      "music box lullaby": 1.4,
+      "minimal techno": 1.3
+    },
+    "moodWeights": {
+      "serene": 2.5,
+      "weightless": 1.8,
+      "mysterious": 1.5,
+      "cozy": 1.2
+    },
+    "energyRange": [
+      0.05,
+      0.55
+    ],
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.06
+    },
+    "palette": [
+      "#969576",
+      "#EBE3CA",
+      "#EDE5CD",
+      "#D4CFB0",
+      "#EEE8CF"
+    ],
+    "composition": "botanical_line",
+    "figurePresence": "none",
+    "backgroundFit": 0.86,
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    },
+    "curatorNote": "A spare botanical signal: delicate enough for quiet covers while still clearly printed."
+  },
+  {
+    "id": "printed_signal-met-37193",
+    "bucket": "printed_signal",
+    "title": "Seaside Village in Winter",
+    "artist": "Katsushika Hokusai",
+    "year": "1814",
+    "source": "met",
+    "sourceId": "37193",
+    "sourceUrl": "https://www.metmuseum.org/art/collection/search/37193",
+    "imagePath": "/artworks/printed_signal/met-37193-hokusai-seaside-village-winter.jpg",
+    "backgroundImagePath": "/background_ready/printed_signal/met-37193-hokusai-seaside-village-winter-bg.jpg",
+    "license": "Public Domain",
+    "tags": [
+      "woodblock",
+      "print",
+      "winter",
+      "seaside",
+      "village",
+      "archive"
+    ],
+    "genreWeights": {
+      "koto and shakuhachi": 2.6,
+      "guzheng meditation": 2,
+      "ambient electronic": 1.2,
+      "minimal techno": 1.4
+    },
+    "moodWeights": {
+      "serene": 2.1,
+      "melancholic": 1.8,
+      "mysterious": 1.6,
+      "weightless": 1.3
+    },
+    "energyRange": [
+      0.12,
+      0.62
+    ],
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.06
+    },
+    "palette": [
+      "#CCBAA1",
+      "#908679",
+      "#E6CEB0",
+      "#EED7BA",
+      "#F3DCC0"
+    ],
+    "composition": "horizontal_print",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.82,
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.22,
+      "contrast": "softened",
+      "grain": "light"
+    },
+    "curatorNote": "A winter print with quiet line rhythm; useful for restrained, reflective songs."
+  },
+  {
+    "id": "stage_heat-aic-27992",
+    "bucket": "stage_heat",
+    "title": "A Sunday on La Grande Jatte - 1884",
+    "artist": "Georges Seurat",
+    "year": "1884-86",
+    "source": "aic",
+    "sourceId": "27992",
+    "sourceUrl": "https://www.artic.edu/artworks/27992",
+    "imagePath": "/artworks/stage_heat/aic-27992-sunday-la-grande-jatte.jpg",
+    "backgroundImagePath": "/background_ready/stage_heat/aic-27992-sunday-la-grande-jatte-bg.jpg",
+    "license": "CC0",
+    "tags": [
+      "pointillism",
+      "park",
+      "crowd",
+      "leisure",
+      "public rhythm",
+      "water"
+    ],
+    "genreWeights": {
+      "disco": 1.9,
+      "funk groove": 1.8,
+      "swing jazz": 1.8,
+      "city pop": 1.4
+    },
+    "moodWeights": {
+      "playful": 2,
+      "euphoric": 1.5,
+      "serene": 1.4,
+      "glowing": 1.2
+    },
+    "energyRange": [
+      0.35,
+      0.85
+    ],
+    "crop": {
+      "x": 0.5,
+      "y": 0.52,
+      "scale": 1.06
+    },
+    "palette": [
+      "#999478",
+      "#76776A",
+      "#4C5952",
+      "#5A605D",
+      "#6E6365"
+    ],
+    "composition": "allover",
+    "figurePresence": "ambient",
+    "backgroundFit": 0.68,
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.24,
+      "contrast": "softened",
+      "grain": "light"
+    },
+    "curatorNote": "A more famous public-rhythm anchor; visually busy, but useful when softened behind the record treatment."
+  },
+  {
+    "id": "tidal_mineral-aic-24645",
+    "bucket": "tidal_mineral",
+    "title": "Under the Wave off Kanagawa",
+    "artist": "Katsushika Hokusai",
+    "year": "1830/33",
+    "source": "aic",
+    "sourceId": "24645",
+    "sourceUrl": "https://www.artic.edu/artworks/24645",
+    "imagePath": "/artworks/tidal_mineral/aic-24645-great-wave-kanagawa.jpg",
+    "backgroundImagePath": "/background_ready/tidal_mineral/aic-24645-great-wave-kanagawa-bg.jpg",
+    "license": "CC0",
+    "tags": [
+      "woodblock",
+      "wave",
+      "water",
+      "mount fuji",
+      "storm",
+      "ships"
+    ],
+    "genreWeights": {
+      "surf rock": 2.8,
+      "reggae dub": 1.8,
+      "breakbeat": 1.5,
+      "koto and shakuhachi": 2.1
+    },
+    "moodWeights": {
+      "hypnotic": 2,
+      "euphoric": 1.6,
+      "mysterious": 1.5,
+      "glowing": 1.4
+    },
+    "energyRange": [
+      0.38,
+      0.92
+    ],
+    "crop": {
+      "x": 0.5,
+      "y": 0.5,
+      "scale": 1.08
+    },
+    "palette": [
+      "#C0B69F",
+      "#485563",
+      "#A6A396",
+      "#D2C0A2",
+      "#DCCCB0"
+    ],
+    "composition": "diagonal_wave",
+    "figurePresence": "tiny",
+    "backgroundFit": 0.76,
+    "renderTreatment": {
+      "intent": "background_field",
+      "cropFormat": "square",
+      "recommendedOverlay": 0.24,
+      "contrast": "softened",
+      "grain": "light"
+    },
+    "curatorNote": "Famous, but musically legible: a high-energy wave field for surf, dub, and printed-water signals."
+  },
 ] as const satisfies readonly ArtworkCatalogEntry[];

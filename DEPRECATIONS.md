@@ -11,8 +11,6 @@ the removal commit.
 
 | Surface | Reason | Replacement | Linked doc |
 |---|---|---|---|
-| `apps/web/src/lib/music/stainer.ts` | Legacy facade; v2 routes audio through `/api/transcribe` | server-side audio pipeline | `docs/audio-pipeline-redesign.md` |
-| `apps/web/src/lib/music/providers/*` | Browser-side providers no longer participate in the transcription chain | server-side audio worker | `docs/audio-pipeline-redesign.md` §6 |
 | `apps/web/src/modules/stainer/providers/browser-basic-pitch.ts` | Basic Pitch monophonic accuracy is too low for solo hum | server SwiftF0 | `docs/audio-pipeline-redesign.md` §4.3 |
 | `apps/web/src/modules/stainer/providers/remote-python.ts` | Superseded by the proxied `/api/transcribe` route | server-side audio worker | `docs/audio-pipeline-redesign.md` §6 |
 | `apps/web/src/lib/db/schema/songs.ts` column `mp3DataUrl` | Storing MP3 as base64 inside Postgres does not scale | `mp3Url` (object storage) | `docs/data-model.md` §3.6 |
@@ -32,6 +30,14 @@ the removal commit.
 - `apps/web/src/lib/auth/index.ts` (re-export shim) — once all callers
   import from `@/lib/platform/server-auth` directly.
 - `src/modules/` term — folded into `packages/murmur-core` in Phase 5.
+
+## Removed
+
+| Surface | Reason | Replacement | Removal note |
+|---|---|---|---|
+| `src/lib/music/stainer.ts` | Legacy facade no longer had source callers | `src/modules/stainer/transcribe.ts` | Removed in local cleanup; route still uses the server-side audio pipeline. |
+| `src/lib/music/providers/*` | Browser-side provider shim no longer participated in transcription | `src/modules/stainer/providers/fixture.ts` for explicit demo fixture | Removed in local cleanup. |
+| `src/modules/stainer/providers/basic-pitch.d.ts` | Orphan type shim for the deleted browser Basic Pitch provider | server SwiftF0 / audio worker | Removed in local cleanup. |
 
 ## Process
 

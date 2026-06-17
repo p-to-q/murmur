@@ -25,19 +25,39 @@ describe("audio worker adapter", () => {
         },
         frameCount: 128,
         diagnostics: {
+          decodeMs: 8,
+          trimMs: 3,
           rmsDbfs: -20.4,
           peakDbfs: -2.1,
           clippingRatio: 0.0003,
           acceptanceScore: 0.81,
           musicFeelScore: 0.78,
+          rushedRatio: 0.04,
+          ambiguousMidRatio: 0.08,
+          cadenceRatio: 0.18,
           excessiveHoldRatio: 0,
+          interiorHoldRatio: 0.03,
           onsetFragmentation: 0.12,
+          noteDensity: 3.2,
           firstOnsetLag: 0.04,
+          urgentCoherence: 0.14,
           denoiseProvider: "deepfilternet",
           denoiseModel: "DeepFilterNet3",
           denoiseMs: 39,
+          providerPitchMs: 118,
+          pitchMs: 296,
+          totalMs: 342,
           noteHypothesis: "balanced",
+          noteProposalProfile: "glide",
+          noteProposalCandidates: "glide_guarded:2.82,balanced:2.78",
+          proposalGlideRatio: 0.37,
+          proposalWobbleRatio: 0.11,
+          proposalUrgentRatio: 0.06,
           hypothesisCandidates: "balanced:2.98,agile:2.76,steady:2.64",
+          alternateReviewMode: "light_no_repair_general",
+          alternateReviewHypotheses: "balanced,steady",
+          detailPreservingRerank: "steady->glide_guarded:glide",
+          ensembleScore: 2.98,
           ensembleCandidates: "pyin/balanced:2.98",
           ensembleDecision: "highest_score",
           ensembleSelected: "pyin/balanced",
@@ -56,6 +76,9 @@ describe("audio worker adapter", () => {
     expect(result.contour?.pitchHz[2]).toBeNull();
     expect(result.contour?.voiced[2]).toBe(false);
     expect(result.contour?.hopSeconds).toBeCloseTo(0.02322, 6);
+    expect(result.melodyIntent?.tonalCandidates.length).toBeGreaterThan(0);
+    expect(result.melodyIntent?.lockedTonalCandidate.key).toEqual(expect.any(String));
+    expect(result.melodyIntent?.correctionPolicy.allowedPitchClasses.length).toBeGreaterThan(0);
     expect(result.melodies.intent.notes.length).toBeGreaterThan(0);
     expect(result.melodies.corrected).toEqual(result.cleanMelody);
     expect(result.selectedMelodyKind).toBe("corrected");
@@ -63,20 +86,42 @@ describe("audio worker adapter", () => {
       result.cleanMelody.duration,
     );
     expect(result.diagnostics?.frameCount).toBe(128);
+    expect(result.diagnostics?.decodeMs).toBe(8);
+    expect(result.diagnostics?.trimMs).toBe(3);
     expect(result.diagnostics?.rmsDbfs).toBe(-20.4);
     expect(result.diagnostics?.peakDbfs).toBe(-2.1);
     expect(result.diagnostics?.clippingRatio).toBe(0.0003);
     expect(result.diagnostics?.acceptanceScore).toBe(0.81);
     expect(result.diagnostics?.musicFeelScore).toBe(0.78);
+    expect(result.diagnostics?.rushedRatio).toBe(0.04);
+    expect(result.diagnostics?.ambiguousMidRatio).toBe(0.08);
+    expect(result.diagnostics?.cadenceRatio).toBe(0.18);
+    expect(result.diagnostics?.interiorHoldRatio).toBe(0.03);
+    expect(result.diagnostics?.noteDensity).toBe(3.2);
     expect(result.diagnostics?.firstOnsetLag).toBe(0.04);
+    expect(result.diagnostics?.urgentCoherence).toBe(0.14);
     expect(result.diagnostics?.noteHypothesis).toBe("balanced");
+    expect(result.diagnostics?.noteProposalProfile).toBe("glide");
+    expect(result.diagnostics?.noteProposalCandidates).toContain("glide_guarded");
+    expect(result.diagnostics?.proposalGlideRatio).toBe(0.37);
+    expect(result.diagnostics?.proposalWobbleRatio).toBe(0.11);
+    expect(result.diagnostics?.proposalUrgentRatio).toBe(0.06);
     expect(result.diagnostics?.hypothesisCandidates).toContain("balanced");
+    expect(result.diagnostics?.alternateReviewMode).toBe("light_no_repair_general");
+    expect(result.diagnostics?.alternateReviewHypotheses).toContain("steady");
+    expect(result.diagnostics?.detailPreservingRerank).toBe(
+      "steady->glide_guarded:glide",
+    );
+    expect(result.diagnostics?.ensembleScore).toBe(2.98);
     expect(result.diagnostics?.ensembleCandidates).toContain("pyin/");
     expect(result.diagnostics?.ensembleDecision).toBe("highest_score");
     expect(result.diagnostics?.ensembleSelected).toBe("pyin/balanced");
     expect(result.diagnostics?.denoiseProvider).toBe("deepfilternet");
     expect(result.diagnostics?.denoiseModel).toBe("DeepFilterNet3");
     expect(result.diagnostics?.denoiseMs).toBe(39);
+    expect(result.diagnostics?.providerPitchMs).toBe(118);
+    expect(result.diagnostics?.pitchMs).toBe(296);
+    expect(result.diagnostics?.totalMs).toBe(342);
     expect(result.diagnostics?.selectedMelodyKind).toBe("corrected");
     expect(result.diagnostics?.rangeClampApplied).toBe(true);
     for (const note of result.cleanMelody.notes) {

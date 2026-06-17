@@ -32,22 +32,41 @@ defensively and remains authoritative for transcription.
 
 ```ts
 {
-  provider: "swiftf0" | "pyin";
+  provider: "swiftf0" | "pyin" | "yin" | "parselmouth" | "fixture";
   rawNotes: MelodyNote[];
+  contour?: TranscriptionContour;
+  melodyIntent?: MelodyIntentProfile;
+  melodies: TranscriptionMelodies;
+  selectedMelodyKind: "intent" | "corrected" | "musical";
   cleanMelody: CleanMelody;
   warnings: string[];
   diagnostics: {
     duration: number;
     snr: number | null;
     voicedRatio: number | null;
+    rmsDbfs?: number | null;
+    peakDbfs?: number | null;
+    clippingRatio?: number | null;
+    acceptanceScore?: number | null;
+    musicFeelScore?: number | null;
+    frameCount?: number;
+    decodeMs?: number;
+    trimMs?: number;
     denoiseMs?: number;
     denoiseProvider?: "off" | "deepfilternet";
     denoiseModel?: string | null;
+    providerPitchMs?: number;
     pitchMs?: number;
     polishMs?: number;
+    totalMs?: number;
     workerMs?: number;
     targetInstrument?: string;
     rangeClampApplied?: boolean;
+    selectedMelodyKind?: "intent" | "corrected" | "musical";
+    noteHypothesis?: string;
+    ensembleDecision?: string;
+    ensembleSelected?: string;
+    providerRerouted?: boolean;
   };
 }
 ```
@@ -65,12 +84,17 @@ AUDIO_ENGINE_PITCH_PROVIDER=auto
 AUDIO_ENGINE_DENOISE_PROVIDER=auto
 ```
 
-No transcription URL is exposed as `NEXT_PUBLIC_*`. The browser does not pick
-providers and does not call the worker directly.
+No transcription URL is exposed as `NEXT_PUBLIC_*`. The browser product flow
+does not pick providers and does not call the worker directly. The hidden Melo
+Lab can pass a request-level `pitchProvider` to loopback-only test APIs for
+local diagnostics; production test APIs still require `MURMUR_ENABLE_MELO_LAB=1`
+and never route to the product worker.
 
 ## Worker Roadmap
 
-The current worker defaults to `auto`: SwiftF0 primary with pYIN fallback.
+The current product worker defaults to `auto`: SwiftF0 primary with pYIN
+fallback. The worker also exposes `yin` and `parselmouth` as light lab providers
+for local comparison; they do not participate in the product auto reroute.
 It also has an independent denoise provider seam selected by
 `AUDIO_ENGINE_DENOISE_PROVIDER`:
 
@@ -85,8 +109,10 @@ The next Phase 1 stops deepen the implementation behind the same route:
 1. worker rename/containerization under `workers/audio-engine/`;
 2. silence trim and optional DeepFilterNet-family denoise;
 3. SwiftF0 primary detection with pYIN fallback through the
-   `audio_engine.detectors` provider seam;
+   `audio_engine.detectors` provider seam, plus lab-only YIN/Parselmouth
+   comparison providers;
 4. worker-native diagnostics for `snr`, `voicedRatio`, `denoiseProvider`,
-   `denoiseModel`, `denoiseMs`, `pitchMs`, and `polishMs`.
+   `denoiseModel`, `denoiseMs`, `pitchMs`, `providerPitchMs`, selection
+   diagnostics, and `polishMs`.
 
 The contract above stays stable while the algorithm improves.

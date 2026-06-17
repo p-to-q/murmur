@@ -29,6 +29,8 @@ export type NotesReason =
   | "grant:daily_free"
   | "grant:signup_bonus"
   | "grant:cutover_gift"
+  | "grant:local_creator"
+  | "grant:referral"
   // Purchases
   | "purchase:topup"
   | "refund:topup"
@@ -80,6 +82,7 @@ export const MAX_FREE_BALANCE = 10;
 export const GRANTS = Object.freeze({
   signup_bonus: 15,
   cutover_gift: 50,
+  referral: 100,
 });
 
 /**

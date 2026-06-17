@@ -24,11 +24,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useSession } from "next-auth/react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { ChevronsLeft, ChevronsRight, LinkIcon } from "lucide-react";
 import { createPortal } from "react-dom";
 
-import { buildShareInviteUrl, getShareInviteUrl } from "@/lib/api/share-links";
+import { getShareInviteUrl } from "@/lib/api/share-links";
 import { copyShareInviteLink } from "@/lib/platform/share-invite";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
@@ -432,6 +433,7 @@ export function SideNavWithModal() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareInviteUrl, setShareInviteUrl] = useState<string | null>(null);
   const t = useTranslator();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -444,18 +446,21 @@ export function SideNavWithModal() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [session?.user?.id, status]);
 
   const handleShareClick = () => {
     setShareModalOpen(true);
-    const fallbackUrl =
-      typeof window === "undefined"
-        ? ""
-        : buildShareInviteUrl(window.location.origin);
-    void copyShareInviteLink(shareInviteUrl ?? fallbackUrl, {
-      copied: t("share.copied"),
-      copyFailed: t("share.copy_failed"),
-    });
+    void (async () => {
+      const url = shareInviteUrl
+        ?? (typeof window === "undefined"
+          ? ""
+          : await getShareInviteUrl(window.location.origin));
+      setShareInviteUrl(url);
+      await copyShareInviteLink(url, {
+        copied: t("share.copied"),
+        copyFailed: t("share.copy_failed"),
+      });
+    })();
   };
 
   return (

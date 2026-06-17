@@ -10,6 +10,7 @@ import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
+import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { log } from "@/lib/observability/log";
 import { COST } from "@murmur/core";
 
@@ -45,13 +46,19 @@ type BillingMode = "ledger" | "dev_fallback";
 export async function POST(request: NextRequest) {
   const startedAt = performance.now();
   const requestId = getRequestId(request);
-  const auth = await resolveRequestAuth(request);
+  const auth = await resolveRequestAuth(request, {
+    allowGuestPreview: shouldAllowGuestTranscribePreview(request),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
+  const rateLimitUserId =
+    auth.source === "guest"
+      ? `${userId}:${clientIpFromHeaders(request.headers)}`
+      : userId;
   const rateLimit = await checkApiRateLimit({
     route: ROUTE,
     bucket: "user",
-    userId,
+    userId: rateLimitUserId,
     requestId,
     sessionId: auth.sessionId,
     options: TRANSCRIBE_RATE_LIMIT,
@@ -105,54 +112,86 @@ export async function POST(request: NextRequest) {
 
     let balance: Awaited<ReturnType<typeof getNotesBalance>>;
     let billingMode: BillingMode = "ledger";
-    try {
-      balance = await getNotesBalance(userId);
-    } catch (error) {
-      if (shouldBypassBillingForLocalDemo(request)) {
-        billingMode = "dev_fallback";
-        log("user.balance_failed", {
-          phase: "billing",
-          message: error instanceof Error ? error.message : String(error),
-          fallback: "local_demo_bypass",
-        }, {
-          route: ROUTE,
-          requestId,
-          userId,
-          sessionId: auth.sessionId,
-          level: "warn",
-        });
-        balance = {
-          ok: true,
-          userId,
-          notes: Number.POSITIVE_INFINITY,
-          planTier: "free",
-          freeNotesGrantedAt: new Date(),
-        };
-      } else {
-        return fail("billing_unavailable", "User balance is unavailable", 503, {
-          requestId,
-          userId,
-          startedAt,
-          phase: "billing",
-          ext: { message: error instanceof Error ? error.message : String(error) },
-        });
+    if (shouldSkipNotesBilling(auth)) {
+      billingMode = "dev_fallback";
+      balance = {
+        ok: true,
+        userId,
+        notes: Number.POSITIVE_INFINITY,
+        planTier: "free",
+        freeNotesGrantedAt: new Date(),
+      };
+    } else {
+      try {
+        balance = await getNotesBalance(userId);
+      } catch (error) {
+        if (shouldBypassBillingForLocalDemo(request)) {
+          billingMode = "dev_fallback";
+          log("user.balance_failed", {
+            phase: "billing",
+            message: error instanceof Error ? error.message : String(error),
+            fallback: "local_demo_bypass",
+          }, {
+            route: ROUTE,
+            requestId,
+            userId,
+            sessionId: auth.sessionId,
+            level: "warn",
+          });
+          balance = {
+            ok: true,
+            userId,
+            notes: Number.POSITIVE_INFINITY,
+            planTier: "free",
+            freeNotesGrantedAt: new Date(),
+          };
+        } else {
+          return fail("billing_unavailable", "User balance is unavailable", 503, {
+            requestId,
+            userId,
+            startedAt,
+            phase: "billing",
+            ext: { message: error instanceof Error ? error.message : String(error) },
+          });
+        }
       }
-    }
 
-    if (!balance.ok) {
-      if (shouldBypassBillingForLocalDemo(request)) {
+      if (!balance.ok) {
+        if (shouldBypassBillingForLocalDemo(request)) {
+          billingMode = "dev_fallback";
+          log("user.balance_failed", {
+            phase: "billing",
+            reason: balance.reason,
+            fallback: "local_demo_bypass",
+          }, {
+            route: ROUTE,
+            requestId,
+            userId,
+            sessionId: auth.sessionId,
+            level: "warn",
+          });
+          balance = {
+            ok: true,
+            userId,
+            notes: Number.POSITIVE_INFINITY,
+            planTier: "free",
+            freeNotesGrantedAt: new Date(),
+          };
+        } else {
+          return fail("billing_unavailable", "User balance is unavailable", 503, {
+            requestId,
+            userId,
+            startedAt,
+            phase: "billing",
+          });
+        }
+      }
+      if (
+        billingMode === "ledger"
+        && auth.user.accountKind !== "local_creator"
+        && shouldBypassBillingForLocalDemo(request)
+      ) {
         billingMode = "dev_fallback";
-        log("user.balance_failed", {
-          phase: "billing",
-          reason: balance.reason,
-          fallback: "local_demo_bypass",
-        }, {
-          route: ROUTE,
-          requestId,
-          userId,
-          sessionId: auth.sessionId,
-          level: "warn",
-        });
         balance = {
           ok: true,
           userId,
@@ -160,34 +199,7 @@ export async function POST(request: NextRequest) {
           planTier: "free",
           freeNotesGrantedAt: new Date(),
         };
-      } else {
-        return fail("billing_unavailable", "User balance is unavailable", 503, {
-          requestId,
-          userId,
-          startedAt,
-          phase: "billing",
-        });
       }
-    }
-    if (billingMode === "ledger" && shouldBypassBillingForLocalDemo(request)) {
-      billingMode = "dev_fallback";
-      balance = {
-        ok: true,
-        userId,
-        notes: Number.POSITIVE_INFINITY,
-        planTier: "free",
-        freeNotesGrantedAt: new Date(),
-      };
-    }
-    if (billingMode === "ledger" && shouldSkipNotesBilling(auth)) {
-      billingMode = "dev_fallback";
-      balance = {
-        ok: true,
-        userId,
-        notes: Number.POSITIVE_INFINITY,
-        planTier: "free",
-        freeNotesGrantedAt: new Date(),
-      };
     }
     if (balance.notes < COST.hum) {
       return fail("insufficient_notes", "Not enough Murmur Notes", 402, {
@@ -354,6 +366,12 @@ function shouldBypassBillingForLocalDemo(request: NextRequest): boolean {
   return shouldBypassBillingInDevelopment({
     host,
   });
+}
+
+function shouldAllowGuestTranscribePreview(request: NextRequest): boolean {
+  if (process.env.NODE_ENV === "development") return true;
+  const host = request.nextUrl?.hostname || safeHostnameFromUrl(request.url);
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
 function safeHostnameFromUrl(url: string): string | null {

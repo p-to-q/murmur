@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 from os import environ
 from typing import Literal
 
-ConfiguredPitchProviderId = Literal["auto", "pyin", "swiftf0"]
-PitchProviderId = Literal["pyin", "swiftf0"]
+ConfiguredPitchProviderId = Literal["auto", "pyin", "swiftf0", "yin", "parselmouth"]
+PitchProviderId = Literal["pyin", "swiftf0", "yin", "parselmouth"]
 
 
 @dataclass(frozen=True)
@@ -46,10 +46,8 @@ def configured_pitch_provider() -> ConfiguredPitchProviderId:
     configured = environ.get("AUDIO_ENGINE_PITCH_PROVIDER", "auto").strip().lower()
     if configured in ("", "auto"):
         return "auto"
-    if configured == "pyin":
-        return "pyin"
-    if configured == "swiftf0":
-        return "swiftf0"
+    if configured in ("pyin", "swiftf0", "yin", "parselmouth"):
+        return configured
     raise DetectorUnavailable(f"Unsupported pitch provider: {configured}")
 
 
@@ -88,6 +86,16 @@ def detect_pitch(audio: object, config: DetectorConfig) -> PitchDetection:
         from audio_engine.swift_f0_provider import detect_swiftf0
 
         return detect_swiftf0(audio, config)
+
+    if config.provider == "yin":
+        from audio_engine.yin_provider import detect_yin
+
+        return detect_yin(audio, config)
+
+    if config.provider == "parselmouth":
+        from audio_engine.parselmouth_provider import detect_parselmouth
+
+        return detect_parselmouth(audio, config)
 
     raise DetectorUnavailable(f"Unsupported pitch provider: {config.provider}")
 

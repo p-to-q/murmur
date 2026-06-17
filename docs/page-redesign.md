@@ -573,7 +573,7 @@ identity + engineering debug. The redesign cleanly separates.
 │   ── Notes ──────────────────────────  │
 │   ┌────────────────────────────────┐   │
 │   │  12  notes                      │   │
-│   │  next refill at 0:00            │   │
+│   │  signed in · notes balance      │   │
 │   │  [Top up →]                     │   │
 │   └────────────────────────────────┘   │
 │                                        │
@@ -622,8 +622,8 @@ What changes:
 
 - Eyebrow zh: `属于你`, en: `YOURS`.
 - Headline zh: *"你的一小架歌。"* en: *"A small shelf of your own."*
-- Notes refill caption: *"再过 8 小时刷新 5 颗。"* / *"5 more notes in
-  8 hours."*
+- Local Creator notes caption: *"免费 5 枚用完后请登录继续。"* /
+  *"5 free notes once. Sign in to continue."*
 - About copy: the existing manifesto language, unchanged.
 
 ---
@@ -643,7 +643,7 @@ What changes:
 │                                        │
 │   current balance — large numerical:    │
 │       12 notes                          │
-│   caption: refills 5 daily at 0:00     │
+│   caption: one-time signup bonus, then top up │
 │                                        │
 │   ── Pick a top up ──────────────────  │
 │                                        │
@@ -688,7 +688,8 @@ What this is: a friendly purchase page that doesn't feel like a paywall.
 - Eyebrow zh: `音符`, en: `MURMUR NOTES`.
 - Headline zh: *"再来几颗音符，多哼几首小歌。"*
 - en: *"More notes, more little songs."*
-- Daily-refill caption: *"每天 0 点送 5 颗，至多攒到 10 颗。"*
+- Signed-in balance caption: *"登录赠送 15 枚；之后可按需补给。"* /
+  *"15 notes on sign-in; top up when you need more."*
 
 ---
 

@@ -75,20 +75,35 @@ export interface GoogleProfileInput {
 
 export async function createLocalCreatorUser(): Promise<User> {
   const userId = `lc_${ulid()}`;
-  const [user] = await db
-    .insert(users)
-    .values({
-      id: userId,
-      email: null,
-      name: "Local Creator",
-      avatarUrl: null,
-      regionId: "intl",
-      accountKind: "local_creator",
-      notesBalance: LOCAL_CREATOR_FREE_NOTES,
-      planTier: "free",
-    })
-    .returning();
-  return user;
+
+  return db.transaction(async (tx) => {
+    const [user] = await tx
+      .insert(users)
+      .values({
+        id: userId,
+        email: null,
+        name: "Local Creator",
+        avatarUrl: null,
+        regionId: "intl",
+        accountKind: "local_creator",
+        notesBalance: LOCAL_CREATOR_FREE_NOTES,
+        planTier: "free",
+      })
+      .returning();
+
+    await tx.insert(notesLedger).values({
+      id: `nle_${ulid()}`,
+      userId,
+      delta: LOCAL_CREATOR_FREE_NOTES,
+      reason: "grant:local_creator",
+      externalRef: "local_creator_initial",
+      metadata: {
+        source: "local_creator_bootstrap",
+      },
+    });
+
+    return user;
+  });
 }
 
 /**

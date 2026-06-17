@@ -71,6 +71,13 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
     balanceAfter: 0,
     duplicate: false,
   }),
+  grantNotesInTransaction: async () => ({
+    ok: true as const,
+    ledgerId: "nle_grant_tx",
+    balanceBefore: 0,
+    balanceAfter: 0,
+    duplicate: false,
+  }),
   decideGrant: () => ({ kind: "grant", balanceAfter: 0 }),
   decideSpend: () => ({ kind: "insufficient", currentBalance: 0 }),
   decideRefund: () => ({ kind: "original_missing" }),

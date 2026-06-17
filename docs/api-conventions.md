@@ -139,8 +139,8 @@ GET /api/songs?limit=50&cursor=sng_01H…
   newer-than) instead of pagination; mutually exclusive with `cursor`.
 
 Internally, "list of user's X" queries always pass through a shared
-`paginate()` helper in `apps/web/src/lib/api/paginate.ts` (Codex
-implements; spec is §4 of this doc).
+`paginate()` helper in `src/lib/api/paginate.ts` (Codex implements; spec
+is §4 of this doc).
 
 ---
 
@@ -150,19 +150,30 @@ See `user-model.md` §4. From the API's view:
 
 - Every route except `/api/auth/login/*`, `/api/billing/webhook/*`, and
   `/api/health` requires a session.
-- Session resolved by middleware in this order:
+- `resolveRequestAuth(request)` is the production identity boundary. Routes
+  must not derive `userId` from client-supplied local headers directly.
+- Session resolved in this order:
   1. `Authorization: Bearer <token>` (Capacitor + MP).
   2. `__murmur_session` cookie (Web).
-  3. fallback: no session → 401 `unauthorized`.
-- The handler receives a `req` augmented with `req.auth = { user, session }`
-  (Next.js middleware sets `req.headers['x-murmur-auth']` and a
-  per-request resolver reads it).
+  3. Auth.js/NextAuth Web session, while the Google login path is still being
+     adopted into Murmur's opaque session table.
+  4. fallback: no session → 401 `unauthorized`.
+- This production-like behavior is also the default on localhost. In explicit
+  `MURMUR_AUTH_MODE=local` or `demo`, no-session requests may resolve to the
+  local `guest` identity so preview fallback work remains possible.
+- The Hum preview path is the narrow exception: routes may call
+  `resolveRequestAuth(request, { allowGuestPreview: true })` only when the
+  product explicitly allows Local Creator traffic. This does not grant cloud
+  ownership, account, or payment access. Local Creator sessions have a finite
+  server ledger allowance; pure guest preview fallback is restricted to
+  local/dev demo conditions and remains rate-limited.
 
 The `x-murmur-user-id` header from v1 is no longer a production identity
-source. During the Phase 3 substrate it is accepted only when
-`MURMUR_ALLOW_HEADER_AUTH=true` or in non-production local/demo environments.
-Bearer/cookie validation now exists behind `resolveRequestAuth`; login,
-refresh, logout, and client session adoption are the remaining Phase 3 work.
+source. It is accepted only outside production auth mode, and only when
+`MURMUR_ALLOW_HEADER_AUTH=true` or in `MURMUR_AUTH_MODE=local` by default.
+In `MURMUR_AUTH_MODE=demo`, guest fallback is allowed but header identity is
+off unless explicitly enabled. Login, refresh, and full Auth.js → Murmur
+opaque session adoption remain the follow-up work.
 
 ---
 
@@ -231,7 +242,7 @@ await rateLimit(req, "transcribe", { perMin: 10 });
 Mutating routes accept an `Idempotency-Key` header (ulid). The server
 records `idempotency_key + userId + route` for 24 hours and returns
 the cached response on repeat. Implementation lives in
-`apps/web/src/lib/api/idempotency.ts`.
+`src/lib/api/idempotency.ts`.
 
 Routes that **must** use this:
 
@@ -312,11 +323,12 @@ anything.
 
 ## 13. Standard route template
 
-Codex implements every route from this skeleton. Refusing to deviate
-from this template is a feature, not a constraint.
+Codex implements every route from this skeleton. The helper names in the
+snippet are illustrative; the current app may use narrower route-local
+adapters as long as the same response contract holds.
 
 ```ts
-// apps/web/src/app/api/<area>/<resource>/route.ts
+// src/app/api/<area>/<resource>/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth/api";        // resolves session
 import { rateLimit }    from "@/lib/api/rate-limit";
@@ -330,7 +342,7 @@ type Body = z.infer<typeof BodySchema>;
 export async function POST(req: NextRequest) {
   const requestId = crypto.randomUUID();
   try {
-    const auth = await authenticate(req);  // throws unauthorized
+  const auth = await authenticate(req);  // throws unauthorized
     await rateLimit(req, "songs-create", { perMin: 20, userId: auth.user.id });
     const body = BodySchema.parse(await req.json());
     return withIdempotency(req, async () => {
@@ -369,10 +381,10 @@ falls to `server_error`. It always sets `X-Request-Id`.
 
 A downstream agent has implemented these conventions when:
 
-- [ ] Every existing route in `apps/web/src/app/api/` matches the
+- [ ] Every existing route in `src/app/api/` matches the
       template + error envelope.
-- [ ] Every new route uses `authenticate` (replaces the v1
-      `resolveUserId`) and emits a `requestId`.
+- [ ] Every new route uses `resolveRequestAuth` or an equivalent
+      adapter and emits a `requestId`.
 - [ ] All ulid ids are typed-prefix and validated server-side.
 - [ ] `Idempotency-Key` is enforced on the routes listed in §8.
 - [ ] Rate limits in §7 are active.

@@ -6,6 +6,7 @@ import {
 } from "@murmur/core/music/instrument-ranges";
 import { polishMelody } from "@/modules/music/melody-polisher";
 import {
+  buildMelodyIntentProfile,
   buildTranscriptionMelodies,
   chooseGenerationMelodyKind,
 } from "@/modules/music/humming-engine";
@@ -65,18 +66,27 @@ const diagnosticsSchema = z
     firstOnsetLag: z.number().nullable().optional(),
     urgentCoherence: z.number().nullable().optional(),
     frameCount: z.number().optional(),
+    decodeMs: z.number().optional(),
+    trimMs: z.number().optional(),
     denoiseMs: z.number().optional(),
     denoiseProvider: z.enum(["off", "deepfilternet"]).optional(),
     denoiseModel: z.string().nullable().optional(),
+    providerPitchMs: z.number().optional(),
     pitchMs: z.number().optional(),
     polishMs: z.number().optional(),
+    totalMs: z.number().optional(),
     noteHypothesis: z.string().optional(),
     noteProposalProfile: z.string().optional(),
     noteProposalCandidates: z.string().optional(),
     proposalGlideRatio: z.number().nullable().optional(),
     proposalWobbleRatio: z.number().nullable().optional(),
     proposalUrgentRatio: z.number().nullable().optional(),
+    noteDensity: z.number().nullable().optional(),
     hypothesisCandidates: z.string().optional(),
+    alternateReviewMode: z.string().optional(),
+    alternateReviewHypotheses: z.string().optional(),
+    detailPreservingRerank: z.string().optional(),
+    ensembleScore: z.number().nullable().optional(),
     ensembleCandidates: z.string().optional(),
     ensembleDecision: z.string().optional(),
     ensembleSelected: z.string().optional(),
@@ -329,12 +339,18 @@ export function normalizeWorkerResponse(
     ? normalizeCleanMelody(workerResponse.cleanMelody)
     : polishMelody(rawNotes);
   const clamped = clampMelody(polished, options.targetInstrument);
-  const melodies = buildTranscriptionMelodies(rawNotes, clamped.melody, {
+  const melodyIntent = buildMelodyIntentProfile(rawNotes, clamped.melody, {
     diagnostics: workerResponse.diagnostics,
     contour: workerResponse.contour,
   });
+  const melodies = buildTranscriptionMelodies(rawNotes, clamped.melody, {
+    diagnostics: workerResponse.diagnostics,
+    contour: workerResponse.contour,
+    melodyIntent,
+  });
   const selectedMelodyKind = chooseGenerationMelodyKind({
     melodies,
+    melodyIntent,
     diagnostics: workerResponse.diagnostics,
     contour: workerResponse.contour,
   });
@@ -350,6 +366,7 @@ export function normalizeWorkerResponse(
     provider,
     rawNotes,
     contour,
+    melodyIntent,
     melodies,
     selectedMelodyKind,
     cleanMelody: melodies.corrected,
@@ -365,6 +382,9 @@ function getAudioWorkerUrl(): string | null {
 function normalizeProvider(value: string | undefined): TranscriptionProvider {
   const lower = value?.toLowerCase() ?? "";
   if (lower.includes("swift")) return "swiftf0";
+  if (lower.includes("parselmouth") || lower.includes("praat")) return "parselmouth";
+  if (lower.includes("pyin")) return "pyin";
+  if (lower === "yin" || lower.includes("librosa_yin")) return "yin";
   return "pyin";
 }
 
@@ -502,128 +522,86 @@ function normalizeDiagnostics(
   return {
     duration:
       typeof diagnostics.duration === "number" ? diagnostics.duration : 0,
-    snr: typeof diagnostics.snr === "number" ? diagnostics.snr : null,
+    snr: numberOrNull(diagnostics.snr),
     voicedRatio:
-      typeof diagnostics.voicedRatio === "number"
-        ? diagnostics.voicedRatio
-        : null,
-    rmsDbfs:
-      typeof diagnostics.rmsDbfs === "number"
-        ? diagnostics.rmsDbfs
-        : null,
-    peakDbfs:
-      typeof diagnostics.peakDbfs === "number"
-        ? diagnostics.peakDbfs
-        : null,
-    clippingRatio:
-      typeof diagnostics.clippingRatio === "number"
-        ? diagnostics.clippingRatio
-        : null,
-    acceptanceScore:
-      typeof diagnostics.acceptanceScore === "number"
-        ? diagnostics.acceptanceScore
-        : null,
-    musicFeelScore:
-      typeof diagnostics.musicFeelScore === "number"
-        ? diagnostics.musicFeelScore
-        : null,
-    rushedRatio:
-      typeof diagnostics.rushedRatio === "number"
-        ? diagnostics.rushedRatio
-        : null,
-    ambiguousMidRatio:
-      typeof diagnostics.ambiguousMidRatio === "number"
-        ? diagnostics.ambiguousMidRatio
-        : null,
-    cadenceRatio:
-      typeof diagnostics.cadenceRatio === "number"
-        ? diagnostics.cadenceRatio
-        : null,
-    excessiveHoldRatio:
-      typeof diagnostics.excessiveHoldRatio === "number"
-        ? diagnostics.excessiveHoldRatio
-        : null,
-    interiorHoldRatio:
-      typeof diagnostics.interiorHoldRatio === "number"
-        ? diagnostics.interiorHoldRatio
-        : null,
-    onsetFragmentation:
-      typeof diagnostics.onsetFragmentation === "number"
-        ? diagnostics.onsetFragmentation
-        : null,
-    firstOnsetLag:
-      typeof diagnostics.firstOnsetLag === "number"
-        ? diagnostics.firstOnsetLag
-        : null,
-    urgentCoherence:
-      typeof diagnostics.urgentCoherence === "number"
-        ? diagnostics.urgentCoherence
-        : null,
+      numberOrNull(diagnostics.voicedRatio),
+    rmsDbfs: numberOrNull(diagnostics.rmsDbfs),
+    peakDbfs: numberOrNull(diagnostics.peakDbfs),
+    clippingRatio: numberOrNull(diagnostics.clippingRatio),
+    acceptanceScore: numberOrNull(diagnostics.acceptanceScore),
+    musicFeelScore: numberOrNull(diagnostics.musicFeelScore),
+    rushedRatio: numberOrNull(diagnostics.rushedRatio),
+    ambiguousMidRatio: numberOrNull(diagnostics.ambiguousMidRatio),
+    cadenceRatio: numberOrNull(diagnostics.cadenceRatio),
+    excessiveHoldRatio: numberOrNull(diagnostics.excessiveHoldRatio),
+    interiorHoldRatio: numberOrNull(diagnostics.interiorHoldRatio),
+    onsetFragmentation: numberOrNull(diagnostics.onsetFragmentation),
+    firstOnsetLag: numberOrNull(diagnostics.firstOnsetLag),
+    urgentCoherence: numberOrNull(diagnostics.urgentCoherence),
     frameCount:
       typeof diagnostics.frameCount === "number"
         ? diagnostics.frameCount
         : workerResponse.frameCount ?? workerResponse.contour?.timestamps.length,
-    denoiseMs:
-      typeof diagnostics.denoiseMs === "number"
-        ? diagnostics.denoiseMs
-        : undefined,
+    decodeMs: numberOrUndefined(diagnostics.decodeMs),
+    trimMs: numberOrUndefined(diagnostics.trimMs),
+    denoiseMs: numberOrUndefined(diagnostics.denoiseMs),
     denoiseProvider:
       diagnostics.denoiseProvider === "off" ||
       diagnostics.denoiseProvider === "deepfilternet"
         ? diagnostics.denoiseProvider
         : undefined,
-    denoiseModel:
-      typeof diagnostics.denoiseModel === "string" ||
-      diagnostics.denoiseModel === null
-        ? diagnostics.denoiseModel
-        : undefined,
-    pitchMs:
-      typeof diagnostics.pitchMs === "number"
-        ? diagnostics.pitchMs
-        : undefined,
-    polishMs:
-      typeof diagnostics.polishMs === "number"
-        ? diagnostics.polishMs
-        : undefined,
+    denoiseModel: stringOrNull(diagnostics.denoiseModel),
+    providerPitchMs: numberOrUndefined(diagnostics.providerPitchMs),
+    pitchMs: numberOrUndefined(diagnostics.pitchMs),
+    polishMs: numberOrUndefined(diagnostics.polishMs),
+    totalMs: numberOrUndefined(diagnostics.totalMs),
     workerMs: options.workerMs,
     targetInstrument: options.targetInstrument,
     rangeClampApplied: options.rangeClampApplied,
     selectedMelodyKind: options.selectedMelodyKind,
-    noteHypothesis:
-      typeof diagnostics.noteHypothesis === "string"
-        ? diagnostics.noteHypothesis
-        : undefined,
-    hypothesisCandidates:
-      typeof diagnostics.hypothesisCandidates === "string"
-        ? diagnostics.hypothesisCandidates
-        : undefined,
-    ensembleCandidates:
-      typeof diagnostics.ensembleCandidates === "string"
-        ? diagnostics.ensembleCandidates
-        : undefined,
-    ensembleDecision:
-      typeof diagnostics.ensembleDecision === "string"
-        ? diagnostics.ensembleDecision
-        : undefined,
-    ensembleSelected:
-      typeof diagnostics.ensembleSelected === "string"
-        ? diagnostics.ensembleSelected
-        : undefined,
+    noteHypothesis: stringOrUndefined(diagnostics.noteHypothesis),
+    noteProposalProfile: stringOrUndefined(diagnostics.noteProposalProfile),
+    noteProposalCandidates: stringOrUndefined(diagnostics.noteProposalCandidates),
+    proposalGlideRatio: numberOrNull(diagnostics.proposalGlideRatio),
+    proposalWobbleRatio: numberOrNull(diagnostics.proposalWobbleRatio),
+    proposalUrgentRatio: numberOrNull(diagnostics.proposalUrgentRatio),
+    noteDensity: numberOrNull(diagnostics.noteDensity),
+    hypothesisCandidates: stringOrUndefined(diagnostics.hypothesisCandidates),
+    alternateReviewMode: stringOrUndefined(diagnostics.alternateReviewMode),
+    alternateReviewHypotheses: stringOrUndefined(
+      diagnostics.alternateReviewHypotheses,
+    ),
+    detailPreservingRerank: stringOrUndefined(diagnostics.detailPreservingRerank),
+    ensembleScore: numberOrNull(diagnostics.ensembleScore),
+    ensembleCandidates: stringOrUndefined(diagnostics.ensembleCandidates),
+    ensembleDecision: stringOrUndefined(diagnostics.ensembleDecision),
+    ensembleSelected: stringOrUndefined(diagnostics.ensembleSelected),
     repairTriggered:
       typeof diagnostics.repairTriggered === "boolean"
         ? diagnostics.repairTriggered
         : undefined,
-    repairTriggerReason:
-      typeof diagnostics.repairTriggerReason === "string"
-        ? diagnostics.repairTriggerReason
-        : undefined,
-    repairCandidates:
-      typeof diagnostics.repairCandidates === "string"
-        ? diagnostics.repairCandidates
-        : undefined,
+    repairTriggerReason: stringOrUndefined(diagnostics.repairTriggerReason),
+    repairCandidates: stringOrUndefined(diagnostics.repairCandidates),
     providerRerouted:
       typeof diagnostics.providerRerouted === "boolean"
         ? diagnostics.providerRerouted
         : undefined,
   };
+}
+
+function numberOrUndefined(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return numberOrUndefined(value) ?? null;
+}
+
+function stringOrUndefined(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function stringOrNull(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  return stringOrUndefined(value);
 }

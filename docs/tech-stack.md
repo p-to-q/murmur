@@ -52,7 +52,7 @@ unreachable.
 | Styling | Tailwind CSS | 4.x |
 | Animation | Framer Motion | 12.x |
 | State | Zustand | 5.x |
-| Data viz | Recharts | 3.x |
+| Data viz | DOM/SVG primitives in product surfaces | repo-native |
 | Client audio | Tone.js | 14.x |
 | Validation | Zod | 4.x |
 
@@ -86,11 +86,9 @@ probe.
 
 - Port `:8001`. `pYIN` / `SwiftF0` pitch detection + `DeepFilterNet` denoise,
   wrapped by the Stainer provider facade ([provider-strategy.md](provider-strategy.md)).
-- **Production runs on the operator's Mac**, exposed through a `cloudflared`
-  quick tunnel; `scripts/serve-workers-public.sh --sync-vercel` brings it up and
-  writes the rotating tunnel URL into Vercel env. Per
-  [music-engine.md](music-engine.md) the Next.js app probes `/health` and routes
-  `/api/transcribe` to whichever URL is live.
+- **Production runs on Fly.io**. Local dev still runs the FastAPI server on
+  `:8001` with `bun run dev:audio`; the Next.js app probes `/health` and routes
+  `/api/transcribe` to the configured `AUDIO_WORKER_URL`.
 
 ### `music-engine` — vibe → audio clip (generation)
 
@@ -130,13 +128,13 @@ bootstrap scripts are in [billing-waffo.md](billing-waffo.md).
 |---|---|---|
 | Web + API | Vercel (`murmur.ptoq.io`) | `vercel` CLI (project linked) |
 | Music generation | RunPod Serverless | `bun run deploy:music-serverless` (syncs endpoint id → Vercel) |
-| Audio transcription | Operator Mac + `cloudflared` | `scripts/serve-workers-public.sh --sync-vercel` |
+| Audio transcription | Fly.io | `fly deploy` / documented audio-engine deploy flow |
 | Database | Managed Postgres | migrations via Drizzle |
 | Object storage | S3 / R2 bucket | provisioned out-of-band |
 
-The audio worker's URL can rotate on restart, so `--sync-vercel` re-points
-production in one command. The music serverless endpoint id is stable — re-run
-`deploy:music-serverless` only to ship a new image or change scaling.
+The audio worker has a stable service URL. The music serverless endpoint id is
+stable — re-run `deploy:music-serverless` only to ship a new image or change
+scaling.
 
 ## CI/CD
 

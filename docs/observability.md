@@ -60,7 +60,7 @@ Every log line, every shell, every worker, JSON-encoded, one per line:
 ```
 
 Codex defines a typed helper in
-`apps/web/src/lib/observability/log.ts`:
+`src/lib/observability/log.ts`:
 
 ```ts
 type LogEvent = "song.created" | "song.deleted" | "transcribe.failed" | ... ;
@@ -178,7 +178,7 @@ process and into the audio worker.
 ### Trace context propagation
 
 Next.js → audio worker: pass the W3C `traceparent` header through the
-worker fetch in `apps/web/src/lib/audio/worker-client.ts`. The worker's
+worker fetch in `src/lib/audio/worker-client.ts`. The worker's
 FastAPI instrumentation will attach to it.
 
 Client → server: the Web shell injects `traceparent` from the
@@ -205,7 +205,7 @@ Sentry (intl) + 腾讯云 APM (cn). Same SDK shape:
 - **Never include user emails.** UserId is OK.
 - **PII redactor** runs on metadata before send.
 
-A small wrapper in `apps/web/src/lib/observability/sentry.ts` encodes
+A small wrapper in `src/lib/observability/sentry.ts` encodes
 all of this.
 
 ---
@@ -286,6 +286,36 @@ gets extra treatment:
   developer mode exposes raw i18n tokens, one-shot browser performance
   snapshots, `/api/qa/health`, `/api/qa/i18n`, and the `/me/debug` cockpit.
   The settings page only fetches those diagnostics after the toggle is enabled.
+- **Melo Lab**: `/me/debug/melo-lab?debug=1` is a test-only local diagnostic
+  bench for "the song does not match my hum" reports. It is enabled in local
+  development, or explicitly with `MURMUR_ENABLE_MELO_LAB=1`; its APIs live
+  under `/api/test/melo-lab/*` and only call loopback workers. The page itself
+  may remain a hidden debug-room UI, but without the local worker boundary it
+  should be inert. The lab records or uploads one hum, sends it to the local
+  audio worker, then lets the tester audition the returned JSON layers through
+  one browser-local renderer: `raw` notes, `intent`, `corrected`, and
+  `musical`. Only after one JSON layer sounds close should the tester invoke
+  the local music worker, which isolates final composition / melody-conditioning
+  drift from transcription errors. The shared provider/stage contract lives in
+  `src/lib/test/melo-lab-contract.ts` alongside the compact diagnostics key
+  list; the page exports a versioned feedback packet for handoff.
+
+Melo Lab interpretation:
+
+- If `raw` already sounds unlike the hum, fix audio-worker pitch/onset
+  extraction before touching composition.
+- If `raw` is close but `intent`, `corrected`, or `musical` gets worse, fix the
+  repair heuristics or the selection policy in `humming-engine`.
+- If one JSON layer sounds close in the local piano/voice renderer but the
+  music-worker output drifts, tune music conditioning (`MAGENTA_CFG_NOTES`,
+  `style_mix`, prompt constraints, or a stronger lead-melody path).
+- Tester handoff should include the exported provider/stage JSON or CSV file,
+  or the combined feedback packet with the layer that sounded closest, a 1-5
+  match score, and one sentence about where the melody first diverged.
+- The compact diagnostics packet must keep the current audio-engine timing and
+  selection evidence: `decodeMs`, `trimMs`, `providerPitchMs`, `pitchMs`,
+  `totalMs`, `noteDensity`, `ensembleScore`, `alternateReviewMode`, and
+  `detailPreservingRerank`.
 
 ---
 
@@ -322,7 +352,7 @@ Probes hit these every 30 s. Probes never have side effects.
 
 A downstream agent has shipped observability v2 when:
 
-- [ ] No raw `console.log` lives in `apps/web/src/app/api/`. The lint
+- [ ] No raw `console.log` lives in `src/app/api/`. The lint
       flags them.
 - [ ] Every route emits its taxonomy event from §2 on success and
       failure.

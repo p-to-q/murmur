@@ -260,9 +260,9 @@ version. But we still mark deprecation:
 - Lints fail on **new** uses of deprecated symbols (`eslint
   no-deprecated`); existing uses warn until they're migrated.
 
-The current `src/lib/music/stainer.ts` + the legacy
-`src/lib/music/providers/` directories are deprecated by the v2 audio
-work — mark them on day one of phase 1.
+The legacy `src/lib/music/stainer.ts` facade and
+`src/lib/music/providers/` shims were removed after the v2 audio path moved to
+`src/modules/stainer/transcribe.ts` and the server-side audio worker.
 
 ---
 

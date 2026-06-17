@@ -253,54 +253,58 @@ export async function spendNotesInTransaction(
 }
 
 export async function grantNotes(input: GrantNotesInput): Promise<GrantNotesResult> {
+  return db.transaction((tx) => grantNotesInTransaction(tx, input));
+}
+
+export async function grantNotesInTransaction(
+  tx: DbTransaction,
+  input: GrantNotesInput,
+): Promise<GrantNotesResult> {
   const amount = normalizePositiveNotes(input.amount, "amount");
+  const user = await lockUserRow(tx, input.userId);
+  if (!user) return { ok: false, reason: "user_not_found" };
 
-  return db.transaction(async (tx) => {
-    const user = await lockUserRow(tx, input.userId);
-    if (!user) return { ok: false, reason: "user_not_found" };
+  const existing = input.externalRef
+    ? await findIdempotentLedger(tx, input.userId, input.reason, input.externalRef)
+    : null;
 
-    const existing = input.externalRef
-      ? await findIdempotentLedger(tx, input.userId, input.reason, input.externalRef)
-      : null;
+  const decision = decideGrant({
+    currentBalance: user.notesBalance,
+    amount,
+    existing,
+  });
 
-    const decision = decideGrant({
-      currentBalance: user.notesBalance,
-      amount,
-      existing,
-    });
-
-    if (decision.kind === "duplicate") {
-      return {
-        ok: true,
-        ledgerId: decision.ledgerId,
-        balanceBefore: decision.balanceBefore,
-        balanceAfter: decision.balanceAfter,
-        duplicate: true,
-      };
-    }
-
-    const ledgerId = createLedgerId();
-    await tx.insert(notesLedger).values({
-      id: ledgerId,
-      userId: input.userId,
-      delta: amount,
-      reason: input.reason,
-      externalRef: input.externalRef,
-      metadata: input.metadata ?? {},
-    });
-    await tx
-      .update(users)
-      .set({ notesBalance: decision.balanceAfter, updatedAt: new Date() })
-      .where(eq(users.id, input.userId));
-
+  if (decision.kind === "duplicate") {
     return {
       ok: true,
-      ledgerId,
-      balanceBefore: user.notesBalance,
+      ledgerId: decision.ledgerId,
+      balanceBefore: decision.balanceBefore,
       balanceAfter: decision.balanceAfter,
-      duplicate: false,
+      duplicate: true,
     };
+  }
+
+  const ledgerId = createLedgerId();
+  await tx.insert(notesLedger).values({
+    id: ledgerId,
+    userId: input.userId,
+    delta: amount,
+    reason: input.reason,
+    externalRef: input.externalRef,
+    metadata: input.metadata ?? {},
   });
+  await tx
+    .update(users)
+    .set({ notesBalance: decision.balanceAfter, updatedAt: new Date() })
+    .where(eq(users.id, input.userId));
+
+  return {
+    ok: true,
+    ledgerId,
+    balanceBefore: user.notesBalance,
+    balanceAfter: decision.balanceAfter,
+    duplicate: false,
+  };
 }
 
 /**
@@ -506,7 +510,7 @@ async function ensureInitialLedgerForUser(userId: string): Promise<void> {
       id: createLedgerId(),
       userId,
       delta: user.notesBalance,
-      reason: userId === "guest" ? "grant:signup_bonus" : "grant:cutover_gift",
+      reason: initialLedgerReasonForUser(userId, user.accountKind),
       externalRef: "initial_balance",
       metadata: { source: "ensure_initial_ledger" },
     });
@@ -516,17 +520,27 @@ async function ensureInitialLedgerForUser(userId: string): Promise<void> {
 async function lockUserRow(
   tx: DbTransaction,
   userId: string,
-): Promise<{ id: string; notesBalance: number } | null> {
+): Promise<{ id: string; notesBalance: number; accountKind: string } | null> {
   const [user] = await tx
     .select({
       id: users.id,
       notesBalance: users.notesBalance,
+      accountKind: users.accountKind,
     })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
     .for("update");
   return user ?? null;
+}
+
+function initialLedgerReasonForUser(
+  userId: string,
+  accountKind: string,
+): GrantReason {
+  if (userId === "guest") return "grant:signup_bonus";
+  if (accountKind === "local_creator") return "grant:local_creator";
+  return "grant:cutover_gift";
 }
 
 async function findIdempotentLedger(
