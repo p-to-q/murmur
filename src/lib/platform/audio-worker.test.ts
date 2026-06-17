@@ -169,7 +169,7 @@ describe("audio worker adapter", () => {
     ).toThrow(AudioWorkerError);
   });
 
-  it("switches to musical melody for fragmented low-confidence takes", () => {
+  it("keeps corrected for ordinary fragmented low-confidence takes", () => {
     const result = normalizeWorkerResponse(
       {
         source: "swiftf0",
@@ -192,14 +192,14 @@ describe("audio worker adapter", () => {
       },
     );
 
-    expect(result.selectedMelodyKind).toBe("musical");
-    expect(result.diagnostics?.selectedMelodyKind).toBe("musical");
+    expect(result.selectedMelodyKind).toBe("corrected");
+    expect(result.diagnostics?.selectedMelodyKind).toBe("corrected");
     expect(result.melodies.musical.duration).toBeGreaterThanOrEqual(
       result.melodies.corrected.duration,
     );
   });
 
-  it("switches to musical melody when acceptance diagnostics show a poor take", () => {
+  it("keeps corrected when acceptance diagnostics are poor but not tail-bad", () => {
     const result = normalizeWorkerResponse(
       {
         source: "swiftf0",
@@ -225,9 +225,73 @@ describe("audio worker adapter", () => {
       },
     );
 
+    expect(result.selectedMelodyKind).toBe("corrected");
+    expect(result.diagnostics?.selectedMelodyKind).toBe("corrected");
+    expect(result.melodies.musical.notes[1]?.duration).toBeLessThan(0.84);
+  });
+
+  it("does not use musical for unusably poor transcription takes", () => {
+    const result = normalizeWorkerResponse(
+      {
+        source: "swiftf0",
+        notes: [
+          { pitch: 60, start: 0, duration: 0.12, velocity: 0.7, confidence: 0.42 },
+          { pitch: 66, start: 0.17, duration: 0.12, velocity: 0.68, confidence: 0.43 },
+          { pitch: 61, start: 0.34, duration: 0.12, velocity: 0.69, confidence: 0.41 },
+          { pitch: 70, start: 0.51, duration: 0.12, velocity: 0.66, confidence: 0.42 },
+          { pitch: 62, start: 0.68, duration: 0.12, velocity: 0.7, confidence: 0.43 },
+          { pitch: 71, start: 0.85, duration: 0.12, velocity: 0.68, confidence: 0.41 },
+        ],
+        diagnostics: {
+          voicedRatio: 0.38,
+          snr: 5.8,
+          acceptanceScore: 0.26,
+          musicFeelScore: 0.28,
+          excessiveHoldRatio: 0.5,
+          interiorHoldRatio: 0.36,
+          onsetFragmentation: 0.72,
+          firstOnsetLag: 0.34,
+        },
+      },
+      {
+        targetInstrument: "piano",
+        workerMs: 18,
+      },
+    );
+
+    expect(result.selectedMelodyKind).toBe("corrected");
+    expect(result.diagnostics?.selectedMelodyKind).toBe("corrected");
+  });
+
+  it("uses musical for recoverable transcription takes with several uncomfortable gates", () => {
+    const result = normalizeWorkerResponse(
+      {
+        source: "swiftf0",
+        notes: [
+          { pitch: 60, start: 0, duration: 0.12, velocity: 0.7, confidence: 0.58 },
+          { pitch: 62, start: 0.18, duration: 0.14, velocity: 0.68, confidence: 0.61 },
+          { pitch: 64, start: 0.36, duration: 0.12, velocity: 0.69, confidence: 0.6 },
+          { pitch: 65, start: 0.54, duration: 0.14, velocity: 0.66, confidence: 0.59 },
+          { pitch: 67, start: 0.72, duration: 0.12, velocity: 0.7, confidence: 0.62 },
+          { pitch: 69, start: 0.9, duration: 0.14, velocity: 0.71, confidence: 0.6 },
+        ],
+        diagnostics: {
+          voicedRatio: 0.58,
+          snr: 8.8,
+          acceptanceScore: 0.43,
+          musicFeelScore: 0.44,
+          onsetFragmentation: 0.58,
+          firstOnsetLag: 0.2,
+        },
+      },
+      {
+        targetInstrument: "piano",
+        workerMs: 18,
+      },
+    );
+
     expect(result.selectedMelodyKind).toBe("musical");
     expect(result.diagnostics?.selectedMelodyKind).toBe("musical");
-    expect(result.melodies.musical.notes[1]?.duration).toBeLessThan(0.84);
   });
 
   it("preserves no_voiced_frames from worker 422 responses", async () => {

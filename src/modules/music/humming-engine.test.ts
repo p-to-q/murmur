@@ -177,7 +177,7 @@ describe("humming-engine musical layer", () => {
     ).toBe("corrected");
   });
 
-  it("switches to musical when weak intent stacks with noisy delivery", () => {
+  it("keeps corrected when weak intent stacks with noisy delivery but is not tail-bad", () => {
     const melodies = buildTranscriptionMelodies([
       { pitch: 60, start: 0, duration: 0.16, velocity: 0.7, confidence: 0.48 },
       { pitch: 61, start: 0.18, duration: 0.14, velocity: 0.68, confidence: 0.5 },
@@ -201,7 +201,7 @@ describe("humming-engine musical layer", () => {
           onsetFragmentation: 0.58,
         },
       }),
-    ).toBe("musical");
+    ).toBe("corrected");
   });
 
   it("lets weak intent policy push musical repair further than the stable intent reading", () => {
@@ -542,6 +542,47 @@ describe("humming-engine musical layer", () => {
     );
   });
 
+  it("rewrites weak musical takes into a songlike phrase while keeping the hum shadow", () => {
+    const corrected = melody(
+      [
+        { pitch: 60, start: 0.02, duration: 0.26, velocity: 0.72, confidence: 0.66 },
+        { pitch: 67, start: 0.34, duration: 0.12, velocity: 0.66, confidence: 0.54 },
+        { pitch: 61, start: 0.64, duration: 0.22, velocity: 0.68, confidence: 0.57 },
+        { pitch: 69, start: 1.0, duration: 0.14, velocity: 0.67, confidence: 0.55 },
+        { pitch: 64, start: 1.38, duration: 0.5, velocity: 0.74, confidence: 0.78 },
+        { pitch: 67, start: 2.02, duration: 0.42, velocity: 0.74, confidence: 0.82 },
+      ],
+      {
+        bpm: 120,
+        key: "C",
+        scale: "major",
+        contour: "wave",
+      },
+    );
+
+    const melodies = buildTranscriptionMelodies(corrected.notes, corrected, {
+      diagnostics: {
+        duration: 2.44,
+        snr: 9.4,
+        voicedRatio: 0.61,
+        musicFeelScore: 0.34,
+        acceptanceScore: 0.4,
+        onsetFragmentation: 0.64,
+      },
+    });
+
+    expect(melodies.musical.notes[0]?.pitch).toBe(60);
+    expect(melodies.musical.notes.some((note) => note.pitch % 12 === 7)).toBe(true);
+    expect(countAwkwardLeaps(melodies.musical.notes)).toBeLessThan(
+      countAwkwardLeaps(melodies.corrected.notes),
+    );
+    expect(localDirectionChanges(melodies.musical.notes)).toBeLessThan(
+      localDirectionChanges(melodies.corrected.notes),
+    );
+    expect(melodies.musical.notes.length).toBeGreaterThanOrEqual(5);
+    expect([0, 4, 7]).toContain(melodies.musical.notes.at(-1)?.pitch % 12);
+  });
+
   it("keeps the hummed rhythmic skeleton close enough for band-style arrangement conditioning", () => {
     const corrected = melody(
       [
@@ -585,7 +626,7 @@ describe("humming-engine musical layer", () => {
     );
   });
 
-  it("prefers musical melody when input is fragmented and weak", () => {
+  it("keeps corrected when input is fragmented and weak but not tail-bad", () => {
     const melodies = buildTranscriptionMelodies([
       { pitch: 60, start: 0, duration: 0.12, velocity: 0.7, confidence: 0.58 },
       { pitch: 62, start: 0.18, duration: 0.14, velocity: 0.68, confidence: 0.61 },
@@ -600,10 +641,10 @@ describe("humming-engine musical layer", () => {
         melodies,
         diagnostics: { duration: 1.04, snr: 8.5, voicedRatio: 0.54 },
       }),
-    ).toBe("musical");
+    ).toBe("corrected");
   });
 
-  it("promotes musical melody when contour confidence and continuity are weak even if notes look passable", () => {
+  it("keeps corrected when contour continuity is weak but not tail-bad", () => {
     const melodies = buildTranscriptionMelodies([
       { pitch: 60, start: 0, duration: 0.35, velocity: 0.7, confidence: 0.8 },
       { pitch: 62, start: 0.45, duration: 0.35, velocity: 0.68, confidence: 0.79 },
@@ -632,10 +673,10 @@ describe("humming-engine musical layer", () => {
           ],
         }),
       }),
-    ).toBe("musical");
+    ).toBe("corrected");
   });
 
-  it("promotes musical melody when acceptance diagnostics say the phrase still feels wrong", () => {
+  it("keeps corrected when acceptance diagnostics are poor but not tail-bad", () => {
     const melodies = buildTranscriptionMelodies([
       { pitch: 60, start: 0.2, duration: 0.42, velocity: 0.74, confidence: 0.84 },
       { pitch: 62, start: 0.76, duration: 0.18, velocity: 0.71, confidence: 0.82 },
@@ -656,7 +697,7 @@ describe("humming-engine musical layer", () => {
           firstOnsetLag: 0.22,
         },
       }),
-    ).toBe("musical");
+    ).toBe("corrected");
   });
 
   it("tightens overheld interior notes when acceptance says the phrase is dragging", () => {
@@ -725,7 +766,7 @@ describe("humming-engine musical layer", () => {
     expect(melodies.musical.notes[2]?.duration).toBeLessThanOrEqual(0.36);
   });
 
-  it("forces the stronger repair branch on weak familiar-song timing shapes", () => {
+  it("keeps corrected on weak familiar-song timing shapes unless they are tail-bad", () => {
     const corrected = melody(
       [
         { pitch: 60, start: 0.18, duration: 0.52, velocity: 0.72, confidence: 0.86 },
@@ -764,19 +805,73 @@ describe("humming-engine musical layer", () => {
         onsetFragmentation: 0.58,
         firstOnsetLag: 0.19,
       },
-    })).toBe("musical");
+    })).toBe("corrected");
     expect(melodies.musical.notes[0]?.start).toBeLessThanOrEqual(0.18);
     expect(melodies.musical.notes[2]?.duration).toBeLessThan(0.78);
   });
 
-  it("lets a strong pleasantness bias promote the musical layer", () => {
+  it("does not send unusably poor takes to musical", () => {
+    const melodies = buildTranscriptionMelodies([
+      { pitch: 60, start: 0, duration: 0.12, velocity: 0.7, confidence: 0.42 },
+      { pitch: 66, start: 0.17, duration: 0.12, velocity: 0.68, confidence: 0.43 },
+      { pitch: 61, start: 0.34, duration: 0.12, velocity: 0.69, confidence: 0.41 },
+      { pitch: 70, start: 0.51, duration: 0.12, velocity: 0.66, confidence: 0.42 },
+      { pitch: 62, start: 0.68, duration: 0.12, velocity: 0.7, confidence: 0.43 },
+      { pitch: 71, start: 0.85, duration: 0.12, velocity: 0.68, confidence: 0.41 },
+    ]);
+
+    expect(
+      chooseGenerationMelodyKind({
+        melodies,
+        diagnostics: {
+          duration: 1.3,
+          snr: 5.8,
+          voicedRatio: 0.38,
+          acceptanceScore: 0.26,
+          musicFeelScore: 0.28,
+          excessiveHoldRatio: 0.5,
+          interiorHoldRatio: 0.36,
+          onsetFragmentation: 0.72,
+          firstOnsetLag: 0.34,
+        },
+      }),
+    ).toBe("corrected");
+  });
+
+  it("uses musical for recoverable takes with several uncomfortable gates", () => {
+    const melodies = buildTranscriptionMelodies([
+      { pitch: 60, start: 0, duration: 0.12, velocity: 0.7, confidence: 0.58 },
+      { pitch: 62, start: 0.18, duration: 0.14, velocity: 0.68, confidence: 0.61 },
+      { pitch: 64, start: 0.36, duration: 0.12, velocity: 0.69, confidence: 0.6 },
+      { pitch: 65, start: 0.54, duration: 0.14, velocity: 0.66, confidence: 0.59 },
+      { pitch: 67, start: 0.72, duration: 0.12, velocity: 0.7, confidence: 0.62 },
+      { pitch: 69, start: 0.9, duration: 0.14, velocity: 0.71, confidence: 0.6 },
+    ]);
+
+    expect(
+      chooseGenerationMelodyKind({
+        melodies,
+        diagnostics: {
+          duration: 1.04,
+          snr: 8.8,
+          voicedRatio: 0.58,
+          acceptanceScore: 0.43,
+          musicFeelScore: 0.44,
+          onsetFragmentation: 0.58,
+          firstOnsetLag: 0.2,
+        },
+      }),
+    ).toBe("musical");
+  });
+
+  it("does not let a strong pleasantness bias force the musical layer", () => {
     const melodies = buildTranscriptionMelodies([
       { pitch: 60, start: 0, duration: 0.4, velocity: 0.7, confidence: 0.8 },
       { pitch: 62, start: 0.5, duration: 0.4, velocity: 0.68, confidence: 0.82 },
       { pitch: 64, start: 1.0, duration: 0.45, velocity: 0.72, confidence: 0.84 },
     ]);
 
-    expect(selectGenerationMelody({ melodies }, { repairBias: 0.8 }).kind).toBe("musical");
+    expect(selectGenerationMelody({ melodies }, { repairBias: 0.8 }).kind).toBe("corrected");
   });
 
   it("lets a strong fidelity bias favor intent when the take is stable enough", () => {

@@ -193,6 +193,7 @@ export function chooseGenerationMelodyKind(input: {
   melodyIntent?: MelodyIntentProfile;
   diagnostics?: Partial<TranscriptionDiagnostics>;
   contour?: TranscriptionContour;
+  repairBias?: number;
 }): MelodySelectionKind {
   const { melodies, melodyIntent, diagnostics, contour } = input;
   const corrected = melodies.corrected;
@@ -273,17 +274,109 @@ export function chooseGenerationMelodyKind(input: {
   ].filter(Boolean).length;
 
   if (strongRescueSignal || moderateSignalCount >= 2) {
+    return shouldAutoSelectMusical({
+      corrected,
+      musical: melodies.musical,
+      melodyIntent,
+      diagnostics,
+      contour,
+      repairBias: input.repairBias,
+    })
+      ? "musical"
+      : "corrected";
+  }
+
+  if (shouldAutoSelectMusical({
+    corrected,
+    musical: melodies.musical,
+    melodyIntent,
+    diagnostics,
+    contour,
+    repairBias: input.repairBias,
+    requireUserBias: true,
+  })) {
     return "musical";
   }
 
   return "corrected";
 }
 
+function shouldAutoSelectMusical(input: {
+  corrected: CleanMelody;
+  musical: CleanMelody;
+  melodyIntent?: MelodyIntentProfile;
+  diagnostics?: Partial<TranscriptionDiagnostics>;
+  contour?: TranscriptionContour;
+  repairBias?: number;
+  requireUserBias?: boolean;
+}): boolean {
+  const bias = clampRepairBias(input.repairBias ?? 0);
+  if (input.requireUserBias && bias < 0.45) return false;
+
+  const notes = input.corrected.notes;
+  const noteCount = notes.length;
+  const avgConfidence =
+    noteCount > 0
+      ? notes.reduce((sum, note) => sum + note.confidence, 0) / noteCount
+      : 1;
+  const shortNoteRatio =
+    noteCount > 0
+      ? notes.filter((note) => note.duration <= 0.18).length / noteCount
+      : 0;
+  const contourStats = summarizeContour(input.contour);
+  const diagnostics = input.diagnostics;
+
+  const audioTooPoor =
+    (typeof diagnostics?.voicedRatio === "number" && diagnostics.voicedRatio < 0.42) ||
+    (typeof diagnostics?.snr === "number" && diagnostics.snr < 6.2);
+  if (audioTooPoor) return false;
+
+  const audioNotGreat =
+    (typeof diagnostics?.voicedRatio === "number" && diagnostics.voicedRatio < 0.7) ||
+    (typeof diagnostics?.snr === "number" && diagnostics.snr < 12);
+  const acceptanceBad =
+    (typeof diagnostics?.acceptanceScore === "number" && diagnostics.acceptanceScore < 0.5) ||
+    (typeof diagnostics?.musicFeelScore === "number" && diagnostics.musicFeelScore < 0.5);
+  const timingBad =
+    shortNoteRatio >= 0.42 ||
+    (typeof diagnostics?.onsetFragmentation === "number" && diagnostics.onsetFragmentation >= 0.52) ||
+    (typeof diagnostics?.firstOnsetLag === "number" && diagnostics.firstOnsetLag >= 0.18) ||
+    (typeof diagnostics?.interiorHoldRatio === "number" && diagnostics.interiorHoldRatio >= 0.2) ||
+    (typeof diagnostics?.excessiveHoldRatio === "number" && diagnostics.excessiveHoldRatio >= 0.34);
+  const shapeUncomfortable =
+    avgConfidence < 0.72 ||
+    contourStats.voicedConfidence < 0.72 ||
+    contourStats.lowConfidenceVoicedRatio >= 0.34 ||
+    contourStats.unstableVoicedJumpRatio >= 0.24;
+  const intentBad =
+    (typeof input.melodyIntent?.confidence === "number" && input.melodyIntent.confidence < 0.5) ||
+    (typeof input.melodyIntent?.intentMatch === "number" && input.melodyIntent.intentMatch < 0.5) ||
+    (typeof input.melodyIntent?.musicalityBias === "number" && input.melodyIntent.musicalityBias >= 0.68);
+
+  const failedRecoverableGates = [
+    audioNotGreat,
+    acceptanceBad,
+    timingBad,
+    shapeUncomfortable,
+    intentBad,
+  ].filter(Boolean).length;
+  const requiredGateCount = bias >= 0.65 ? 2 : 3;
+
+  return (
+    acceptanceBad &&
+    timingBad &&
+    failedRecoverableGates >= requiredGateCount
+  );
+}
+
 export function selectGenerationMelody(
   result: Pick<TranscriptionResult, "melodies" | "diagnostics" | "contour" | "melodyIntent">,
   options: { repairBias?: number } = {},
 ): { kind: MelodySelectionKind; melody: CleanMelody } {
-  const baseKind = chooseGenerationMelodyKind(result);
+  const baseKind = chooseGenerationMelodyKind({
+    ...result,
+    repairBias: options.repairBias ?? 0,
+  });
   const kind = applyRepairBiasToMelodyKind(baseKind, result, options.repairBias ?? 0);
   return {
     kind,
@@ -297,9 +390,6 @@ export function applyRepairBiasToMelodyKind(
   repairBias: number,
 ): MelodySelectionKind {
   const bias = clampRepairBias(repairBias);
-  if (bias >= 0.55) {
-    return "musical";
-  }
 
   if (bias <= -0.45) {
     const corrected = result.melodies.corrected;
@@ -1064,6 +1154,8 @@ function shouldUseSoothingRewrite(
 
   return (
     (weakIntent && highMusicalityNeed) ||
+    (highMusicalityNeed && repairSeverity >= 0.42) ||
+    (highMusicalityNeed && (shortRatio >= 0.36 || awkwardLeapCount >= 1 || avgConfidence < 0.72)) ||
     (repairSeverity >= 0.68 && (shortRatio >= 0.42 || awkwardLeapCount >= 2)) ||
     (avgConfidence < 0.58 && awkwardLeapCount >= 2 && source.notes.length >= 5)
   );
@@ -1079,11 +1171,16 @@ function buildSoothingMusicalRewrite(
   const sourceNotes = source.notes;
   if (sourceNotes.length === 0) return [];
 
-  const desiredCount = clamp(
-    Math.round(source.duration / Math.max(beat * 0.62, 0.28)),
-    4,
-    Math.min(7, Math.max(4, sourceNotes.length)),
+  const totalDuration = Math.max(
+    source.duration,
+    sourceNotes.at(-1)!.start + sourceNotes.at(-1)!.duration,
+    beat * 2.2,
   );
+  const desiredCount = Math.round(clamp(
+    Math.round(totalDuration / Math.max(beat * 0.52, 0.26)),
+    4,
+    Math.min(8, Math.max(5, sourceNotes.length + 1)),
+  ));
   const count = Math.max(4, desiredCount);
   const firstPitch = nearestScalePitch(sourceNotes[0]!.pitch, scalePcs);
   const sourceHigh = Math.max(...sourceNotes.map((note) => note.pitch));
@@ -1100,53 +1197,267 @@ function buildSoothingMusicalRewrite(
     Math.abs(cadencePitch - lastSourcePitch) <= 5
       ? cadencePitch
       : nearestCadencePitch(firstPitch, cadencePcs);
+  const signaturePc = chooseSignaturePitchClass(sourceNotes, melodyIntent);
   const apexPosition =
     contour === "falling"
       ? 0.28
       : contour === "rising"
         ? 0.72
         : 0.58;
-  const totalDuration = Math.max(source.duration, beat * (count * 0.72 + 0.6));
-  const step = totalDuration / count;
+  const motifIntervals = deriveSonglikeMotifIntervals(sourceNotes, contour);
   const notes: MelodyNote[] = [];
 
   for (let index = 0; index < count; index++) {
     const progress = count === 1 ? 1 : index / (count - 1);
-    const pitchTarget =
+    const sourceShadow = sourceNoteAtProgress(sourceNotes, progress);
+    const arcTarget =
       progress <= apexPosition
-        ? interpolate(firstPitch, apexPitch, progress / apexPosition)
-        : interpolate(apexPitch, phraseEndPitch, (progress - apexPosition) / (1 - apexPosition));
-    const pitch = nearestScalePitch(Math.round(pitchTarget), scalePcs);
+        ? interpolate(firstPitch, apexPitch, progress / Math.max(apexPosition, 0.001))
+        : interpolate(apexPitch, phraseEndPitch, (progress - apexPosition) / Math.max(1 - apexPosition, 0.001));
+    const shadowPitch = nearestScalePitch(sourceShadow.pitch, scalePcs);
+    const previousPitch = notes.at(-1)?.pitch ?? firstPitch;
+    const motifTarget = nearestScalePitch(
+      previousPitch + motifIntervals[(index - 1) % motifIntervals.length]!,
+      scalePcs,
+    );
     const isLast = index === count - 1;
     const isApex = Math.abs(progress - apexPosition) <= 1 / Math.max(2, count - 1);
-    const duration = isLast
-      ? Math.max(beat * 0.95, step * 0.96)
-      : isApex
-        ? Math.max(beat * 0.68, step * 0.82)
-        : Math.max(beat * 0.48, step * 0.72);
+    const edge = index === 0 || isLast;
+    const shadowWeight = edge ? 0.64 : sourceShadow.confidence >= 0.78 ? 0.34 : 0.24;
+    const motifWeight = edge ? 0 : 0.22;
+    let pitch = edge
+      ? index === 0
+        ? firstPitch
+        : phraseEndPitch
+      : nearestScalePitch(
+          Math.round(
+            arcTarget * (1 - shadowWeight - motifWeight) +
+              shadowPitch * shadowWeight +
+              motifTarget * motifWeight,
+          ),
+          scalePcs,
+        );
+
+    if (!edge && signaturePc !== null && (index === 1 || (count >= 6 && index === count - 3))) {
+      const signaturePitch = nearestPitchForClass(pitch, signaturePc);
+      if (Math.abs(signaturePitch - pitch) <= 4) {
+        pitch = signaturePitch;
+      }
+    }
+
+    const start = computeSignatureStart(sourceNotes, index, count, totalDuration, beat);
+    const duration = computeSignatureDuration(
+      sourceShadow,
+      index,
+      count,
+      beat,
+      totalDuration,
+      start,
+      isApex,
+    );
 
     notes.push({
       pitch,
-      start: roundTo(index * step, 3),
+      start: roundTo(start, 3),
       duration: roundTo(duration, 3),
       velocity: clamp(0.7 + (isApex ? 0.07 : 0), 0.05, 1),
       confidence: 0.86,
     });
   }
 
+  const ordered = enforceReadableMelodySpacing(notes, beat);
+  const arced = enforceSignaturePhraseArc(
+    ordered,
+    scalePcs,
+    cadencePcs,
+    apexPosition,
+    contour,
+  );
   const smoothed = smoothAwkwardMusicalLeaps(
-    notes,
+    arced,
     scalePcs,
     cadencePcs,
     0.78,
     melodyIntent,
   );
-  const final = smoothed.at(-1);
+  const shaped = shapeSonglikePhraseArcs(
+    smoothed,
+    scalePcs,
+    cadencePcs,
+    beat,
+    0.78,
+    melodyIntent,
+  );
+  const final = shaped.at(-1);
   if (final) {
     final.pitch = nearestCadencePitch(final.pitch, cadencePcs);
     final.duration = Math.max(final.duration, beat * 1.05);
   }
-  return extendFinalNoteToMinimumDuration(smoothed, totalDuration);
+  return extendFinalNoteToMinimumDuration(shaped, totalDuration);
+}
+
+function sourceNoteAtProgress(notes: MelodyNote[], progress: number): MelodyNote {
+  if (notes.length === 1) return notes[0]!;
+
+  const duration = Math.max(melodyDuration(notes), 1e-6);
+  const target = progress * duration;
+  return notes.reduce((best, note) => {
+    const bestCenter = best.start + best.duration * 0.5;
+    const noteCenter = note.start + note.duration * 0.5;
+    return Math.abs(noteCenter - target) < Math.abs(bestCenter - target) ? note : best;
+  }, notes[0]!);
+}
+
+function computeSignatureStart(
+  sourceNotes: MelodyNote[],
+  index: number,
+  count: number,
+  totalDuration: number,
+  beat: number,
+): number {
+  if (index === 0) return Math.min(sourceNotes[0]!.start, beat * 0.08);
+
+  const progress = count === 1 ? 1 : index / (count - 1);
+  const evenStart = progress * totalDuration;
+  const shadow = sourceNoteAtProgress(sourceNotes, progress);
+  const shadowStart = clamp(shadow.start, 0, totalDuration);
+  const blend = index === count - 1 ? 0.24 : 0.36;
+  return Math.max(0, evenStart * (1 - blend) + shadowStart * blend);
+}
+
+function computeSignatureDuration(
+  sourceShadow: MelodyNote,
+  index: number,
+  count: number,
+  beat: number,
+  totalDuration: number,
+  start: number,
+  isApex: boolean,
+): number {
+  const isLast = index === count - 1;
+  const phraseCell = totalDuration / Math.max(count, 1);
+  const sourceDuration = clamp(sourceShadow.duration, beat * 0.28, beat * 1.3);
+  const target = isLast
+    ? Math.max(beat * 0.95, phraseCell * 0.95)
+    : isApex
+      ? Math.max(beat * 0.66, phraseCell * 0.82)
+      : Math.max(beat * 0.42, phraseCell * 0.68);
+  const blended = target * 0.7 + sourceDuration * 0.3;
+  const remaining = Math.max(beat * 0.35, totalDuration - start);
+  return clamp(blended, beat * 0.28, remaining);
+}
+
+function enforceReadableMelodySpacing(notes: MelodyNote[], beat: number): MelodyNote[] {
+  const sorted = notes.map((note) => ({ ...note })).sort((a, b) => a.start - b.start);
+  const minGap = Math.max(0.012, beat * 0.025);
+  const minDuration = Math.max(0.08, beat * 0.2);
+
+  for (let index = 0; index < sorted.length - 1; index++) {
+    const note = sorted[index]!;
+    const next = sorted[index + 1]!;
+    if (next.start <= note.start + minDuration + minGap) {
+      next.start = roundTo(note.start + minDuration + minGap, 3);
+    }
+    const maxDuration = next.start - note.start - minGap;
+    note.duration = roundTo(clamp(note.duration, minDuration, Math.max(minDuration, maxDuration)), 3);
+  }
+
+  const final = sorted.at(-1);
+  if (final) {
+    final.duration = roundTo(Math.max(final.duration, beat * 0.62), 3);
+  }
+
+  return sorted;
+}
+
+function enforceSignaturePhraseArc(
+  notes: MelodyNote[],
+  scalePcs: Set<number>,
+  cadencePcs: number[],
+  apexPosition: number,
+  contour: CleanMelody["contour"],
+): MelodyNote[] {
+  if (notes.length < 4) return notes.map((note) => ({ ...note }));
+
+  const arced = notes.map((note) => ({ ...note }));
+  const apexIndex = clamp(Math.round((arced.length - 1) * apexPosition), 1, arced.length - 2);
+
+  for (let index = 1; index < arced.length - 1; index++) {
+    const prev = arced[index - 1]!;
+    const note = arced[index]!;
+    const towardApex = index <= apexIndex;
+    const desiredDirection =
+      contour === "falling"
+        ? towardApex
+          ? -1
+          : 1
+        : towardApex
+          ? 1
+          : -1;
+    const step = note.pitch - prev.pitch;
+    const wrongDirection = step !== 0 && Math.sign(step) !== desiredDirection;
+    const tooLarge = Math.abs(step) > 5;
+
+    if (!wrongDirection && !tooLarge) continue;
+
+    const target = prev.pitch + desiredDirection * (towardApex ? 2 : 1);
+    const candidate = nearestScalePitch(target, scalePcs);
+    if (Math.abs(candidate - note.pitch) <= 5) {
+      note.pitch = candidate;
+    }
+  }
+
+  const final = arced.at(-1);
+  if (final && cadencePcs.length > 0) {
+    final.pitch = nearestCadencePitch(final.pitch, cadencePcs);
+  }
+
+  return arced;
+}
+
+function chooseSignaturePitchClass(
+  sourceNotes: MelodyNote[],
+  melodyIntent?: MelodyIntentProfile,
+): number | null {
+  const weights = new Map<number, number>();
+  for (const note of sourceNotes) {
+    const pc = mod12(note.pitch);
+    weights.set(pc, (weights.get(pc) ?? 0) + note.duration * Math.max(0.2, note.confidence));
+  }
+  for (const pc of melodyIntent?.intervalPolicy.anchorPitchClasses ?? []) {
+    weights.set(pc, (weights.get(pc) ?? 0) + 0.6);
+  }
+
+  let bestPc: number | null = null;
+  let bestWeight = 0;
+  for (const [pc, weight] of weights) {
+    if (weight > bestWeight) {
+      bestPc = pc;
+      bestWeight = weight;
+    }
+  }
+
+  return bestWeight >= 0.42 ? bestPc : null;
+}
+
+function deriveSonglikeMotifIntervals(
+  sourceNotes: MelodyNote[],
+  contour: CleanMelody["contour"],
+): number[] {
+  const intervals: number[] = [];
+  for (let index = 1; index < sourceNotes.length && intervals.length < 3; index++) {
+    const raw = sourceNotes[index]!.pitch - sourceNotes[index - 1]!.pitch;
+    if (raw === 0) {
+      intervals.push(0);
+      continue;
+    }
+    intervals.push(Math.sign(raw) * clamp(Math.round(Math.abs(raw) * 0.45), 1, 3));
+  }
+
+  if (intervals.length > 0) return intervals;
+  if (contour === "falling") return [-2, -1, 2];
+  if (contour === "rising") return [2, 1, -1];
+  return [2, -1, 1];
 }
 
 function preserveIntentTrace(
