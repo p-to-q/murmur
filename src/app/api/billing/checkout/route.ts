@@ -132,9 +132,24 @@ function checkoutMetadata(
 
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
-  const auth = await resolveRequestAuth(request);
-  if (!auth.ok) return auth.response;
-  const userId = auth.user.id;
+  let body: CheckoutRequestBody;
+  try {
+    body = (await request.json()) as CheckoutRequestBody;
+  } catch {
+    body = {};
+  }
+
+  const product = parseCheckoutProduct(body);
+  if (!product) {
+    return NextResponse.json(
+      {
+        error: "invalid_topup_request",
+        message: "Provide a valid SKU or customAmountUsd between 1 and 999.",
+        requestId,
+      },
+      { status: 400, headers: { "X-Request-Id": requestId } },
+    );
+  }
 
   if (!isWaffoConfigured()) {
     return NextResponse.json(
@@ -146,6 +161,10 @@ export async function POST(request: NextRequest) {
       { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
+
+  const auth = await resolveRequestAuth(request);
+  if (!auth.ok) return auth.response;
+  const userId = auth.user.id;
 
   if (userId === "guest" || auth.user.accountKind === "local_creator") {
     return NextResponse.json(
@@ -168,25 +187,6 @@ export async function POST(request: NextRequest) {
   });
   if (!rateLimit.allowed) {
     return rateLimitedResponse(rateLimit, requestId);
-  }
-
-  let body: CheckoutRequestBody;
-  try {
-    body = (await request.json()) as CheckoutRequestBody;
-  } catch {
-    body = {};
-  }
-
-  const product = parseCheckoutProduct(body);
-  if (!product) {
-    return NextResponse.json(
-      {
-        error: "invalid_topup_request",
-        message: "Provide a valid SKU or customAmountUsd between 1 and 999.",
-        requestId,
-      },
-      { status: 400, headers: { "X-Request-Id": requestId } },
-    );
   }
 
   const client = getWaffoClient()!;

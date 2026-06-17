@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { CheckoutScreen } from "@/components/screens/CheckoutScreen";
+import CheckoutClient from "./CheckoutClient";
 
 /**
  * /topup/checkout — provider handoff.
@@ -14,7 +14,7 @@ import { CheckoutScreen } from "@/components/screens/CheckoutScreen";
 export default function CheckoutPage() {
   return (
     <Suspense fallback={null}>
-      <CheckoutScreen />
+      <CheckoutClient />
     </Suspense>
   );
 }

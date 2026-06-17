@@ -143,4 +143,20 @@ describe("POST /api/billing/checkout", () => {
     const response = await POST(buildRequest({ sku: "topup_30_notes" }));
     expect(response.status).toBe(503);
   });
+
+  it("answers keyless checkout requests before auth-dependent work", async () => {
+    waffoConfigured = false;
+    nextAuth = {
+      ok: false,
+      response: new Response(JSON.stringify({ error: "auth_unavailable" }), {
+        status: 401,
+      }),
+    };
+
+    const response = await POST(buildRequest({ sku: "topup_30_notes" }));
+
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe("waffo_not_configured");
+  });
 });
