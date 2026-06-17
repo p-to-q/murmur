@@ -29,6 +29,7 @@ export type NotesReason =
   | "grant:daily_free"
   | "grant:signup_bonus"
   | "grant:cutover_gift"
+  | "grant:local_creator"
   | "grant:referral"
   // Purchases
   | "purchase:topup"

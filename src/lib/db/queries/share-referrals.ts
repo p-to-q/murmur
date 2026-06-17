@@ -18,7 +18,7 @@ export function canUseShareReferral(user: Pick<AppUser, "id" | "accountKind"> | 
 export type ClaimShareReferralResult =
   | {
       ok: true;
-      referrer: GrantNotesResult & { ok: true };
+      referrer: (GrantNotesResult & { ok: true }) | null;
       invitee: GrantNotesResult & { ok: true };
       duplicate: boolean;
     }
@@ -48,32 +48,46 @@ export async function claimShareReferral(input: {
     return { ok: false, reason: "self_referral" };
   }
 
-  const externalRef = referralExternalRef(referrerId, inviteeId);
+  const referrerExternalRef = referralExternalRef(referrerId, inviteeId);
+  const inviteeExternalRef = inviteeReferralExternalRef(inviteeId);
   try {
     return await db.transaction(async (tx) => {
-      const referrerRow = await tx
-        .select({ id: users.id, accountKind: users.accountKind })
-        .from(users)
-        .where(eq(users.id, referrerId))
-        .limit(1);
-      const inviteeRow = await tx
-        .select({ id: users.id, accountKind: users.accountKind })
-        .from(users)
-        .where(eq(users.id, inviteeId))
-        .limit(1);
+      const { referrerRow, inviteeRow } = await lockReferralUsers(tx, referrerId, inviteeId);
 
-      if (referrerRow[0]?.accountKind !== "registered") {
+      if (referrerRow?.accountKind !== "registered") {
         return { ok: false as const, reason: "invalid_referrer" as const };
       }
-      if (inviteeRow[0]?.accountKind !== "registered") {
+      if (inviteeRow?.accountKind !== "registered") {
         return { ok: false as const, reason: "grant_failed" as const };
+      }
+
+      const invitee = await grantNotesInTransaction(tx, {
+        userId: inviteeId,
+        amount: SHARE_REFERRAL_REWARD_NOTES,
+        reason: "grant:referral",
+        externalRef: inviteeExternalRef,
+        metadata: {
+          role: "invitee",
+          referrerId,
+        },
+      });
+      if (!invitee.ok) {
+        throw new ShareReferralGrantError("grant_failed");
+      }
+      if (invitee.duplicate) {
+        return {
+          ok: true as const,
+          referrer: null,
+          invitee,
+          duplicate: true,
+        };
       }
 
       const referrer = await grantNotesInTransaction(tx, {
         userId: referrerId,
         amount: SHARE_REFERRAL_REWARD_NOTES,
         reason: "grant:referral",
-        externalRef,
+        externalRef: referrerExternalRef,
         metadata: {
           role: "referrer",
           inviteeId,
@@ -83,25 +97,11 @@ export async function claimShareReferral(input: {
         throw new ShareReferralGrantError("invalid_referrer");
       }
 
-      const invitee = await grantNotesInTransaction(tx, {
-        userId: inviteeId,
-        amount: SHARE_REFERRAL_REWARD_NOTES,
-        reason: "grant:referral",
-        externalRef,
-        metadata: {
-          role: "invitee",
-          referrerId,
-        },
-      });
-      if (!invitee.ok) {
-        throw new ShareReferralGrantError("grant_failed");
-      }
-
       return {
         ok: true as const,
         referrer,
         invitee,
-        duplicate: referrer.duplicate && invitee.duplicate,
+        duplicate: referrer.duplicate || invitee.duplicate,
       };
     });
   } catch (error) {
@@ -113,11 +113,44 @@ export async function claimShareReferral(input: {
 }
 
 export function referralExternalRef(referrerId: string, inviteeId: string): string {
-  return `referral:${referrerId}:${inviteeId}`;
+  return `referral:referrer:${referrerId}:invitee:${inviteeId}`;
+}
+
+export function inviteeReferralExternalRef(inviteeId: string): string {
+  return `referral:invitee:${inviteeId}`;
 }
 
 export function normalizeReferralUserId(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;
   return /^[A-Za-z0-9_-]{6,128}$/.test(trimmed) ? trimmed : null;
+}
+
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function lockReferralUsers(
+  tx: DbTransaction,
+  referrerId: string,
+  inviteeId: string,
+): Promise<{
+  referrerRow: { id: string; accountKind: string } | null;
+  inviteeRow: { id: string; accountKind: string } | null;
+}> {
+  const rows = new Map<string, { id: string; accountKind: string }>();
+  const orderedIds = [referrerId, inviteeId].sort();
+
+  for (const userId of orderedIds) {
+    const [row] = await tx
+      .select({ id: users.id, accountKind: users.accountKind })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+      .for("update");
+    if (row) rows.set(row.id, row);
+  }
+
+  return {
+    referrerRow: rows.get(referrerId) ?? null,
+    inviteeRow: rows.get(inviteeId) ?? null,
+  };
 }
