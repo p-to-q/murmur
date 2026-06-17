@@ -320,7 +320,7 @@ Saved songs should also carry lightweight branch lineage so the product can
 distinguish an original save from later branches and keep those derivative
 paths legible in future compare/history experiences.
 
-### 7.5 Melo Lab local bench
+### 7.5 MeLo Lab local bench
 
 `/me/debug/melo-lab?debug=1` is the test-only bench for layer-by-layer melody
 diagnosis. The page can live as a hidden debug-room surface, but its execution
@@ -330,7 +330,7 @@ worker. This keeps experiments out of billing, RunPod/serverless, and the main
 Hum -> Vibe product path while still leaving room for a small discoverable
 debug surprise.
 
-Packaging rule: Melo Lab may ship as inert UI in a web/client build, but the
+Packaging rule: MeLo Lab may ship as inert UI in a web/client build, but the
 test APIs stay disabled in production unless `MURMUR_ENABLE_MELO_LAB=1` is set,
 and even then they must only resolve `localhost`, `127.0.0.1`, or `::1` worker
 URLs. Do not point these routes at production workers or expose them as part of
@@ -355,7 +355,7 @@ The first layer that stops sounding like the hum names the area to improve. If
 all JSON layers are close and the final worker output drifts, tune melody
 conditioning instead of transcription.
 
-For handoff, Melo Lab exports either per-provider JSON/CSV files or one combined
+For handoff, MeLo Lab exports either per-provider JSON/CSV files or one combined
 feedback packet. The packet includes every provider/stage JSON result, compact
 diagnostics, the tester's closest-layer choice, a 1-5 match score, a divergence
 note, and local music-worker metadata. It intentionally does not embed the
@@ -363,7 +363,7 @@ original hum audio. Use `MELO_LAB_AUDIO_WORKER_URL` and
 `MELO_LAB_MUSIC_WORKER_URL` when the local workers are not on the default
 `127.0.0.1:8001` and `127.0.0.1:8002` ports.
 
-When probing the music worker with the `raw` stage, Melo Lab wraps the raw notes
+When probing the music worker with the `raw` stage, MeLo Lab wraps the raw notes
 in the corrected melody scaffold because the music worker expects full
 `CleanMelody` JSON. Feedback packets label this as
 `raw-notes-with-corrected-melody-scaffold`.
@@ -391,12 +391,12 @@ The model does not need to be a large remote LLM. Good local candidates:
 - a small sequence model trained on hummed-contour -> lead-sheet pairs;
 - a dynamic-programming smoother that preserves phrase contour and repeated
   motifs while snapping only low-confidence notes;
-- an interactive preference loop from exported Melo Lab provider/stage files:
+- an interactive preference loop from exported MeLo Lab provider/stage files:
   "raw closest", "corrected closest", "musical closest", plus divergence notes.
 
 The contract should be explainable. For every changed note, keep a reason such
 as `low_confidence_pitch`, `off_scale_anchor`, `fragmented_onset`, or
-`cadence_resolution`. That lets Melo Lab show not only what changed, but why.
+`cadence_resolution`. That lets MeLo Lab show not only what changed, but why.
 
 ## 8. Core pipeline
 

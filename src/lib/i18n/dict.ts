@@ -428,6 +428,7 @@ export const DICT = {
   "me.payments":           { zh: "支付记录", en: "Payment records" },
   "me.privacy":            { zh: "隐私", en: "Privacy" },
   "me.delete_account":     { zh: "删除账号", en: "Delete account" },
+  "me.melo_lab":           { zh: "MeLo Lab", en: "MeLo Lab" },
   "me.stats.title":        { zh: "创作数据", en: "Activity" },
   "me.stats.songs":        { zh: "小歌",   en: "Songs" },
   "me.stats.vibes":        { zh: "氛围",   en: "Vibes" },

@@ -286,7 +286,7 @@ gets extra treatment:
   developer mode exposes raw i18n tokens, one-shot browser performance
   snapshots, `/api/qa/health`, `/api/qa/i18n`, and the `/me/debug` cockpit.
   The settings page only fetches those diagnostics after the toggle is enabled.
-- **Melo Lab**: `/me/debug/melo-lab?debug=1` is a test-only local diagnostic
+- **MeLo Lab**: `/me/debug/melo-lab?debug=1` is a test-only local diagnostic
   bench for "the song does not match my hum" reports. It is enabled in local
   development, or explicitly with `MURMUR_ENABLE_MELO_LAB=1`; its APIs live
   under `/api/test/melo-lab/*` and only call loopback workers. The page itself
@@ -300,7 +300,7 @@ gets extra treatment:
   `src/lib/test/melo-lab-contract.ts` alongside the compact diagnostics key
   list; the page exports a versioned feedback packet for handoff.
 
-Melo Lab interpretation:
+MeLo Lab interpretation:
 
 - If `raw` already sounds unlike the hum, fix audio-worker pitch/onset
   extraction before touching composition.

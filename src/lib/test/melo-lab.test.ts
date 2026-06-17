@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { compactMeloLabDiagnostics } from "@/lib/test/melo-lab-contract";
 import { meloLabGate, resolveLocalWorkerUrl } from "@/lib/test/melo-lab";
 
-describe("melo lab helpers", () => {
+describe("MeLo Lab helpers", () => {
   it("keeps production test APIs behind an explicit flag", () => {
     const originalNodeEnv = process.env.NODE_ENV;
     const originalFlag = process.env.MURMUR_ENABLE_MELO_LAB;

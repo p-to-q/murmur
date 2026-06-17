@@ -12,7 +12,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-describe("melo lab client adapter", () => {
+describe("MeLo Lab client adapter", () => {
   it("normalizes provider errors into provider run results", async () => {
     globalThis.fetch = (async () =>
       new Response(JSON.stringify({ detail: { message: "worker unavailable" } }), {

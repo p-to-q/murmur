@@ -441,7 +441,7 @@ function MeloLabContent() {
               TEST ONLY / local melo-lab
             </p>
             <h1 className="mt-2 hero-serif text-[42px] leading-none md:text-[64px]">
-              Melo Lab
+              MeLo Lab
             </h1>
             <p className="mt-3 max-w-3xl text-[14px] leading-[1.65] text-[#6F6A63]">
               Local pitch-provider bench for the Murmur worker path plus small
@@ -778,7 +778,7 @@ function MeloLabFallback() {
     <div className="min-h-svh bg-[#F5F1EB] px-6 py-12 text-[13px] text-[#6F6A63]">
       TEST ONLY / local melo-lab
       <br />
-      Loading Melo Lab...
+      Loading MeLo Lab...
     </div>
   );
 }
