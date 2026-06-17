@@ -361,11 +361,24 @@ function shouldAutoSelectMusical(input: {
     intentBad,
   ].filter(Boolean).length;
   const requiredGateCount = bias >= 0.65 ? 2 : 3;
+  const correctedQuality = scoreMelodyAcceptance(input.corrected);
+  const musicalQuality = scoreMelodyAcceptance(input.musical);
+  const musicalImprovesCandidate =
+    musicalQuality.score >= correctedQuality.score + 0.015 ||
+    musicalQuality.musicFeelScore >= correctedQuality.musicFeelScore + 0.025 ||
+    musicalQuality.excessiveHoldRatio <= correctedQuality.excessiveHoldRatio - 0.08 ||
+    musicalQuality.onsetFragmentation <= correctedQuality.onsetFragmentation - 0.12;
+  const musicalDoesNotRegress =
+    musicalQuality.score >= correctedQuality.score - 0.04 &&
+    musicalQuality.musicFeelScore >= correctedQuality.musicFeelScore - 0.05 &&
+    musicalQuality.excessiveHoldRatio <= correctedQuality.excessiveHoldRatio + 0.08 &&
+    musicalQuality.onsetFragmentation <= correctedQuality.onsetFragmentation + 0.16;
 
   return (
     acceptanceBad &&
     timingBad &&
-    failedRecoverableGates >= requiredGateCount
+    failedRecoverableGates >= requiredGateCount &&
+    (musicalImprovesCandidate || musicalDoesNotRegress)
   );
 }
 

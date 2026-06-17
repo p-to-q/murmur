@@ -263,7 +263,7 @@ describe("audio worker adapter", () => {
     expect(result.diagnostics?.selectedMelodyKind).toBe("corrected");
   });
 
-  it("uses musical for recoverable transcription takes with several uncomfortable gates", () => {
+  it("keeps corrected for recoverable takes when musical does not improve quality", () => {
     const result = normalizeWorkerResponse(
       {
         source: "swiftf0",
@@ -290,8 +290,8 @@ describe("audio worker adapter", () => {
       },
     );
 
-    expect(result.selectedMelodyKind).toBe("musical");
-    expect(result.diagnostics?.selectedMelodyKind).toBe("musical");
+    expect(result.selectedMelodyKind).toBe("corrected");
+    expect(result.diagnostics?.selectedMelodyKind).toBe("corrected");
   });
 
   it("preserves no_voiced_frames from worker 422 responses", async () => {

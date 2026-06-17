@@ -100,13 +100,6 @@ function compactNoiseBursts(notes: MelodyNote[]): MelodyNote[] {
       Math.abs(note.pitch - next!.pitch) >= 4;
 
     if (isolated) return false;
-    if (
-      prev &&
-      next &&
-      isSpuriousInteriorFragment(note, prev, next)
-    ) {
-      return false;
-    }
 
     const farFromCenter =
       Math.abs(note.pitch - medianPitch) >= 15 &&
@@ -115,40 +108,6 @@ function compactNoiseBursts(notes: MelodyNote[]): MelodyNote[] {
 
     return !farFromCenter;
   });
-}
-
-function isSpuriousInteriorFragment(
-  note: MelodyNote,
-  prev: MelodyNote,
-  next: MelodyNote,
-): boolean {
-  const short = note.duration <= 0.13;
-  const weak = note.confidence < 0.68;
-  if (!short || !weak) return false;
-
-  const prevGap = note.start - (prev.start + prev.duration);
-  const nextGap = next.start - (note.start + note.duration);
-  const tightlyEmbedded = prevGap <= 0.055 && nextGap <= 0.075;
-  if (!tightlyEmbedded) return false;
-
-  const fromPrev = note.pitch - prev.pitch;
-  const toNext = next.pitch - note.pitch;
-  const sameAnchor = Math.abs(prev.pitch - next.pitch) <= 1;
-  const abruptDetour =
-    sameAnchor && Math.abs(note.pitch - Math.round((prev.pitch + next.pitch) / 2)) >= 2;
-  const passingMotion =
-    Math.sign(fromPrev) === Math.sign(toNext) &&
-    Math.abs(fromPrev) <= 3 &&
-    Math.abs(toNext) <= 3 &&
-    Math.abs(next.pitch - prev.pitch) >= 2;
-
-  if (passingMotion) return false;
-
-  const tinySamePitchSliver =
-    note.duration <= 0.08 &&
-    (Math.abs(note.pitch - prev.pitch) <= 1 || Math.abs(note.pitch - next.pitch) <= 1);
-
-  return abruptDetour || tinySamePitchSliver;
 }
 
 function mergeAdjacentNotes(notes: MelodyNote[]): MelodyNote[] {
@@ -163,7 +122,7 @@ function mergeAdjacentNotes(notes: MelodyNote[]): MelodyNote[] {
     const gap = curr.start - (prev.start + prev.duration);
     const semitoneDelta = Math.abs(curr.pitch - prev.pitch);
 
-    if (shouldMergeAdjacentNotes(prev, curr, gap, semitoneDelta)) {
+    if (gap <= 0.12 && semitoneDelta <= 1) {
       const totalWeight =
         prev.duration * prev.confidence + curr.duration * curr.confidence;
       prev.pitch =
@@ -183,35 +142,6 @@ function mergeAdjacentNotes(notes: MelodyNote[]): MelodyNote[] {
   }
 
   return merged;
-}
-
-function shouldMergeAdjacentNotes(
-  prev: MelodyNote,
-  curr: MelodyNote,
-  gap: number,
-  semitoneDelta: number,
-): boolean {
-  const overlapsOrTouches = gap <= 0.012;
-  const tinyGap = gap <= 0.035;
-  const weakFragment =
-    Math.min(prev.duration, curr.duration) <= 0.105 ||
-    Math.min(prev.confidence, curr.confidence) <= 0.55;
-  const bothIntentional =
-    prev.duration >= 0.14 &&
-    curr.duration >= 0.14 &&
-    prev.confidence >= 0.62 &&
-    curr.confidence >= 0.62;
-
-  if (semitoneDelta === 0) {
-    return (overlapsOrTouches || tinyGap) && weakFragment && !bothIntentional;
-  }
-
-  if (semitoneDelta === 1) {
-    const continuousGlide = gap <= 0.055 && bothIntentional;
-    return !continuousGlide && tinyGap && weakFragment;
-  }
-
-  return false;
 }
 
 function removePitchOutliers(notes: MelodyNote[]): MelodyNote[] {
@@ -480,9 +410,6 @@ function fitNotesToTonalProfile(
     const prev = index > 0 ? notes[index - 1] : null;
     const next = index < notes.length - 1 ? notes[index + 1] : null;
     const isAnchor = note.duration >= 0.45 || index === notes.length - 1;
-    const expressiveNeighbor = !isAnchor && isExpressiveNeighborNote(notes, index);
-    if (expressiveNeighbor) return note;
-
     const correctionStrength = isAnchor ? 1 : 0.78;
 
     let bestPitch = note.pitch;
@@ -563,7 +490,6 @@ function stabilizeCadence(
   return notes.map((note, index) => {
     const isCadenceZone = index >= notes.length - 2;
     if (!isCadenceZone) return note;
-    if (isExpressiveNeighborNote(notes, index)) return note;
 
     const currentPc = mod12(note.pitch);
     if (cadenceTargets.includes(currentPc)) return note;
@@ -591,18 +517,6 @@ function stabilizeCadence(
 
     return note;
   });
-}
-
-function isExpressiveNeighborNote(notes: MelodyNote[], index: number): boolean {
-  const note = notes[index];
-  if (!note || note.duration >= 0.45 || note.confidence < 0.72) return false;
-
-  const prev = index > 0 ? notes[index - 1] : null;
-  const next = index < notes.length - 1 ? notes[index + 1] : null;
-  return Boolean(
-    (prev && Math.abs(note.pitch - prev.pitch) <= 2) ||
-      (next && Math.abs(note.pitch - next.pitch) <= 2),
-  );
 }
 
 function estimateContour(notes: MelodyNote[]): "rising" | "falling" | "wave" | "flat" {

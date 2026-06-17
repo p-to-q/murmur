@@ -906,6 +906,29 @@ describe("humming-engine musical layer", () => {
     expect(selectGenerationMelody({ melodies }, { repairBias: 0.8 }).kind).toBe("corrected");
   });
 
+  it("requires musical to improve quality before auto-selecting it", () => {
+    const melodies = buildTranscriptionMelodies([
+      { pitch: 60, start: 0, duration: 0.32, velocity: 0.72, confidence: 0.84 },
+      { pitch: 62, start: 0.4, duration: 0.28, velocity: 0.7, confidence: 0.8 },
+      { pitch: 64, start: 0.78, duration: 0.36, velocity: 0.72, confidence: 0.82 },
+      { pitch: 67, start: 1.2, duration: 0.44, velocity: 0.74, confidence: 0.86 },
+    ]);
+
+    expect(
+      selectGenerationMelody({
+        melodies,
+        diagnostics: {
+          duration: 1.64,
+          snr: 14.8,
+          voicedRatio: 0.8,
+          acceptanceScore: 0.52,
+          musicFeelScore: 0.51,
+          onsetFragmentation: 0.18,
+        },
+      }).kind,
+    ).toBe("corrected");
+  });
+
   it("lets a strong fidelity bias favor intent when the take is stable enough", () => {
     const melodies = buildTranscriptionMelodies([
       { pitch: 60, start: 0, duration: 0.4, velocity: 0.7, confidence: 0.84 },
