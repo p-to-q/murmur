@@ -62,6 +62,39 @@ function localDirectionChanges(notes: MelodyNote[]): number {
   return changes;
 }
 
+function pitchClass(pitch: number): number {
+  return ((pitch % 12) + 12) % 12;
+}
+
+function allowedPitchClassesForMelody(melody: CleanMelody): Set<number> {
+  const root = [
+    "C",
+    "C#",
+    "D",
+    "D#",
+    "E",
+    "F",
+    "F#",
+    "G",
+    "G#",
+    "A",
+    "A#",
+    "B",
+  ].indexOf(melody.key);
+  const intervals =
+    melody.scale === "minor"
+      ? [0, 2, 3, 5, 7, 8, 10]
+      : melody.scale === "dorian"
+        ? [0, 2, 3, 5, 7, 9, 10]
+        : melody.scale === "phrygian"
+          ? [0, 1, 3, 5, 7, 8, 10]
+          : melody.scale === "pentatonic"
+            ? [0, 2, 4, 7, 9]
+            : [0, 2, 4, 5, 7, 9, 11];
+
+  return new Set(intervals.map((interval) => pitchClass(root + interval)));
+}
+
 describe("humming-engine musical layer", () => {
   function contour(
     input: Partial<TranscriptionContour> & Pick<TranscriptionContour, "timestamps" | "pitchHz" | "confidence" | "voiced">,
@@ -154,6 +187,29 @@ describe("humming-engine musical layer", () => {
     expect(Math.abs((melodies.corrected.notes[0]?.start ?? 1) - raw[0]!.start)).toBeLessThanOrEqual(0.06);
     expect(melodies.corrected.notes[2]?.pitch).toBe(64);
     expect(melodies.corrected.notes.at(-1)?.pitch).toBe(67);
+  });
+
+  it("keeps each candidate inside a single tonal center", () => {
+    const melodies = buildTranscriptionMelodies([
+      { pitch: 60, start: 0, duration: 0.26, velocity: 0.72, confidence: 0.78 },
+      { pitch: 63, start: 0.32, duration: 0.24, velocity: 0.7, confidence: 0.72 },
+      { pitch: 66, start: 0.62, duration: 0.22, velocity: 0.68, confidence: 0.7 },
+      { pitch: 65, start: 0.9, duration: 0.34, velocity: 0.72, confidence: 0.76 },
+      { pitch: 67, start: 1.32, duration: 0.48, velocity: 0.76, confidence: 0.82 },
+    ]);
+    const correctedPitchClasses = allowedPitchClassesForMelody(melodies.corrected);
+    const musicalPitchClasses = allowedPitchClassesForMelody(melodies.musical);
+
+    expect(
+      melodies.corrected.notes.every((note) =>
+        correctedPitchClasses.has(pitchClass(note.pitch)),
+      ),
+    ).toBe(true);
+    expect(
+      melodies.musical.notes.every((note) =>
+        musicalPitchClasses.has(pitchClass(note.pitch)),
+      ),
+    ).toBe(true);
   });
 
   it("keeps corrected when only the melody intent is a little weak", () => {
@@ -262,7 +318,7 @@ describe("humming-engine musical layer", () => {
     expect(melodies.musical.notes.some((note) => note.pitch === 61 || note.pitch === 62)).toBe(true);
   });
 
-  it("nudges phrase endings toward a more stable cadence target", () => {
+  it("stabilizes phrase endings toward a cadence target", () => {
     const corrected = melody(
       [
         { pitch: 67, start: 0, duration: 0.4, velocity: 0.72, confidence: 0.88 },
@@ -278,7 +334,7 @@ describe("humming-engine musical layer", () => {
     const finalCorrected = melodies.corrected.notes.at(-1)?.pitch;
     const finalMusical = melodies.musical.notes.at(-1)?.pitch;
 
-    expect(finalCorrected).toBe(71);
+    expect(finalCorrected).toBe(72);
     expect(finalMusical).toBe(72);
   });
 
@@ -367,7 +423,7 @@ describe("humming-engine musical layer", () => {
 
     expect(melodies.musical.notes[1]?.start).toBeCloseTo(0.5, 6);
     expect(melodies.musical.notes[1]?.pitch).toBe(64);
-    expect(melodies.corrected.notes[1]?.pitch).toBe(63);
+    expect(melodies.corrected.notes[1]?.pitch).toBe(62);
   });
 
   it("stabilizes repeated hook notes before decorative tones", () => {
@@ -389,7 +445,7 @@ describe("humming-engine musical layer", () => {
 
     const melodies = buildTranscriptionMelodies(corrected.notes, corrected);
 
-    expect(melodies.corrected.notes[3]?.pitch).toBe(61);
+    expect(melodies.corrected.notes[3]?.pitch).toBe(60);
     expect(melodies.musical.notes[3]?.pitch).toBe(60);
   });
 
@@ -421,7 +477,7 @@ describe("humming-engine musical layer", () => {
       },
     });
 
-    const correctedAwkwardLeaps = countAwkwardLeaps(melodies.corrected.notes);
+    const correctedAwkwardLeaps = countAwkwardLeaps(corrected.notes);
     const musicalAwkwardLeaps = countAwkwardLeaps(melodies.musical.notes);
     const correctedTimingRoughness = timingRoughness(melodies.corrected.notes);
     const musicalTimingRoughness = timingRoughness(melodies.musical.notes);

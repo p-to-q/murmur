@@ -63,8 +63,8 @@ export function buildTranscriptionMelodies(
 
   return {
     intent,
-    corrected,
-    musical,
+    corrected: alignMelodyToOwnTonalCenter(corrected),
+    musical: alignMelodyToOwnTonalCenter(musical),
   };
 }
 
@@ -1082,6 +1082,33 @@ function buildAcceptanceRepairMelody(
     notes: songlike,
     duration: melodyDuration(songlike),
     contour: estimateContour(songlike),
+  };
+}
+
+function alignMelodyToOwnTonalCenter(melody: CleanMelody): CleanMelody {
+  const root = KEY_NAMES.indexOf(melody.key as (typeof KEY_NAMES)[number]);
+  if (melody.notes.length === 0 || root < 0) return melody;
+
+  const scalePcs = getScalePitchClasses(root, melody.scale);
+  const cadencePcs = getCadenceTargets(root, melody.scale);
+  const notes = melody.notes.map((note, index) => {
+    const snapped = nearestScalePitch(note.pitch, scalePcs);
+    const isFinal = index === melody.notes.length - 1;
+    const targetPitch =
+      isFinal && cadencePcs.length > 0
+        ? nearestCadencePitch(snapped, cadencePcs)
+        : snapped;
+    return {
+      ...note,
+      pitch: targetPitch,
+    };
+  });
+
+  return {
+    ...melody,
+    notes,
+    duration: melodyDuration(notes),
+    contour: estimateContour(notes),
   };
 }
 
