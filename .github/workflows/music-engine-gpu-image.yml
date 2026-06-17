@@ -19,6 +19,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Free disk space
+        # The CUDA + magenta-rt[jax] + jax[cuda12] image is multi-GB; the runner's
+        # ~14 GB free disk overflows mid-build (and on cache export) whenever the
+        # pip layer rebuilds. Reclaim ~25 GB of preinstalled toolchains we don't use.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          sudo docker image prune --all --force || true
+          df -h /
+
       - name: Checkout
         uses: actions/checkout@v6
 
@@ -43,7 +53,7 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/murmur-music-engine:latest
             ghcr.io/${{ github.repository_owner }}/murmur-music-engine:${{ github.sha }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=min
 
       - name: Make GHCR package public (RunPod pulls without registry auth)
         continue-on-error: true
