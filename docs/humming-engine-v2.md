@@ -351,14 +351,9 @@ contour frames + raw notes + diagnostics
   -> generation-conditioned melody
 ```
 
-The model does not need to be a large remote LLM. Good local candidates:
-
-- a deterministic hypothesis scorer over several onset/pitch proposals;
-- a small sequence model trained on hummed-contour -> lead-sheet pairs;
-- a dynamic-programming smoother that preserves phrase contour and repeated
-  motifs while snapping only low-confidence notes;
-- an interactive preference loop from exported Melo Lab provider/stage files:
-  "raw closest", "corrected closest", "musical closest", plus divergence notes.
+The model does not need to be a large remote LLM. Good local candidates include
+a deterministic hypothesis scorer, a small hummed-contour sequence model, and
+an interactive preference loop from exported Melo Lab provider/stage files.
 
 The contract should be explainable. For every changed note, keep a reason such
 as `low_confidence_pitch`, `off_scale_anchor`, `fragmented_onset`, or

@@ -134,19 +134,6 @@ bun run setup:audio
 bun run dev:audio
 ```
 
-Melo Lab is the local/test-only bench for comparing the Murmur audio worker
-against small pitch-provider baselines. To enable the light external Praat
-baseline, install the lab requirements into the audio-worker venv:
-
-```bash
-cd workers/audio-engine
-./.venv/bin/pip install -r requirements-lab.txt
-```
-
-Then run the worker on loopback and open
-`http://127.0.0.1:3001/me/debug/melo-lab?debug=1` from a local `next start` or
-`next dev` process. Melo Lab APIs only accept loopback worker URLs.
-
 Equivalent manual steps:
 
 ```bash
