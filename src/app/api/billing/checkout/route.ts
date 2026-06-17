@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (userId === "guest") {
+  if (userId === "guest" || auth.user.accountKind === "local_creator") {
     return NextResponse.json(
       {
         error: "sign_in_required",

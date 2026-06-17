@@ -107,6 +107,31 @@ describe("POST /api/share/claim", () => {
     });
   });
 
+  it("reports duplicate claims without claiming fresh granted notes", async () => {
+    claimShareReferralMock.mockResolvedValueOnce({
+      ok: true as const,
+      referrer: null,
+      invitee: {
+        ok: true as const,
+        ledgerId: "nle_invitee",
+        balanceBefore: 115,
+        balanceAfter: 115,
+        duplicate: true,
+      },
+      duplicate: true,
+    });
+
+    const response = await POST(request({ referrerId: "usr_referrer" }));
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      notesGranted?: unknown;
+      duplicate?: unknown;
+    };
+    expect(body.notesGranted).toBe(0);
+    expect(body.duplicate).toBe(true);
+  });
+
   it("rejects guest claims", async () => {
     nextAuth = {
       ok: true,

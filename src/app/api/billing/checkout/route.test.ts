@@ -118,6 +118,26 @@ describe("POST /api/billing/checkout", () => {
     expect(response.status).toBe(403);
   });
 
+  it("rejects Local Creator sessions before checkout handoff", async () => {
+    nextAuth = {
+      ok: true,
+      user: {
+        id: "lc_checkout",
+        email: null,
+        name: "Local Creator",
+        avatarUrl: null,
+        accountKind: "local_creator",
+      },
+      source: "session",
+      sessionId: "sess_local",
+    };
+
+    const response = await POST(buildRequest({ sku: "topup_30_notes" }));
+
+    expect(response.status).toBe(403);
+    expect(createdSessions).toHaveLength(0);
+  });
+
   it("answers 503 when Waffo is not configured", async () => {
     waffoConfigured = false;
     const response = await POST(buildRequest({ sku: "topup_30_notes" }));

@@ -164,10 +164,9 @@ See `user-model.md` §4. From the API's view:
 - The Hum preview path is the narrow exception: routes may call
   `resolveRequestAuth(request, { allowGuestPreview: true })` only when the
   product explicitly allows Local Creator traffic. This does not grant cloud
-  ownership, billing, account, or payment access. The current Web 5-note Local
-  Creator allowance is enforced by the client preview path; server preview
-  routes remain rate-limited but do not spend ledger notes for Local Creator
-  sessions until server-side Local Creator quotas ship.
+  ownership, account, or payment access. Local Creator sessions have a finite
+  server ledger allowance; pure guest preview fallback is restricted to
+  local/dev demo conditions and remains rate-limited.
 
 The `x-murmur-user-id` header from v1 is no longer a production identity
 source. It is accepted only outside production auth mode, and only when

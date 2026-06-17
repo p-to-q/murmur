@@ -788,7 +788,9 @@ function MeloLabContent() {
 function MeloLabFallback() {
   return (
     <div className="min-h-svh bg-[#F5F1EB] px-6 py-12 text-[13px] text-[#6F6A63]">
-      Loading melo-lab...
+      TEST ONLY / local melo-lab
+      <br />
+      Loading Melo Lab...
     </div>
   );
 }

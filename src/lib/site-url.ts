@@ -1,4 +1,4 @@
-const DEFAULT_SITE_URL = "http://localhost:3000";
+const DEFAULT_SITE_URL = "https://murmur.ptoq.io";
 
 export function getSiteUrl(): string {
   const configured = process.env.MURMUR_APP_URL?.trim();

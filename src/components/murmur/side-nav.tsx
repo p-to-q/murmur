@@ -29,7 +29,7 @@ import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { ChevronsLeft, ChevronsRight, LinkIcon } from "lucide-react";
 import { createPortal } from "react-dom";
 
-import { buildShareInviteUrl, getShareInviteUrl } from "@/lib/api/share-links";
+import { getShareInviteUrl } from "@/lib/api/share-links";
 import { copyShareInviteLink } from "@/lib/platform/share-invite";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
@@ -450,14 +450,17 @@ export function SideNavWithModal() {
 
   const handleShareClick = () => {
     setShareModalOpen(true);
-    const fallbackUrl =
-      typeof window === "undefined"
-        ? ""
-        : buildShareInviteUrl(window.location.origin);
-    void copyShareInviteLink(shareInviteUrl ?? fallbackUrl, {
-      copied: t("share.copied"),
-      copyFailed: t("share.copy_failed"),
-    });
+    void (async () => {
+      const url = shareInviteUrl
+        ?? (typeof window === "undefined"
+          ? ""
+          : await getShareInviteUrl(window.location.origin));
+      setShareInviteUrl(url);
+      await copyShareInviteLink(url, {
+        copied: t("share.copied"),
+        copyFailed: t("share.copy_failed"),
+      });
+    })();
   };
 
   return (

@@ -6,6 +6,7 @@ import { users } from "@/lib/db/schema/users";
 import { eq } from "drizzle-orm";
 import {
   grantNotesInTransaction,
+  type GrantNotesInput,
   type GrantNotesResult,
 } from "@/lib/db/queries/notes-ledger";
 
@@ -34,6 +35,11 @@ class ShareReferralGrantError extends Error {
   }
 }
 
+type ReferralUserRow = {
+  id: string;
+  accountKind: string;
+} | null;
+
 export async function claimShareReferral(input: {
   referrerId: string;
   inviteeId: string;
@@ -54,55 +60,15 @@ export async function claimShareReferral(input: {
     return await db.transaction(async (tx) => {
       const { referrerRow, inviteeRow } = await lockReferralUsers(tx, referrerId, inviteeId);
 
-      if (referrerRow?.accountKind !== "registered") {
-        return { ok: false as const, reason: "invalid_referrer" as const };
-      }
-      if (inviteeRow?.accountKind !== "registered") {
-        return { ok: false as const, reason: "grant_failed" as const };
-      }
-
-      const invitee = await grantNotesInTransaction(tx, {
-        userId: inviteeId,
-        amount: SHARE_REFERRAL_REWARD_NOTES,
-        reason: "grant:referral",
-        externalRef: inviteeExternalRef,
-        metadata: {
-          role: "invitee",
-          referrerId,
-        },
+      return claimShareReferralWithLockedUsers({
+        referrerId,
+        inviteeId,
+        referrerExternalRef,
+        inviteeExternalRef,
+        referrerRow,
+        inviteeRow,
+        grantNotes: (grantInput) => grantNotesInTransaction(tx, grantInput),
       });
-      if (!invitee.ok) {
-        throw new ShareReferralGrantError("grant_failed");
-      }
-      if (invitee.duplicate) {
-        return {
-          ok: true as const,
-          referrer: null,
-          invitee,
-          duplicate: true,
-        };
-      }
-
-      const referrer = await grantNotesInTransaction(tx, {
-        userId: referrerId,
-        amount: SHARE_REFERRAL_REWARD_NOTES,
-        reason: "grant:referral",
-        externalRef: referrerExternalRef,
-        metadata: {
-          role: "referrer",
-          inviteeId,
-        },
-      });
-      if (!referrer.ok) {
-        throw new ShareReferralGrantError("invalid_referrer");
-      }
-
-      return {
-        ok: true as const,
-        referrer,
-        invitee,
-        duplicate: referrer.duplicate || invitee.duplicate,
-      };
     });
   } catch (error) {
     if (error instanceof ShareReferralGrantError) {
@@ -110,6 +76,66 @@ export async function claimShareReferral(input: {
     }
     throw error;
   }
+}
+
+export async function claimShareReferralWithLockedUsers(input: {
+  referrerId: string;
+  inviteeId: string;
+  referrerExternalRef: string;
+  inviteeExternalRef: string;
+  referrerRow: ReferralUserRow;
+  inviteeRow: ReferralUserRow;
+  grantNotes: (grantInput: GrantNotesInput) => Promise<GrantNotesResult>;
+}): Promise<ClaimShareReferralResult> {
+  if (input.referrerRow?.accountKind !== "registered") {
+    return { ok: false as const, reason: "invalid_referrer" as const };
+  }
+  if (input.inviteeRow?.accountKind !== "registered") {
+    return { ok: false as const, reason: "grant_failed" as const };
+  }
+
+  const invitee = await input.grantNotes({
+    userId: input.inviteeId,
+    amount: SHARE_REFERRAL_REWARD_NOTES,
+    reason: "grant:referral",
+    externalRef: input.inviteeExternalRef,
+    metadata: {
+      role: "invitee",
+      referrerId: input.referrerId,
+    },
+  });
+  if (!invitee.ok) {
+    throw new ShareReferralGrantError("grant_failed");
+  }
+  if (invitee.duplicate) {
+    return {
+      ok: true as const,
+      referrer: null,
+      invitee,
+      duplicate: true,
+    };
+  }
+
+  const referrer = await input.grantNotes({
+    userId: input.referrerId,
+    amount: SHARE_REFERRAL_REWARD_NOTES,
+    reason: "grant:referral",
+    externalRef: input.referrerExternalRef,
+    metadata: {
+      role: "referrer",
+      inviteeId: input.inviteeId,
+    },
+  });
+  if (!referrer.ok) {
+    throw new ShareReferralGrantError("invalid_referrer");
+  }
+
+  return {
+    ok: true as const,
+    referrer,
+    invitee,
+    duplicate: referrer.duplicate || invitee.duplicate,
+  };
 }
 
 export function referralExternalRef(referrerId: string, inviteeId: string): string {
@@ -133,10 +159,10 @@ async function lockReferralUsers(
   referrerId: string,
   inviteeId: string,
 ): Promise<{
-  referrerRow: { id: string; accountKind: string } | null;
-  inviteeRow: { id: string; accountKind: string } | null;
+  referrerRow: ReferralUserRow;
+  inviteeRow: ReferralUserRow;
 }> {
-  const rows = new Map<string, { id: string; accountKind: string }>();
+  const rows = new Map<string, NonNullable<ReferralUserRow>>();
   const orderedIds = [referrerId, inviteeId].sort();
 
   for (const userId of orderedIds) {

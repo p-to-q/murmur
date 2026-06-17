@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
@@ -21,7 +21,11 @@ mock.module("@/lib/auth", () => ({
 
 const { GET } = await import("./route");
 
+let originalAppUrl: string | undefined;
+
 beforeEach(() => {
+  originalAppUrl = process.env.MURMUR_APP_URL;
+  process.env.MURMUR_APP_URL = "https://murmur.example";
   nextAuth = {
     ok: true,
     user: {
@@ -36,10 +40,15 @@ beforeEach(() => {
   };
 });
 
+afterEach(() => {
+  if (originalAppUrl === undefined) delete process.env.MURMUR_APP_URL;
+  else process.env.MURMUR_APP_URL = originalAppUrl;
+});
+
 describe("GET /api/share/invite", () => {
   it("returns a signed-in user's referral link", async () => {
     const response = await GET(
-      new Request("https://murmur.example/api/share/invite") as unknown as NextRequest,
+      new Request("https://api-preview.example/api/share/invite") as unknown as NextRequest,
     );
 
     expect(response.status).toBe(200);

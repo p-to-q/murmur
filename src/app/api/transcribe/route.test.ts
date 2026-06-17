@@ -38,6 +38,7 @@ let nextRefundThrows: Error | null = null;
 let nextWorkerImpl: (() => Promise<TranscriptionResult>) | null = null;
 const lastSpendInputs: SpendNotesInput[] = [];
 const lastRefundInputs: RefundNotesInput[] = [];
+let lastResolveAuthOptions: { allowGuestPreview?: boolean } | null = null;
 
 const stubTranscription: TranscriptionResult = {
   provider: "swiftf0",
@@ -106,7 +107,13 @@ const stubTranscription: TranscriptionResult = {
 };
 
 mock.module("@/lib/auth", () => ({
-  resolveRequestAuth: async () => nextAuth,
+  resolveRequestAuth: async (
+    _request: Request,
+    options: { allowGuestPreview?: boolean } = {},
+  ) => {
+    lastResolveAuthOptions = options;
+    return nextAuth;
+  },
 }));
 
 mock.module("@/lib/db/queries/notes-ledger", () => ({
@@ -247,27 +254,75 @@ beforeEach(() => {
   nextWorkerImpl = async () => stubTranscription;
   lastSpendInputs.length = 0;
   lastRefundInputs.length = 0;
+  lastResolveAuthOptions = null;
 });
 
 describe("POST /api/transcribe", () => {
   it("returns the polished melody and debits a note on success", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
     const form = new FormData();
     form.append("audio", audioFile());
     form.append("targetInstrument", "piano");
 
-    const response = await POST(buildRequest(form, { requestId: "req_happy" }));
-    expect(response.status).toBe(200);
-    expect(response.headers.get("X-Request-Id")).toBe("req_happy");
+    try {
+      const response = await POST(buildRequest(form, { requestId: "req_happy" }));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("X-Request-Id")).toBe("req_happy");
 
-    const body = (await response.json()) as TranscriptionResult;
-    expect(body.provider).toBe("swiftf0");
-    expect(body.cleanMelody.notes).toHaveLength(2);
-    expect(body.melodies.corrected.notes).toHaveLength(2);
-    expect(body.selectedMelodyKind).toBe("corrected");
+      const body = (await response.json()) as TranscriptionResult;
+      expect(body.provider).toBe("swiftf0");
+      expect(body.cleanMelody.notes).toHaveLength(2);
+      expect(body.melodies.corrected.notes).toHaveLength(2);
+      expect(body.selectedMelodyKind).toBe("corrected");
+      expect(lastSpendInputs).toHaveLength(1);
+      expect(lastRefundInputs).toHaveLength(0);
+      expect(lastSpendInputs[0]?.reason).toBe("spend:hum");
+      expect(lastSpendInputs[0]?.cost).toBe(1);
+      expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+    }
+  });
+
+  it("spends Local Creator ledger notes on localhost when a balance row exists", async () => {
+    nextAuth = {
+      ok: true,
+      user: {
+        id: "lc_test",
+        email: null,
+        name: "Local Creator",
+        avatarUrl: null,
+        accountKind: "local_creator",
+      },
+      source: "session",
+      sessionId: "sess_local",
+    };
+    nextBalance = {
+      ok: true,
+      userId: "lc_test",
+      notes: 5,
+      planTier: "free",
+      freeNotesGrantedAt: new Date(),
+    };
+    const form = new FormData();
+    form.append("audio", audioFile());
+
+    const response = await POST(
+      buildRequest(form, {
+        requestId: "req_local_creator",
+        url: "http://localhost:3000/api/transcribe",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(lastResolveAuthOptions?.allowGuestPreview).toBe(true);
     expect(lastSpendInputs).toHaveLength(1);
-    expect(lastRefundInputs).toHaveLength(0);
-    expect(lastSpendInputs[0]?.reason).toBe("spend:hum");
-    expect(lastSpendInputs[0]?.cost).toBe(1);
+    expect(lastSpendInputs[0]).toMatchObject({
+      userId: "lc_test",
+      reason: "spend:hum",
+      cost: 1,
+    });
   });
 
   it("rejects missing audio with audio_required", async () => {
@@ -482,6 +537,8 @@ describe("POST /api/transcribe", () => {
   });
 
   it("respects the auth resolver returning a 401 envelope", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
     nextAuth = {
       ok: false,
       response: new Response(
@@ -491,9 +548,14 @@ describe("POST /api/transcribe", () => {
     };
     const form = new FormData();
     form.append("audio", audioFile());
-    const response = await POST(buildRequest(form));
-    expect(response.status).toBe(401);
-    expect(lastSpendInputs).toHaveLength(0);
+    try {
+      const response = await POST(buildRequest(form));
+      expect(response.status).toBe(401);
+      expect(lastSpendInputs).toHaveLength(0);
+      expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+    }
   });
 
   it("does not refund duplicate spends on worker failure", async () => {

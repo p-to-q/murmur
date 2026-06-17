@@ -46,7 +46,9 @@ type BillingMode = "ledger" | "dev_fallback";
 export async function POST(request: NextRequest) {
   const startedAt = performance.now();
   const requestId = getRequestId(request);
-  const auth = await resolveRequestAuth(request, { allowGuestPreview: true });
+  const auth = await resolveRequestAuth(request, {
+    allowGuestPreview: shouldAllowGuestTranscribePreview(request),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const rateLimitUserId =
@@ -184,7 +186,11 @@ export async function POST(request: NextRequest) {
           });
         }
       }
-      if (billingMode === "ledger" && shouldBypassBillingForLocalDemo(request)) {
+      if (
+        billingMode === "ledger"
+        && auth.user.accountKind !== "local_creator"
+        && shouldBypassBillingForLocalDemo(request)
+      ) {
         billingMode = "dev_fallback";
         balance = {
           ok: true,
@@ -360,6 +366,12 @@ function shouldBypassBillingForLocalDemo(request: NextRequest): boolean {
   return shouldBypassBillingInDevelopment({
     host,
   });
+}
+
+function shouldAllowGuestTranscribePreview(request: NextRequest): boolean {
+  if (process.env.NODE_ENV === "development") return true;
+  const host = request.nextUrl?.hostname || safeHostnameFromUrl(request.url);
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
 function safeHostnameFromUrl(url: string): string | null {

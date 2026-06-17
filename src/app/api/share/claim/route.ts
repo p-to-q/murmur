@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
   const response = NextResponse.json(
     {
       ok: true,
-      notesGranted: SHARE_REFERRAL_REWARD_NOTES,
+      notesGranted: result.duplicate ? 0 : SHARE_REFERRAL_REWARD_NOTES,
       duplicate: result.duplicate,
       requestId,
     },

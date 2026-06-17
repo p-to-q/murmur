@@ -11,16 +11,7 @@ export function isAuthenticatedSession(auth: OkAuth): boolean {
   );
 }
 
-/**
- * Skip server ledger spends for preview identities.
- *
- * Registered users spend server-side notes from the ledger. Anonymous fallback
- * and Local Creator takes are quota-gated by the preview path until the
- * server-side Local Creator billing cutover is complete.
- */
+/** Skip server ledger spends only for the shared anonymous preview identity. */
 export function shouldSkipNotesBilling(auth: OkAuth): boolean {
-  return (
-    (auth.source === "guest" && auth.user.id === "guest")
-    || auth.user.accountKind === "local_creator"
-  );
+  return auth.source === "guest" && auth.user.id === "guest";
 }

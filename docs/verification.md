@@ -60,10 +60,9 @@
   dev-only `/api/storage/local/[...key]` route because the local filesystem
   adapter is loaded inside that route. The build still succeeds and the warning
   is currently treated as a tooling edge, not a broken product path.
-- `next build` may fall back to `http://localhost:3000` for metadata URLs when
-  `MURMUR_APP_URL` and `VERCEL_URL` are both unset. This is intentional for
-  local verification; set `MURMUR_APP_URL` in deployed environments so share
-  metadata resolves to the canonical origin.
+- Metadata URLs default to `https://murmur.ptoq.io` when `MURMUR_APP_URL` and
+  `VERCEL_URL` are both unset. Set `MURMUR_APP_URL` in deployed environments
+  that need a different canonical origin.
 - Mobile Safari may reject `audio.play()` if invoked outside the gesture frame
   after route navigation — SongDetail falls back to Tone player automatically.
 - MP3 encoding uses `@breezystack/lamejs`; it dynamically imports so render

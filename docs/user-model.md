@@ -35,7 +35,7 @@ schema (a single `users` row covers all three; the type is computed).
 
 | Type | Signal | Default behavior |
 |---|---|---|
-| **`guest` / Local Creator** | Murmur session with `users.accountKind == "local_creator"`; no external identity yet | Limited local preview: 5 notes once per browser in the Web client. Can hum, save, reopen, and manage its own songs on this browser. Top-up, purchases, account deletion, cross-device sync, and account-sensitive actions require sign-in. |
+| **`guest` / Local Creator** | Murmur session with `users.accountKind == "local_creator"`; no external identity yet | Limited preview: 5 notes once for this browser-backed server row. Can hum, save, reopen, and manage its own songs on this browser. Top-up, purchases, account deletion, cross-device sync, and account-sensitive actions require sign-in. |
 | **`free`** | Authenticated, `planTier == "free"` | Full surface. 15 notes once on sign-in, then paid top-up. |
 | **`premium`** | Authenticated, `planTier == "premium"` (reserved for v3) | Full surface. Unlimited core actions. |
 
@@ -55,13 +55,11 @@ function userType(user: User | null): "guest" | "free" | "premium" {
 WeChat MP openid resolution is automatic; iOS / Android can require sign-
 in immediately; only the **Web** shell has a meaningful Local Creator tier —
 and even there, only to lower the "play with it" activation barrier. Guest
-support is intentionally small: 5 notes once per browser, no refill, and a
-login wall once the allowance is spent. That allowance is a client preview gate,
-not a production abuse-control boundary; server preview routes still rate-limit
-and avoid account-only billing until server-side Local Creator quotas ship.
-Local Creator is still a real owner row so saved songs are not stranded in
-browser storage. Guest support is one-way: a Local Creator can be promoted to a
-real user, but a real user is never demoted to guest.
+support is intentionally small: 5 notes once, no refill, and a login wall once
+the allowance is spent. The Local Creator session has a real owner row and a
+finite server ledger, while pure no-session guest fallback is only for local/dev
+preview resilience. Guest support is one-way: a Local Creator can be promoted to
+a real user, but a real user is never demoted to guest.
 
 ---
 

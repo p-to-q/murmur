@@ -33,13 +33,32 @@ export function clearRememberedShareReferrer(): void {
   document.cookie = `${SHARE_REFERRAL_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
 
-export async function claimShareReferral(referrerId: string): Promise<boolean> {
+export type ClaimShareReferralClientResult =
+  | { ok: true; duplicate: boolean }
+  | { ok: false; error: string | null };
+
+export async function claimShareReferral(
+  referrerId: string,
+): Promise<ClaimShareReferralClientResult> {
   const response = await request("/api/share/claim", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ referrerId }),
   });
-  return response.ok;
+  let payload: { error?: unknown; duplicate?: unknown } = {};
+  try {
+    payload = (await response.json()) as { error?: unknown; duplicate?: unknown };
+  } catch {
+    // Keep the error nullable; callers only need to distinguish terminal
+    // referral failures from transient network/server failures.
+  }
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: typeof payload.error === "string" ? payload.error : null,
+    };
+  }
+  return { ok: true, duplicate: payload.duplicate === true };
 }
 
 function sanitizeReferrerId(value: string | null): string | null {

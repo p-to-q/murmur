@@ -510,7 +510,7 @@ async function ensureInitialLedgerForUser(userId: string): Promise<void> {
       id: createLedgerId(),
       userId,
       delta: user.notesBalance,
-      reason: userId === "guest" ? "grant:signup_bonus" : "grant:cutover_gift",
+      reason: initialLedgerReasonForUser(userId, user.accountKind),
       externalRef: "initial_balance",
       metadata: { source: "ensure_initial_ledger" },
     });
@@ -520,17 +520,27 @@ async function ensureInitialLedgerForUser(userId: string): Promise<void> {
 async function lockUserRow(
   tx: DbTransaction,
   userId: string,
-): Promise<{ id: string; notesBalance: number } | null> {
+): Promise<{ id: string; notesBalance: number; accountKind: string } | null> {
   const [user] = await tx
     .select({
       id: users.id,
       notesBalance: users.notesBalance,
+      accountKind: users.accountKind,
     })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
     .for("update");
   return user ?? null;
+}
+
+function initialLedgerReasonForUser(
+  userId: string,
+  accountKind: string,
+): GrantReason {
+  if (userId === "guest") return "grant:signup_bonus";
+  if (accountKind === "local_creator") return "grant:local_creator";
+  return "grant:cutover_gift";
 }
 
 async function findIdempotentLedger(
