@@ -2,8 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Download,
@@ -92,6 +91,7 @@ export default function MeloLabClient() {
 }
 
 function MeloLabContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const developerMode = usePreferencesStore((state) => state.developerMode);
   const debugEnabled = developerMode || searchParams.get("debug") === "1";
@@ -149,6 +149,7 @@ function MeloLabContent() {
   const selectedOutput = musicOutputs[selectedOutputKey] ?? null;
   const readyRuns = providerRuns.filter(isReadyRun);
   const selectedProviderRun = providerRuns.find((run) => run.provider === selectedProvider) ?? null;
+  const systemSelectedStage = selectedRun?.response.result.selectedMelodyKind ?? null;
 
   const stopStream = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -413,13 +414,14 @@ function MeloLabContent() {
             Add <span className="font-mono text-[#1A1A1A]">?debug=1</span> or enable
             Developer mode in Settings.
           </p>
-          <Link
-            href="/me/debug?debug=1"
+          <button
+            type="button"
+            onClick={() => router.push("/me/debug?debug=1")}
             className="mt-5 inline-flex items-center gap-2 border border-[#1A1A1A]/15 bg-white px-4 py-2 text-[12px]"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to debug
-          </Link>
+          </button>
         </div>
       </div>
     );
@@ -430,13 +432,14 @@ function MeloLabContent() {
       <header className="border-b border-[#1A1A1A]/10 px-5 py-5 md:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <Link
-              href="/me/debug?debug=1"
+            <button
+              type="button"
+              onClick={() => router.push("/me/debug?debug=1")}
               className="inline-flex items-center gap-2 text-[12px] text-[#6F6A63] hover:text-[#1A1A1A]"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Debug
-            </Link>
+            </button>
             <p className="mt-5 text-[10px] uppercase tracking-[0.24em] text-[#FF5924]">
               TEST ONLY / local melo-lab
             </p>
@@ -579,9 +582,12 @@ function MeloLabContent() {
               Probe only after a JSON layer sounds close. Keep hum style mix at
               0 when testing melody following.
             </p>
-            <p className="mt-2 text-[12px] leading-[1.55] text-[#6F6A63]">
-              Selected: {selectedProvider} / {stageTitle(selectedStage)}
-            </p>
+            <SelectedLayerSummary
+              selectedProvider={selectedProvider}
+              selectedStage={selectedStage}
+              systemSelectedStage={systemSelectedStage}
+              target="music worker"
+            />
             <label className="mt-4 block text-[12px] text-[#6F6A63]">
               Prompt
               <input
@@ -656,9 +662,12 @@ function MeloLabContent() {
                 <h2 className="text-[13px] font-semibold uppercase tracking-[0.16em]">
                   Pitch path
                 </h2>
-                <p className="mt-1 text-[12px] text-[#6F6A63]">
-                  Selected: {selectedProvider} / {stageTitle(selectedStage)}
-                </p>
+                <SelectedLayerSummary
+                  selectedProvider={selectedProvider}
+                  selectedStage={selectedStage}
+                  systemSelectedStage={systemSelectedStage}
+                  compact
+                />
               </div>
               <div className="flex flex-wrap gap-2">
                 {selectedRun && (
@@ -892,6 +901,63 @@ function ProviderMissing({ provider }: { provider: PitchProviderId }) {
   );
 }
 
+function SelectedLayerSummary({
+  selectedProvider,
+  selectedStage,
+  systemSelectedStage,
+  target = "preview",
+  compact = false,
+}: {
+  selectedProvider: PitchProviderId;
+  selectedStage: StageId;
+  systemSelectedStage: StageId | null;
+  target?: string;
+  compact?: boolean;
+}) {
+  const hasSystemChoice = systemSelectedStage !== null;
+  const isManualOverride = hasSystemChoice && selectedStage !== systemSelectedStage;
+  const selectedTitle = stageTitle(selectedStage);
+  const systemTitle = systemSelectedStage ? stageTitle(systemSelectedStage) : "Not run yet";
+
+  return (
+    <div className={`${compact ? "mt-2" : "mt-4"} border border-[#1A1A1A]/10 bg-[#FAF7F0] p-3`}>
+      <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#8C8780]">
+        Selected layer
+      </p>
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="font-serif text-[22px] leading-none text-[#1A1A1A]">
+          {selectedTitle}
+        </span>
+        <span className="font-mono text-[11px] text-[#6F6A63]">
+          {selectedProvider}
+        </span>
+        {isManualOverride ? (
+          <span className="border border-[#FF5924]/25 bg-[#FFF1EA] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#A83B16]">
+            manual override
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-3 grid gap-2 text-[11px] leading-[1.45] text-[#6F6A63] sm:grid-cols-3">
+        <span className="border border-[#1A1A1A]/10 bg-white px-2 py-1">
+          system picked: <span className="font-mono text-[#1A1A1A]">{systemTitle}</span>
+        </span>
+        <span className="border border-[#1A1A1A]/10 bg-white px-2 py-1">
+          using now: <span className="font-mono text-[#1A1A1A]">{selectedTitle}</span>
+        </span>
+        <span className="border border-[#1A1A1A]/10 bg-white px-2 py-1">
+          sent to: <span className="font-mono text-[#1A1A1A]">{target}</span>
+        </span>
+      </div>
+      {!compact ? (
+        <p className="mt-3 text-[11px] leading-[1.55] text-[#8C8780]">
+          The music worker uses the layer shown as &quot;using now&quot;. Click a Raw,
+          Intent, Corrected, or Musical card to change this selection.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ProviderPanel({
   run,
   selectedProvider,
@@ -964,7 +1030,8 @@ function ProviderPanel({
               key={`${run.provider}-${stage.id}`}
               response={run.response}
               stage={stage}
-              selected={selectedProvider === run.provider && selectedStage === stage.id}
+              finalSelected={run.response.result.selectedMelodyKind === stage.id}
+              usingNow={selectedProvider === run.provider && selectedStage === stage.id}
               playing={playingKey === candidateKey(run.provider, stage.id)}
               renderMode={renderMode}
               onSelect={() => onSelect(run.provider, stage.id)}
@@ -982,7 +1049,8 @@ function ProviderPanel({
 function StageCard({
   response,
   stage,
-  selected,
+  finalSelected,
+  usingNow,
   playing,
   renderMode,
   onSelect,
@@ -992,7 +1060,8 @@ function StageCard({
 }: {
   response: MeloLabResponse;
   stage: (typeof STAGES)[number];
-  selected: boolean;
+  finalSelected: boolean;
+  usingNow: boolean;
   playing: boolean;
   renderMode: RenderMode;
   onSelect: () => void;
@@ -1007,9 +1076,11 @@ function StageCard({
   return (
     <div
       className={
-        selected
+        finalSelected
           ? "border border-[#1A1A1A] bg-[#FFF9F2] p-3"
-          : "border border-[#1A1A1A]/10 bg-white p-3"
+          : usingNow
+            ? "border border-[#FF5924]/35 bg-white p-3"
+            : "border border-[#1A1A1A]/10 bg-white p-3"
       }
     >
       <button type="button" onClick={onSelect} className="block w-full text-left">
@@ -1018,11 +1089,18 @@ function StageCard({
             <p className="text-[14px] font-semibold">{stage.title}</p>
             <p className="mt-1 text-[11px] leading-[1.45] text-[#6F6A63]">{stage.intent}</p>
           </div>
-          {selected && (
-            <span className="border border-[#1A1A1A]/10 bg-white px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-[#1A1A1A]">
-              selected
-            </span>
-          )}
+          <div className="flex flex-col items-end gap-1">
+            {finalSelected && (
+              <span className="border border-[#1A1A1A]/10 bg-white px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-[#1A1A1A]">
+                final selected
+              </span>
+            )}
+            {usingNow && !finalSelected && (
+              <span className="border border-[#FF5924]/25 bg-[#FFF1EA] px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-[#A83B16]">
+                using now
+              </span>
+            )}
+          </div>
         </div>
       </button>
 
@@ -1375,7 +1453,7 @@ function FeedbackPanel({
             Feedback packet
           </h2>
           <p className="mt-1 text-[12px] leading-[1.55] text-[#6F6A63]">
-            Selected: {selectedProvider} / {stageTitle(selectedStage)}
+            Using now: {selectedProvider} / {stageTitle(selectedStage)}
           </p>
         </div>
         <button

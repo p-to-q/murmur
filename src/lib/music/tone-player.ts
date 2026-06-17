@@ -150,6 +150,15 @@ function midiNote(midi: number): string {
   return `${names[midi % 12] ?? "C"}${Math.floor(midi / 12) - 1}`;
 }
 
+function isLegatoNeighbor(notes: MelodyNote[], index: number): boolean {
+  const note = notes[index]!;
+  const next = notes[index + 1];
+  if (!next) return false;
+
+  const gap = next.start - (note.start + note.duration);
+  return gap <= 0.07 && Math.abs(next.pitch - note.pitch) <= 2;
+}
+
 function chordMidi(chord: string): number[] {
   const roots: Record<string, number> = {
     C:60,"C#":61,Db:61,D:62,"D#":63,Eb:63,E:64,F:65,"F#":66,Gb:66,G:67,"G#":68,Ab:68,A:69,"A#":70,Bb:70,B:71,
@@ -205,17 +214,25 @@ export class TonePlayer {
     if (arrangement.melody.enabled && melodyNotes.length > 0) {
       try {
         const synth = buildSynth(Tone, arrangement.melody.instrument);
+        if ("portamento" in synth) {
+          (synth as import("tone").Synth).portamento = 0.035;
+        }
         const gain = new Tone.Gain(Math.min(1, arrangement.melody.intensity)).toDestination();
         synth.disconnect(); synth.connect(gain);
         this.synths.push(synth, gain);
 
         const part = new Tone.Part(
-          (t: number, note: MelodyNote) => {
+          (t: number, note: MelodyNote & { legatoNeighbor?: boolean }) => {
             const vel = Math.max(0.01, Math.min(1, note.velocity));
-            const dur = Math.max(0.05, note.duration - 0.04);
+            const releaseTrim = note.legatoNeighbor ? 0.01 : 0.04;
+            const dur = Math.max(0.05, note.duration - releaseTrim);
             (synth as import("tone").Synth).triggerAttackRelease(midiNote(note.pitch), dur, t, vel);
           },
-          melodyNotes.map((n) => ({ time: n.start, ...n }))
+          melodyNotes.map((n, index) => ({
+            time: n.start,
+            ...n,
+            legatoNeighbor: isLegatoNeighbor(melodyNotes, index),
+          }))
         );
         part.start(0);
         this.parts.push(part);
