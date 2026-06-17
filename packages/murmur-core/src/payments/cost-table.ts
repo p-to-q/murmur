@@ -29,6 +29,7 @@ export type NotesReason =
   | "grant:daily_free"
   | "grant:signup_bonus"
   | "grant:cutover_gift"
+  | "grant:referral"
   // Purchases
   | "purchase:topup"
   | "refund:topup"
@@ -56,9 +57,8 @@ export const COST: Readonly<Record<CostKey, number>> = Object.freeze({
 /**
  * Local Creator one-time preview allowance.
  *
- * This pre-login allowance does not refill and does not unlock account-only
- * billing surfaces. Promotion to a registered account raises the balance to
- * the normal signup baseline without copying songs.
+ * This is a browser-local, pre-login allowance. It does not refill and does
+ * not represent a server-side user balance.
  */
 export const LOCAL_CREATOR_FREE_NOTES = 5;
 
@@ -80,6 +80,7 @@ export const MAX_FREE_BALANCE = 10;
 export const GRANTS = Object.freeze({
   signup_bonus: 15,
   cutover_gift: 50,
+  referral: 100,
 });
 
 /**

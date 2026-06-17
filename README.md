@@ -256,6 +256,9 @@ cp .env.example .env
 | `AUDIO_ENGINE_DENOISE_PROVIDER` | Worker denoise provider. `auto` uses DeepFilterNet when optional deps are installed; `deepfilternet` fails loudly if they are missing. |
 | `DATABASE_URL` | Postgres connection string for Drizzle. |
 | `CRON_SECRET` | Shared secret for the daily digest cron route. |
+| `MURMUR_AUTH_MODE` | Auth runtime mode. Defaults to production-like behavior even on localhost: no session means 401. Set `demo` or `local` only for explicit preview fallback work. |
+| `NEXT_PUBLIC_MURMUR_AUTH_MODE` | Browser-side companion for local header auth. Set to `local` only with `MURMUR_AUTH_MODE=local` when intentionally exercising localStorage user headers. |
+| `MURMUR_ALLOW_HEADER_AUTH` | Local/demo-only legacy switch for `x-murmur-user-*` identity headers. Ignored in production auth mode. |
 | `MURMUR_ALLOW_DEV_BILLING_FALLBACK` | Development-only switch. Defaults to enabled in `next dev`; when enabled, local development bypasses notes spending for hum/save/edit flows. Set to `0` to force real billing even in development. |
 | `MURMUR_DEV_NOTES_BALANCE` | Development-only display balance returned by `/api/user/balance` and `/api/auth/me` when dev billing fallback is enabled. Defaults to `9999`. |
 
@@ -263,6 +266,10 @@ cp .env.example .env
 
 - Authentication, notifications, and AI now go through Murmur's local
   platform adapter under [src/lib/platform](./src/lib/platform).
+- Identity is session-resolved by `resolveRequestAuth()` in production and by
+  default on localhost. Guest/header fallback is available only after opting
+  into `MURMUR_AUTH_MODE=local` or `demo`; `x-murmur-user-*` is never a
+  production identity source.
 - Real recordings go through server `/api/transcribe`; the fixture melody is
   only used when the user explicitly chooses the demo action.
 - In local development, billing fallback is enabled by default. Hum, save, and

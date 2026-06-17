@@ -25,6 +25,9 @@ export function UserBadge() {
         email: session.user.email || null,
         name: session.user.name || null,
         avatarUrl: session.user.image || null,
+        accountKind:
+          (session.user as { accountKind?: "local_creator" | "registered" }).accountKind
+          ?? "registered",
       } as AppUser)
     : platformUser;
 
@@ -84,12 +87,11 @@ export function UserBadge() {
             </button>
           )}
           <button
-            onClick={async () => {
+            onClick={() => {
               if (isGoogleUser) {
-                await authClient.logout();
-                await signOut({ callbackUrl: "/" });
+                signOut({ callbackUrl: "/" });
               } else {
-                await authClient.logout();
+                authClient.logout();
               }
               setOpen(false);
             }}

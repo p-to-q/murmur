@@ -15,6 +15,7 @@ import { I18nHydrator } from "@/lib/i18n";
 import { cn } from "@/utils/utils";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { FontHydrator } from "@/components/murmur/font-hydrator";
+import { ShareReferralTracker } from "@/components/murmur/share-referral-tracker";
 
 const SITE_URL =
   process.env.MURMUR_APP_URL ||
@@ -118,6 +119,7 @@ export default function RootLayout({
         <AuthProvider>
           <I18nHydrator />
           <FontHydrator />
+          <ShareReferralTracker />
           {/* Desktop sidebar (md+) — mobile hides via internal media query */}
           <SideNav />
           {/* Main content area:

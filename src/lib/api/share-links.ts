@@ -1,10 +1,13 @@
 import { resolveApiUrl } from "./base-url";
 
 const SHARE_INVITE_PATH = "/api/share/invite";
+const REFERRAL_PARAM = "ref";
 
-export function buildShareInviteUrl(origin: string): string {
+export function buildShareInviteUrl(origin: string, inviterId?: string | null): string {
   const base = origin.replace(/\/+$/, "");
-  return `${base}/?ref=share`;
+  const url = new URL("/", base);
+  if (inviterId) url.searchParams.set(REFERRAL_PARAM, inviterId);
+  return url.toString();
 }
 
 export function resolveShareInviteEndpoint(): string {

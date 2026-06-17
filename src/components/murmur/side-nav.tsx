@@ -24,6 +24,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useSession } from "next-auth/react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { ChevronsLeft, ChevronsRight, LinkIcon } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -432,6 +433,7 @@ export function SideNavWithModal() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareInviteUrl, setShareInviteUrl] = useState<string | null>(null);
   const t = useTranslator();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -444,7 +446,7 @@ export function SideNavWithModal() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [session?.user?.id, status]);
 
   const handleShareClick = () => {
     setShareModalOpen(true);

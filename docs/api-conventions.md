@@ -150,19 +150,28 @@ See `user-model.md` §4. From the API's view:
 
 - Every route except `/api/auth/login/*`, `/api/billing/webhook/*`, and
   `/api/health` requires a session.
-- Session resolved by middleware in this order:
+- `resolveRequestAuth(request)` is the production identity boundary. Routes
+  must not derive `userId` from client-supplied local headers directly.
+- Session resolved in this order:
   1. `Authorization: Bearer <token>` (Capacitor + MP).
   2. `__murmur_session` cookie (Web).
-  3. fallback: no session → 401 `unauthorized`.
-- The handler receives a `req` augmented with `req.auth = { user, session }`
-  (Next.js middleware sets `req.headers['x-murmur-auth']` and a
-  per-request resolver reads it).
+  3. Auth.js/NextAuth Web session, while the Google login path is still being
+     adopted into Murmur's opaque session table.
+  4. fallback: no session → 401 `unauthorized`.
+- This production-like behavior is also the default on localhost. In explicit
+  `MURMUR_AUTH_MODE=local` or `demo`, no-session requests may resolve to the
+  local `guest` identity so preview fallback work remains possible.
+- The Hum preview path is the narrow exception: routes may call
+  `resolveRequestAuth(request, { allowGuestPreview: true })` only when the
+  product explicitly allows Local Creator traffic. This does not grant cloud
+  ownership, billing, account, or payment access.
 
 The `x-murmur-user-id` header from v1 is no longer a production identity
-source. During the Phase 3 substrate it is accepted only when
-`MURMUR_ALLOW_HEADER_AUTH=true` or in non-production local/demo environments.
-Bearer/cookie validation now exists behind `resolveRequestAuth`; login,
-refresh, logout, and client session adoption are the remaining Phase 3 work.
+source. It is accepted only outside production auth mode, and only when
+`MURMUR_ALLOW_HEADER_AUTH=true` or in `MURMUR_AUTH_MODE=local` by default.
+In `MURMUR_AUTH_MODE=demo`, guest fallback is allowed but header identity is
+off unless explicitly enabled. Login, refresh, and full Auth.js → Murmur
+opaque session adoption remain the follow-up work.
 
 ---
 

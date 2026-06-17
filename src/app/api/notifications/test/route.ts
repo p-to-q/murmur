@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { resolveRequestAuth } from "@/lib/auth";
 import {
   NotificationPublishError,
   notifications,
@@ -12,7 +12,7 @@ import { log } from "@/lib/observability/log";
  * a real push gateway is wired in behind the adapter.
  */
 export async function POST(request: NextRequest) {
-  const auth = requireAuth(request);
+  const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
 
   const callerLabel =
