@@ -216,3 +216,85 @@ describe("audio worker adapter", () => {
     }
   });
 });
+
+describe("audio worker retry", () => {
+  const validBody = JSON.stringify({
+    source: "swiftf0",
+    notes: [{ pitch: 60, start: 0, duration: 0.4, velocity: 0.7, confidence: 0.9 }],
+  });
+
+  function withWorker(handler: (callIndex: number) => Response | Promise<Response>) {
+    const originalFetch = globalThis.fetch;
+    const originalUrl = process.env.AUDIO_WORKER_URL;
+    process.env.AUDIO_WORKER_URL = "http://audio-worker.test";
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      const index = calls;
+      calls += 1;
+      return handler(index);
+    }) as typeof fetch;
+    return {
+      calls: () => calls,
+      restore() {
+        globalThis.fetch = originalFetch;
+        if (originalUrl === undefined) delete process.env.AUDIO_WORKER_URL;
+        else process.env.AUDIO_WORKER_URL = originalUrl;
+      },
+    };
+  }
+
+  it("retries a transient 502 and then succeeds", async () => {
+    const worker = withWorker((i) =>
+      i === 0
+        ? new Response("upstream", { status: 502 })
+        : new Response(validBody, { status: 200 }),
+    );
+    try {
+      const result = await transcribeWithAudioWorker({
+        audio: new File(["audio"], "hum.webm", { type: "audio/webm" }),
+        targetInstrument: "piano",
+        requestId: "req_retry_502",
+      });
+      expect(result.rawNotes.length).toBeGreaterThan(0);
+      expect(worker.calls()).toBe(2);
+    } finally {
+      worker.restore();
+    }
+  });
+
+  it("retries a transient connection failure and then succeeds", async () => {
+    const worker = withWorker((i) => {
+      if (i === 0) throw new Error("ECONNREFUSED");
+      return new Response(validBody, { status: 200 });
+    });
+    try {
+      const result = await transcribeWithAudioWorker({
+        audio: new File(["audio"], "hum.webm", { type: "audio/webm" }),
+        targetInstrument: "piano",
+        requestId: "req_retry_conn",
+      });
+      expect(result.rawNotes.length).toBeGreaterThan(0);
+      expect(worker.calls()).toBe(2);
+    } finally {
+      worker.restore();
+    }
+  });
+
+  it("does not retry a non-retryable 4xx", async () => {
+    const worker = withWorker(() => new Response("bad request", { status: 400 }));
+    try {
+      await transcribeWithAudioWorker({
+        audio: new File(["audio"], "hum.webm", { type: "audio/webm" }),
+        targetInstrument: "piano",
+        requestId: "req_4xx",
+      });
+      throw new Error("expected transcribeWithAudioWorker to reject");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AudioWorkerError);
+      expect((error as AudioWorkerError).code).toBe("worker_http_error");
+      expect(worker.calls()).toBe(1);
+    } finally {
+      worker.restore();
+    }
+  });
+});

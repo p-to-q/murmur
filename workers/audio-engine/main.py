@@ -48,6 +48,7 @@ async def _lifespan(_app: FastAPI):
             "AUDIO_WORKER_TOKEN is not set — all endpoints are UNAUTHENTICATED. "
             "Fine for localhost dev; never expose this process through a public tunnel."
         )
+    _preload_pitch_model()
     yield
 
 
@@ -62,6 +63,35 @@ MIN_NOTE_DUR = 0.08
 MIN_CONF = 0.4
 MAX_AUDIO_BYTES = 2 * 1024 * 1024
 MAX_AUDIO_SECONDS = 30
+
+
+def _preload_pitch_model() -> None:
+    """Warm the pitch detector at startup.
+
+    SwiftF0 (and any fallback) lazy-loads its model on first use, which can add
+    tens of seconds to the very first hum after a deploy or restart and shows up
+    to users as a "service is napping" timeout. Running one tiny synthetic clip
+    through the same detection path forces that load to happen at boot instead.
+    Best-effort: a preload failure must never stop the worker from serving.
+    """
+    try:
+        warm_seconds = 1.0
+        t = np.linspace(0, warm_seconds, int(SR * warm_seconds), endpoint=False)
+        warm_audio = (0.1 * np.sin(2 * np.pi * 220.0 * t)).astype(np.float32)
+        detect_pitch(
+            warm_audio,
+            DetectorConfig(
+                provider=configured_pitch_provider(),
+                sample_rate=SR,
+                fmin=FMIN,
+                fmax=FMAX,
+                frame_length=FRAME_LEN,
+                hop_length=HOP_LEN,
+            ),
+        )
+        logger.info("audio engine: pitch model preloaded at startup")
+    except Exception as exc:  # noqa: BLE001 - best-effort warm, never fatal
+        logger.warning("audio engine: pitch model preload skipped: %s", exc)
 
 # ── Hum capture ───────────────────────────────────────────────────────
 # Every hum that reaches the worker is a real input someone sang. Saving

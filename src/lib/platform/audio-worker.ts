@@ -18,9 +18,16 @@ import type {
   TranscriptionResult,
 } from "@/modules/shared/types";
 
-// Generous enough to survive the worker's first-request model load
-// (SwiftF0/denoiser lazy-init can take ~40s on a cold worker).
-const WORKER_TIMEOUT_MS = 90_000;
+// Per-attempt and total budgets stay under the /api/transcribe route's 60s
+// maxDuration so a transient blip can be retried inside the same request
+// instead of failing the user immediately. The SwiftF0 model is now preloaded
+// at worker startup, so a warm transcription is only a few seconds — leaving
+// room for a couple of retries within the total budget.
+const WORKER_ATTEMPT_TIMEOUT_MS = 20_000;
+const WORKER_TOTAL_BUDGET_MS = 40_000;
+const WORKER_MAX_ATTEMPTS = 3;
+const WORKER_RETRY_BACKOFF_MS = [500, 1500];
+const MIN_ATTEMPT_BUDGET_MS = 3_000;
 
 const noteSchema = z.object({
   pitch: z.number(),
@@ -112,6 +119,8 @@ export class AudioWorkerError extends Error {
     public readonly code: TranscribeErrorCode,
     message: string,
     public readonly status = 500,
+    /** Transient failure (connection/timeout/5xx) safe to retry within budget. */
+    public readonly retryable = false,
   ) {
     super(message);
     this.name = "AudioWorkerError";
@@ -145,13 +154,86 @@ export async function transcribeWithAudioWorker({
   const workerUrl = workerBase.endsWith("/transcribe")
     ? workerBase
     : `${workerBase.replace(/\/+$/, "")}/transcribe`;
+  const token = process.env.AUDIO_WORKER_TOKEN?.trim() || undefined;
+  // Read the upload once so every retry can send a fresh body — a File/Blob can
+  // otherwise be left consumed by a failed attempt's fetch.
+  const audioBytes = await audio.arrayBuffer();
+  const audioName = audio.name || "hum.webm";
+  const audioType = audio.type || "audio/webm";
 
+  const deadline = Date.now() + WORKER_TOTAL_BUDGET_MS;
+  let lastError: AudioWorkerError | null = null;
+
+  for (let attempt = 0; attempt < WORKER_MAX_ATTEMPTS; attempt++) {
+    const remaining = deadline - Date.now();
+    if (remaining < MIN_ATTEMPT_BUDGET_MS) break;
+
+    if (attempt > 0) {
+      const backoff = Math.min(
+        WORKER_RETRY_BACKOFF_MS[attempt - 1] ?? 1_500,
+        remaining - MIN_ATTEMPT_BUDGET_MS,
+      );
+      if (backoff > 0) await sleep(backoff);
+    }
+
+    const attemptTimeout = Math.min(WORKER_ATTEMPT_TIMEOUT_MS, deadline - Date.now());
+    if (attemptTimeout < MIN_ATTEMPT_BUDGET_MS) break;
+
+    try {
+      return await runTranscribeAttempt({
+        workerUrl,
+        audioBytes,
+        audioName,
+        audioType,
+        targetInstrument,
+        requestId,
+        token,
+        timeoutMs: attemptTimeout,
+      });
+    } catch (error) {
+      if (error instanceof AudioWorkerError && error.retryable) {
+        lastError = error;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw (
+    lastError ??
+    new AudioWorkerError(
+      "worker_http_error",
+      "Audio worker did not respond within the retry budget",
+      502,
+      false,
+    )
+  );
+}
+
+async function runTranscribeAttempt({
+  workerUrl,
+  audioBytes,
+  audioName,
+  audioType,
+  targetInstrument,
+  requestId,
+  token,
+  timeoutMs,
+}: {
+  workerUrl: string;
+  audioBytes: ArrayBuffer;
+  audioName: string;
+  audioType: string;
+  targetInstrument: InstrumentId;
+  requestId: string;
+  token?: string;
+  timeoutMs: number;
+}): Promise<TranscriptionResult> {
   const form = new FormData();
-  form.append("audio", audio, audio.name || "hum.webm");
+  form.append("audio", new Blob([audioBytes], { type: audioType }), audioName);
   form.append("targetInstrument", targetInstrument);
 
   const headers = new Headers({ "X-Request-Id": requestId });
-  const token = process.env.AUDIO_WORKER_TOKEN?.trim();
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -163,13 +245,15 @@ export async function transcribeWithAudioWorker({
       method: "POST",
       body: form,
       headers,
-      signal: AbortSignal.timeout(WORKER_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
+    // Connection refused / DNS / TLS / per-attempt timeout — all transient.
     throw new AudioWorkerError(
       "worker_http_error",
       error instanceof Error ? error.message : "Audio worker request failed",
       502,
+      true,
     );
   }
 
@@ -177,17 +261,16 @@ export async function transcribeWithAudioWorker({
   if (!response.ok) {
     const workerError = await readWorkerError(response);
     if (response.status === 422 && workerError.code === "no_voiced_frames") {
-      throw new AudioWorkerError(
-        "no_voiced_frames",
-        workerError.message,
-        422,
-      );
+      throw new AudioWorkerError("no_voiced_frames", workerError.message, 422);
     }
 
+    // 5xx (a restarting or overloaded worker) is worth another try; other 4xx
+    // are caller/content errors that a retry would not fix.
     throw new AudioWorkerError(
       "worker_http_error",
       workerError.message || `Audio worker returned HTTP ${response.status}`,
       response.status === 422 ? 422 : 502,
+      response.status >= 500,
     );
   }
 
@@ -206,6 +289,10 @@ export async function transcribeWithAudioWorker({
     targetInstrument,
     workerMs,
   });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function isInstrumentId(value: string): value is InstrumentId {
