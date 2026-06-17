@@ -1,6 +1,6 @@
 import type { AppUser, AuthResult } from "./types";
 import { auth as nextAuthSession } from "@/lib/auth/auth";
-import { getSessionByToken } from "@/lib/db/queries/sessions";
+import { getSessionByToken, type ResolvedSession } from "@/lib/db/queries/sessions";
 
 export const SESSION_COOKIE_NAME = "__murmur_session";
 
@@ -93,17 +93,41 @@ export interface ResolveRequestAuthOptions {
   allowGuestPreview?: boolean;
 }
 
+type NextAuthSessionLike = { user?: unknown } | null;
+
+/**
+ * Dependency-injection seam for unit tests. Production callers omit `deps` and
+ * get the real DB session + NextAuth lookups via {@link DEFAULT_DEPS}.
+ */
+export interface ResolveRequestAuthDeps {
+  getSessionByToken: (token: string) => Promise<ResolvedSession | null>;
+  getNextAuthSession: () => Promise<NextAuthSessionLike>;
+}
+
+const DEFAULT_DEPS: ResolveRequestAuthDeps = {
+  getSessionByToken: (token) => getSessionByToken(token),
+  getNextAuthSession: () => nextAuthSession(),
+};
+
 export async function resolveRequestAuth(
   request: Request,
   options: ResolveRequestAuthOptions = {},
+  deps: ResolveRequestAuthDeps = DEFAULT_DEPS,
 ): Promise<ResolvedRequestAuth> {
   const mode = resolveAuthRuntimeMode();
   const token = getSessionToken(request);
   let invalidSessionAuth: Extract<ResolvedRequestAuth, { ok: false }> | null = null;
+  // Every visitor is auto-issued a Local Creator __murmur_session, and it is
+  // re-ensured right before the Google redirect, so this cookie is almost
+  // always present. It must NOT shadow a real Google sign-in: a local_creator
+  // session is held here and only used when no NextAuth session resolves. A
+  // registered session — including an lc_ row promoted to registered in place
+  // during sign-in — is a real identity and still short-circuits immediately.
+  let localCreatorAuth: Extract<ResolvedRequestAuth, { ok: true }> | null = null;
   if (token) {
     let session;
     try {
-      session = await getSessionByToken(token);
+      session = await deps.getSessionByToken(token);
     } catch (error) {
       return authError(
         "session_unavailable",
@@ -118,6 +142,13 @@ export async function resolveRequestAuth(
         "Invalid or expired session",
         401,
       );
+    } else if (session.user.accountKind === "local_creator") {
+      localCreatorAuth = {
+        ok: true,
+        user: session.user,
+        source: "session",
+        sessionId: session.sessionId,
+      };
     } else {
       return {
         ok: true,
@@ -131,9 +162,10 @@ export async function resolveRequestAuth(
   // NextAuth (Google) session. The web client signs in through authjs, whose
   // JWT cookie the API routes previously never consulted — production
   // identity then collapsed to the shared guest user, putting every
-  // visitor's songs and balance in one bucket.
+  // visitor's songs and balance in one bucket. A Google session also wins over
+  // a held Local Creator cookie so returning users are not stuck as lc_…
   try {
-    const nextAuth = await nextAuthSession();
+    const nextAuth = await deps.getNextAuthSession();
     const nextAuthUser = nextAuth?.user as
       | { id?: string; email?: string | null; name?: string | null; image?: string | null }
       | undefined;
@@ -154,6 +186,12 @@ export async function resolveRequestAuth(
   } catch {
     // authjs not configured / no request scope — fall through to auth-mode
     // fallback handling below. In production that means a clean 401.
+  }
+
+  // No Google session won — fall back to the held Local Creator session, which
+  // is a valid identity even though Google takes priority when both exist.
+  if (localCreatorAuth) {
+    return localCreatorAuth;
   }
 
   if (!options.allowGuestPreview && !areAuthFallbacksAllowed(mode)) {
