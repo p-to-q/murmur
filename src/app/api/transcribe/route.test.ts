@@ -324,7 +324,7 @@ describe("POST /api/transcribe", () => {
     form.append("targetInstrument", "piano");
 
     for (let i = 0; i < 10; i += 1) {
-      await store.hit("/api/transcribe:user:usr_test", {
+      await store.hit("/api/transcribe:user:usr_test:unknown", {
         capacity: 10,
         refillWindowMs: 60_000,
       });
