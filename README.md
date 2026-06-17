@@ -236,7 +236,7 @@ Then set `AUDIO_WORKER_URL=http://localhost:8001` in `.env`. Without the
 worker, live recordings return a visible retry/demo error instead of silently
 using a fixture melody.
 
-For local "why does the generated song not match my hum?" work, use Melo Lab:
+For local "why does the generated song not match my hum?" work, use MeLo Lab:
 
 ```bash
 bun run dev:audio
@@ -269,7 +269,7 @@ cp .env.example .env
 | `AUDIO_WORKER_TOKEN` | Optional bearer token for Next.js → audio worker calls. |
 | `AUDIO_ENGINE_PITCH_PROVIDER` | Worker pitch detector provider. `auto` uses SwiftF0 first, then pYIN fallback. |
 | `AUDIO_ENGINE_DENOISE_PROVIDER` | Worker denoise provider. `auto` uses DeepFilterNet when optional deps are installed; `deepfilternet` fails loudly if they are missing. |
-| `MURMUR_ENABLE_MELO_LAB` | Explicit production diagnostic flag for the test-only Melo Lab APIs. Local development enables them by default; worker URLs still must be loopback. |
+| `MURMUR_ENABLE_MELO_LAB` | Explicit production diagnostic flag for the test-only MeLo Lab APIs. Local development enables them by default; worker URLs still must be loopback. |
 | `MELO_LAB_AUDIO_WORKER_URL` | Optional loopback audio worker override for `/api/test/melo-lab/transcribe`. Defaults to `http://127.0.0.1:8001`. |
 | `MELO_LAB_MUSIC_WORKER_URL` | Optional loopback music worker override for `/api/test/melo-lab/music`. Defaults to `http://127.0.0.1:8002`. |
 | `DATABASE_URL` | Postgres connection string for Drizzle. |

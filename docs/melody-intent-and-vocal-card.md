@@ -122,7 +122,7 @@ corrected around the user's line, then harmony supports that line.
 
 ## Next Engineering Steps
 
-1. Show `melodyIntent` in Melo Lab beside raw / intent / corrected / musical.
+1. Show `melodyIntent` in MeLo Lab beside raw / intent / corrected / musical.
 2. Add note-level repair reasons for the strongest changed notes.
 3. Show the computed correction policy values in the lab view before exposing
    any front-door control.

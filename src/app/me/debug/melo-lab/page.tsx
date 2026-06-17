@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import MeloLabClient from "./MeloLabClient";
 
 export const metadata: Metadata = {
-  title: "Melo Lab | Murmur",
+  title: "MeLo Lab | Murmur",
   robots: {
     index: false,
     follow: false,
