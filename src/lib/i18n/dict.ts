@@ -31,6 +31,70 @@ export const DICT = {
     zh: "使用 Google 登录",
     en: "Continue with Google",
   },
+  "auth.continue_github": {
+    zh: "使用 GitHub 登录",
+    en: "Continue with GitHub",
+  },
+  "auth.continue_email": {
+    zh: "使用邮箱登录",
+    en: "Continue with email",
+  },
+  "auth.or_email": {
+    zh: "或使用邮箱",
+    en: "or use email",
+  },
+  "auth.email_placeholder": {
+    zh: "输入邮箱地址",
+    en: "Enter email address",
+  },
+  "auth.send_code": {
+    zh: "发送验证码",
+    en: "Send code",
+  },
+  "auth.enter_code": {
+    zh: "输入验证码",
+    en: "Enter verification code",
+  },
+  "auth.verify": {
+    zh: "验证",
+    en: "Verify",
+  },
+  "auth.code_sent": {
+    zh: "验证码已发送至 {email}",
+    en: "Code sent to {email}",
+  },
+  "auth.code_expired": {
+    zh: "验证码已过期，请重新发送",
+    en: "Code expired, please resend",
+  },
+  "auth.code_invalid": {
+    zh: "验证码不正确",
+    en: "Invalid code",
+  },
+  "auth.code_rate_limit": {
+    zh: "发送过于频繁，请稍后再试",
+    en: "Too many requests, please wait",
+  },
+  "auth.code_send_failed": {
+    zh: "验证码发送失败，请稍后再试",
+    en: "Failed to send code, please try again",
+  },
+  "auth.code_max_attempts": {
+    zh: "尝试次数过多，请重新发送验证码",
+    en: "Too many attempts, please request a new code",
+  },
+  "auth.change_email": {
+    zh: "换个邮箱",
+    en: "Change email",
+  },
+  "auth.account_github": {
+    zh: "GitHub",
+    en: "GitHub",
+  },
+  "auth.account_email": {
+    zh: "邮箱",
+    en: "Email",
+  },
   "auth.sign_out": {
     zh: "退出登录",
     en: "Sign out",
@@ -430,6 +494,7 @@ export const DICT = {
   "me.settings":           { zh: "设置", en: "Settings" },
   "me.payments":           { zh: "支付记录", en: "Payment records" },
   "me.privacy":            { zh: "隐私", en: "Privacy" },
+  "me.terms":              { zh: "服务条款", en: "Terms" },
   "me.delete_account":     { zh: "删除账号", en: "Delete account" },
   "me.melo_lab":           { zh: "MeLo Lab", en: "MeLo Lab" },
   "me.stats.title":        { zh: "创作数据", en: "Activity" },

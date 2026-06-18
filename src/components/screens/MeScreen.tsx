@@ -293,6 +293,10 @@ export function MeScreen() {
             {t("me.privacy") || "Privacy"}
           </Link>
           <span className="text-[#D2C9B6]">·</span>
+          <Link href="/me/terms" className="hover:text-[#1A1A1A] transition-colors">
+            {t("me.terms") || "Terms"}
+          </Link>
+          <span className="text-[#D2C9B6]">·</span>
           <Link
             href="/me/delete"
             className="hover:text-[#D9421A] transition-colors"
