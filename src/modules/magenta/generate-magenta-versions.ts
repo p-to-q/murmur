@@ -2,6 +2,8 @@ import type { CleanMelody, VibeVersion, VersionGeneration } from "@/modules/shar
 import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import { createVibePromptBatch } from "@/lib/music/vibe-prompts";
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { addMurmurNotification } from "@/lib/store/notification-store";
+import { sendBrowserNotification } from "@/lib/hooks/use-browser-notification";
 import { log } from "@/lib/observability/log";
 import { pickArtworkSelection } from "@/presets/artworks/artwork-matcher";
 
@@ -37,6 +39,7 @@ export type MusicEngineStatus = {
 let healthCache: { at: number; status: MusicEngineStatus } | null = null;
 let activeAbort: AbortController | null = null;
 let liveObjectUrls: string[] = [];
+const notifiedBatchIds = new Set<string>();
 
 export function invalidateMusicEngineCache(): void {
   healthCache = null;
@@ -211,6 +214,10 @@ function startBatchGeneration(versions: VibeVersion[], humBlob: Blob | null): vo
   liveObjectUrls = [];
 
   for (const version of versions) {
+    notifiedBatchIds.delete(batchNotificationId(version));
+  }
+
+  for (const version of versions) {
     void requestClip(version, humBlob, controller.signal);
   }
 }
@@ -259,6 +266,7 @@ async function requestClip(
     }, {
       durationMs: Math.round(performance.now() - startedAt),
     });
+    notifyIfBatchComplete(version);
   } catch (error) {
     if (signal?.aborted) return;
     patchGeneration(version.id, {
@@ -273,7 +281,54 @@ async function requestClip(
       level: "warn",
       durationMs: Math.round(performance.now() - startedAt),
     });
+    notifyIfBatchComplete(version);
   }
+}
+
+function batchNotificationId(version: VibeVersion): string {
+  return `song_generated:${version.originFlowId}:${version.generation?.batchIndex ?? 0}`;
+}
+
+function notifyIfBatchComplete(version: VibeVersion): void {
+  const notificationId = batchNotificationId(version);
+  if (notifiedBatchIds.has(notificationId)) return;
+
+  const { vibeVersions } = useMurmurStore.getState();
+  const batchIndex = version.generation?.batchIndex ?? 0;
+  const batch = vibeVersions.filter(
+    (candidate) =>
+      candidate.originFlowId === version.originFlowId &&
+      candidate.generation?.batchIndex === batchIndex,
+  );
+  if (batch.length === 0) return;
+  if (batch.some((candidate) => candidate.generation?.status === "pending")) {
+    return;
+  }
+
+  const readyCount = batch.filter(
+    (candidate) => candidate.generation?.status === "ready",
+  ).length;
+  if (readyCount === 0) return;
+
+  notifiedBatchIds.add(notificationId);
+  const allReady = readyCount === batch.length;
+  const title = allReady ? "三种方向都酿好了" : "有新方向可以听了";
+  const body = allReady
+    ? "你的哼唱已经长成三首小歌，去挑一个最像你的。"
+    : `${readyCount} 个方向已生成完成，可以先试听可用版本。`;
+
+  addMurmurNotification({
+    id: notificationId,
+    kind: "song_generated",
+    title,
+    body,
+    href: "/vibe",
+    sourceId: version.originFlowId,
+  });
+  sendBrowserNotification("Murmur", {
+    body,
+    tag: notificationId,
+  });
 }
 
 /** Patch a version's generation in the store; false if it's no longer there. */

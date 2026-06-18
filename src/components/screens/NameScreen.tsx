@@ -23,6 +23,7 @@ import { memory } from "@/lib/platform/memory";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { addMurmurNotification } from "@/lib/store/notification-store";
 import { useTranslator } from "@/lib/i18n";
 import { synth } from "@/lib/music/simple-synth";
 import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
@@ -242,6 +243,16 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
         .catch(() => {});
 
       toast.success(t("studio.save_ok"));
+      addMurmurNotification({
+        id: `song_saved:${id}`,
+        kind: "song_saved",
+        title: t("nav.notify.song_saved.title") || "已保存到藏歌",
+        body:
+          t("nav.notify.song_saved.body") ||
+          "这首小歌已经收好，可以从藏歌里随时打开。",
+        href: `/song/${id}`,
+        sourceId: id,
+      });
       router.push(`/song/${id}`);
     } catch (error) {
       console.error("[Name] save failed:", error);

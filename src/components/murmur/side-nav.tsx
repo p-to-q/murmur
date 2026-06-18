@@ -36,6 +36,7 @@ import { getPlayer } from "@/lib/music/tone-player";
 import { versionPreview } from "@/lib/music/version-preview";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
+import { useBrowserNotification } from "@/lib/hooks/use-browser-notification";
 import { NAV_ITEMS, computeTrail, type ComputedStep } from "./nav-items";
 import { MurmurMark } from "./murmur-mark";
 import { ShareCardModal } from "./share-card-modal";
@@ -396,25 +397,14 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                 title={t("nav.device.title")}
                 body={t("nav.device.desc")}
               />
-              <PopoverButton
-                icon={<BellIcon className="h-4 w-4" />}
-                label={t("nav.notify.title")}
-                title={t("nav.notify.title")}
-                body={t("nav.notify.desc")}
-              />
+              <NotificationBellButton />
             </div>
           </div>
         )}
 
         {collapsed && (
           <div className="flex flex-col items-center gap-2">
-            <PopoverButton
-              icon={<BellIcon className="h-4 w-4" />}
-              label={t("nav.notify.title")}
-              title={t("nav.notify.title")}
-              body={t("nav.notify.desc")}
-              chromeless
-            />
+            <NotificationBellButton chromeless />
             <button
               onClick={() => setLang(lang === "zh" ? "en" : "zh")}
               className="text-[13px] text-[#1A1A1A] hover:text-[#FF5924] transition-colors py-1"
@@ -450,6 +440,9 @@ export function SideNavWithModal() {
 
   const handleShareClick = () => {
     setShareModalOpen(true);
+  };
+
+  const handleCopyInviteLink = () => {
     void (async () => {
       const url = shareInviteUrl
         ?? (typeof window === "undefined"
@@ -466,7 +459,11 @@ export function SideNavWithModal() {
   return (
     <>
       <SideNavInner onShareClick={handleShareClick} />
-      <ShareCardModal open={shareModalOpen} onClose={() => setShareModalOpen(false)} />
+      <ShareCardModal
+        open={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        onCopyInviteLink={handleCopyInviteLink}
+      />
     </>
   );
 }
@@ -682,6 +679,199 @@ function BellIcon({ className }: { className?: string }) {
   );
 }
 
+/* ── NotificationBellButton — in-app inbox + browser alert preference ───── */
+
+function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }) {
+  const t = useTranslator();
+  const {
+    permission,
+    browserAlertsEnabled,
+    requestPermission,
+    setBrowserAlertsEnabled,
+  } = useBrowserNotification();
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ left: 0, top: 0, isCollapsed: false, width: 240 });
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMounted(true), 0);
+    return () => {
+      clearTimeout(timer);
+      setMounted(false);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open || !buttonRef.current) return;
+
+    const updatePosition = () => {
+      if (!buttonRef.current) return;
+      const button = buttonRef.current.getBoundingClientRect();
+      const isCollapsed = document.documentElement.classList.contains("nav-collapsed");
+      const popoverHeight = 70;
+
+      if (isCollapsed) {
+        setPosition({
+          left: button.right + 12,
+          top: button.top - 4,
+          isCollapsed: true,
+          width: 240,
+        });
+      } else {
+        setPosition({
+          left: 28,
+          top: button.top - popoverHeight - 8,
+          isCollapsed: false,
+          width: 264,
+        });
+      }
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => window.removeEventListener("resize", updatePosition);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node) &&
+        popoverRef.current &&
+        !popoverRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const handleClick = async () => {
+    if (permission === "default") {
+      await requestPermission();
+      return;
+    }
+    setOpen((v) => !v);
+  };
+
+  const isGranted = permission === "granted";
+  const isDenied = permission === "denied";
+  const alertsOn = isGranted && browserAlertsEnabled;
+  const body = alertsOn
+    ? t("nav.notify.enabled")
+    : isDenied
+      ? t("nav.notify.denied")
+      : t("nav.notify.desc");
+  const handleAlertsToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    void setBrowserAlertsEnabled(!alertsOn);
+  };
+
+  const buttonCls = chromeless
+    ? "group relative flex h-7 w-7 items-center justify-center rounded-[10px] border border-[#E5DDD0] bg-white/45 text-[#8C8780] hover:border-[#C8C0B4] hover:bg-white/70 hover:text-[#1A1A1A] transition-colors"
+    : "group relative flex h-8 w-8 items-center justify-center rounded-[10px] border border-[#E5DDD0] bg-white/40 text-[#B6B0A4] hover:text-[#1A1A1A] hover:border-[#C8C0B4] transition-colors";
+
+  const popoverContent = open && mounted && (
+    <AnimatePresence>
+      <motion.div
+        ref={popoverRef}
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.92 }}
+        transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+        role="dialog"
+        aria-label={t("nav.notify.title")}
+        style={{
+          position: "fixed",
+          left: `${position.left}px`,
+          top: `${position.top}px`,
+          transform: "none",
+          zIndex: 9999,
+          width: position.isCollapsed ? "240px" : `${position.width}px`,
+        }}
+        className="min-h-[70px] rounded-[14px] border border-[#E5DDD0] bg-white p-4 shadow-[0_12px_36px_rgba(26,26,26,0.12)]"
+      >
+        {position.isCollapsed && (
+          <>
+            <div
+              className="absolute left-0 top-[14px] -translate-x-[6px] w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#E5DDD0]"
+              aria-hidden
+            />
+            <div
+              className="absolute left-0 top-[14px] -translate-x-[5px] w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-r-[5px] border-r-white"
+              aria-hidden
+            />
+          </>
+        )}
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-medium text-[#1A1A1A] leading-snug">
+              {t("nav.notify.title")}
+            </p>
+            <p className="mt-1 text-[11px] text-[#8C8780] leading-snug">
+              {body}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={alertsOn}
+            aria-label={t("nav.notify.title")}
+            onClick={handleAlertsToggle}
+            className={`relative h-[22px] w-[40px] shrink-0 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/20 ${
+              alertsOn
+                ? "border-[#1A1A1A] bg-[#1A1A1A]"
+                : "border-[#E5DDD0] bg-[#F8F3EA]"
+            }`}
+          >
+            <span
+              className={`absolute left-[2px] top-[2px] h-4 w-4 rounded-full bg-white shadow-[0_1px_4px_rgba(26,26,26,0.18)] transition-transform ${
+                alertsOn ? "translate-x-[18px]" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={handleClick}
+        aria-label={t("nav.notify.title")}
+        title={t("nav.notify.title")}
+        aria-expanded={open}
+        className={`relative ${buttonCls}`}
+      >
+        <BellIcon className="h-4 w-4" />
+        {isGranted && (
+          <span
+            className="absolute -right-1 -top-1 z-10 flex h-2.5 w-2.5 items-center justify-center rounded-full border border-[#E5DDD0] bg-white transition-colors group-hover:border-[#C8C0B4]"
+            aria-hidden
+          >
+            <span className="h-1 w-1 rounded-full bg-[#E5DDD0] transition-colors group-hover:bg-[#C8C0B4]" />
+          </span>
+        )}
+      </button>
+      {mounted && createPortal(popoverContent, document.body)}
+    </>
+  );
+}
+
 /* ── PopoverButton — icon button that pops a small card upward ─────── */
 
 function PopoverButton({
@@ -801,7 +991,7 @@ function PopoverButton({
           zIndex: 9999,
           width: position.isCollapsed ? "240px" : `${position.width}px`,
         }}
-        className="rounded-[14px] border border-[#E5DDD0] bg-white p-4 shadow-[0_12px_36px_rgba(26,26,26,0.12)]"
+        className="min-h-[70px] rounded-[14px] border border-[#E5DDD0] bg-white p-4 shadow-[0_12px_36px_rgba(26,26,26,0.12)]"
       >
         {position.isCollapsed && (
           <>

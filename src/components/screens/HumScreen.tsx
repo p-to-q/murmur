@@ -208,7 +208,6 @@ export function HumScreen() {
   const msgIdxRef = useRef(0);
   const heardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPhaseRef = useRef<CapturePhase>("idle");
-  const cancelPendingStartRef = useRef(false);
 
   // Audio-reactive aurora. The analyser drives amplitude only while capture
   // is active; the refs below are reset together by stopAudioAnalyser.
@@ -565,7 +564,6 @@ export function HumScreen() {
       return;
     }
     startPhaseRef.current = "starting";
-    cancelPendingStartRef.current = false;
     startAudioContext();
     setHumError(null);
     setInputLevelState("idle");
@@ -618,13 +616,6 @@ export function HumScreen() {
       const recordingType =
         recorder.mimeType || recorderOptions.mimeType || "application/octet-stream";
       mediaRecorderRef.current = recorder;
-      if (cancelPendingStartRef.current) {
-        stopMediaStream(stream);
-        activeStreamRef.current = null;
-        mediaRecorderRef.current = null;
-        stopAudioAnalyser();
-        return;
-      }
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
@@ -671,11 +662,13 @@ export function HumScreen() {
 
   const releaseCapture = useCallback(() => {
     if (startPhaseRef.current === "starting") {
-      cancelPendingStartRef.current = true;
+      return;
+    }
+    if (recordingTime === 0) {
       return;
     }
     stopRecording();
-  }, [stopRecording]);
+  }, [recordingTime, stopRecording]);
 
   const updateInputLevel = useCallback((rms: number) => {
     const startedAt = recordingStartedAtRef.current;
@@ -968,7 +961,6 @@ export function HumScreen() {
               <motion.button
                 onPointerDown={() => {
                   if (isIdle && !humError && startPhaseRef.current === "idle") {
-                    cancelPendingStartRef.current = false;
                     if (!passGuestGate()) return;
                     void startRecording();
                   }
@@ -991,7 +983,6 @@ export function HumScreen() {
                     startPhaseRef.current === "idle"
                   ) {
                     e.preventDefault();
-                    cancelPendingStartRef.current = false;
                     if (!passGuestGate()) return;
                     void startRecording();
                   }

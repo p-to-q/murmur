@@ -95,6 +95,10 @@ export const DICT = {
   "nav.device.desc":   { zh: "手机端体验更佳，所有数据实时同步", en: "Better on mobile, all data syncs in real-time" },
   "nav.notify.title":  { zh: "通知",              en: "Notifications" },
   "nav.notify.desc":   { zh: "查看最新动态和更新", en: "Check latest updates and news" },
+  "nav.notify.enabled": { zh: "开着。曲子酿好时，会轻轻叫你。", en: "On. We’ll quietly ping you" },
+  "nav.notify.denied": { zh: "浏览器拦住了提醒；需要在设置里放行。", en: "Browser notifications are blocked. Allow them in settings." },
+  "nav.notify.song_saved.title": { zh: "已保存到藏歌", en: "Saved to Gallery" },
+  "nav.notify.song_saved.body": { zh: "这首小歌已经收好，可以从藏歌里随时打开。", en: "This song is tucked away and ready to reopen from your Gallery." },
 
   // ── HumScreen ───────────────────────────────────────────────────────
   "hum.brand.tagline": { zh: "MURMUR",     en: "MURMUR" },
@@ -114,7 +118,7 @@ export const DICT = {
 
   // CTA pill
   "hum.cta":           { zh: "按住开始哼唱",  en: "HOLD TO HUM" },
-  "hum.cta.release":   { zh: "松开结束",      en: "RELEASE TO STOP" },
+  "hum.cta.release":   { zh: "再次点击结束",      en: "TAP AGAIN TO STOP" },
   "hum.demo.cta":      { zh: "示例旋律",      en: "Try demo" },
   "hum.cta_demo":      { zh: "用示例旋律继续", en: "Use the demo melody" },
   "hum.login_wall.title":   { zh: "免费试唱用完啦", en: "That's your free taste" },
