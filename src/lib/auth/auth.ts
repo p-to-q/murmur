@@ -1,62 +1,62 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
+import GitHub from "next-auth/providers/github";
 import { CallbackRouteError } from "@auth/core/errors";
 import { headers } from "next/headers";
 import { db } from "@/lib/db/client";
 import { users, externalIdentities } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   googleOAuthProviderOptions,
   isGoogleOAuthConfigured,
 } from "@/lib/auth/google-config";
+import {
+  gitHubOAuthProviderOptions,
+  isGitHubOAuthConfigured,
+} from "@/lib/auth/github-config";
 import { resolveAuthSecret } from "@/lib/auth/env";
 import { assertProductionAuthConfig } from "@/lib/auth/assert-config";
-import { upsertGoogleUser } from "@/lib/db/queries/users";
+import { upsertOAuthUser } from "@/lib/db/queries/users";
 import { getSessionByToken } from "@/lib/db/queries/sessions";
 import { getSessionToken } from "@/lib/platform/server-auth";
 import { log } from "@/lib/observability/log";
 
-/**
- * Google OAuth is optional: without credentials the provider list is empty,
- * /api/auth/session answers "no session", and the app stays on the Local
- * Creator path. Registering Google with undefined credentials (the old `!`
- * casts) made authjs 500 on every request, which SessionProvider then
- * surfaced as a ClientFetchError on every page.
- */
 const googleConfigured = isGoogleOAuthConfigured();
+const githubConfigured = isGitHubOAuthConfigured();
 
 assertProductionAuthConfig();
 
+const providers = [
+  ...(googleConfigured ? [Google(googleOAuthProviderOptions())] : []),
+  ...(githubConfigured ? [GitHub(gitHubOAuthProviderOptions())] : []),
+];
+
+const SUPPORTED_PROVIDERS = new Set(["google", "github"]);
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // authjs hard-requires a secret even for anonymous session reads.
-  // Production must provide AUTH_SECRET (fail loudly if not); local dev
-  // falls back to a fixed value so keyless setups boot cleanly.
   secret:
     resolveAuthSecret() ??
     (process.env.NODE_ENV === "production"
       ? undefined
       : "murmur-dev-insecure-secret"),
-  providers: googleConfigured
-    ? [Google(googleOAuthProviderOptions())]
-    : [],
+  providers,
   pages: {
     signIn: "/",
     error: "/auth/error",
   },
   callbacks: {
     async signIn({ user, account }) {
-      // Benign validation rejections: returning false routes to
-      // /auth/error?error=AccessDenied ("you cancelled"), which is the right
-      // UX for these non-error cases (wrong provider / missing email).
-      if (!account || account.provider !== "google" || !user.email) return false;
+      if (!account || !SUPPORTED_PROVIDERS.has(account.provider) || !user.email)
+        return false;
 
-      const googleId = account.providerAccountId;
-      if (!googleId) return false;
+      const externalId = account.providerAccountId;
+      if (!externalId) return false;
 
       try {
         const localCreatorUserId = await resolveCurrentLocalCreatorUserId();
-        const { created } = await upsertGoogleUser({
-          googleId,
+        const { created } = await upsertOAuthUser({
+          provider: account.provider,
+          externalId,
           email: user.email,
           name: user.name ?? null,
           image: user.image ?? null,
@@ -65,49 +65,59 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (created) {
           log(
             "auth.user_provisioned",
-            { provider: "google" },
-            { route: "/api/auth/callback/google", shell: "web" },
+            { provider: account.provider },
+            { route: `/api/auth/callback/${account.provider}`, shell: "web" },
           );
         }
         return true;
       } catch (error) {
-        // Infra/DB failure. Do NOT return false — that maps to the misleading
-        // AccessDenied ("you cancelled"). Log a non-PII summary, then throw an
-        // AuthError whose type is not client-safe so Auth.js routes to
-        // /auth/error?error=Configuration ("server couldn't finish sign-in").
         log(
           "auth.signin_failed",
           {
-            provider: "google",
+            provider: account.provider,
             stage: "upsert",
             err: error instanceof Error ? error.name : "unknown",
           },
-          { level: "error", route: "/api/auth/callback/google", shell: "web" },
+          {
+            level: "error",
+            route: `/api/auth/callback/${account.provider}`,
+            shell: "web",
+          },
         );
-        throw new CallbackRouteError("Google sign-in could not be completed", {
-          cause: error instanceof Error ? error : new Error("signIn upsert failed"),
-        });
+        throw new CallbackRouteError(
+          `${account.provider} sign-in could not be completed`,
+          {
+            cause:
+              error instanceof Error
+                ? error
+                : new Error("signIn upsert failed"),
+          },
+        );
       }
     },
 
     async jwt({ token, account }) {
-      if (account?.provider === "google" && account.providerAccountId) {
-        token.googleSub = account.providerAccountId;
+      if (account?.providerAccountId) {
+        token.oauthProvider = account.provider;
+        token.oauthSub = account.providerAccountId;
       }
 
-      const googleSub =
-        typeof token.googleSub === "string"
-          ? token.googleSub
-          : typeof token.sub === "string"
-            ? token.sub
-            : null;
+      // Back-compat: read legacy googleSub if oauthSub not set yet
+      const sub =
+        typeof token.oauthSub === "string"
+          ? token.oauthSub
+          : typeof token.googleSub === "string"
+            ? token.googleSub
+            : typeof token.sub === "string"
+              ? token.sub
+              : null;
 
-      if (googleSub && !token.murmurUserId) {
+      if (sub && !token.murmurUserId) {
         try {
           const [identity] = await db
             .select({ userId: externalIdentities.userId })
             .from(externalIdentities)
-            .where(eq(externalIdentities.externalId, googleSub))
+            .where(eq(externalIdentities.externalId, sub))
             .limit(1);
           if (identity) token.murmurUserId = identity.userId;
         } catch (error) {
@@ -137,23 +147,38 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           session.user.name = user.name || session.user.name;
           session.user.image = user.avatarUrl || session.user.image;
           session.user.accountKind =
-            user.accountKind === "local_creator" ? "local_creator" : "registered";
+            user.accountKind === "local_creator"
+              ? "local_creator"
+              : "registered";
           return session;
         }
       }
 
-      const googleSub =
-        typeof token.googleSub === "string"
-          ? token.googleSub
-          : typeof token.sub === "string"
-            ? token.sub
-            : null;
+      // Fallback: resolve by externalId from token
+      const sub =
+        typeof token.oauthSub === "string"
+          ? token.oauthSub
+          : typeof token.googleSub === "string"
+            ? token.googleSub
+            : typeof token.sub === "string"
+              ? token.sub
+              : null;
 
-      if (googleSub) {
+      if (sub) {
+        const provider =
+          typeof token.oauthProvider === "string"
+            ? token.oauthProvider
+            : "google";
+
         const [identity] = await db
           .select()
           .from(externalIdentities)
-          .where(eq(externalIdentities.externalId, googleSub))
+          .where(
+            and(
+              eq(externalIdentities.provider, provider),
+              eq(externalIdentities.externalId, sub),
+            ),
+          )
           .limit(1);
 
         if (identity) {
@@ -169,7 +194,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             session.user.name = user.name || session.user.name;
             session.user.image = user.avatarUrl || session.user.image;
             session.user.accountKind =
-              user.accountKind === "local_creator" ? "local_creator" : "registered";
+              user.accountKind === "local_creator"
+                ? "local_creator"
+                : "registered";
           }
         }
       }

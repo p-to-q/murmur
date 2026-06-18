@@ -62,14 +62,21 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export interface GoogleProfileInput {
-  /** Google OIDC `sub` (account.providerAccountId). */
-  googleId: string;
-  /** Caller guarantees this is non-empty. */
+export interface OAuthProfileInput {
+  provider: string;
+  externalId: string;
   email: string;
   name: string | null;
   image: string | null;
-  /** Existing Local Creator user from the same browser session, if any. */
+  localCreatorUserId?: string | null;
+}
+
+/** @deprecated Use {@link OAuthProfileInput} with {@link upsertOAuthUser}. */
+export interface GoogleProfileInput {
+  googleId: string;
+  email: string;
+  name: string | null;
+  image: string | null;
   localCreatorUserId?: string | null;
 }
 
@@ -107,39 +114,35 @@ export async function createLocalCreatorUser(): Promise<User> {
 }
 
 /**
- * Idempotently ensure a murmur user + google `external_identities` row exist
- * for a Google sign-in, then return the resolved user id.
+ * Idempotently ensure a murmur user + external_identities row exist for an
+ * OAuth / email sign-in, then return the resolved user id.
  *
  * Resolution order:
- *   1. identity already linked by (google, googleId)  → refresh profile.
- *   2. no identity, but a user already has this email  → link a new identity to
- *      that user. This is the fix for the silent lockout: previously a fresh
- *      `users` insert would hit the `users_email_unique` constraint and the
- *      whole callback was swallowed into `return false`.
- *   3. brand new                                       → create user + identity
- *      atomically inside one transaction.
+ *   1. identity already linked by (provider, externalId)  → refresh profile.
+ *   2. no identity, but a user already has this email     → link identity.
+ *   3. local creator in session                           → promote + link.
+ *   4. brand new                                          → create user + identity.
  *
- * Concurrency: the identity insert is guarded by `onConflictDoNothing` on the
- * `(provider, external_id)` unique index; if a parallel first sign-in won the
- * race we re-select the winning row. Throws on genuine infra/DB failure so the
- * caller can surface it instead of silently denying access.
+ * Concurrency: the identity insert uses onConflictDoNothing on the
+ * (provider, external_id) unique index; a parallel first sign-in that won
+ * the race is re-selected. Throws on genuine infra/DB failure.
  */
-export async function upsertGoogleUser(
-  profile: GoogleProfileInput,
+export async function upsertOAuthUser(
+  profile: OAuthProfileInput,
 ): Promise<{ userId: string; created: boolean }> {
+  const { provider, externalId } = profile;
   const email = normalizeEmail(profile.email);
   const name = profile.name?.trim() || email.split("@")[0];
   const avatarUrl = profile.image ?? null;
   const localCreatorUserId = normalizeLocalCreatorUserId(profile.localCreatorUserId);
 
-  // 1) Fast path: identity already exists — just refresh the cached profile.
   const [identity] = await db
     .select({ userId: externalIdentities.userId })
     .from(externalIdentities)
     .where(
       and(
-        eq(externalIdentities.provider, "google"),
-        eq(externalIdentities.externalId, profile.googleId),
+        eq(externalIdentities.provider, provider),
+        eq(externalIdentities.externalId, externalId),
       ),
     )
     .limit(1);
@@ -152,10 +155,7 @@ export async function upsertGoogleUser(
     return { userId: identity.userId, created: false };
   }
 
-  // 2) + 3) + 4) No identity yet — create, link, or promote a Local Creator atomically.
   return db.transaction(async (tx) => {
-    // Case-insensitive lookup so a pre-existing (possibly mixed-case) row is
-    // reused, not duplicated — a duplicate insert would hit users_email_unique.
     const [existingByEmail] = await tx
       .select({ id: users.id })
       .from(users)
@@ -167,8 +167,6 @@ export async function upsertGoogleUser(
     if (existingByEmail) {
       userId = existingByEmail.id;
       created = false;
-      // Refresh profile only; leave the stored email's case untouched to avoid
-      // colliding with any rare case-variant row.
       await tx
         .update(users)
         .set({ name, avatarUrl, updatedAt: new Date() })
@@ -202,14 +200,13 @@ export async function upsertGoogleUser(
       }
     }
 
-    // Insert the identity; tolerate a concurrent first sign-in winning the race.
     const inserted = await tx
       .insert(externalIdentities)
       .values({
         id: `eid_${ulid()}`,
         userId,
-        provider: "google",
-        externalId: profile.googleId,
+        provider,
+        externalId,
         metadata: { email, name },
       })
       .onConflictDoNothing({
@@ -219,14 +216,13 @@ export async function upsertGoogleUser(
 
     if (inserted[0]) return { userId: inserted[0].userId, created };
 
-    // Race lost: the identity now exists — re-select the winning row.
     const [winner] = await tx
       .select({ userId: externalIdentities.userId })
       .from(externalIdentities)
       .where(
         and(
-          eq(externalIdentities.provider, "google"),
-          eq(externalIdentities.externalId, profile.googleId),
+          eq(externalIdentities.provider, provider),
+          eq(externalIdentities.externalId, externalId),
         ),
       )
       .limit(1);
@@ -235,6 +231,20 @@ export async function upsertGoogleUser(
       throw new Error("identity upsert: conflict fired with no resolvable row");
     }
     return { userId: winner.userId, created: false };
+  });
+}
+
+/** @deprecated Use {@link upsertOAuthUser}. */
+export async function upsertGoogleUser(
+  profile: GoogleProfileInput,
+): Promise<{ userId: string; created: boolean }> {
+  return upsertOAuthUser({
+    provider: "google",
+    externalId: profile.googleId,
+    email: profile.email,
+    name: profile.name,
+    image: profile.image,
+    localCreatorUserId: profile.localCreatorUserId,
   });
 }
 

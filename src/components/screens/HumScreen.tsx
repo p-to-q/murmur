@@ -7,7 +7,9 @@ import {
   hasLocalNotes,
   spendLocalNotes,
 } from "@/lib/balance/balance-manager";
-import { useGoogleSignIn } from "@/lib/hooks/use-google-sign-in";
+import { useAuthProviders } from "@/lib/hooks/use-auth-providers";
+import { AuthButtons } from "@/components/auth/auth-buttons";
+import { EmailLoginForm } from "@/components/auth/email-login-form";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
@@ -192,7 +194,8 @@ export function HumScreen() {
   const [showHeardMessage, setShowHeardMessage] = useState(false);
   const { refresh: refreshBalance } = useUserBalance();
   const { status: sessionStatus } = useSession();
-  const { signInWithGoogle, googleAuthAvailable } = useGoogleSignIn();
+  const { providers: authProviders } = useAuthProviders();
+  const [showEmailForm, setShowEmailForm] = useState(false);
   // During "loading" we do NOT gate, so a returning signed-in user is never
   // briefly walled by a stale guest counter on their device.
   const isGuest = sessionStatus === "unauthenticated";
@@ -1231,17 +1234,14 @@ export function HumScreen() {
                 <p className="text-[#8C8780] text-[13px] leading-relaxed mb-6">
                   {t("hum.login_wall.detail")}
                 </p>
-                <button
-                  onClick={() => signInWithGoogle("/")}
-                  disabled={googleAuthAvailable === false}
-                  className="mm-btn-primary mb-3 w-full justify-center disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {t("hum.login_wall.cta")}
-                </button>
-                {googleAuthAvailable === false && (
-                  <p className="mb-3 text-[12px] leading-relaxed text-[#8C8780]">
-                    {t("auth.google_unavailable")}
-                  </p>
+                {showEmailForm ? (
+                  <EmailLoginForm className="mb-3 text-left" />
+                ) : (
+                  <AuthButtons
+                    callbackUrl="/"
+                    onEmailClick={() => setShowEmailForm(true)}
+                    className="mb-3"
+                  />
                 )}
                 <button
                   onClick={() => setShowLoginWall(false)}
