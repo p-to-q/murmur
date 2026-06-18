@@ -896,9 +896,6 @@ export function HumScreen() {
                       {processingMessage}
                     </motion.h1>
                   </AnimatePresence>
-                  <p className="text-[#B6B0A4] text-[12px] tracking-[0.2em] uppercase mt-4">
-                    {t("hum.proc.wait")}
-                  </p>
                 </motion.div>
               )}
               </AnimatePresence>
