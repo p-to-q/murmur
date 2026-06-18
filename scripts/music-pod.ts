@@ -49,8 +49,10 @@ const MODEL = process.env.MAGENTA_MODEL?.trim() || "mrt2_base";
 
 // A5000 first: cheapest 24 GB card, enough for mrt2_base under JAX. Fallbacks
 // stay on cards available in the network volume's (secure) data center.
+// MUSIC_POD_GPU_TYPE_ID overrides — deliberately NOT RUNPOD_GPU_TYPE_ID, which
+// is the serverless deploy's preference and would otherwise hijack the pod.
 const GPU_CANDIDATES = [
-  process.env.RUNPOD_GPU_TYPE_ID?.trim(),
+  process.env.MUSIC_POD_GPU_TYPE_ID?.trim(),
   "NVIDIA RTX A5000",
   "NVIDIA GeForce RTX 3090",
   "NVIDIA GeForce RTX 4090",
