@@ -36,6 +36,7 @@ import { getPlayer } from "@/lib/music/tone-player";
 import { versionPreview } from "@/lib/music/version-preview";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
+import { useBrowserNotification } from "@/lib/hooks/use-browser-notification";
 import { NAV_ITEMS, computeTrail, type ComputedStep } from "./nav-items";
 import { MurmurMark } from "./murmur-mark";
 import { ShareCardModal } from "./share-card-modal";
@@ -396,25 +397,14 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                 title={t("nav.device.title")}
                 body={t("nav.device.desc")}
               />
-              <PopoverButton
-                icon={<BellIcon className="h-4 w-4" />}
-                label={t("nav.notify.title")}
-                title={t("nav.notify.title")}
-                body={t("nav.notify.desc")}
-              />
+              <NotificationBellButton />
             </div>
           </div>
         )}
 
         {collapsed && (
           <div className="flex flex-col items-center gap-2">
-            <PopoverButton
-              icon={<BellIcon className="h-4 w-4" />}
-              label={t("nav.notify.title")}
-              title={t("nav.notify.title")}
-              body={t("nav.notify.desc")}
-              chromeless
-            />
+            <NotificationBellButton chromeless />
             <button
               onClick={() => setLang(lang === "zh" ? "en" : "zh")}
               className="text-[13px] text-[#1A1A1A] hover:text-[#FF5924] transition-colors py-1"
@@ -679,6 +669,125 @@ function BellIcon({ className }: { className?: string }) {
     >
       <path d="M9 1.5C11.9204 1.5 14.3283 3.79001 14.4741 6.70679L14.6082 9.39771C14.6134 9.50151 14.6402 9.60308 14.6865 9.6958L15.6064 11.5364L15.6687 11.6814C15.7223 11.8293 15.75 11.9858 15.75 12.1436C15.7498 12.8926 15.1426 13.4998 14.3936 13.5H12.6746C12.3271 15.2116 10.8142 16.5 9 16.5C7.18581 16.5 5.67293 15.2116 5.32544 13.5H3.60645C2.90413 13.4998 2.32681 12.966 2.25732 12.282L2.25 12.1436L2.25879 11.9861C2.27699 11.83 2.32285 11.6777 2.39355 11.5364L3.31348 9.6958C3.35978 9.60306 3.38664 9.5019 3.39185 9.39844L3.52588 6.70679C3.67179 3.79002 6.07956 1.5 9 1.5ZM6.88037 13.5C7.18946 14.3735 8.02062 15 9 15C9.97936 15 10.8105 14.3735 11.1196 13.5H6.88037ZM9 3C6.87895 3 5.13052 4.66314 5.02441 6.78149L4.88965 9.47314C4.87409 9.78408 4.7944 10.0883 4.65527 10.3667L3.83862 12H14.1614L13.3447 10.3667C13.2229 10.1231 13.1468 9.85973 13.1191 9.5896L13.1104 9.47314L12.9756 6.78149C12.8695 4.66315 11.1211 3 9 3Z" />
     </svg>
+  );
+}
+
+/* ── NotificationBellButton — requests browser notification permission ── */
+
+function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }) {
+  const t = useTranslator();
+  const { permission, requestPermission } = useBrowserNotification();
+  const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ left: 0, top: 0, isCollapsed: false, width: 240 });
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMounted(true), 0);
+    return () => { clearTimeout(timer); setMounted(false); };
+  }, []);
+
+  useEffect(() => {
+    if (!open || !buttonRef.current) return;
+    const updatePosition = () => {
+      if (!buttonRef.current) return;
+      const button = buttonRef.current.getBoundingClientRect();
+      const isCollapsed = document.documentElement.classList.contains("nav-collapsed");
+      const popoverHeight = 80;
+      if (isCollapsed) {
+        setPosition({ left: button.right + 12, top: button.top - 4, isCollapsed: true, width: 240 });
+      } else {
+        setPosition({ left: 28, top: button.top - popoverHeight - 8, isCollapsed: false, width: 264 });
+      }
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    return () => window.removeEventListener("resize", updatePosition);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (
+        buttonRef.current && !buttonRef.current.contains(e.target as Node) &&
+        popoverRef.current && !popoverRef.current.contains(e.target as Node)
+      ) setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => { document.removeEventListener("mousedown", onMouseDown); document.removeEventListener("keydown", onKeyDown); };
+  }, [open]);
+
+  const handleClick = async () => {
+    if (permission === "default") {
+      await requestPermission();
+    } else {
+      setOpen((v) => !v);
+    }
+  };
+
+  const isGranted = permission === "granted";
+  const isDenied = permission === "denied";
+
+  const buttonCls = chromeless
+    ? "flex h-7 w-7 items-center justify-center text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
+    : "flex h-8 w-8 items-center justify-center rounded-[10px] border border-[#E5DDD0] bg-white/40 text-[#B6B0A4] hover:text-[#1A1A1A] hover:border-[#C8C0B4] transition-colors";
+
+  const popoverContent = open && mounted && (
+    <AnimatePresence>
+      <motion.div
+        ref={popoverRef}
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.92 }}
+        transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+        role="dialog"
+        style={{
+          position: "fixed",
+          left: `${position.left}px`,
+          top: `${position.top}px`,
+          transform: "none",
+          zIndex: 9999,
+          width: position.isCollapsed ? "240px" : `${position.width}px`,
+        }}
+        className="rounded-[14px] border border-[#E5DDD0] bg-white p-4 shadow-[0_12px_36px_rgba(26,26,26,0.12)]"
+      >
+        {position.isCollapsed && (
+          <>
+            <div className="absolute left-0 top-[14px] -translate-x-[6px] w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#E5DDD0]" aria-hidden />
+            <div className="absolute left-0 top-[14px] -translate-x-[5px] w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-r-[5px] border-r-white" aria-hidden />
+          </>
+        )}
+        <p className="text-[13px] font-medium text-[#1A1A1A] leading-snug">
+          {t("nav.notify.title")}
+        </p>
+        <p className="mt-1 text-[11px] text-[#8C8780] leading-snug">
+          {isGranted ? t("nav.notify.enabled") : isDenied ? t("nav.notify.denied") : t("nav.notify.desc")}
+        </p>
+      </motion.div>
+    </AnimatePresence>
+  );
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={handleClick}
+        aria-label={t("nav.notify.title")}
+        title={t("nav.notify.title")}
+        aria-expanded={open}
+        className={`relative ${buttonCls}`}
+      >
+        <BellIcon className="h-4 w-4" />
+        {isGranted && (
+          <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[#34C759]" />
+        )}
+      </button>
+      {mounted && createPortal(popoverContent, document.body)}
+    </>
   );
 }
 

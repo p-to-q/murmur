@@ -4,6 +4,7 @@ import { createVibePromptBatch } from "@/lib/music/vibe-prompts";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { log } from "@/lib/observability/log";
 import { pickArtworkSelection, gradientFromPalette } from "@/presets/artworks/artwork-matcher";
+import { sendBrowserNotification } from "@/lib/hooks/use-browser-notification";
 
 /**
  * Magenta RealTime version flow.
@@ -263,6 +264,7 @@ async function requestClip(
     }, {
       durationMs: Math.round(performance.now() - startedAt),
     });
+    notifyIfBatchComplete();
   } catch (error) {
     if (signal?.aborted) return;
     patchGeneration(version.id, {
@@ -278,6 +280,22 @@ async function requestClip(
       durationMs: Math.round(performance.now() - startedAt),
     });
   }
+}
+
+function notifyIfBatchComplete(): void {
+  const { vibeVersions } = useMurmurStore.getState();
+  const withGen = vibeVersions.filter((v) => v.generation);
+  if (withGen.length === 0) return;
+  const allSettled = withGen.every((v) => v.generation!.status !== "pending");
+  if (!allSettled) return;
+  const readyCount = withGen.filter((v) => v.generation!.status === "ready").length;
+  if (readyCount === 0) return;
+  sendBrowserNotification("Murmur", {
+    body: readyCount === withGen.length
+      ? `All ${readyCount} vibes are ready!`
+      : `${readyCount} of ${withGen.length} vibes ready`,
+    tag: "murmur-generation",
+  });
 }
 
 /** Patch a version's generation in the store; false if it's no longer there. */
