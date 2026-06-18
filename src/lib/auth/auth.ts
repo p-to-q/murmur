@@ -114,10 +114,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       if (sub && !token.murmurUserId) {
         try {
+          const provider =
+            typeof token.oauthProvider === "string"
+              ? token.oauthProvider
+              : "google";
           const [identity] = await db
             .select({ userId: externalIdentities.userId })
             .from(externalIdentities)
-            .where(eq(externalIdentities.externalId, sub))
+            .where(
+              and(
+                eq(externalIdentities.provider, provider),
+                eq(externalIdentities.externalId, sub),
+              ),
+            )
             .limit(1);
           if (identity) token.murmurUserId = identity.userId;
         } catch (error) {
@@ -133,6 +142,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       const murmurUserId =
         typeof token.murmurUserId === "string" ? token.murmurUserId : null;
+
+      const authProvider =
+        typeof token.oauthProvider === "string"
+          ? token.oauthProvider
+          : "google";
 
       if (murmurUserId) {
         const [user] = await db
@@ -150,6 +164,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             user.accountKind === "local_creator"
               ? "local_creator"
               : "registered";
+          session.user.authProvider = authProvider;
           return session;
         }
       }
@@ -197,6 +212,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               user.accountKind === "local_creator"
                 ? "local_creator"
                 : "registered";
+            session.user.authProvider = provider;
           }
         }
       }

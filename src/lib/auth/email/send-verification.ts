@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import { ulid } from "ulid";
 import { randomInt } from "crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { emailVerificationCodes } from "@/lib/db/schema/email-verification-codes";
 import { normalizeEmail } from "@/lib/db/queries/users";
@@ -22,7 +22,7 @@ function getFromEmail(): string {
 }
 
 function generateCode(): string {
-  return String(randomInt(100000, 999999));
+  return String(randomInt(100000, 1000000));
 }
 
 export async function sendVerificationCode(rawEmail: string): Promise<{
@@ -86,32 +86,42 @@ const MAX_ATTEMPTS = 5;
 
 export async function verifyCode(
   rawEmail: string,
-  code: string,
+  inputCode: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const email = normalizeEmail(rawEmail);
+  const code = inputCode.trim();
   const now = new Date();
 
-  const [record] = await db
+  const activeCodes = await db
     .select()
     .from(emailVerificationCodes)
     .where(
       and(
         eq(emailVerificationCodes.email, email),
-        eq(emailVerificationCodes.code, code),
+        gt(emailVerificationCodes.expiresAt, now),
+        isNull(emailVerificationCodes.usedAt),
       ),
     )
-    .orderBy(emailVerificationCodes.createdAt)
-    .limit(1);
+    .orderBy(desc(emailVerificationCodes.createdAt));
 
-  if (!record) return { ok: false, error: "invalid_code" };
-  if (record.usedAt) return { ok: false, error: "already_used" };
-  if (record.expiresAt <= now) return { ok: false, error: "expired" };
-  if (record.attempts >= MAX_ATTEMPTS) return { ok: false, error: "max_attempts" };
+  if (activeCodes.length === 0) return { ok: false, error: "invalid_code" };
+
+  const latest = activeCodes[0];
+  const totalAttempts = activeCodes.reduce((sum, c) => sum + c.attempts, 0);
+  if (totalAttempts >= MAX_ATTEMPTS) return { ok: false, error: "max_attempts" };
 
   await db
     .update(emailVerificationCodes)
-    .set({ attempts: record.attempts + 1, usedAt: now })
-    .where(eq(emailVerificationCodes.id, record.id));
+    .set({ attempts: latest.attempts + 1 })
+    .where(eq(emailVerificationCodes.id, latest.id));
+
+  const matched = activeCodes.find((c) => c.code === code);
+  if (!matched) return { ok: false, error: "invalid_code" };
+
+  await db
+    .update(emailVerificationCodes)
+    .set({ usedAt: now })
+    .where(eq(emailVerificationCodes.id, matched.id));
 
   return { ok: true };
 }

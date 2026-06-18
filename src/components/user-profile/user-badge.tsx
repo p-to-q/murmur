@@ -31,6 +31,7 @@ export function UserBadge() {
     : platformUser;
 
   const isOAuthUser = !!session?.user;
+  const authProvider = (session?.user as { authProvider?: string } | undefined)?.authProvider;
   const { providers, signInWithOAuth } = useAuthProviders();
 
   useEffect(() => {
@@ -94,7 +95,7 @@ export function UserBadge() {
     <div ref={ref} className="relative z-50">
       <BadgeTrigger user={user} onClick={() => setOpen((v) => !v)} />
       {open && (
-        <DropdownPanel user={user} isOAuthUser={isOAuthUser} onClose={() => setOpen(false)}>
+        <DropdownPanel user={user} isOAuthUser={isOAuthUser} authProvider={authProvider} onClose={() => setOpen(false)}>
           {!isOAuthUser && (
             <div className="space-y-1">
               {providers.google !== false && (
@@ -161,11 +162,13 @@ function BadgeTrigger({ user, onClick }: { user: AppUser; onClick: () => void })
 function DropdownPanel({
   user,
   isOAuthUser,
+  authProvider,
   onClose,
   children,
 }: {
   user: AppUser;
   isOAuthUser?: boolean;
+  authProvider?: string;
   onClose: () => void;
   children?: React.ReactNode;
 }) {
@@ -215,7 +218,17 @@ function DropdownPanel({
         {joinedDate && <Row label={t("auth.joined")} value={joinedDate} />}
         <Row
           label={t("auth.account")}
-          value={isOAuthUser ? t("auth.account_google") : t("auth.account_local")}
+          value={
+            isOAuthUser
+              ? t(
+                  authProvider === "github"
+                    ? "auth.account_github"
+                    : authProvider === "email"
+                      ? "auth.account_email"
+                      : "auth.account_google",
+                )
+              : t("auth.account_local")
+          }
         />
         <Row label={t("auth.user_id")} value={user.id} mono />
       </div>

@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 
 import { useTranslator } from "@/lib/i18n";
 import { AuthButtons } from "@/components/auth/auth-buttons";
+import { EmailLoginForm } from "@/components/auth/email-login-form";
 
 interface ShareCardModalProps {
   open: boolean;
@@ -280,10 +281,14 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
                     {t("share.tagline")}
                   </h2>
 
-                  <AuthButtons
-                    callbackUrl="/"
-                    onEmailClick={() => setShowEmail(true)}
-                  />
+                  {showEmail ? (
+                    <EmailLoginForm className="text-left" />
+                  ) : (
+                    <AuthButtons
+                      callbackUrl="/"
+                      onEmailClick={() => setShowEmail(true)}
+                    />
+                  )}
                 </div>
               </div>
             </div>
