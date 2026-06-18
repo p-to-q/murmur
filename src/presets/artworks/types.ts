@@ -62,6 +62,7 @@ export type ArtworkSelection = Pick<
   | "license"
   | "crop"
   | "renderTreatment"
+  | "palette"
 >;
 
 export type VisualFacets = {
@@ -87,5 +88,6 @@ export function toArtworkSelection(entry: ArtworkCatalogEntry): ArtworkSelection
     license: entry.license,
     crop: { ...entry.crop },
     renderTreatment: entry.renderTreatment ? { ...entry.renderTreatment } : undefined,
+    palette: entry.palette ? [...entry.palette] : undefined,
   };
 }

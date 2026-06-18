@@ -175,3 +175,14 @@ export function pickArtworkSelection(
   const entry = pickArtwork(ARTWORK_CATALOG, facets, seed, recentArtworkIds);
   return entry ? toArtworkSelection(entry) : undefined;
 }
+
+export function gradientFromPalette(palette: string[], seed: string): string {
+  const rng = mulberry32(hashString(seed));
+  const indices = [0, 1, 2, 3, 4];
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [indices[i], indices[j]] = [indices[j]!, indices[i]!];
+  }
+  const picked = indices.slice(0, 3).map((i) => palette[i]!);
+  return `linear-gradient(148deg, ${picked[0]} 0%, ${picked[1]} 48%, ${picked[2]} 100%)`;
+}

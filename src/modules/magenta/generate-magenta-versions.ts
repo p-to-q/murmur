@@ -3,7 +3,7 @@ import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import { createVibePromptBatch } from "@/lib/music/vibe-prompts";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { log } from "@/lib/observability/log";
-import { pickArtworkSelection } from "@/presets/artworks/artwork-matcher";
+import { pickArtworkSelection, gradientFromPalette } from "@/presets/artworks/artwork-matcher";
 
 /**
  * Magenta RealTime version flow.
@@ -167,17 +167,21 @@ export function createMagentaVersions(
       title: spec.title,
       vibe: spec.vibeId,
       tags: spec.tags,
-      visualConfig: {
-        preset: spec.visualPreset,
-        gradient: spec.gradient,
-        particleDensity: spec.energy,
-        pulseSource: spec.energy > 0.6 ? "drums" : "melody",
-        visualFacets: spec.visualFacets,
-        artwork: pickArtworkSelection(
-          spec.visualFacets,
-          `${options.draftId}:${options.batchIndex}:${index}:${version.id}`,
-        ),
-      } satisfies VibeVersion["visualConfig"],
+      visualConfig: (() => {
+        const artworkSeed = `${options.draftId}:${options.batchIndex}:${index}:${version.id}`;
+        const artwork = pickArtworkSelection(spec.visualFacets, artworkSeed);
+        const gradient = artwork?.palette?.length
+          ? gradientFromPalette(artwork.palette, artworkSeed)
+          : spec.gradient;
+        return {
+          preset: spec.visualPreset,
+          gradient,
+          particleDensity: spec.energy,
+          pulseSource: spec.energy > 0.6 ? "drums" : "melody",
+          visualFacets: spec.visualFacets,
+          artwork,
+        } satisfies VibeVersion["visualConfig"];
+      })(),
       generation,
     };
   });

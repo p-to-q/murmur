@@ -132,6 +132,7 @@ export type VisualArtwork = {
   backgroundImagePath?: string;
   license: "CC0" | "Public Domain";
   crop: VisualArtworkCrop;
+  palette?: string[];
   renderTreatment?: {
     intent?: string;
     cropFormat?: string;

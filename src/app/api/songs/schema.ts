@@ -40,6 +40,7 @@ export const visualArtworkSchema = z.object({
     y: z.number(),
     scale: z.number().min(0.1),
   }),
+  palette: z.array(z.string()).optional(),
   renderTreatment: z.object({
     intent: z.string().optional(),
     cropFormat: z.string().optional(),
