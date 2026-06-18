@@ -40,11 +40,6 @@ import { ShareTicketCard } from "@/components/song-detail/ShareTicketCard";
 import { buildShareHtml, downloadHtml } from "@/modules/export/render-share-html";
 import { downloadBlob, renderPoster } from "@/modules/export/render-poster";
 import {
-  exportSongAsVideo,
-  getVideoExportSupport,
-  VideoExportError,
-} from "@/modules/export/export-video";
-import {
   buildSavedSongRemixVersions,
   hydrateSavedSongToVersion,
 } from "@/modules/music/saved-song-version";
@@ -60,7 +55,7 @@ type Song = SongCard & {
   tags?: string[];
 };
 
-type ExportKey = "audio" | "html" | "poster" | "video";
+type ExportKey = "audio" | "html" | "poster";
 
 export function SongDetailScreen({ songId }: { songId: string }) {
   const router = useRouter();
@@ -80,8 +75,6 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [shareCardOpen, setShareCardOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  const videoSupport = useMemo(() => getVideoExportSupport(), []);
 
   /* ── Load ──────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -319,41 +312,6 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     } catch (e) {
       console.error(e);
       toast.error(t("song.export.err"));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const exportVideo = async () => {
-    if (!song) return;
-    if (!song.mp3DataUrl) {
-      toast(t("song.share.no_audio"));
-      return;
-    }
-    if (!videoSupport.supported) {
-      toast(t("song.export.video_unsupported"));
-      return;
-    }
-    setBusy("video");
-    try {
-      toast(t("song.export.video_preparing"));
-      await exportSongAsVideo(song);
-      toast.success(t("song.export.video_ready"));
-      memory
-        .reportAction({
-          content: `Exported video for "${song.title}"`,
-          event_type: "update",
-          page: "song-detail",
-          metadata: { type: "download_video", song_id: song.id },
-        })
-        .catch(() => {});
-    } catch (e) {
-      console.error(e);
-      if (e instanceof VideoExportError && e.code === "browser_unsupported") {
-        toast(t("song.export.video_unsupported"));
-      } else {
-        toast.error(t("song.export.video_failed"));
-      }
     } finally {
       setBusy(null);
     }
@@ -707,19 +665,6 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 cost={t("song.export.free") || "free"}
                 busy={busy === "poster"}
                 onClick={exportPoster}
-              />
-              <ExportRow
-                label={t("song.export.video.label") || "Audio video"}
-                hint={
-                  videoSupport.supported
-                    ? t("song.export.video_hint") || "mp4"
-                    : t("song.export.video_unsupported_hint") ||
-                      "your browser doesn't support video export"
-                }
-                cost={t("song.export.cost.video") || "free"}
-                disabled={!videoSupport.supported || !song.mp3DataUrl}
-                busy={busy === "video"}
-                onClick={exportVideo}
               />
             </motion.div>
 
