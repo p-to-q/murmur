@@ -36,6 +36,7 @@ import { getPlayer, startAudioContext } from "@/lib/music/tone-player";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { ShareTicketCard } from "@/components/song-detail/ShareTicketCard";
 import { buildShareHtml, downloadHtml } from "@/modules/export/render-share-html";
 import { downloadBlob, renderPoster } from "@/modules/export/render-poster";
 import {
@@ -77,6 +78,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState<ExportKey | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [shareCardOpen, setShareCardOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const videoSupport = useMemo(() => getVideoExportSupport(), []);
@@ -694,10 +696,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               />
               <ExportRow
                 label={t("song.export.html.label") || "Share card"}
-                hint={t("song.export.html.hint") || "self-contained html"}
+                hint={t("song.export.ticket.hint") || "ticket-style image"}
                 cost={t("song.export.free") || "free"}
-                busy={busy === "html"}
-                onClick={exportHtml}
+                busy={false}
+                onClick={() => setShareCardOpen(true)}
               />
               <ExportRow
                 label={t("song.export.poster.label") || "Poster"}
@@ -750,6 +752,20 @@ export function SongDetailScreen({ songId }: { songId: string }) {
           </div>
         </div>
       </div>
+
+      {/* Share ticket card */}
+      <ShareTicketCard
+        songId={song.id}
+        title={song.title}
+        gradient={gradient}
+        artwork={song.visualConfig.artwork}
+        durationSec={song.duration}
+        bpm={song.bpm ?? 80}
+        keySignature={song.keySignature ?? "C"}
+        createdAt={song.createdAt}
+        open={shareCardOpen}
+        onClose={() => setShareCardOpen(false)}
+      />
 
       {/* Delete confirm */}
       <AnimatePresence>
