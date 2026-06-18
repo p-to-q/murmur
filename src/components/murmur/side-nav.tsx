@@ -26,8 +26,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useSession } from "next-auth/react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import { ChevronsLeft, ChevronsRight, LinkIcon } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, LinkIcon, LogIn } from "lucide-react";
 import { createPortal } from "react-dom";
+import { GRANTS } from "@murmur/core";
 
 import { getShareInviteUrl } from "@/lib/api/share-links";
 import { copyShareInviteLink } from "@/lib/platform/share-invite";
@@ -81,6 +82,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const t = useTranslator();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
+  const { data: session } = useSession();
   const { balance } = useUserBalance();
   const { resetFlow, isPlaying, auditioningVersionId } = useMurmurStore();
   const audioActive = isPlaying || auditioningVersionId !== null;
@@ -110,6 +112,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   };
 
   const items = NAV_ITEMS.filter((it) => it.desktopNav !== false);
+  const isRegistered = Boolean(session?.user);
   // Nested rows under the active destination — a small outline that accrues
   // as the user walks through a sub-flow. Vibe -> Studio -> Name stays
   // additive: each step appears below the previous one, none replace it.
@@ -297,14 +300,20 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
             className="group flex w-full items-center gap-3 rounded-[15px] border border-[#E5DDD0] bg-white/50 px-4 py-3.5 text-left transition-colors hover:border-[#FF5924]/40 hover:bg-white/70"
           >
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F1EB] text-[#8C8780] group-hover:text-[#FF5924] transition-colors">
-              <LinkIcon className="h-3.5 w-3.5" />
+              {isRegistered ? (
+                <LinkIcon className="h-3.5 w-3.5" />
+              ) : (
+                <LogIn className="h-3.5 w-3.5" />
+              )}
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-medium text-[#1A1A1A] leading-tight truncate">
-                {t("nav.share")}
+                {isRegistered ? t("nav.share") : t("nav.login")}
               </p>
               <p className="text-[11px] text-[#B6B0A4] leading-tight mt-0.5">
-                {t("nav.share.reward")}
+                {isRegistered
+                  ? formatNotesLine(t("nav.share.reward"), GRANTS.referral)
+                  : formatNotesLine(t("nav.login.reward"), GRANTS.signup_bonus)}
               </p>
             </div>
             <span className="text-[#B6B0A4] group-hover:text-[#FF5924] transition-colors text-[13px]">›</span>
@@ -422,6 +431,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
 export function SideNavWithModal() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareInviteUrl, setShareInviteUrl] = useState<string | null>(null);
+  const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
   const t = useTranslator();
   const { data: session, status } = useSession();
 
@@ -438,27 +448,61 @@ export function SideNavWithModal() {
     };
   }, [session?.user?.id, status]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("share") !== "1") return;
+
+    params.delete("share");
+    const query = params.toString();
+    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
+    window.history.replaceState(null, "", nextUrl);
+
+    const timer = window.setTimeout(() => setShareModalOpen(true), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const handleShareClick = () => {
+    setInviteLinkCopied(false);
     setShareModalOpen(true);
+  };
+
+  const handleCopyInviteLink = () => {
     void (async () => {
       const url = shareInviteUrl
         ?? (typeof window === "undefined"
           ? ""
           : await getShareInviteUrl(window.location.origin));
       setShareInviteUrl(url);
-      await copyShareInviteLink(url, {
+      const copied = await copyShareInviteLink(url, {
         copied: t("share.copied"),
         copyFailed: t("share.copy_failed"),
       });
+      if (copied) {
+        setInviteLinkCopied(true);
+        window.setTimeout(() => setInviteLinkCopied(false), 1800);
+      }
     })();
   };
 
   return (
     <>
       <SideNavInner onShareClick={handleShareClick} />
-      <ShareCardModal open={shareModalOpen} onClose={() => setShareModalOpen(false)} />
+      <ShareCardModal
+        open={shareModalOpen}
+        onClose={() => {
+          setInviteLinkCopied(false);
+          setShareModalOpen(false);
+        }}
+        onCopyInviteLink={handleCopyInviteLink}
+        inviteLinkCopied={inviteLinkCopied}
+      />
     </>
   );
+}
+
+function formatNotesLine(template: string, notes: number): string {
+  return template.replace("{notes}", String(notes));
 }
 
 /* ── Brand glyph — small disc that breathes when audio plays ───────── */

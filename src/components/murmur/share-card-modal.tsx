@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { Check, LinkIcon, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 import { useTranslator } from "@/lib/i18n";
@@ -12,6 +12,8 @@ import { EmailLoginForm } from "@/components/auth/email-login-form";
 interface ShareCardModalProps {
   open: boolean;
   onClose: () => void;
+  onCopyInviteLink: () => void;
+  inviteLinkCopied: boolean;
 }
 
 const CAROUSEL_SLIDES = [
@@ -95,7 +97,12 @@ function initialLayer(): CarouselLayer {
   };
 }
 
-export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
+export function ShareCardModal({
+  open,
+  onClose,
+  onCopyInviteLink,
+  inviteLinkCopied,
+}: ShareCardModalProps) {
   const t = useTranslator();
   const { data: session } = useSession();
   const [showEmail, setShowEmail] = useState(false);
@@ -104,20 +111,19 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
   const [layers, setLayers] = useState<CarouselLayer[]>(() => [initialLayer()]);
   const [isMoving, setIsMoving] = useState(false);
 
-  useEffect(() => {
-    if (session?.user) {
-      onClose();
-    }
-  }, [session, onClose]);
+  const handleClose = useCallback(() => {
+    setShowEmail(false);
+    onClose();
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") handleClose();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+  }, [open, handleClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -191,7 +197,7 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-md"
-          onClick={onClose}
+          onClick={handleClose}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -266,7 +272,7 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
                     className="h-7 w-auto brightness-0 invert drop-shadow"
                   />
                   <button
-                    onClick={onClose}
+                    onClick={handleClose}
                     aria-label={t("common.cancel")}
                     className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[#1A1A1A] backdrop-blur-sm transition-colors hover:bg-white"
                   >
@@ -281,11 +287,34 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
                     {t("share.tagline")}
                   </h2>
 
-                  {showEmail ? (
-                    <EmailLoginForm className="text-left" />
+                  {session?.user ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-center gap-1.5 text-[12px] text-[#9E978C]">
+                        <Check className="h-3.5 w-3.5" />
+                        {t("share.logged_in")}
+                      </div>
+                      <button
+                        onClick={onCopyInviteLink}
+                        className="flex w-full items-center justify-center gap-3 rounded-full bg-[#EBEBEB] px-6 py-4 text-[16px] font-medium text-[#1A1A1A] transition-colors hover:bg-[#DCDCDC]"
+                      >
+                        {inviteLinkCopied ? (
+                          <Check className="h-5 w-5" />
+                        ) : (
+                          <LinkIcon className="h-5 w-5" />
+                        )}
+                        {inviteLinkCopied ? t("share.copied_short") : t("share.copy_link")}
+                      </button>
+                    </div>
+                  ) : showEmail ? (
+                    <EmailLoginForm
+                      className="text-left"
+                      onSuccess={() => {
+                        window.location.href = "/?share=1";
+                      }}
+                    />
                   ) : (
                     <AuthButtons
-                      callbackUrl="/"
+                      callbackUrl="/?share=1"
                       onEmailClick={() => setShowEmail(true)}
                     />
                   )}

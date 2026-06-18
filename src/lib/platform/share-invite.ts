@@ -8,10 +8,10 @@ interface ShareInviteCopyMessages {
 export async function copyShareInviteLink(
   url: string,
   messages: ShareInviteCopyMessages,
-) {
+): Promise<boolean> {
   if (!url || typeof window === "undefined") {
     toast.error(messages.copyFailed);
-    return;
+    return false;
   }
 
   try {
@@ -21,11 +21,14 @@ export async function copyShareInviteLink(
       throw new Error("clipboard unavailable");
     }
     toast.success(messages.copied);
+    return true;
   } catch {
     if (copyTextWithSelection(url)) {
       toast.success(messages.copied);
+      return true;
     } else {
       toast.error(messages.copyFailed);
+      return false;
     }
   }
 }
