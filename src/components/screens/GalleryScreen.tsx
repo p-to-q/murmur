@@ -11,6 +11,7 @@ import { useTranslator } from "@/lib/i18n";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import type { SongCard as SongCardType } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { FloatingMusicNotes } from "@/components/murmur/floating-music-notes";
 import { SongCard } from "@/components/gallery/SongCard";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
 import { ARTWORK_CATALOG } from "@/presets/artworks/catalog";
@@ -218,42 +219,7 @@ export function GalleryScreen() {
           transition={{ delay: 0.35, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="relative z-10 flex flex-col items-center px-5 md:px-12 py-8 md:py-12 max-w-2xl mx-auto text-center"
         >
-          <svg
-            width="160"
-            height="160"
-            viewBox="0 0 120 120"
-            fill="none"
-            className="opacity-20"
-          >
-            <motion.circle
-              initial={{ scale: 0.75, opacity: 0.15 }}
-              animate={{ scale: 1, opacity: 0.5 }}
-              transition={{
-                duration: 1.6,
-                repeat: Infinity,
-                repeatType: "reverse",
-                ease: "easeInOut",
-              }}
-              cx="60"
-              cy="80"
-              r="12"
-              fill="#FF5924"
-            />
-            <motion.path
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{
-                duration: 1.6,
-                repeat: Infinity,
-                repeatType: "reverse",
-                ease: "easeInOut",
-              }}
-              d="M 72 80 L 72 30 Q 72 20 82 22 L 100 26"
-              stroke="#FF5924"
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-          </svg>
+          <FloatingMusicNotes size={160} className="opacity-20" />
         </motion.div>
       )}
 
