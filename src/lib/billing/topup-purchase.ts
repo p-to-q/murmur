@@ -1,7 +1,9 @@
 import {
   CUSTOM_TOPUP_ID,
   getCustomTopupQuote,
+  getCustomTopupQuoteCny,
   getTopupSku,
+  getRegionalPrice,
   topupNotesGranted,
 } from "@murmur/core";
 
@@ -44,10 +46,16 @@ function resolveFromMetadata(
   let purchaseMetadata: Record<string, unknown>;
 
   if (skuId === CUSTOM_TOPUP_ID) {
-    const quote = getCustomTopupQuote(customAmountUsd);
+    // Try CNY quote first if metadata signals a CNY custom purchase
+    const customAmountCny = Number(metadata.customAmountCny);
+    const cnyQuote =
+      Number.isFinite(customAmountCny) && customAmountCny > 0
+        ? getCustomTopupQuoteCny(customAmountCny)
+        : null;
+    const quote = cnyQuote ?? getCustomTopupQuote(customAmountUsd);
     if (!quote) {
       throw new InvalidTopupPurchaseError(
-        `purchase ${providerRef} references invalid custom amount "${metadata.customAmountUsd ?? ""}"`,
+        `purchase ${providerRef} references invalid custom amount "${metadata.customAmountUsd ?? metadata.customAmountCny ?? ""}"`,
       );
     }
     productId = quote.id;
@@ -57,7 +65,9 @@ function resolveFromMetadata(
       Number.isFinite(metadataNotes) && metadataNotes > 0
         ? Math.floor(metadataNotes)
         : quote.notesGranted;
-    purchaseMetadata = { skuId: productId, customAmountUsd: quote.amountUsd };
+    purchaseMetadata = cnyQuote
+      ? { skuId: productId, customAmountCny: cnyQuote.faceAmount }
+      : { skuId: productId, customAmountUsd: quote.faceAmount };
     assertPaidAmountMatchesQuote(
       providerRef,
       amountCents,
@@ -77,9 +87,14 @@ function resolveFromMetadata(
         `purchase ${providerRef} references unknown SKU "${skuId}"`,
       );
     }
+    // When the payment was in CNY, validate against the CNY price
+    const regional =
+      currency.toUpperCase() === "CNY"
+        ? getRegionalPrice(sku, "CNY")
+        : getRegionalPrice(sku, "USD");
     productId = sku.id;
-    defaultAmountCents = sku.defaultPriceCents;
-    defaultCurrency = sku.defaultCurrency;
+    defaultAmountCents = regional.priceCents;
+    defaultCurrency = regional.currency;
     notesGranted =
       Number.isFinite(metadataNotes) && metadataNotes > 0
         ? Math.floor(metadataNotes)
@@ -88,9 +103,9 @@ function resolveFromMetadata(
     assertPaidAmountMatchesQuote(
       providerRef,
       amountCents,
-      sku.defaultPriceCents,
+      regional.priceCents,
       currency,
-      sku.defaultCurrency,
+      regional.currency,
     );
     const expectedNotes = topupNotesGranted(sku);
     if (Number.isFinite(metadataNotes) && metadataNotes > 0 && metadataNotes !== expectedNotes) {

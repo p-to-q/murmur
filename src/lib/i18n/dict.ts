@@ -379,6 +379,7 @@ export const DICT = {
   "song.export.audio.hint":   { zh: "mp3", en: "mp3" },
   "song.export.html.label":   { zh: "分享卡", en: "Share card" },
   "song.export.html.hint":    { zh: "单文件 html", en: "self-contained html" },
+  "song.export.ticket.hint":  { zh: "票券风格图片", en: "ticket-style image" },
   "song.export.poster.label": { zh: "海报", en: "Poster" },
   "song.export.poster.hint":  { zh: "png", en: "png" },
   "song.export.video.label":  { zh: "音乐视频", en: "Audio video" },
@@ -602,6 +603,11 @@ export const DICT = {
   "topup.plan_label":    { zh: "计划", en: "Plan" },
   "topup.restoring":     { zh: "恢复中…", en: "Restoring…" },
   "checkout.confirming_grant": { zh: "正在确认到账…", en: "Confirming your notes…" },
+
+  // ── Payment methods (CNY region) ──────────────────────────────────
+  "topup.payment.alipay":    { zh: "支付宝",                       en: "Alipay" },
+  "topup.payment.wechat":    { zh: "微信支付",                     en: "WeChat Pay" },
+  "topup.payment.supported": { zh: "支持 支付宝 · 微信支付",       en: "Supports Alipay · WeChat Pay" },
 } as const;
 
 export type TKey = keyof typeof DICT;

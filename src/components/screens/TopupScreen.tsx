@@ -14,18 +14,18 @@ import { toast } from "sonner";
 import {
   CUSTOM_TOPUP_ID,
   CUSTOM_TOPUP_MAX_USD,
-  CUSTOM_TOPUP_MIN_USD,
   getCustomTopupQuote,
   TOPUP_SKUS,
-  topupNotesGranted,
 } from "@murmur/core";
 
 import { useI18nStore, useTranslator } from "@/lib/i18n";
+import { useRegionalSkus } from "@/lib/hooks/use-regional-skus";
 import { useTopupSurface } from "@/lib/hooks/use-topup-surface";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
 const SLIDER_MAX_USD = Math.min(100, CUSTOM_TOPUP_MAX_USD);
+const SLIDER_MAX_CNY = 500;
 const PLAN_LABEL_KEYS: Record<string, string> = {
   topup_30_notes: "topup.plan.starter",
   topup_120_notes: "topup.plan.creator",
@@ -76,25 +76,47 @@ export function TopupScreen() {
   const lang = useI18nStore((s) => s.lang);
   const { balance, isLoading, refresh } = useUserBalance();
   const { data: topupSurface, refresh: refreshTopupSurface } = useTopupSurface();
+  const { skus: regionalSkus, currency, customConfig } = useRegionalSkus();
+
+  // Use regional SKUs when available, fall back to hardcoded
+  const effectiveSkus = regionalSkus.length > 0 ? regionalSkus : TOPUP_SKUS;
+  const isCny = currency === "CNY";
+  const currencySymbol = isCny ? "¥" : "$";
+  const sliderMin = customConfig.minAmount;
+  const sliderMax = isCny ? Math.min(SLIDER_MAX_CNY, customConfig.maxAmount) : SLIDER_MAX_USD;
+  const notesPerUnit = customConfig.notesPerUnit;
 
   const [selectedId, setSelectedId] = useState<string>(
     TOPUP_SKUS.find((s) => s.highlight === "popular")?.id ?? TOPUP_SKUS[0]!.id,
   );
-  const [customAmount, setCustomAmount] = useState(10);
+  const [customAmount, setCustomAmount] = useState(isCny ? 50 : 10);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Reset custom amount default when currency changes
+  useEffect(() => {
+    setCustomAmount(isCny ? 50 : 10);
+  }, [isCny]);
 
   const notesSpring = useSpring(0, { stiffness: 100, damping: 20 });
   const balanceUSDSpring = useSpring(0, { stiffness: 100, damping: 20 });
 
-  const selected = TOPUP_SKUS.find((s) => s.id === selectedId);
+  const selected = effectiveSkus.find((s) => s.id === selectedId);
   const customQuote = useMemo(() => getCustomTopupQuote(customAmount), [customAmount]);
+  const customDisplay = isCny
+    ? `¥${customAmount.toFixed(2)}`
+    : customQuote?.display ?? "$0";
+  const customNotes = isCny
+    ? customAmount * notesPerUnit
+    : customQuote?.notesGranted ?? 0;
   const displayAmount = selectedId === CUSTOM_TOPUP_ID
-    ? customQuote?.display ?? "$0"
+    ? customDisplay
     : selected?.display ?? "$0";
   const displayNotes = selectedId === CUSTOM_TOPUP_ID
-    ? customQuote?.notesGranted ?? 0
-    : selected ? topupNotesGranted(selected) : 0;
+    ? customNotes
+    : selected
+      ? selected.notes + (selected.bonusNotes ?? 0)
+      : 0;
 
   const currentBalance = balance?.notes ?? 0;
   const purchasedPlanKey = topupSurface?.latestPlanSkuId
@@ -113,12 +135,17 @@ export function TopupScreen() {
 
   const handleProceed = () => {
     if (selectedId === CUSTOM_TOPUP_ID) {
-      if (!customQuote) return;
-      router.push(`/topup/checkout?customAmountUsd=${encodeURIComponent(String(customQuote.amountUsd))}`);
+      if (isCny) {
+        router.push(`/topup/checkout?customAmountCny=${encodeURIComponent(String(customAmount))}&currency=CNY`);
+      } else {
+        if (!customQuote) return;
+        router.push(`/topup/checkout?customAmountUsd=${encodeURIComponent(String(customQuote.faceAmount))}`);
+      }
       return;
     }
     if (!selected) return;
-    router.push(`/topup/checkout?sku=${encodeURIComponent(selected.id)}`);
+    const currencyParam = isCny ? "&currency=CNY" : "";
+    router.push(`/topup/checkout?sku=${encodeURIComponent(selected.id)}${currencyParam}`);
   };
 
   const animateBalance = useCallback(
@@ -215,7 +242,7 @@ export function TopupScreen() {
 
   const displayNotesBalance = useTransform(notesSpring, (v) => Math.round(v));
   const displayBalanceUSD = useTransform(balanceUSDSpring, (v) => v.toFixed(2));
-  const sliderSpan = SLIDER_MAX_USD - CUSTOM_TOPUP_MIN_USD;
+  const sliderSpan = sliderMax - sliderMin;
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
@@ -309,10 +336,11 @@ export function TopupScreen() {
               </div>
 
               <div className="grid grid-cols-3 gap-3 mb-6">
-                {TOPUP_SKUS.map((sku, idx) => {
+                {effectiveSkus.map((sku, idx) => {
                   const isSelected = sku.id === selectedId;
                   const tierNames = [t("topup.starter"), t("topup.creator"), t("topup.patron")];
-                  const songCount = Math.floor(topupNotesGranted(sku) / 5);
+                  const skuNotes = sku.notes + (sku.bonusNotes ?? 0);
+                  const songCount = Math.floor(skuNotes / 5);
 
                   return (
                     <motion.button
@@ -347,9 +375,9 @@ export function TopupScreen() {
                       </p>
                       <div className="flex items-baseline justify-center gap-1">
                         <span className="font-serif text-[#1A1A1A] text-[16px]">{sku.notes}</span>
-                        {sku.bonusNotes && (
+                        {sku.bonusNotes ? (
                           <span className="font-serif text-[#5F8A6B] text-[13px]">+{sku.bonusNotes}</span>
-                        )}
+                        ) : null}
                         <span className="text-[11px] text-[#B7AEA1] ml-0.5">{t("topup.notes")}</span>
                       </div>
                     </motion.button>
@@ -379,16 +407,16 @@ export function TopupScreen() {
                   </div>
                   <div className="text-right">
                     <p className="font-serif text-[#1A1A1A] text-[32px] leading-none">
-                      ${customAmount}
+                      {currencySymbol}{customAmount}
                     </p>
                   </div>
                 </div>
 
                 <div className="relative mb-6 pt-2">
                   <div className="mb-3 flex justify-between text-[11px] font-medium text-[#B7AEA1]">
-                    <span>${CUSTOM_TOPUP_MIN_USD}</span>
-                    <span className="absolute left-1/2 -translate-x-1/2">${Math.round(SLIDER_MAX_USD / 2)}</span>
-                    <span>${SLIDER_MAX_USD}</span>
+                    <span>{currencySymbol}{sliderMin}</span>
+                    <span className="absolute left-1/2 -translate-x-1/2">{currencySymbol}{Math.round(sliderMax / 2)}</span>
+                    <span>{currencySymbol}{sliderMax}</span>
                   </div>
 
                   <div className="relative">
@@ -396,16 +424,16 @@ export function TopupScreen() {
                       <div
                         className="absolute h-1 rounded-full bg-[#8C8780] transition-all duration-150"
                         style={{
-                          width: `${((customAmount - CUSTOM_TOPUP_MIN_USD) / sliderSpan) * 100}%`,
+                          width: `${((customAmount - sliderMin) / sliderSpan) * 100}%`,
                         }}
                       />
                     </div>
 
                     <input
                       type="range"
-                      min={String(CUSTOM_TOPUP_MIN_USD)}
-                      max={String(SLIDER_MAX_USD)}
-                      value={Math.min(customAmount, SLIDER_MAX_USD)}
+                      min={String(sliderMin)}
+                      max={String(sliderMax)}
+                      value={Math.min(customAmount, sliderMax)}
                       onChange={(e) => setCustomAmount(Number(e.target.value))}
                       aria-label={t("topup.slider.label")}
                       className="absolute z-10 h-8 w-full cursor-grab opacity-0 active:cursor-grabbing"
@@ -415,7 +443,7 @@ export function TopupScreen() {
                     <div
                       className="pointer-events-none absolute -top-3 z-20 h-7 w-7 rounded-full border-[3px] border-white shadow-[0_2px_12px_rgba(0,0,0,0.25)] transition-all duration-150"
                       style={{
-                        left: `calc(${((Math.min(customAmount, SLIDER_MAX_USD) - CUSTOM_TOPUP_MIN_USD) / sliderSpan) * 100}% - 14px)`,
+                        left: `calc(${((Math.min(customAmount, sliderMax) - sliderMin) / sliderSpan) * 100}% - 14px)`,
                         ...paperTextureStyle,
                       }}
                     />
@@ -426,17 +454,17 @@ export function TopupScreen() {
                   <div className="max-w-[200px] flex-1">
                     <input
                       type="number"
-                      min={String(CUSTOM_TOPUP_MIN_USD)}
-                      max={String(CUSTOM_TOPUP_MAX_USD)}
+                      min={String(sliderMin)}
+                      max={String(customConfig.maxAmount)}
                       value={customAmount}
                       onChange={(e) => {
                         const value = Number(e.target.value);
                         setCustomAmount(
                           Math.min(
-                            CUSTOM_TOPUP_MAX_USD,
+                            customConfig.maxAmount,
                             Math.max(
-                              CUSTOM_TOPUP_MIN_USD,
-                              Number.isFinite(value) ? Math.floor(value) : CUSTOM_TOPUP_MIN_USD,
+                              sliderMin,
+                              Number.isFinite(value) ? Math.floor(value) : sliderMin,
                             ),
                           ),
                         );
@@ -447,7 +475,7 @@ export function TopupScreen() {
                     />
                   </div>
                   <p className="text-[13px] leading-none text-[#B7AEA1] sm:whitespace-nowrap">
-                    ≈ {Math.floor(customAmount * 20)} {t("topup.notes")}
+                    ≈ {Math.floor(customAmount * notesPerUnit)} {t("topup.notes")}
                   </p>
                 </div>
               </motion.div>
@@ -463,6 +491,12 @@ export function TopupScreen() {
                     .replace("{notes}", String(displayNotes))
                     .replace("{price}", displayAmount)}
                 </motion.button>
+
+                {isCny && (
+                  <p className="mt-2 text-center text-[11px] text-[#8C8780]">
+                    {t("topup.payment.supported")}
+                  </p>
+                )}
 
                 <div className="mt-3 flex items-center justify-center gap-3 text-[11px] text-[#8C8780]">
                   <button
@@ -495,6 +529,12 @@ export function TopupScreen() {
                 .replace("{notes}", String(displayNotes))
                 .replace("{price}", displayAmount)}
             </motion.button>
+
+            {isCny && (
+              <p className="mt-2 text-center text-[11px] text-[#8C8780]">
+                {t("topup.payment.supported")}
+              </p>
+            )}
 
             <div className="mt-3 flex items-center justify-center gap-3 text-[11px] text-[#8C8780]">
               <button

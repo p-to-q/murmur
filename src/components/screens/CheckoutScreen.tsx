@@ -25,9 +25,12 @@ import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import {
   getCustomTopupQuote,
+  getCustomTopupQuoteCny,
+  getRegionalPrice,
   getTopupSku,
   topupNotesGranted,
   TOPUP_SKUS,
+  type Currency,
 } from "@murmur/core";
 
 import { useTranslator } from "@/lib/i18n";
@@ -46,9 +49,32 @@ export function CheckoutScreen() {
 
   const skuId = params?.get("sku") ?? DEFAULT_SKU_ID;
   const customAmountParam = params?.get("customAmountUsd");
+  const customAmountCnyParam = params?.get("customAmountCny");
+  const currencyParam = params?.get("currency");
+  const requestedCurrency: Currency =
+    currencyParam?.toUpperCase() === "CNY" ? "CNY" : "USD";
   const returnStatus = params?.get("status");
   const purchase = useMemo(
     () => {
+      // CNY custom topup
+      if (requestedCurrency === "CNY" && customAmountCnyParam) {
+        const amountCny = Number(customAmountCnyParam);
+        const cnyQuote = Number.isFinite(amountCny)
+          ? getCustomTopupQuoteCny(amountCny)
+          : null;
+        if (cnyQuote) {
+          return {
+            kind: "custom" as const,
+            id: cnyQuote.id,
+            display: cnyQuote.display,
+            notesGranted: cnyQuote.notesGranted,
+            customAmountCny: cnyQuote.faceAmount,
+            currency: "CNY" as Currency,
+          };
+        }
+      }
+
+      // USD custom topup
       const customAmountUsd = customAmountParam ? Number(customAmountParam) : Number.NaN;
       const customQuote = Number.isFinite(customAmountUsd)
         ? getCustomTopupQuote(customAmountUsd)
@@ -59,19 +85,23 @@ export function CheckoutScreen() {
           id: customQuote.id,
           display: customQuote.display,
           notesGranted: customQuote.notesGranted,
-          customAmountUsd: customQuote.amountUsd,
+          customAmountUsd: customQuote.faceAmount,
+          currency: "USD" as Currency,
         };
       }
 
+      // Fixed SKU
       const sku = getTopupSku(skuId) ?? getTopupSku(DEFAULT_SKU_ID) ?? TOPUP_SKUS[0]!;
+      const regional = getRegionalPrice(sku, requestedCurrency);
       return {
         kind: "sku" as const,
         id: sku.id,
-        display: sku.display,
+        display: regional.display,
         notesGranted: topupNotesGranted(sku),
+        currency: regional.currency,
       };
     },
-    [customAmountParam, skuId],
+    [customAmountParam, customAmountCnyParam, requestedCurrency, skuId],
   );
   const skuNotes = purchase.notesGranted;
 
@@ -145,14 +175,17 @@ export function CheckoutScreen() {
 
   const beginCheckout = useCallback(async () => {
     try {
+      const checkoutBody =
+        purchase.kind === "custom"
+          ? "customAmountCny" in purchase && purchase.customAmountCny != null
+            ? { customAmountCny: purchase.customAmountCny, currency: "CNY" }
+            : { customAmountUsd: purchase.customAmountUsd, currency: purchase.currency }
+          : { sku: purchase.id, currency: purchase.currency };
+
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          purchase.kind === "custom"
-            ? { customAmountUsd: purchase.customAmountUsd }
-            : { sku: purchase.id },
-        ),
+        body: JSON.stringify(checkoutBody),
       });
 
       if (response.ok) {
@@ -298,7 +331,14 @@ export function CheckoutScreen() {
                         "When you finish, you'll return here automatically. You can also close the tab and come back."}
                     </p>
                     <button
-                      onClick={() => router.push(`/topup/checkout?${purchase.kind === "custom" ? `customAmountUsd=${purchase.customAmountUsd}` : `sku=${purchase.id}`}&status=success`)}
+                      onClick={() => {
+                        const base = purchase.kind === "custom"
+                          ? "customAmountCny" in purchase && purchase.customAmountCny != null
+                            ? `customAmountCny=${purchase.customAmountCny}&currency=CNY`
+                            : `customAmountUsd=${"customAmountUsd" in purchase ? purchase.customAmountUsd : ""}`
+                          : `sku=${purchase.id}${purchase.currency === "CNY" ? "&currency=CNY" : ""}`;
+                        router.push(`/topup/checkout?${base}&status=success`);
+                      }}
                       className="text-[13px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] underline-mm transition-colors"
                     >
                       {t("checkout.already_paid") || "I already paid"}

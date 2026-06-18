@@ -85,6 +85,9 @@ export const GRANTS = Object.freeze({
   referral: 100,
 });
 
+/** Supported payment currencies. */
+export type Currency = "USD" | "CNY";
+
 /**
  * Top-up SKU display defaults.
  *
@@ -103,8 +106,10 @@ export interface TopupSku {
   /** Extra notes granted on top of `notes` (top-tier incentive). */
   bonusNotes?: number;
   defaultPriceCents: number;
-  defaultCurrency: "USD" | "CNY";
+  defaultCurrency: Currency;
   display: string;
+  /** CNY price in fen (1/100 yuan). Optional — only present for CNY-enabled SKUs. */
+  cnyPriceCents?: number;
   highlight?: "popular" | "best_value";
 }
 
@@ -113,13 +118,18 @@ export const CUSTOM_TOPUP_MIN_USD = 1;
 export const CUSTOM_TOPUP_MAX_USD = 999;
 export const CUSTOM_TOPUP_NOTES_PER_USD = 20;
 
+export const CUSTOM_TOPUP_MIN_CNY = 5;
+export const CUSTOM_TOPUP_MAX_CNY = 6999;
+export const CUSTOM_TOPUP_NOTES_PER_CNY = 3;
+
 export interface CustomTopupQuote {
   id: typeof CUSTOM_TOPUP_ID;
-  amountUsd: number;
+  /** Face-value amount in `defaultCurrency` (USD integer or CNY integer). */
+  faceAmount: number;
   amountCents: number;
   notesGranted: number;
   display: string;
-  defaultCurrency: "USD";
+  defaultCurrency: Currency;
 }
 
 export const TOPUP_SKUS: ReadonlyArray<TopupSku> = Object.freeze([
@@ -129,6 +139,7 @@ export const TOPUP_SKUS: ReadonlyArray<TopupSku> = Object.freeze([
     defaultPriceCents: 199,
     defaultCurrency: "USD",
     display: "$1.99",
+    cnyPriceCents: 1290,
   },
   {
     id: "topup_120_notes",
@@ -137,6 +148,7 @@ export const TOPUP_SKUS: ReadonlyArray<TopupSku> = Object.freeze([
     defaultPriceCents: 599,
     defaultCurrency: "USD",
     display: "$5.99",
+    cnyPriceCents: 4290,
     highlight: "popular",
   },
   {
@@ -146,6 +158,7 @@ export const TOPUP_SKUS: ReadonlyArray<TopupSku> = Object.freeze([
     defaultPriceCents: 1499,
     defaultCurrency: "USD",
     display: "$14.99",
+    cnyPriceCents: 10800,
     highlight: "best_value",
   },
 ]);
@@ -173,11 +186,52 @@ export function getCustomTopupQuote(amountUsd: number): CustomTopupQuote | null 
   if (!isValidCustomTopupAmount(amountUsd)) return null;
   return {
     id: CUSTOM_TOPUP_ID,
-    amountUsd,
+    faceAmount: amountUsd,
     amountCents: amountUsd * 100,
     notesGranted: amountUsd * CUSTOM_TOPUP_NOTES_PER_USD,
     display: `$${amountUsd}`,
     defaultCurrency: "USD",
+  };
+}
+
+export function isValidCustomTopupAmountCny(amountCny: unknown): amountCny is number {
+  return (
+    typeof amountCny === "number"
+    && Number.isInteger(amountCny)
+    && amountCny >= CUSTOM_TOPUP_MIN_CNY
+    && amountCny <= CUSTOM_TOPUP_MAX_CNY
+  );
+}
+
+export function getCustomTopupQuoteCny(amountCny: number): CustomTopupQuote | null {
+  if (!isValidCustomTopupAmountCny(amountCny)) return null;
+  return {
+    id: CUSTOM_TOPUP_ID,
+    faceAmount: amountCny,
+    amountCents: amountCny * 100,
+    notesGranted: amountCny * CUSTOM_TOPUP_NOTES_PER_CNY,
+    display: `¥${amountCny.toFixed(2)}`,
+    defaultCurrency: "CNY",
+  };
+}
+
+/** Regional price for a SKU in the given currency. */
+export function getRegionalPrice(
+  sku: TopupSku,
+  currency: Currency,
+): { priceCents: number; currency: Currency; display: string } {
+  if (currency === "CNY" && sku.cnyPriceCents != null) {
+    const yuan = sku.cnyPriceCents / 100;
+    return {
+      priceCents: sku.cnyPriceCents,
+      currency: "CNY",
+      display: `¥${yuan.toFixed(2)}`,
+    };
+  }
+  return {
+    priceCents: sku.defaultPriceCents,
+    currency: "USD",
+    display: sku.display,
   };
 }
 

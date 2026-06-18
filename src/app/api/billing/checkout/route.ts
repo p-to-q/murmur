@@ -6,8 +6,9 @@
  * in /api/billing/webhook when `order.completed` arrives.
  *
  * Body:
- *   - { sku: string } for canonical fixed tiers
- *   - { customAmountUsd: number } for the custom top-up flow
+ *   - { sku: string, currency?: "USD"|"CNY" } for canonical fixed tiers
+ *   - { customAmountUsd: number } for the USD custom top-up flow
+ *   - { customAmountCny: number, currency: "CNY" } for the CNY custom top-up flow
  *
  * Errors:
  *   400 invalid_topup_request
@@ -21,8 +22,11 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   CUSTOM_TOPUP_ID,
   getCustomTopupQuote,
+  getCustomTopupQuoteCny,
+  getRegionalPrice,
   getTopupSku,
   topupNotesGranted,
+  type Currency,
 } from "@murmur/core";
 
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
@@ -44,6 +48,8 @@ const CHECKOUT_RATE_LIMIT = { capacity: 10, refillWindowMs: 60_000 };
 type CheckoutRequestBody = {
   sku?: unknown;
   customAmountUsd?: unknown;
+  customAmountCny?: unknown;
+  currency?: unknown;
 };
 
 type CheckoutProduct =
@@ -68,7 +74,8 @@ type CheckoutProduct =
       productName: string;
       productDescription: string;
       successQuery: string;
-      customAmountUsd: number;
+      customAmountUsd?: number;
+      customAmountCny?: number;
     };
 
 function resolveAppOrigin(request: NextRequest): string {
@@ -78,6 +85,30 @@ function resolveAppOrigin(request: NextRequest): string {
 }
 
 function parseCheckoutProduct(body: CheckoutRequestBody): CheckoutProduct | null {
+  const requestedCurrency: Currency =
+    typeof body.currency === "string" && body.currency.toUpperCase() === "CNY"
+      ? "CNY"
+      : "USD";
+
+  // CNY custom topup
+  if (typeof body.customAmountCny === "number" && requestedCurrency === "CNY") {
+    const quote = getCustomTopupQuoteCny(body.customAmountCny);
+    if (!quote) return null;
+    return {
+      kind: "custom",
+      skuId: quote.id,
+      display: quote.display,
+      amountCents: quote.amountCents,
+      currency: quote.defaultCurrency,
+      notesGranted: quote.notesGranted,
+      productName: `Murmur — ${quote.notesGranted} notes`,
+      productDescription: `${quote.notesGranted} notes from a custom top up`,
+      successQuery: `customAmountCny=${encodeURIComponent(String(quote.faceAmount))}&currency=CNY`,
+      customAmountCny: quote.faceAmount,
+    };
+  }
+
+  // USD custom topup
   if (typeof body.customAmountUsd === "number") {
     const quote = getCustomTopupQuote(body.customAmountUsd);
     if (!quote) return null;
@@ -90,26 +121,28 @@ function parseCheckoutProduct(body: CheckoutRequestBody): CheckoutProduct | null
       notesGranted: quote.notesGranted,
       productName: `Murmur — ${quote.notesGranted} notes`,
       productDescription: `${quote.notesGranted} notes from a custom top up`,
-      successQuery: `customAmountUsd=${encodeURIComponent(String(quote.amountUsd))}`,
-      customAmountUsd: quote.amountUsd,
+      successQuery: `customAmountUsd=${encodeURIComponent(String(quote.faceAmount))}`,
+      customAmountUsd: quote.faceAmount,
     };
   }
 
+  // Fixed SKU
   const skuId = typeof body.sku === "string" ? body.sku : "";
   const sku = getTopupSku(skuId);
   if (!sku) return null;
 
   const notesGranted = topupNotesGranted(sku);
+  const regional = getRegionalPrice(sku, requestedCurrency);
   return {
     kind: "sku",
     skuId: sku.id,
-    display: sku.display,
-    amountCents: sku.defaultPriceCents,
-    currency: sku.defaultCurrency,
+    display: regional.display,
+    amountCents: regional.priceCents,
+    currency: regional.currency,
     notesGranted,
     productName: `Murmur — ${notesGranted} notes`,
     productDescription: `${sku.notes} notes${sku.bonusNotes ? ` + ${sku.bonusNotes} bonus` : ""}`,
-    successQuery: `sku=${encodeURIComponent(sku.id)}`,
+    successQuery: `sku=${encodeURIComponent(sku.id)}&currency=${regional.currency}`,
   };
 }
 
@@ -124,7 +157,11 @@ function checkoutMetadata(
     purchaseKind: product.kind === "custom" ? "custom" : "sku",
   };
   if (product.kind === "custom") {
-    base.customAmountUsd = String(product.customAmountUsd);
+    if (product.customAmountCny != null) {
+      base.customAmountCny = String(product.customAmountCny);
+    } else if (product.customAmountUsd != null) {
+      base.customAmountUsd = String(product.customAmountUsd);
+    }
     base.customAmountCents = String(product.amountCents);
   }
   return base;
@@ -144,7 +181,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "invalid_topup_request",
-        message: "Provide a valid SKU or customAmountUsd between 1 and 999.",
+        message: "Provide a valid SKU, customAmountUsd (1-999), or customAmountCny (5-6999) with currency.",
         requestId,
       },
       { status: 400, headers: { "X-Request-Id": requestId } },
