@@ -40,7 +40,9 @@ const updateSongSchema = z.object({
 type SongUpdatePayload = z.infer<typeof updateSongSchema>;
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await resolveRequestAuth(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowGuestSongsPreview(),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const { id } = await params;
@@ -74,7 +76,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await resolveRequestAuth(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowGuestSongsPreview(),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const { id } = await params;
@@ -141,7 +145,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await resolveRequestAuth(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowGuestSongsPreview(),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const { id } = await params;
@@ -191,6 +197,11 @@ function getRequestHostname(req: NextRequest): string | null {
   } catch {
     return null;
   }
+}
+
+function shouldAllowGuestSongsPreview(): boolean {
+  if (process.env.NODE_ENV === "development") return true;
+  return process.env.MURMUR_AUTH_MODE?.trim().toLowerCase() === "local";
 }
 
 function isDatabaseUnavailable(error: unknown): boolean {

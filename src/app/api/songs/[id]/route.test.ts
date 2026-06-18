@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
@@ -8,6 +8,8 @@ let nextAuth: ResolvedRequestAuth = {
   source: "session",
   sessionId: "sess_owner",
 };
+let lastResolveAuthOptions: { allowGuestPreview?: boolean } | null = null;
+const originalAuthMode = process.env.MURMUR_AUTH_MODE;
 
 let nextSong: Record<string, unknown> | null = {
   id: "song_owner",
@@ -20,9 +22,13 @@ let nextUpdatedSong: Record<string, unknown> | null = {
   title: "Renamed Song",
 };
 let nextDeleteResult = true;
+let getSongError: unknown = null;
 let updateSongError: unknown = null;
 
-const getSongByIdForUserMock = mock(async () => nextSong);
+const getSongByIdForUserMock = mock(async () => {
+  if (getSongError) throw getSongError;
+  return nextSong;
+});
 const updateSongForUserMock = mock(async () => {
   if (updateSongError) throw updateSongError;
   return nextUpdatedSong;
@@ -30,7 +36,10 @@ const updateSongForUserMock = mock(async () => {
 const deleteSongForUserMock = mock(async () => nextDeleteResult);
 
 mock.module("@/lib/auth", () => ({
-  resolveRequestAuth: async () => nextAuth,
+  resolveRequestAuth: async (_req: NextRequest, options: { allowGuestPreview?: boolean } = {}) => {
+    lastResolveAuthOptions = options;
+    return nextAuth;
+  },
 }));
 
 mock.module("@/lib/db/queries/songs", () => ({
@@ -62,6 +71,8 @@ function ctx(id = "song_owner") {
 }
 
 beforeEach(() => {
+  if (originalAuthMode === undefined) delete process.env.MURMUR_AUTH_MODE;
+  else process.env.MURMUR_AUTH_MODE = originalAuthMode;
   nextAuth = {
     ok: true,
     user: { id: "usr_owner", email: null, name: "Owner", avatarUrl: null },
@@ -79,11 +90,18 @@ beforeEach(() => {
     title: "Renamed Song",
   };
   nextDeleteResult = true;
+  getSongError = null;
   updateSongError = null;
+  lastResolveAuthOptions = null;
   getSongByIdForUserMock.mockClear();
   updateSongForUserMock.mockClear();
   deleteSongForUserMock.mockClear();
   resetLocalSongFallbackForTests();
+});
+
+afterEach(() => {
+  if (originalAuthMode === undefined) delete process.env.MURMUR_AUTH_MODE;
+  else process.env.MURMUR_AUTH_MODE = originalAuthMode;
 });
 
 describe("GET /api/songs/[id]", () => {
@@ -94,6 +112,7 @@ describe("GET /api/songs/[id]", () => {
     expect(getSongByIdForUserMock).toHaveBeenCalledWith("song_owner", "usr_owner");
     const body = await response.json() as Record<string, unknown>;
     expect(body.userId).toBe("usr_owner");
+    expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
   });
 
   it("does not expose guest songs to a different authenticated user", async () => {
@@ -103,6 +122,56 @@ describe("GET /api/songs/[id]", () => {
 
     expect(response.status).toBe(404);
     expect(getSongByIdForUserMock).toHaveBeenCalledWith("song_guest", "usr_owner");
+  });
+
+  it("reads the local guest fallback in local auth mode when the dev database is unavailable", async () => {
+    process.env.MURMUR_AUTH_MODE = "local";
+    nextAuth = {
+      ok: true,
+      user: { id: "guest", email: null, name: "Guest", avatarUrl: null },
+      source: "guest",
+      sessionId: "sess_guest",
+    };
+    getSongError = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:5432"), {
+      code: "ECONNREFUSED",
+    });
+    createLocalSongFallback({
+      id: "song_guest",
+      userId: "guest",
+      title: "Local Guest Song",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    });
+
+    const response = await GET(
+      request("GET", undefined, "http://localhost/api/songs/song_guest"),
+      ctx("song_guest"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Murmur-Fallback")).toBe("local-guest-song");
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.title).toBe("Local Guest Song");
+    expect(lastResolveAuthOptions?.allowGuestPreview).toBe(true);
   });
 });
 
@@ -176,7 +245,8 @@ describe("PATCH /api/songs/[id]", () => {
     expect(body.error).toBe("validation_error");
   });
 
-  it("updates the local guest fallback when the dev database is unavailable", async () => {
+  it("updates the local guest fallback in local auth mode when the dev database is unavailable", async () => {
+    process.env.MURMUR_AUTH_MODE = "local";
     nextAuth = {
       ok: true,
       user: { id: "guest", email: null, name: "Guest", avatarUrl: null },
@@ -226,6 +296,7 @@ describe("PATCH /api/songs/[id]", () => {
     expect(response.headers.get("X-Murmur-Fallback")).toBe("local-guest-song");
     const body = await response.json() as Record<string, unknown>;
     expect(body.title).toBe("After Rename");
+    expect(lastResolveAuthOptions?.allowGuestPreview).toBe(true);
   });
 });
 

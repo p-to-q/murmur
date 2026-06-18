@@ -46,7 +46,9 @@ type SongPayload = z.infer<typeof songPayloadSchema>;
 type SongInput = typeof songs.$inferInsert;
 
 export async function GET(req: NextRequest) {
-  const auth = await resolveRequestAuth(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowGuestSongsPreview(),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   try {
@@ -82,7 +84,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
-  const auth = await resolveRequestAuth(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowGuestSongsPreview(),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const rateLimit = await checkApiRateLimit({
@@ -343,6 +347,10 @@ function shouldUseLocalSongFallback(): boolean {
   return true;
 }
 
+function shouldAllowGuestSongsPreview(): boolean {
+  if (process.env.NODE_ENV === "development") return true;
+  return process.env.MURMUR_AUTH_MODE?.trim().toLowerCase() === "local";
+}
 
 function isMelodySelectionKind(value: unknown): value is MelodySelectionKind {
   return typeof value === "string" && MELODY_SELECTION_KINDS.has(value as MelodySelectionKind);

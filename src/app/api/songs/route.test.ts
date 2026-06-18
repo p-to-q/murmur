@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
@@ -9,6 +9,8 @@ let nextAuth: ResolvedRequestAuth = {
   source: "guest",
   sessionId: "sess_song",
 };
+let lastResolveAuthOptions: { allowGuestPreview?: boolean } | null = null;
+const originalAuthMode = process.env.MURMUR_AUTH_MODE;
 
 const createdSongs: Array<Record<string, unknown>> = [];
 let createSongError: unknown = null;
@@ -43,7 +45,10 @@ const createSongWithSpendMock = mock(async (data: Record<string, unknown>) => {
 });
 
 mock.module("@/lib/auth", () => ({
-  resolveRequestAuth: async () => nextAuth,
+  resolveRequestAuth: async (_req: NextRequest, options: { allowGuestPreview?: boolean } = {}) => {
+    lastResolveAuthOptions = options;
+    return nextAuth;
+  },
 }));
 
 mock.module("@/lib/db/queries/songs", () => ({
@@ -75,6 +80,8 @@ function buildRequest(
 
 beforeEach(() => {
   delete process.env.MURMUR_RATE_LIMIT_DRIVER;
+  if (originalAuthMode === undefined) delete process.env.MURMUR_AUTH_MODE;
+  else process.env.MURMUR_AUTH_MODE = originalAuthMode;
   resetCachedRateLimitStore();
   getRateLimitStore().resetAll();
   nextAuth = {
@@ -88,7 +95,13 @@ beforeEach(() => {
   createSongWithSpendMock.mockClear();
   createSongError = null;
   createSongWithSpendError = null;
+  lastResolveAuthOptions = null;
   resetLocalSongFallbackForTests();
+});
+
+afterEach(() => {
+  if (originalAuthMode === undefined) delete process.env.MURMUR_AUTH_MODE;
+  else process.env.MURMUR_AUTH_MODE = originalAuthMode;
 });
 
 describe("POST /api/songs", () => {
@@ -139,6 +152,7 @@ describe("POST /api/songs", () => {
     expect(body.editDepth).toBe("reworked");
     expect(createSongMock).toHaveBeenCalledTimes(1);
     expect(createSongWithSpendMock).toHaveBeenCalledTimes(0);
+    expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
   });
 
   it("preserves curated artwork metadata inside the saved visual config", async () => {
@@ -280,7 +294,8 @@ describe("POST /api/songs", () => {
     expect(body.issues.some((issue) => issue.path === "bpm")).toBe(true);
   });
 
-  it("uses a local guest song fallback when the dev database is unavailable", async () => {
+  it("uses a local guest song fallback in local auth mode when the dev database is unavailable", async () => {
+    process.env.MURMUR_AUTH_MODE = "local";
     nextAuth = {
       ok: true,
       user: { id: "guest", email: null, name: "Guest", avatarUrl: null },
@@ -325,5 +340,6 @@ describe("POST /api/songs", () => {
     const body = await response.json() as Record<string, unknown>;
     expect(body.id).toBe("song_guest_fallback");
     expect(body.userId).toBe("guest");
+    expect(lastResolveAuthOptions?.allowGuestPreview).toBe(true);
   });
 });

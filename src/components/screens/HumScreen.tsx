@@ -7,7 +7,6 @@ import {
   hasLocalNotes,
   spendLocalNotes,
 } from "@/lib/balance/balance-manager";
-import { useAuthProviders } from "@/lib/hooks/use-auth-providers";
 import { AuthButtons } from "@/components/auth/auth-buttons";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
@@ -18,6 +17,10 @@ import {
   prefetchMusicEngineStatus,
   shouldUseMagentaEngine,
 } from "@/modules/magenta/generate-magenta-versions";
+import {
+  buildDemoFlowState,
+  type DemoMelodyId,
+} from "@/modules/demo/demo-flow";
 import { startAudioContext } from "@/lib/music/tone-player";
 import { transcribeWithStainer } from "@/modules/stainer/transcribe";
 import { selectGenerationMelody } from "@/modules/music/humming-engine";
@@ -194,7 +197,6 @@ export function HumScreen() {
   const [showHeardMessage, setShowHeardMessage] = useState(false);
   const { refresh: refreshBalance } = useUserBalance();
   const { status: sessionStatus } = useSession();
-  const { providers: authProviders } = useAuthProviders();
   const [showEmailForm, setShowEmailForm] = useState(false);
   // During "loading" we do NOT gate, so a returning signed-in user is never
   // briefly walled by a stale guest counter on their device.
@@ -355,7 +357,47 @@ export function HumScreen() {
     return true;
   };
 
+  const startDemoFlow = (demoId?: DemoMelodyId) => {
+    setRecordingState("processing");
+    tickMessages();
+    startAudioContext();
+    setHumError(null);
+    setShowLoginWall(false);
+    setHumStyleBlob(null);
+
+    const demo = buildDemoFlowState({
+      demoId,
+      random: demoId === undefined,
+    });
+    setVibeVersions(demo.versions);
+    setCurrentDraftId(demo.draftId);
+    setCurrentFlowId(demo.flowId);
+    memory
+      .reportAction({
+        content: `Started demo "${demo.preset.id}" with ${demo.versions.length} versions`,
+        event_type: "create",
+        page: "hum",
+        metadata: {
+          type: "hum_demo",
+          demo_id: demo.preset.id,
+          source_melody_kind: demo.currentVersion.sourceMelodyKind,
+          bpm: demo.currentVersion.melody.bpm,
+          key: demo.currentVersion.melody.key,
+          notes: demo.currentVersion.melody.notes.length,
+        },
+      })
+      .catch(() => {});
+    setRecordingState("done");
+    stopMessages();
+    router.push("/vibe");
+  };
+
   const transcribeAndGenerate = async (blob: Blob | undefined) => {
+    if (!blob) {
+      startDemoFlow();
+      return;
+    }
+
     setRecordingState("processing");
     tickMessages();
     try {
@@ -475,7 +517,7 @@ export function HumScreen() {
             },
           })
           .catch(() => {});
-        await transcribeAndGenerate(undefined);
+        startDemoFlow();
         return;
       }
       setRecordingState("idle");
@@ -707,9 +749,7 @@ export function HumScreen() {
         router.push("/topup");
         return;
       case "demo":
-        startAudioContext();
-        setHumError(null);
-        void transcribeAndGenerate(undefined);
+        startDemoFlow();
         return;
       case "record":
         if (action.requiresGuestGate && !passGuestGate()) return;
@@ -1123,7 +1163,7 @@ export function HumScreen() {
                 state; without it, the demo line vanishing on first click shrinks
                 this column, the vertically-centered row re-centers, and the orb
                 + headline visibly jump once. */}
-            <div className="mt-6 h-[18px] flex items-start justify-center">
+            <div className="mt-6 flex h-[18px] items-start justify-center">
               <AnimatePresence>
                 {isIdle && !humError && (
                   <motion.button
@@ -1132,12 +1172,8 @@ export function HumScreen() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ delay: 0.6, duration: 0.5 }}
-                    onClick={() => {
-                      if (!passGuestGate()) return;
-                      startAudioContext();
-                      transcribeAndGenerate(undefined);
-                    }}
-                    className="font-serif-italic text-[12px] leading-none text-[#B6B0A4] hover:text-[#8C8780] transition-colors"
+                    onClick={() => startDemoFlow()}
+                    className="font-serif-italic text-[12px] leading-none text-[#B6B0A4] transition-colors hover:text-[#8C8780]"
                   >
                     {t("hum.demo.cta")}
                   </motion.button>
@@ -1432,7 +1468,10 @@ function recoveryForState(
         label: copy.retry,
         requiresGuestGate: false,
       },
-      secondary: null,
+      secondary: {
+        kind: "demo",
+        label: copy.demo,
+      },
     };
   }
 

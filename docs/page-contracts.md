@@ -54,7 +54,9 @@ Interaction rules that should remain true:
 - the white orb uses press-and-hold for live recording
 - idle hover expands the orb slightly; recording state keeps the smaller held
   scale
-- demo melody is explicit, not a hidden fallback from live capture
+- demo melody is explicit, not a hidden fallback from live capture; the homepage
+  Try demo action randomly picks one preset demo, and demo runs must stay
+  backend-free by hydrating local fixture melody plus local arrangement result
 - billing / note exhaustion should preserve a clear recovery path instead of
   collapsing into generic retry copy
 - browser recording failures should surface as a quiet card with a stable
@@ -64,8 +66,8 @@ Implementation note:
 
 - keep recording cleanup, audio stream teardown, and timer clearing inside the
   screen boundary
-- keep transcription / fixture branching inside the client transcription
-  facade, not in the view tree
+- keep live transcription behind the client transcription facade; keep explicit
+  demo catalog and local demo result construction in `src/modules/demo/`
 
 ## Me personal-center contract notes
 
