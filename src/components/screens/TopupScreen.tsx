@@ -89,14 +89,22 @@ export function TopupScreen() {
   const [selectedId, setSelectedId] = useState<string>(
     TOPUP_SKUS.find((s) => s.highlight === "popular")?.id ?? TOPUP_SKUS[0]!.id,
   );
-  const [customAmount, setCustomAmount] = useState(isCny ? 50 : 10);
+  const [customAmountsByCurrency, setCustomAmountsByCurrency] = useState({
+    USD: 10,
+    CNY: 50,
+  });
   const [isRestoring, setIsRestoring] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Reset custom amount default when currency changes
-  useEffect(() => {
-    setCustomAmount(isCny ? 50 : 10);
-  }, [isCny]);
+  const customAmount = customAmountsByCurrency[isCny ? "CNY" : "USD"];
+  const setCustomAmount = useCallback(
+    (amount: number) => {
+      setCustomAmountsByCurrency((current) => ({
+        ...current,
+        [isCny ? "CNY" : "USD"]: amount,
+      }));
+    },
+    [isCny],
+  );
 
   const notesSpring = useSpring(0, { stiffness: 100, damping: 20 });
   const balanceUSDSpring = useSpring(0, { stiffness: 100, damping: 20 });

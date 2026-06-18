@@ -56,7 +56,7 @@ describe("cost-table", () => {
     const quote = getCustomTopupQuote(12);
     expect(quote).toEqual({
       id: CUSTOM_TOPUP_ID,
-      amountUsd: 12,
+      faceAmount: 12,
       amountCents: 1200,
       notesGranted: 12 * CUSTOM_TOPUP_NOTES_PER_USD,
       display: "$12",
