@@ -63,6 +63,10 @@ export async function renderPoster(input: PosterInput): Promise<Blob | null> {
 function buildPosterNode(input: PosterInput): HTMLDivElement {
   const { title, vibe, bpm, keySig, gradient, durationSec } = input;
 
+  const notchY = 720; // Position from top where the dashed line will be
+  const notchRadius = 24; // Radius of the semicircle notch
+  const cornerRadius = 60;
+
   const root = document.createElement("div");
   Object.assign(root.style, {
     position: "fixed",
@@ -73,10 +77,13 @@ function buildPosterNode(input: PosterInput): HTMLDivElement {
     fontFamily: '-apple-system, "PingFang SC", system-ui, sans-serif',
     color: "white",
     background: gradient,
-    borderRadius: "60px",
     overflow: "hidden",
-    boxShadow: "0 0 0 28px rgba(255,255,255,0.95)",
   } as CSSStyleDeclaration);
+
+  // Add stamp-style notches using clip-path
+  // Path: start at top-left corner, go around with rounded corners and notches on left and right sides
+  root.style.clipPath = `path('M ${cornerRadius} 0 L ${SIZE - cornerRadius} 0 Q ${SIZE} 0 ${SIZE} ${cornerRadius} L ${SIZE} ${notchY - notchRadius} A ${notchRadius} ${notchRadius} 0 0 0 ${SIZE} ${notchY + notchRadius} L ${SIZE} ${SIZE - cornerRadius} Q ${SIZE} ${SIZE} ${SIZE - cornerRadius} ${SIZE} L ${cornerRadius} ${SIZE} Q 0 ${SIZE} 0 ${SIZE - cornerRadius} L 0 ${notchY + notchRadius} A ${notchRadius} ${notchRadius} 0 0 0 0 ${notchY - notchRadius} L 0 ${cornerRadius} Q 0 0 ${cornerRadius} 0 Z')`;
+  root.style.boxShadow = "0 0 0 28px rgba(255,255,255,0.95)";
 
   // Paper grain overlay
   const grain = document.createElement("div");
@@ -123,6 +130,17 @@ function buildPosterNode(input: PosterInput): HTMLDivElement {
     letterSpacing: "0.1em",
   } as CSSStyleDeclaration);
   root.appendChild(meta);
+
+  // Dashed line at notch position
+  const dashedLine = document.createElement("div");
+  Object.assign(dashedLine.style, {
+    position: "absolute",
+    left: "0", right: "0",
+    top: `${notchY}px`,
+    height: "0",
+    borderTop: "2px dashed rgba(255,255,255,0.35)",
+  } as CSSStyleDeclaration);
+  root.appendChild(dashedLine);
 
   // Title block — bottom-left
   const block = document.createElement("div");

@@ -50,8 +50,12 @@ export function buildShareHtml(input: ShareHtmlInput): string {
   body { display: flex; align-items: center; justify-content: center; padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom); }
   .card { width: min(420px, 100%); border-radius: 28px; overflow: hidden; box-shadow: 0 16px 48px rgba(34,48,58,0.18); background: #FFFDF8; }
   .visual { position: relative; aspect-ratio: 1 / 1; background: ${gradient}; overflow: hidden; }
+  .visual::before, .visual::after { content: ""; position: absolute; top: 72%; z-index: 3; width: 24px; height: 24px; border-radius: 999px; background: #F7F3EA; transform: translateY(-50%); pointer-events: none; }
+  .visual::before { left: -12px; }
+  .visual::after { right: -12px; }
   .visual canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   .visual .overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.45), transparent 60%); pointer-events: none; }
+  .visual .dashed-line { position: absolute; left: 0; right: 0; top: 72%; height: 0; border-top: 1px dashed rgba(255,255,255,0.35); pointer-events: none; }
   .visual .meta { position: absolute; left: 22px; bottom: 22px; right: 22px; color: white; pointer-events: none; }
   .visual .vibe { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.7; }
   .visual h1 { font-family: "Lora", Georgia, serif; font-size: 28px; line-height: 1.1; margin-top: 6px; font-weight: 600; }
@@ -73,6 +77,7 @@ export function buildShareHtml(input: ShareHtmlInput): string {
   <div class="visual" id="v">
     <canvas id="c"></canvas>
     <div class="overlay"></div>
+    <div class="dashed-line"></div>
     <div class="meta">
       <div class="vibe">${safeVibe}</div>
       <h1>${safeTitle}</h1>
