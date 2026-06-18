@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
+import { authClient } from "@/lib/platform/auth-client";
 import { useTranslator } from "@/lib/i18n";
 
 type Stage = "email" | "code";
@@ -63,6 +64,14 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
         else if (data.error === "max_attempts") toast.error(t("auth.code_max_attempts"));
         else toast.error(t("auth.code_invalid"));
         return;
+      }
+      if (data.user) {
+        authClient.setUser({
+          id: data.user.id,
+          email: data.user.email,
+          name: data.user.email?.split("@")[0] || "User",
+          accountKind: data.user.accountKind,
+        });
       }
       if (onSuccess) {
         onSuccess();

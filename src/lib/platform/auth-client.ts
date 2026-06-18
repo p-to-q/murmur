@@ -141,6 +141,9 @@ export const authClient = {
     await revokeMurmurSession();
     saveUser(DEFAULT_USER);
   },
+  setUser(partial: Partial<AppUser>) {
+    saveUser({ ...loadUser(), ...partial });
+  },
   async getSessionHeader() {
     return null;
   },
