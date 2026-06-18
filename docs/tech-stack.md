@@ -45,7 +45,7 @@ unreachable.
 
 | Concern | Choice | Version |
 |---|---|---|
-| Framework | Next.js (App Router, Turbopack) | 16.2.x |
+| Framework | Next.js (App Router, webpack command path) | 16.2.x |
 | UI runtime | React | 19.2.x |
 | Language | TypeScript | 5.x |
 | Package manager + runtime | Bun | 1.3.9 |

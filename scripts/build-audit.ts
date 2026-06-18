@@ -13,7 +13,7 @@ async function main() {
 
   const warningMatch = output.match(/Turbopack build encountered (\d+) warnings?:/);
   if (!warningMatch) {
-    console.log("Build audit passed: no Turbopack warnings detected.");
+    console.log("Build audit passed: no audited Next.js warnings detected.");
     return;
   }
 
@@ -30,17 +30,18 @@ async function main() {
 
   console.warn(
     [
-      "Build audit acknowledged the current known Turbopack warning:",
+      "Build audit acknowledged a known legacy Next.js warning:",
       `- route: ${ALLOWED_WARNING_ROUTE}`,
       "- category: unexpected file in NFT list",
-      "- status: non-blocking tooling edge under Next.js 16.2.4",
+      "- status: non-blocking tooling edge under Next.js 16.2.x",
     ].join("\n"),
   );
 }
 
 function runBuild(): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn("bun", ["run", "build"], {
+    const bunExecutable = process.env.npm_execpath || "bun";
+    const child = spawn(bunExecutable, ["run", "build"], {
       cwd: process.cwd(),
       env: process.env,
       stdio: ["inherit", "pipe", "pipe"],

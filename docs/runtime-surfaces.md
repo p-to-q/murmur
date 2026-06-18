@@ -29,7 +29,7 @@ Examples:
 
 - `src/components/screens/HumScreen.tsx`
 - `src/components/studio/track-mixer.tsx`
-- `src/components/song-detail/share-actions.tsx`
+- `src/components/song-detail/song-visual-canvas.tsx`
 
 ### Product logic
 

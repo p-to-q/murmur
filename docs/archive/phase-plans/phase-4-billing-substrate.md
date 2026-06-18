@@ -7,7 +7,7 @@ Date: 2026-06-03
 > (`/api/billing/checkout`) and the `order.completed` webhook
 > (`/api/billing/webhook`) are live. Stripe was never wired and is out of the
 > plan. Current web billing is documented in
-> [../billing-waffo.md](../billing-waffo.md). The daily refill cron and
+> [../../billing-waffo.md](../../billing-waffo.md). The daily refill cron and
 > native-IAP channels remain pending.
 
 ## User / System Problem
@@ -68,7 +68,7 @@ will fund.
 - Real provider login and DB-backed session validation still need Phase 3,
   though v1 header identity is now local/demo-only in production settings.
 - Web checkout + the billing webhook shipped on Waffo (see
-  [../billing-waffo.md](../billing-waffo.md)). `/topup` page polish, the
+  [../../billing-waffo.md](../../billing-waffo.md)). `/topup` page polish, the
   region-aware SKU route, native-IAP channels, and the daily refill cron are
   still pending.
 - MeScreen and Studio balance-aware UI are still pending.

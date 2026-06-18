@@ -112,3 +112,41 @@ After the cleanup pass:
 Build/cache artifacts such as `.next` and local virtual environments are
 rebuildable and should not be treated as source. If they are removed locally,
 rerun the normal setup/build commands.
+
+## Follow-Up Cleanup 2026-06-18
+
+The follow-up pass focused on repository structure and documentation drift, not
+runtime behavior.
+
+Removed or moved:
+
+- Deleted stale external-tool files with no repo references:
+  - `.claude/launch.json`
+  - `.eazo/eazo-share-widgets.md`
+- Archived the completed Phase 4 billing substrate plan:
+  - `docs/phase-plans/phase-4-billing-substrate.md`
+  - moved to `docs/archive/phase-plans/phase-4-billing-substrate.md`
+
+Trimmed:
+
+- Rewrote `docs/repo-architecture.md` to describe the current root `src/`
+  Next.js app, `packages/murmur-core`, workers, scripts, docs, and generated
+  artifact boundaries instead of the future `apps/*` carve-out.
+- Updated doc indexes and current-state docs that still pointed at stale
+  `apps/web`, old examples, or Turbopack-specific wording while the project is
+  using the webpack command path.
+- Tightened `.gitignore` so local `.env.*` files, worker virtualenvs,
+  Python caches, generated worker reports, and retired tool directories stay out
+  of `git status`.
+
+Validation recorded after this pass:
+
+- `bun run check:links` passed.
+- `bun run lint` passed.
+- `bun test` passed: 402 tests across 63 files.
+- `bun run build` passed with Next.js 16.2.9 using the configured webpack
+  command path. The build retried once after a transient TLS socket disconnect
+  and then completed successfully.
+- `bun run build:audit` passed with no audited Next.js warnings. The package
+  scripts were also hardened to reuse Bun's `npm_execpath`, so nested script
+  calls do not require `bun` to be present on the caller's `PATH`.

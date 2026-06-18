@@ -80,13 +80,11 @@ limits are different:
   locked yet.
 - Audio acceptance is automated, but the dataset mix is still bounded by what
   can be checked in or deterministically scaffolded inside CI.
-- `next build` is green, but Next.js 16.2.4 + Turbopack still emits one
-  non-blocking NFT tracing warning for the dev-only
-  `/api/storage/local/[...key]` route because it late-loads the filesystem
-  adapter. Treat that as a known tooling edge, not as proof that the production
-  storage path is wired incorrectly. `bun run build:audit` now codifies this:
-  the known warning is allowed, but any additional build warnings fail the
-  governance gate.
+- `next build` is green through the configured webpack command path, and
+  `bun run build:audit` currently passes without audited Next.js warnings. The
+  audit script still recognizes the older local-storage NFT tracing warning if
+  it reappears under a different build mode, but that warning is not present in
+  the current build output.
 
 ## Human entry points
 

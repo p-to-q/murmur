@@ -28,11 +28,11 @@ For current truth, start at the [docs index](../README.md) and
 
 ## Phase plans (shipped)
 
-Execution records for v2 phases that have since shipped. Phase 4 (billing)
-stays live under [../phase-plans/](../phase-plans/) because it is still being
-revised; see also [../billing-waffo.md](../billing-waffo.md).
+Execution records for v2 phases that have since shipped. Current billing truth
+lives in [../billing-waffo.md](../billing-waffo.md).
 
 - [phase-plans/phase-0-preflight.md](phase-plans/phase-0-preflight.md)
 - [phase-plans/phase-1-hum-surface.md](phase-plans/phase-1-hum-surface.md)
 - [phase-plans/phase-1-server-transcribe.md](phase-plans/phase-1-server-transcribe.md)
 - [phase-plans/phase-3-auth-substrate.md](phase-plans/phase-3-auth-substrate.md)
+- [phase-plans/phase-4-billing-substrate.md](phase-plans/phase-4-billing-substrate.md)

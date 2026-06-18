@@ -24,7 +24,7 @@ back, not "we'll fix it in follow-up."
 4. **Logged.** New routes / actions emit the canonical events from
    `observability.md` §2.
 5. **Documented.** Public symbols (exported from
-   `packages/murmur-core` or any `apps/*/src/lib/*`) have a JSDoc
+   `packages/murmur-core` or any shared `src/lib/*` boundary) have a JSDoc
    header. Internal helpers do not need one unless the name is not
    self-documenting.
 6. **Reversible.** Migrations have a `down.sql`. Removals are
@@ -63,11 +63,11 @@ TypeScript at runtime.
 
 ## 3. Error handling
 
-- All thrown errors extend `class MurmurError extends Error` with
-  a typed `code: ErrorCode`. Lives in
-  `apps/web/src/lib/api/errors.ts`.
-- Route handlers convert thrown `MurmurError`s into the envelope from
-  `api-conventions.md` §3.2 via `errorEnvelope(e, requestId)`.
+- Domain errors should use typed error codes and map to the envelope in
+  `api-conventions.md` at route boundaries. If a shared base error class is
+  introduced, it belongs under `src/lib/api/` or a similarly narrow boundary.
+- Route handlers convert known domain failures into the envelope from
+  `api-conventions.md` §3.2 and include the request id.
 - Catch + rethrow is acceptable to add context; catch + swallow is
   not.
 - Top-level swallowed errors (`.catch(() => {})`) are limited to
@@ -76,16 +76,18 @@ TypeScript at runtime.
 
 ### Domain errors
 
-Audio + payment have specific error types. Codex defines them per
-feature:
+Audio + payment may use feature-specific error classes when that makes route
+handling clearer:
 
 ```ts
-class TranscribeError extends MurmurError { /* no_voiced_frames, … */ }
-class BillingError    extends MurmurError { /* insufficient_notes, signature_invalid, … */ }
-class AuthError       extends MurmurError { /* unauthorized, session_expired, … */ }
+class TranscribeError extends Error {
+  code: "no_voiced_frames" | "worker_http_error";
+}
 ```
 
-Catch by class on the route side; switch on `.code` inside.
+Catch by class on the route side; switch on `.code` inside. If a shared base
+error or `errorEnvelope()` helper is added later, keep it under `src/lib/api/`
+and update this standard in the same PR.
 
 ---
 
@@ -137,7 +139,7 @@ Catch by class on the route side; switch on `.code` inside.
 
 ## 7. Naming
 
-(Per `repo-architecture.md` §5; restated to make this file a one-stop
+(Per `repo-architecture.md`; restated to make this file a one-stop
 shop.)
 
 - Files: `kebab-case.ts`.
@@ -272,10 +274,10 @@ A PR description that doesn't surface its own risks gets sent back.
 The standards are met when:
 
 - [ ] `bun lint` includes rules for: `no-floating-promises`,
-      `no-restricted-imports` (per `repo-architecture.md` §4),
+      `no-restricted-imports` for the active repo boundaries,
       `no-deprecated`, `no-console` (except `console.error` until
       `log()` migration is complete).
-- [ ] Each route in `apps/web/src/app/api/` emits its taxonomy event.
+- [ ] Each route in `src/app/api/` emits its taxonomy event.
 - [ ] `DEPRECATIONS.md` exists with the v1 surfaces listed in §9.
 - [ ] `.github/pull_request_template.md` matches §8.
 - [ ] CI rejects PRs that lack the Done checklist.

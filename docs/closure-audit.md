@@ -51,13 +51,11 @@ What is now true:
   IDs or showing engineering detail on every transient failure;
 - fixture rescue is constrained so it saves a healthy session without masking a
   broken system indefinitely;
-- build warnings are now governed: the current known Turbopack warning is
-  acknowledged, and any new warning should fail the gate.
+- build warnings are now governed by `bun run build:audit`, which currently
+  passes without audited Next.js warnings.
 
 What is still incomplete:
 
-- `next build` still emits one non-blocking Turbopack NFT tracing warning for
-  the dev-only local storage route;
 - browser-level unattended verification of the full product path is still
   thinner than the API / module / worker coverage;
 - some docs still contain historical references to deleted provider paths and
@@ -70,11 +68,9 @@ Priority order:
 1. keep strengthening unattended verification of the mainline flow, especially
    one browser-level check that proves the visible creation path still mounts
    and advances;
-2. either eliminate the remaining Turbopack NFT warning or document the exact
-   upstream/tooling reason it cannot currently be removed;
-3. continue retiring stale architecture references so new work follows today's
+2. continue retiring stale architecture references so new work follows today's
    storage, worker, and fallback model instead of ghost paths;
-4. expand audio acceptance around the product goal, not just raw note
+3. expand audio acceptance around the product goal, not just raw note
    extraction: "sounds like what I sang" and "still sounds musical."
 
 The principle for future work is simple:

@@ -5,9 +5,9 @@
 ### Tested
 - [x] `bun install` — passes (684 packages, +1 lamejs)
 - [x] `bunx tsc --noEmit` — 0 errors
-- [x] `bunx next build` — 14 routes compile cleanly (Turbopack)
-- [x] `bun run build:audit` — build succeeds and only the currently allowed
-  Turbopack NFT warning is present
+- [x] `bun run build` — Next.js build completes through the configured
+  webpack command path
+- [x] `bun run build:audit` — build succeeds with no audited Next.js warnings
 - [x] `bun run lint` — 0 errors, 0 warnings
 - [x] `bun run smoke:local` — web app, user balance API, transcribe validation,
   and audio worker health all pass against the running local stack
@@ -56,10 +56,6 @@
 - [ ] Native push notifications — local adapter is stubbed until a real gateway is configured
 
 ### Known limitations
-- `next build` still emits one non-blocking Turbopack NFT warning for the
-  dev-only `/api/storage/local/[...key]` route because the local filesystem
-  adapter is loaded inside that route. The build still succeeds and the warning
-  is currently treated as a tooling edge, not a broken product path.
 - Metadata URLs default to `https://murmur.ptoq.io` when `MURMUR_APP_URL` and
   `VERCEL_URL` are both unset. Set `MURMUR_APP_URL` in deployed environments
   that need a different canonical origin.

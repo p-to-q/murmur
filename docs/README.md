@@ -54,8 +54,8 @@ these on every PR.
 - [data-model.md](data-model.md) — every Postgres table + invariants.
 - [api-conventions.md](api-conventions.md) — REST shape, error
   envelope, auth, idempotency, webhooks.
-- [repo-architecture.md](repo-architecture.md) — monorepo layout,
-  workspaces, import rules, naming.
+- [repo-architecture.md](repo-architecture.md) — current repository layout,
+  workspaces, import rules, naming, and local artifact hygiene.
 - [engineering-standards.md](engineering-standards.md) — per-PR
   bar; the companion to `engineering-principles.md`.
 - [testing-strategy.md](testing-strategy.md) — unit / API / golden

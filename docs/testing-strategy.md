@@ -1,15 +1,14 @@
 # Testing Strategy
 
-Historical note: this document was written as the full v2 target state. The
-current repo has implemented a meaningful subset of it already
+Historical note: this document started as the full v2 target state. The current
+repo has implemented a meaningful subset of it already
 (`bun test`, `bun run test:audio`, `bun run smoke:local`,
 `bun run smoke:pages`, `bash scripts/ci-local-stack-smoke.sh`,
 `bun run build:audit`), but it has not yet landed the Playwright-based browser
 e2e lane described below.
 
-Murmur v1 has zero tests. v2 cannot ship with that gap. This document
-defines the testing bar for the v2 cutover and the layered approach
-that gets us there without turning every PR into a test sprint.
+This document defines the testing bar and the layered approach that gets Murmur
+there without turning every PR into a test sprint.
 
 It is written so Codex can author the **first** test in each layer
 without re-deciding fixture conventions, naming, or pass/fail
@@ -22,10 +21,10 @@ philosophy.
 | Layer | What | Where | When |
 |---|---|---|---|
 | **Unit** | Pure functions in `packages/murmur-core` | colocated `*.test.ts` | every PR touching the package |
-| **Integration (API)** | Next.js route handlers + DB | `apps/web/tests/api/` | every PR touching a route |
-| **Golden master (music)** | Same melody in → same arrangement out, byte-equivalent | `apps/web/tests/music/` | every PR touching arrangement / engine |
+| **Integration (API)** | Next.js route handlers + DB | colocated route `*.test.ts` today; future harness may use `src/tests/api/` | every PR touching a route |
+| **Golden master (music)** | Same melody in → same arrangement out, byte-equivalent | colocated `*.test.ts` today; larger fixtures may use `src/tests/music/` | every PR touching arrangement / engine |
 | **Audio worker** | Python worker behavior | `workers/audio-engine/tests/` | every PR touching the worker |
-| **E2E** | Playwright + Capacitor smoke | `apps/web/tests/e2e/` | nightly + before release |
+| **E2E** | Playwright web smoke; Capacitor smoke when that shell exists | `src/tests/e2e/` or a future app-local test folder | nightly + before release |
 | **Manual** | What survives only the human eye (UI feel, audio musicality) | doc'd in PR | when relevant |
 
 Required to merge: unit + integration + golden master pass; e2e
@@ -67,8 +66,8 @@ yet at the final multi-layer target described in the rest of this document.
 ### 3.1 Naming + location
 
 - `<name>.test.ts` next to the source file for pure unit tests.
-- Integration / golden-master / e2e tests live under
-  `apps/web/tests/<kind>/`.
+- Route, integration-leaning, and golden-master tests are colocated today.
+  Larger harnesses may live under `src/tests/<kind>/` once they exist.
 - Audio worker tests live under
   `workers/audio-engine/tests/test_<unit>.py`.
 
@@ -85,7 +84,7 @@ yet at the final multi-layer target described in the rest of this document.
 - Tests **must not** depend on `Date.now()`, `Math.random()`, or
   network. Inject these where they appear.
 - Seeded RNG is supplied via `seededRandom(seed)` from
-  `packages/murmur-core/src/utils`. Codex adds this if not already there.
+  `src/lib/utils/seeded-random.ts` or another explicit injected source.
 - Tests that need a current time use `vi.setSystemTime` / `bun test`'s
   clock — never wall clock.
 
@@ -119,7 +118,7 @@ What we test in `packages/murmur-core`:
 
 What we **don't** unit-test in `murmur-core`:
 
-- Things that need a DOM. They live in `apps/web/`.
+- Things that need a DOM. They live in `src/`.
 - Things that need network. Those are integration.
 
 ### Example skeleton
@@ -146,7 +145,7 @@ describe("polishMelody", () => {
 
 ## 5. Integration / API layer
 
-Every route in `apps/web/src/app/api/` gets at least one happy-path
+Every route in `src/app/api/` gets at least one happy-path
 and one error-path test.
 
 ### 5.1 Setup
@@ -174,15 +173,15 @@ function call(req: NextRequest): Promise<Response> // dispatches into the route 
 | `POST /api/auth/login/init` + `/callback` | (a) issues session; (b) double-init invalidates prior |
 | `POST /api/account/delete` | (a) soft-marks; (b) revokes sessions; (c) does not delete songs synchronously |
 
-Current Phase 4 substrate coverage is narrower until the DB-backed API test
-harness exists: `GET /api/user/balance` has a deterministic refill-time unit
-test, while the `/api/transcribe`, `/api/strummer/edit`, and `/api/songs`
-ledger gates are compile/build covered and should move to route-level tests
-once `freshDb()` lands.
+Current route coverage is already colocated with many handlers. A fuller
+DB-backed API test harness is still useful for cross-route transaction cases,
+but new route work should add the nearest useful `route.test.ts` now rather
+than waiting for that harness.
 
 ### 5.3 Conventions
 
-- One file per route: `tests/api/<area>/<resource>.test.ts`.
+- One file per route: colocated `route.test.ts` beside the handler, or
+  `src/tests/api/<area>/<resource>.test.ts` if the shared harness needs it.
 - Test data created inline via `freshDb` seed helpers; no fixture
   files unless the data is huge.
 - Always assert the **error envelope** matches the convention
@@ -198,7 +197,8 @@ The arrangement engine is **deterministic** by design (see
 
 ### 6.1 Storage
 
-Inputs live in `apps/web/tests/music/__fixtures__/`:
+Inputs may live beside the tests or under `src/tests/music/__fixtures__/` when
+they become large enough to share:
 
 ```
 __fixtures__/
@@ -349,7 +349,7 @@ Tracking: a `pnpm test:coverage` is fine to have but not gating.
 ## 10. Test data + factories
 
 Avoid free-floating literals. A small factory module in
-`apps/web/tests/factories.ts`:
+`src/tests/factories.ts` once a shared DB/API harness exists:
 
 ```ts
 export function makeUser(overrides?: Partial<User>): User {
@@ -394,13 +394,8 @@ Webhook tests construct the signed body and call the route directly.
 
 ## 12. Test environment
 
-Codex sets up:
-
-```
-infra/github/workflows/test.yml
-```
-
-with:
+GitHub Actions currently lives under `.github/workflows/ci.yml` and should keep
+covering:
 
 - A Postgres service container.
 - The audio worker's deps + SwiftF0 runtime.

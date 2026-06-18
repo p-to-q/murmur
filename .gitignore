@@ -35,6 +35,8 @@
 # misc
 .DS_Store
 *.pem
+.claude/
+.eazo/
 
 # debug
 npm-debug.log*
@@ -42,11 +44,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# local env files — also exclude the plain .env (template lives in .env.example)
+# Local env files. The committed template lives in .env.example.
 .env
-.env*.local
-.env.workers.cloud
-.env.workers.local
+.env.*
 !.env.example
 
 # vercel
@@ -107,9 +107,15 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+workers/**/.venv/
+workers/**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 workers/audio-engine/tools/manifests/*.local.json
 workers/audio-engine/tools/pitch-maps/*.local.json
 workers/audio-engine/tools/datasets/
+workers/audio-engine/tools/reports/
 
 # Object storage local-fs adapter (src/lib/storage)
 .murmur/
@@ -137,13 +143,6 @@ workers/audio-engine/tools/datasets/
 
 # Yarn Integrity file
 .yarn-integrity
-
-# dotenv environment variable files
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
