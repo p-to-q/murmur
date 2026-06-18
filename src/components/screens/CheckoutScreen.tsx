@@ -33,7 +33,10 @@ import {
   type Currency,
 } from "@murmur/core";
 
+import { signIn } from "next-auth/react";
+
 import { useTranslator } from "@/lib/i18n";
+import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
@@ -113,6 +116,7 @@ export function CheckoutScreen() {
         : "requesting",
   );
   const [failureMessage, setFailureMessage] = useState<string | null>(null);
+  const [failureKind, setFailureKind] = useState<"sign_in_required" | "generic" | null>(null);
   const [copyIdx, setCopyIdx] = useState(0);
   const checkoutStartedRef = useRef(false);
 
@@ -211,26 +215,38 @@ export function CheckoutScreen() {
         return;
       }
 
-      if (errorBody.error === "sign_in_required") {
+      if (errorBody.error === "sign_in_required" || errorBody.error === "unauthorized") {
         setFailureMessage(
-          t("checkout.sign_in_required") || "请先登录再购买灵感币。",
+          t("checkout.sign_in_required") || "Sign in first, then top up your notes.",
         );
+        setFailureKind("sign_in_required");
         setPhase("failed");
         return;
       }
 
       setFailureMessage(errorBody.message ?? null);
+      setFailureKind("generic");
       setPhase("failed");
     } catch {
       setFailureMessage(null);
+      setFailureKind("generic");
       setPhase("failed");
     }
   }, [finishSucceeded, purchase, skuNotes, t]);
 
   const retryCheckout = () => {
     setFailureMessage(null);
+    setFailureKind(null);
     setPhase("requesting");
     void beginCheckout();
+  };
+
+  const handleSignIn = () => {
+    const currentUrl = window.location.pathname + window.location.search;
+    void (async () => {
+      await ensureLocalCreatorSession();
+      await signIn("google", { callbackUrl: currentUrl });
+    })();
   };
 
   /* ── Kick off side effects for the landing state. Phase itself is
@@ -437,17 +453,28 @@ export function CheckoutScreen() {
                         "Something tripped on our end."}
                     </p>
                     <div className="flex gap-3">
-                      <button
-                        onClick={retryCheckout}
-                        className="mm-btn-primary"
-                      >
-                        {t("checkout.try_again") || "Try again"}
-                      </button>
+                      {failureKind === "sign_in_required" ? (
+                        <button
+                          onClick={handleSignIn}
+                          className="mm-btn-primary"
+                        >
+                          {t("checkout.sign_in_btn") || "Sign in"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={retryCheckout}
+                          className="mm-btn-primary"
+                        >
+                          {t("checkout.try_again") || "Try again"}
+                        </button>
+                      )}
                       <button
                         onClick={() => router.push("/topup")}
                         className="text-[13px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] underline-mm transition-colors"
                       >
-                        {t("checkout.different") || "use a different method"}
+                        {failureKind === "sign_in_required"
+                          ? (t("common.back") || "back")
+                          : (t("checkout.different") || "use a different method")}
                       </button>
                     </div>
                   </motion.div>

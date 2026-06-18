@@ -606,6 +606,7 @@ export const DICT = {
   "checkout.different":          { zh: "换个支付方式",     en: "use a different method" },
   "checkout.toast.success":      { zh: "已经多了 {notes} 颗音磅。", en: "+{notes} notes added." },
   "checkout.sign_in_required":   { zh: "请先登录，再来补给音磅。", en: "Sign in first, then top up your notes." },
+  "checkout.sign_in_btn":        { zh: "登录",                   en: "Sign in" },
 
   // ── Side / bottom nav ──────────────────────────────────────────────
   "nav.flow.vibe":               { zh: "风物",     en: "Vibe" },
