@@ -160,9 +160,11 @@ export const DICT = {
   "nav.device.title":  { zh: "跨设备同步",        en: "Device sync" },
   "nav.device.desc":   { zh: "手机端体验更佳，所有数据实时同步", en: "Better on mobile, all data syncs in real-time" },
   "nav.notify.title":  { zh: "通知",              en: "Notifications" },
-  "nav.notify.desc":   { zh: "点击开启浏览器通知", en: "Click to enable browser notifications" },
-  "nav.notify.enabled": { zh: "通知已开启，创作完成时会提醒你", en: "Enabled — we'll notify you when your song is ready" },
-  "nav.notify.denied": { zh: "通知已被浏览器拒绝，请在浏览器设置中允许", en: "Blocked by browser — allow notifications in your browser settings" },
+  "nav.notify.desc":   { zh: "查看最新动态和更新", en: "Check latest updates and news" },
+  "nav.notify.enabled": { zh: "开着。曲子酿好时，会轻轻叫你。", en: "On. We'll quietly ping you." },
+  "nav.notify.denied": { zh: "浏览器拦住了提醒；需要在设置里放行。", en: "Browser notifications are blocked. Allow them in settings." },
+  "nav.notify.song_saved.title": { zh: "已保存到藏歌", en: "Saved to Gallery" },
+  "nav.notify.song_saved.body": { zh: "这首小歌已经收好，可以从藏歌里随时打开。", en: "This song is tucked away and ready to reopen from your Gallery." },
 
   // ── HumScreen ───────────────────────────────────────────────────────
   "hum.brand.tagline": { zh: "MURMUR",     en: "MURMUR" },
