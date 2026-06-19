@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
 import type { VisualArtwork } from "@/modules/shared/types";
 
-export const COVER_ARTWORK_BRIGHTNESS_FILTER = "brightness(1.18) saturate(1.04) contrast(1.02)";
-export const COVER_BRIGHTNESS_COMPENSATION_ALPHA = 0.08;
+export const COVER_ARTWORK_BRIGHTNESS_FILTER = "brightness(1.28) saturate(1.05) contrast(1.02)";
+export const COVER_BRIGHTNESS_COMPENSATION_ALPHA = 0.12;
 
 export const coverBrightnessCompensationStyle: CSSProperties = {
   background: `rgba(255,255,255,${COVER_BRIGHTNESS_COMPENSATION_ALPHA})`,

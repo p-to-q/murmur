@@ -1,5 +1,8 @@
 import type { SongCard } from "@/modules/shared/types";
-import { applyCoverBrightnessCompensation } from "@/lib/music/cover-visual-treatment";
+import {
+  COVER_ARTWORK_BRIGHTNESS_FILTER,
+  applyCoverBrightnessCompensation,
+} from "@/lib/music/cover-visual-treatment";
 
 type Song = SongCard & {
   mp3DataUrl?: string | null;
@@ -363,7 +366,7 @@ function drawArtworkBackground(
 
   ctx.save();
   ctx.globalAlpha = 0.35;
-  ctx.filter = "brightness(1.18) saturate(1.04) contrast(1.02)";
+  ctx.filter = COVER_ARTWORK_BRIGHTNESS_FILTER;
   ctx.drawImage(artwork.image, x, y, drawnWidth, drawnHeight);
   ctx.restore();
 }
