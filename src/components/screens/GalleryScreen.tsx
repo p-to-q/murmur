@@ -13,6 +13,7 @@ import type { SongCard as SongCardType } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
+import { Spinner } from "@/components/ui/spinner";
 import { ARTWORK_CATALOG } from "@/presets/artworks/catalog";
 
 // The gallery only renders light metadata; the heavy SongCard fields
@@ -273,17 +274,11 @@ export function GalleryScreen() {
       {/* Spacer when no sort toggle shown */}
       {!isLoading && displaySongs.length <= 1 && <div className="pb-4" />}
 
-      {/* Loading skeletons — grid layout */}
+      {/* Loading — general spinner (the skeleton grid never matched the real
+          cover layout, so it read as a glitch rather than a placeholder) */}
       {isLoading && (
-        <div className="relative z-10 px-5 md:px-12 max-w-7xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
-            {Array.from({ length: 6 }, (_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="aspect-square rounded-[20px] bg-gradient-to-br from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer shadow-[0_16px_32px_rgba(26,26,26,0.08)]" />
-                <div className="mt-2 h-3 w-2/3 rounded-full bg-[#ECE5D6]" />
-              </div>
-            ))}
-          </div>
+        <div className="relative z-10 flex min-h-[60svh] items-center justify-center">
+          <Spinner size="lg" aria-label={t("loading.aria")} />
         </div>
       )}
 

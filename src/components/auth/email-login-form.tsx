@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/platform/auth-client";
+import { Spinner } from "@/components/ui/spinner";
 import { useTranslator } from "@/lib/i18n";
 
 type Stage = "email" | "code";
@@ -102,7 +103,7 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
           disabled={loading || !email.trim()}
           className="flex w-full items-center justify-center rounded-full bg-[#1A1A1A] px-5 py-2.5 text-[14px] font-medium text-white transition-all hover:bg-[#333] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? <Spinner /> : t("auth.send_code")}
+          {loading ? <Spinner size="sm" variant="light" /> : t("auth.send_code")}
         </button>
       </div>
     );
@@ -131,7 +132,7 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
         disabled={loading || code.length < 6}
         className="flex w-full items-center justify-center rounded-full bg-[#1A1A1A] px-5 py-2.5 text-[14px] font-medium text-white transition-all hover:bg-[#333] disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? <Spinner /> : t("auth.verify")}
+        {loading ? <Spinner size="sm" variant="light" /> : t("auth.verify")}
       </button>
       <button
         onClick={() => {
@@ -146,8 +147,3 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
   );
 }
 
-function Spinner() {
-  return (
-    <div className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-  );
-}

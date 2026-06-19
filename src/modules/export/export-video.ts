@@ -18,7 +18,7 @@ type Particle = {
 };
 
 const WIDTH = 1080;
-const HEIGHT = 1080;
+const HEIGHT = 1920;
 const FPS = 30;
 
 export type VideoExportSupport = {
@@ -169,6 +169,8 @@ export async function exportSongAsVideo(song: Song): Promise<void> {
       title: song.title,
       vibe: song.vibe,
       bpm: song.bpm ?? 80,
+      durationSec: song.duration,
+      keySig: song.keySignature ?? "C",
     });
     frame += 1;
     rafId = requestAnimationFrame(draw);
@@ -288,23 +290,219 @@ function mixColors(a: RGB, b: RGB, ratio: number): RGB {
   };
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function wrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let current = words[0] ?? "";
+  for (let i = 1; i < words.length; i++) {
+    const test = current + " " + words[i];
+    if (ctx.measureText(test).width > maxWidth) {
+      lines.push(current);
+      current = words[i]!;
+    } else {
+      current = test;
+    }
+  }
+  lines.push(current);
+  return lines;
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
 function drawMeta(
   ctx: CanvasRenderingContext2D,
   title: string,
   vibe: string,
   bpm: number,
+  progress: number,
+  durationSec: number,
+  keySig: string,
 ) {
-  ctx.fillStyle = "rgba(255,255,255,0.76)";
-  ctx.font = "500 28px system-ui, sans-serif";
-  ctx.fillText(vibe.toUpperCase(), 86, HEIGHT - 180);
+  ctx.save();
 
+  // ── "FOR YOU" pill at top center ──
+  ctx.font = "700 26px system-ui, sans-serif";
+  ctx.letterSpacing = "3px";
+  const pillText = "FOR YOU";
+  const pillW = ctx.measureText(pillText).width + 48;
+  const pillX = (WIDTH - pillW) / 2;
+  ctx.fillStyle = "rgba(26,26,26,0.58)";
+  roundRect(ctx, pillX, 56, pillW, 44, 8);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.90)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(pillText, WIDTH / 2, 78);
+  ctx.textAlign = "start";
+  ctx.textBaseline = "alphabetic";
+  ctx.letterSpacing = "0px";
+
+  // ── Close (X) circle at top right ──
+  ctx.beginPath();
+  ctx.arc(WIDTH - 72, 78, 26, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.16)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.72)";
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(WIDTH - 82, 68);
+  ctx.lineTo(WIDTH - 62, 88);
+  ctx.moveTo(WIDTH - 62, 68);
+  ctx.lineTo(WIDTH - 82, 88);
+  ctx.stroke();
+
+  // ── Right-side action icons ──
+  const iconBaseY = HEIGHT - 520;
+  const iconSpacing = 78;
+  const iconCx = WIDTH - 72;
+  for (let i = 0; i < 5; i++) {
+    const iy = iconBaseY + i * iconSpacing;
+    if (i < 4) {
+      ctx.beginPath();
+      ctx.arc(iconCx, iy, 32, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.10)";
+      ctx.fill();
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    if (i === 4) {
+      for (let d = -10; d <= 10; d += 10) {
+        ctx.beginPath();
+        ctx.arc(iconCx + d, iy, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      ctx.beginPath();
+      ctx.arc(iconCx, iy, 10, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ── Title text (large, wrapped) ──
+  ctx.font = "600 96px Georgia, serif";
   ctx.fillStyle = "rgba(255,255,255,0.96)";
-  ctx.font = "600 88px Georgia, serif";
-  ctx.fillText(title, 86, HEIGHT - 86, WIDTH - 172);
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 16;
+  const maxTitleW = WIDTH - 220;
+  const lines = wrapText(ctx, title, maxTitleW);
+  const lineH = 96;
+  const titleBaseY = HEIGHT - 380 - Math.max(0, lines.length - 2) * lineH;
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i]!, 60, titleBaseY + i * lineH);
+  }
+  ctx.shadowBlur = 0;
 
-  ctx.fillStyle = "rgba(255,255,255,0.7)";
+  // ── User avatar + name ──
+  const userY = titleBaseY + lines.length * lineH + 32;
+  const avatarGrad = ctx.createLinearGradient(60, userY - 20, 100, userY + 20);
+  avatarGrad.addColorStop(0, "hsl(210, 45%, 72%)");
+  avatarGrad.addColorStop(1, "hsl(250, 55%, 78%)");
+  ctx.beginPath();
+  ctx.arc(80, userY, 20, 0, Math.PI * 2);
+  ctx.fillStyle = avatarGrad;
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.32)";
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.90)";
+  ctx.font = "600 18px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("C", 80, userY + 6);
+  ctx.textAlign = "start";
+  ctx.fillStyle = "rgba(255,255,255,0.80)";
+  ctx.font = "500 28px system-ui, sans-serif";
+  ctx.shadowColor = "rgba(0,0,0,0.25)";
+  ctx.shadowBlur = 6;
+  ctx.fillText("Creator", 114, userY + 8);
+  ctx.shadowBlur = 0;
+
+  // ── BPM + Key badges ──
+  const badgeY = userY + 50;
+  ctx.font = "600 22px system-ui, sans-serif";
+  ctx.letterSpacing = "2px";
+  const bpmLabel = `${bpm} BPM`;
+  const bpmW = ctx.measureText(bpmLabel).width + 28;
+  ctx.fillStyle = "rgba(255,255,255,0.12)";
+  roundRect(ctx, 60, badgeY - 15, bpmW, 30, 15);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.68)";
+  ctx.fillText(bpmLabel, 74, badgeY + 6);
+  const keyW = ctx.measureText(keySig).width + 28;
+  ctx.fillStyle = "rgba(255,255,255,0.12)";
+  roundRect(ctx, 60 + bpmW + 12, badgeY - 15, keyW, 30, 15);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.68)";
+  ctx.fillText(keySig, 74 + bpmW + 12, badgeY + 6);
+  ctx.letterSpacing = "0px";
+
+  // ── Playback bar ──
+  const barY = HEIGHT - 72;
+  // Skip back
+  ctx.fillStyle = "rgba(255,255,255,0.50)";
+  ctx.beginPath();
+  ctx.moveTo(72, barY - 8);
+  ctx.lineTo(56, barY);
+  ctx.lineTo(72, barY + 8);
+  ctx.fill();
+  ctx.fillRect(53, barY - 8, 4, 16);
+  // Pause
+  ctx.fillStyle = "rgba(255,255,255,0.80)";
+  ctx.fillRect(104, barY - 10, 7, 20);
+  ctx.fillRect(118, barY - 10, 7, 20);
+  // Track
+  const trackX = 154;
+  const trackW = WIDTH - 310;
+  const progW = trackW * progress;
+  ctx.fillStyle = "rgba(255,255,255,0.22)";
+  roundRect(ctx, trackX, barY - 2, trackW, 4, 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  roundRect(ctx, trackX, barY - 2, Math.max(progW, 1), 4, 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(trackX + progW, barY, 7, 0, Math.PI * 2);
+  ctx.fillStyle = "white";
+  ctx.shadowColor = "rgba(255,255,255,0.4)";
+  ctx.shadowBlur = 8;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // Duration
+  const totalSec = Math.round(durationSec);
+  const durLabel = `${pad2(Math.floor(totalSec / 60))}:${pad2(totalSec % 60)}`;
+  ctx.fillStyle = "rgba(255,255,255,0.50)";
   ctx.font = "500 24px system-ui, sans-serif";
-  ctx.fillText(`${bpm} BPM · MURMUR`, 86, 86);
+  ctx.textAlign = "right";
+  ctx.fillText(durLabel, WIDTH - 60, barY + 7);
+  ctx.textAlign = "start";
+
+  ctx.restore();
 }
 
 function paintPresetFrame(
@@ -319,10 +517,14 @@ function paintPresetFrame(
     title: string;
     vibe: string;
     bpm: number;
+    durationSec: number;
+    keySig: string;
   },
 ) {
-  const { preset, colors, frame, progress, particles, spawnParticle, title, vibe, bpm } =
-    input;
+  const {
+    preset, colors, frame, progress, particles, spawnParticle,
+    title, vibe, bpm, durationSec, keySig,
+  } = input;
   const [from, to] = colors;
   const drift = (Math.sin(frame * 0.02) + 1) / 2;
   const top = mixColors(from, to, drift * 0.35);
@@ -361,12 +563,26 @@ function paintPresetFrame(
       break;
   }
 
-  ctx.fillStyle = "rgba(0,0,0,0.18)";
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  ctx.fillStyle = "rgba(0,0,0,0.12)";
-  ctx.fillRect(0, HEIGHT * 0.52, WIDTH, HEIGHT * 0.48);
+  // Top vignette
+  const topGrad = ctx.createLinearGradient(0, 0, 0, HEIGHT * 0.2);
+  topGrad.addColorStop(0, "rgba(0,0,0,0.22)");
+  topGrad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = topGrad;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT * 0.2);
 
-  drawMeta(ctx, title, vibe, bpm);
+  // Overall dim
+  ctx.fillStyle = "rgba(0,0,0,0.12)";
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  // Bottom vignette for text readability
+  const bottomGrad = ctx.createLinearGradient(0, HEIGHT * 0.38, 0, HEIGHT);
+  bottomGrad.addColorStop(0, "rgba(0,0,0,0)");
+  bottomGrad.addColorStop(0.45, "rgba(0,0,0,0.16)");
+  bottomGrad.addColorStop(1, "rgba(0,0,0,0.52)");
+  ctx.fillStyle = bottomGrad;
+  ctx.fillRect(0, HEIGHT * 0.38, WIDTH, HEIGHT * 0.62);
+
+  drawMeta(ctx, title, vibe, bpm, progress, durationSec, keySig);
 }
 
 function stepParticles(

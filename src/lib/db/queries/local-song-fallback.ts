@@ -49,6 +49,35 @@ export function getLocalSongsByUserFallback(userId: string): SongRow[] {
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
+// List response shape — drops the heavy audio/arrangement fields, matching
+// getSongSummariesByUser so the gallery payload stays lean even on the
+// DB-unavailable fallback path. The store keeps the full rows for detail reads.
+export type SongSummaryRow = Omit<SongRow, "mp3DataUrl" | "arrangementState">;
+
+export function getLocalSongSummariesByUserFallback(userId: string): SongSummaryRow[] {
+  return getLocalSongsByUserFallback(userId).map((song) => ({
+    id: song.id,
+    userId: song.userId,
+    title: song.title,
+    vibe: song.vibe,
+    vibeEn: song.vibeEn,
+    bpm: song.bpm,
+    keySignature: song.keySignature,
+    scaleType: song.scaleType,
+    duration: song.duration,
+    parentSongId: song.parentSongId,
+    rootSongId: song.rootSongId,
+    lineageDepth: song.lineageDepth,
+    sourceMelodyKind: song.sourceMelodyKind,
+    editCount: song.editCount,
+    editDepth: song.editDepth,
+    visualConfig: song.visualConfig,
+    tags: song.tags,
+    createdAt: song.createdAt,
+    updatedAt: song.updatedAt,
+  }));
+}
+
 export function getLocalSongByIdForUserFallback(
   songId: string,
   userId: string,

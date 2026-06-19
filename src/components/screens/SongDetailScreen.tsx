@@ -36,6 +36,7 @@ import { getPlayer, startAudioContext } from "@/lib/music/tone-player";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { Spinner } from "@/components/ui/spinner";
 import { ShareTicketCard } from "@/components/song-detail/ShareTicketCard";
 import { buildShareHtml, downloadHtml } from "@/modules/export/render-share-html";
 import { downloadBlob, renderPoster } from "@/modules/export/render-poster";
@@ -346,7 +347,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
         <PageBackdrop variant="soft" />
         <div className="relative z-10 flex min-h-svh items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#FF5924] border-t-transparent" />
+          <Spinner size="lg" />
         </div>
       </div>
     );
@@ -519,7 +520,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 handlePlay();
               }}
             >
-              <SongVisualCanvas gradient={gradient} isPlaying={isPlaying} />
+              <SongVisualCanvas gradient={gradient} artwork={song.visualConfig.artwork} isPlaying={isPlaying} />
               <div
                 className="absolute inset-x-0 top-0 h-2/5 pointer-events-none"
                 style={{
@@ -813,7 +814,7 @@ function ExportRow({
           {cost}
         </span>
         {busy ? (
-          <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#1A1A1A] border-t-transparent" />
+          <Spinner size="xs" variant="ink" />
         ) : (
           <span
             className="text-[#1A1A1A] text-[18px] transition-transform group-hover:translate-x-0.5"

@@ -444,7 +444,7 @@
             + safe area
    desktop (md+) — no bottom nav, minimal padding */
 :root {
-  --main-pb: calc(env(safe-area-inset-bottom, 0px) + 84px);
+  --main-pb: 0px;
   /* Side nav width — driven by .nav-collapsed on <html> for the collapsed state.
      Mobile keeps 0 (no side nav). Desktop default 208px (expanded). */
   --side-nav-w: 0px;
@@ -518,26 +518,26 @@
 
 @media (min-width: 1280px) {
   .hum-mirror-stage {
-    max-width: 820px;
-    grid-template-columns: minmax(0, 384px) 320px;
-    gap: 24px;
-    transform: translateX(8px);
+    max-width: 880px;
+    grid-template-columns: minmax(0, 400px) 320px;
+    gap: 72px;
+    transform: translateX(48px);
   }
 
   .hum-mirror-copy {
-    width: 384px;
+    width: 400px;
     text-align: left;
   }
 
   html.nav-collapsed .hum-mirror-stage {
-    max-width: 900px;
-    grid-template-columns: minmax(0, 456px) 320px;
-    gap: 48px;
-    transform: translateX(-34px);
+    max-width: 940px;
+    grid-template-columns: minmax(0, 440px) 320px;
+    gap: 72px;
+    transform: translateX(16px);
   }
 
   html.nav-collapsed .hum-mirror-copy {
-    width: 456px;
+    width: 440px;
   }
 }
 

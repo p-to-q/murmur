@@ -39,6 +39,7 @@ import { useTranslator } from "@/lib/i18n";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { Spinner } from "@/components/ui/spinner";
 
 type Phase = "requesting" | "awaiting_payment" | "confirming" | "succeeded" | "canceled" | "failed";
 
@@ -371,7 +372,7 @@ export function CheckoutScreen() {
                     transition={{ duration: 0.25 }}
                     className="flex flex-col items-center gap-4"
                   >
-                    <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#FF5924] border-t-transparent" />
+                    <Spinner size="lg" />
                     <AnimatePresence mode="wait">
                       <motion.p
                         key={`copy-${copyIdx}`}
@@ -395,7 +396,7 @@ export function CheckoutScreen() {
                     exit={{ opacity: 0 }}
                     className="flex flex-col items-center gap-4"
                   >
-                    <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#FF5924] border-t-transparent" />
+                    <Spinner size="lg" />
                     <p className="font-serif-italic text-[14px] text-[#6F6A63]">
                       {t("checkout.confirming_grant")}
                     </p>

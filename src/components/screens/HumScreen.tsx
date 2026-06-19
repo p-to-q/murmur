@@ -8,6 +8,7 @@ import {
   spendLocalNotes,
 } from "@/lib/balance/balance-manager";
 import { useAuthProviders } from "@/lib/hooks/use-auth-providers";
+import { Spinner } from "@/components/ui/spinner";
 import { AuthButtons } from "@/components/auth/auth-buttons";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
@@ -742,7 +743,7 @@ export function HumScreen() {
           style={{
             width: "min(65vw, 600px)",
             height: "min(55vw, 500px)",
-            left: "-5%",
+            left: "2%",
             bottom: "10%",
             background:
               "radial-gradient(ellipse at center, rgba(255,105,210,0.38) 0%, rgba(255,80,180,0.12) 50%, transparent 75%)",
@@ -751,31 +752,31 @@ export function HumScreen() {
             opacity: blobOpacity,
           }}
         />
-        {/* Yellow/gold blob — right side */}
+        {/* Soft peach blob — right side (whisper of warmth, never a yellow cast) */}
         <motion.div
           className="aurora-blob-2 absolute rounded-full"
           style={{
-            width: "min(55vw, 520px)",
-            height: "min(50vw, 460px)",
+            width: "min(52vw, 480px)",
+            height: "min(48vw, 440px)",
             right: "-8%",
-            top: "8%",
+            top: "10%",
             background:
-              "radial-gradient(ellipse at center, rgba(255,224,64,0.18) 0%, rgba(255,200,40,0.05) 50%, transparent 75%)",
+              "radial-gradient(ellipse at center, rgba(255,196,178,0.16) 0%, rgba(255,178,158,0.05) 50%, transparent 75%)",
             filter: "blur(55px)",
             scale: blob2Scale,
             opacity: blobOpacity,
           }}
         />
-        {/* Lavender/blue blob — top center */}
+        {/* Lavender/blue blob — top center (keeps the top airy and cool) */}
         <motion.div
           className="aurora-blob-3 absolute rounded-full"
           style={{
-            width: "min(45vw, 420px)",
-            height: "min(40vw, 380px)",
-            left: "30%",
+            width: "min(48vw, 440px)",
+            height: "min(42vw, 400px)",
+            left: "32%",
             top: "-5%",
             background:
-              "radial-gradient(ellipse at center, rgba(170,190,255,0.22) 0%, rgba(200,180,240,0.08) 50%, transparent 75%)",
+              "radial-gradient(ellipse at center, rgba(178,196,255,0.28) 0%, rgba(200,180,240,0.10) 50%, transparent 75%)",
             filter: "blur(50px)",
             scale: blob3Scale,
             opacity: blobOpacity,
@@ -801,6 +802,17 @@ export function HumScreen() {
 
       {/* ─── Content layout ──────────────────────────────────────── */}
       <div className="relative z-10 min-h-svh flex flex-col">
+        {/* Brand mark — mobile top-left */}
+        <span className="absolute left-5 z-20 inline-flex select-none md:hidden"
+          style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
+        >
+          <MurmurMark
+            size={36}
+            className="items-center"
+            imageClassName="drop-shadow-[0_10px_20px_rgba(26,26,26,0.07)]"
+          />
+        </span>
+
         {/* ── Desktop: side-by-side layout / Mobile: stacked ──── */}
         <div className="flex-1 flex items-center justify-center px-6 md:px-12 lg:px-14 xl:px-24">
           <div className="hum-mirror-stage grid w-full max-w-md grid-cols-1 items-center justify-items-center gap-8">
@@ -860,18 +872,6 @@ export function HumScreen() {
                         {t(inputLevelLabelKey(levelState))}
                       </motion.p>
                     )}
-                    {showHeardMessage && (
-                      <motion.p
-                        key="heard-message"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="mt-4 text-[11px] tracking-[0.14em] uppercase text-[#8C8780]"
-                      >
-                        {t("hum.level.heard")}
-                      </motion.p>
-                    )}
                   </AnimatePresence>
                 </motion.div>
               )}
@@ -903,7 +903,7 @@ export function HumScreen() {
             </div>
 
             {/* ── Right column: the orb ─────────────────────────── */}
-            <div className="relative flex min-h-[calc(min(55vw,296px)+42px)] flex-col items-center justify-center md:min-h-[338px] xl:min-h-[362px]">
+            <div className="relative flex min-h-[min(55vw,296px)] flex-col items-center justify-center md:min-h-[296px] xl:min-h-[320px]">
             {/* Orb container — responsive sizing */}
             <div
               className="relative h-[min(55vw,296px)] w-[min(55vw,296px)] xl:h-[320px] xl:w-[320px]"
@@ -1085,8 +1085,9 @@ export function HumScreen() {
                       key="processing-spin"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="w-8 h-8 rounded-full border-[2.5px] border-[#B6B0A4] border-t-transparent animate-spin"
-                    />
+                    >
+                      <Spinner size="lg" variant="muted" />
+                    </motion.div>
                   )}
                 </AnimatePresence>
               </motion.button>
@@ -1116,67 +1117,31 @@ export function HumScreen() {
               </AnimatePresence>
             </div>
 
-            {/* "Try demo" whisper below the orb. The slot is a FIXED-height
-                box that is ALWAYS present (the button itself only renders when
-                idle — still in the SSR HTML for the qa-routes hum-home marker).
-                Reserving the space keeps the orb column the same height in every
-                state; without it, the demo line vanishing on first click shrinks
-                this column, the vertically-centered row re-centers, and the orb
-                + headline visibly jump once. */}
-            <div className="mt-6 h-[18px] flex items-start justify-center">
+              {/* ── "Heard" floating pill — below orb, absolute so no layout shift ── */}
               <AnimatePresence>
-                {isIdle && !humError && (
-                  <motion.button
-                    key="demo-whisper"
-                    initial={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : false}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ delay: 0.6, duration: 0.5 }}
-                    onClick={() => {
-                      if (!passGuestGate()) return;
-                      startAudioContext();
-                      transcribeAndGenerate(undefined);
-                    }}
-                    className="font-serif-italic text-[12px] leading-none text-[#B6B0A4] hover:text-[#8C8780] transition-colors"
+                {showHeardMessage && (
+                  <motion.div
+                    key="heard-pill"
+                    initial={{ opacity: 0, y: 6, scale: 0.92 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                    className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+12px)] flex items-center gap-2 rounded-full bg-white/60 backdrop-blur-md px-4 py-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
                   >
-                    {t("hum.demo.cta")}
-                  </motion.button>
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF5924] opacity-50" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-[#FF5924]" />
+                    </span>
+                    <span className="text-[12px] tracking-[0.08em] text-[#1A1A1A]/70 font-medium">
+                      {t("hum.level.heard")}
+                    </span>
+                  </motion.div>
                 )}
               </AnimatePresence>
-            </div>
             </div>
           </div>
         </div>
 
-        {/* ── Bottom bar: brand (mobile) + recording hint ────────── */}
-        <div className="relative z-10 flex items-end justify-between px-5 md:px-16 lg:px-24 pb-6 md:pb-10"
-          style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
-        >
-          {/* Brand mark — mobile only */}
-          <span className="inline-flex h-[48px] items-end pl-0.5 select-none md:hidden">
-            <MurmurMark
-              size={48}
-              yOffset={2}
-              className="h-[48px] items-end"
-              imageClassName="drop-shadow-[0_10px_20px_rgba(26,26,26,0.07)]"
-            />
-          </span>
-
-          {/* CTA area — bottom right */}
-          <AnimatePresence mode="wait">
-            {isRecording && (
-              <motion.span
-                key="release"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="text-[#8C8780] text-[12px] tracking-[0.15em] uppercase"
-              >
-                {t("hum.cta.release")}
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </div>
 
         {/* ── Capture / transcription fallback ────────────────── */}
         <AnimatePresence>

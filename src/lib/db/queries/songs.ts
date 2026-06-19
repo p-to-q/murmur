@@ -11,6 +11,40 @@ export async function getSongsByUser(userId: string) {
   return db.select().from(songs).where(eq(songs.userId, userId)).orderBy(desc(songs.createdAt));
 }
 
+// Gallery / shelf / profile-count listings never touch the audio or the
+// arrangement editor — they only render cover metadata. `mp3DataUrl` is a
+// base64 data URL (often multiple MB) and `arrangementState` is a fat jsonb
+// blob with per-track version histories; pulling either into a list response
+// dwarfs everything else on the wire. Project them out here so switching to
+// the gallery stays cheap. Detail playback still uses the full-row queries.
+export async function getSongSummariesByUser(userId: string) {
+  return db
+    .select({
+      id: songs.id,
+      userId: songs.userId,
+      title: songs.title,
+      vibe: songs.vibe,
+      vibeEn: songs.vibeEn,
+      bpm: songs.bpm,
+      keySignature: songs.keySignature,
+      scaleType: songs.scaleType,
+      duration: songs.duration,
+      parentSongId: songs.parentSongId,
+      rootSongId: songs.rootSongId,
+      lineageDepth: songs.lineageDepth,
+      sourceMelodyKind: songs.sourceMelodyKind,
+      editCount: songs.editCount,
+      editDepth: songs.editDepth,
+      visualConfig: songs.visualConfig,
+      tags: songs.tags,
+      createdAt: songs.createdAt,
+      updatedAt: songs.updatedAt,
+    })
+    .from(songs)
+    .where(eq(songs.userId, userId))
+    .orderBy(desc(songs.createdAt));
+}
+
 export async function getSongById(songId: string) {
   const rows = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
   return rows[0] ?? null;

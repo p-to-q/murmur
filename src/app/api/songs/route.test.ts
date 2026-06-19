@@ -48,6 +48,7 @@ mock.module("@/lib/auth", () => ({
 
 mock.module("@/lib/db/queries/songs", () => ({
   getSongsByUser: mock(async () => []),
+  getSongSummariesByUser: mock(async () => []),
   getSongByIdForUser: mock(async () => null),
   createSong: createSongMock,
   createSongWithSpend: createSongWithSpendMock,

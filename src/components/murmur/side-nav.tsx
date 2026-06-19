@@ -316,8 +316,8 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
             </button>
           ) : (
             <button
-              onClick={() => signInWithOAuth("google", "/")}
-              className="group flex w-full items-center gap-3 rounded-[15px] border border-[#FF5924]/30 bg-white/50 px-4 py-3.5 text-left transition-colors hover:border-[#FF5924]/50 hover:bg-white/70"
+              onClick={onShareClick}
+              className="group flex w-full items-center gap-3 rounded-[15px] border border-[#E5DDD0] bg-white/50 px-4 py-3.5 text-left transition-colors hover:border-[#FF5924]/40 hover:bg-white/70"
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F1EB] text-[#FF5924] transition-colors">
                 <LogIn className="h-3.5 w-3.5" />
@@ -330,7 +330,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                   {t("nav.login.reward")}
                 </p>
               </div>
-              <span className="text-[#FF5924]/60 group-hover:text-[#FF5924] transition-colors text-[13px]">›</span>
+              <span className="text-[#B6B0A4] group-hover:text-[#FF5924] transition-colors text-[13px]">›</span>
             </button>
           )
         )}
@@ -807,7 +807,7 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
       >
         <BellIcon className="h-4 w-4" />
         {isGranted && (
-          <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[#34C759]" />
+          <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[#3D3A36]" />
         )}
       </button>
       {mounted && createPortal(popoverContent, document.body)}

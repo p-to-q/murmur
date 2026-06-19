@@ -1,16 +1,16 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import Image from "next/image";
+import { buildMeshGradient } from "@/components/song-detail/mesh-gradient";
+import type { VisualArtwork } from "@/modules/shared/types";
 
-/**
- * SongVisualCanvas — the breathing gradient + particle field shown on every
- * SongDetail page. Same painter as the share-html visual so a downloaded card
- * matches what the user saw in-app.
- */
 export function SongVisualCanvas({
   gradient,
+  artwork,
   isPlaying,
 }: {
   gradient: string;
+  artwork?: VisualArtwork;
   isPlaying: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -19,6 +19,12 @@ export function SongVisualCanvas({
   useEffect(() => {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
+
+  const artworkPath = artwork?.backgroundImagePath ?? artwork?.imagePath;
+  const bgStyle = useMemo(
+    () => buildMeshGradient(gradient, artwork?.palette),
+    [gradient, artwork?.palette],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -32,17 +38,6 @@ export function SongVisualCanvas({
       ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
     };
     resize();
-
-    const colorMatch = gradient.match(/#[0-9A-Fa-f]{6}/g) ?? ["#F4C87A", "#E9A06D"];
-    const c1 = colorMatch[0] ?? "#F4C87A";
-    const c2 = colorMatch[colorMatch.length - 1] ?? "#E9A06D";
-    const parse = (h: string) => ({
-      r: parseInt(h.slice(1, 3), 16),
-      g: parseInt(h.slice(3, 5), 16),
-      b: parseInt(h.slice(5, 7), 16),
-    });
-    const rgb1 = parse(c1);
-    const rgb2 = parse(c2);
 
     interface P { x: number; y: number; vx: number; vy: number; r: number; life: number; max: number }
     let particles: P[] = [];
@@ -66,13 +61,7 @@ export function SongVisualCanvas({
       if (!ctx || !canvas) return;
       const w = canvas.offsetWidth;
       const h = canvas.offsetHeight;
-      const t = (frame % 240) / 240;
-      const lerp = (a: number, b: number) => Math.round(a + (b - a) * Math.sin(t * Math.PI));
-      const gr = ctx.createLinearGradient(0, 0, w, h);
-      gr.addColorStop(0, `rgb(${lerp(rgb1.r, rgb2.r)},${lerp(rgb1.g, rgb2.g)},${lerp(rgb1.b, rgb2.b)})`);
-      gr.addColorStop(1, `rgb(${rgb2.r},${rgb2.g},${rgb2.b})`);
-      ctx.fillStyle = gr;
-      ctx.fillRect(0, 0, w, h);
+      ctx.clearRect(0, 0, w, h);
 
       const playing = isPlayingRef.current;
       if (playing && particles.length < 50 && frame % 3 === 0) particles.push(spawn());
@@ -109,5 +98,26 @@ export function SongVisualCanvas({
     return () => cancelAnimationFrame(frameRef.current);
   }, [gradient]);
 
-  return <canvas ref={canvasRef} className="w-full h-full" />;
+  return (
+    <div className="relative w-full h-full">
+      {/* Mesh gradient background */}
+      <div className="absolute inset-0" style={bgStyle} />
+
+      {/* Artwork overlay */}
+      {artworkPath && (
+        <div className="absolute inset-0 opacity-35">
+          <Image
+            src={artworkPath}
+            alt={artwork?.title ?? ""}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, 672px"
+          />
+        </div>
+      )}
+
+      {/* Particle canvas (transparent) */}
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+    </div>
+  );
 }

@@ -89,7 +89,7 @@ export function MeScreen() {
       </div>
 
       {/* ── Body cards ─────────────────────────────────────────────── */}
-      <div className="relative z-10 px-5 md:px-12 max-w-3xl mx-auto space-y-5 pb-6">
+      <div className="relative z-10 px-5 md:px-12 max-w-3xl mx-auto space-y-5 pb-8">
         <Card className="relative z-20 overflow-visible">
           <SectionLabel>{t("me.profile.title") || "Profile"}</SectionLabel>
           <div className="space-y-4">
@@ -146,7 +146,7 @@ export function MeScreen() {
 
         <Card>
           <SectionLabel>{t("me.repair_bias.title") || "创作偏好"}</SectionLabel>
-          <div className="space-y-7">
+          <div className="space-y-5">
             <p className="max-w-[30rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
               {t("me.repair_bias.helper") ||
                 "当 Murmur 拿不准该怎么理解你哼的那一段时，这个设置会影响它的判断。"}
@@ -427,7 +427,7 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="eyebrow mb-2 text-[#8C8780]">{children}</p>;
+  return <p className="eyebrow mb-3 text-[#8C8780]">{children}</p>;
 }
 
 function LangPill({

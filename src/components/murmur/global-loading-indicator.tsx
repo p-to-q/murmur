@@ -1,6 +1,7 @@
 "use client";
 
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { Spinner } from "@/components/ui/spinner";
 import { useTranslator } from "@/lib/i18n";
 
 export function GlobalLoadingIndicator() {
@@ -11,11 +12,7 @@ export function GlobalLoadingIndicator() {
       <PageBackdrop variant="soft" />
 
       <div className="relative z-10 flex min-h-svh items-center justify-center">
-        <div className="flex items-center gap-2" aria-label={t("loading.aria")}>
-          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#FF8A5C] [animation-delay:0ms]" />
-          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#FF8A5C] [animation-delay:180ms]" />
-          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#FF8A5C] [animation-delay:360ms]" />
-        </div>
+        <Spinner size="lg" aria-label={t("loading.aria")} />
       </div>
     </div>
   );

@@ -4,10 +4,10 @@ import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
-import { getSongsByUser, createSong, createSongWithSpend } from "@/lib/db/queries/songs";
+import { getSongSummariesByUser, createSong, createSongWithSpend } from "@/lib/db/queries/songs";
 import {
   createLocalSongFallback,
-  getLocalSongsByUserFallback,
+  getLocalSongSummariesByUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
 import { log } from "@/lib/observability/log";
 import { COST } from "@murmur/core";
@@ -50,11 +50,11 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   try {
-    const rows = await getSongsByUser(userId);
+    const rows = await getSongSummariesByUser(userId);
     return NextResponse.json(rows);
   } catch (err) {
     if (shouldUseLocalSongFallback() && isDatabaseUnavailable(err)) {
-      const rows = getLocalSongsByUserFallback(userId);
+      const rows = getLocalSongSummariesByUserFallback(userId);
       log("song.list_failed", {
         reason: "database_unavailable",
         fallback: "local_guest_song_snapshot",
