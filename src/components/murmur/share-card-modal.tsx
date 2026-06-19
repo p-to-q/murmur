@@ -18,7 +18,7 @@ interface ShareCardModalProps {
 
 const CAROUSEL_SLIDES = [
   {
-    image: "/images/share-murmur-bg-v2.jpg",
+    image: "/images/share-murmur-bg-v3.png",
     bylineKey: "share.byline" as const,
     objectPosition: "center 38%",
   },
