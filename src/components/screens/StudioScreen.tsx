@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { RotateCcw, Play, Pause, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
+import Image from "next/image";
+
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
@@ -31,6 +33,7 @@ import type {
 
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { MurmurWave } from "@/components/murmur/murmur-wave";
+import { buildMeshGradient } from "@/components/song-detail/mesh-gradient";
 import { AurisPanel } from "@/components/studio/auris-panel";
 import { TrackMixer } from "@/components/studio/track-mixer";
 import { SceneGrid } from "@/components/studio/scene-grid";
@@ -294,6 +297,11 @@ function StudioContent({ version }: { version: VibeVersion }) {
   const waveAccent =
     extractFirstHex(currentVersion.visualConfig.gradient) ?? "#FF8A5C";
 
+  // Artwork background
+  const artwork = currentVersion.visualConfig.artwork;
+  const artworkPath = artwork?.backgroundImagePath ?? artwork?.imagePath;
+  const meshStyle = buildMeshGradient(currentVersion.visualConfig.gradient, artwork?.palette);
+
   // Magenta versions are whole generated clips — the per-track mixer and
   // arrangement edits below don't apply to them.
   const magenta = currentVersion.generation;
@@ -313,13 +321,29 @@ function StudioContent({ version }: { version: VibeVersion }) {
           transition={{ delay: 0.06, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           className="relative cursor-pointer select-none overflow-hidden flex-shrink-0"
           style={{
-            background: currentVersion.visualConfig.gradient,
             height: "clamp(320px, 62vh, 600px)",
             borderBottomLeftRadius: "24px",
             borderBottomRightRadius: "24px",
           }}
           onClick={togglePlay}
         >
+          {/* Mesh gradient + artwork painting */}
+          <div className="absolute inset-0" style={meshStyle} />
+          {artwork && artworkPath && (
+            <Image
+              src={artworkPath}
+              alt={artwork.title ?? ""}
+              fill
+              sizes="100vw"
+              className="absolute inset-0 h-full w-full object-cover opacity-35"
+              style={{
+                objectPosition: `${((artwork.crop?.x ?? 0.5) * 100).toFixed(1)}% ${((artwork.crop?.y ?? 0.5) * 100).toFixed(1)}%`,
+                transform: `scale(${Math.max(1, artwork.crop?.scale ?? 1)})`,
+                transformOrigin: "center center",
+              }}
+            />
+          )}
+
           {/* ── Header controls — positioned absolutely inside hero ──────────────────────── */}
           <div
             className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 md:px-8 py-3 z-20"

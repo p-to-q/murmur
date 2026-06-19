@@ -33,49 +33,49 @@ function demoArtwork(id: string) {
   return artwork;
 }
 
-// Demo songs for empty state — gradients keep their covers on the same
-// rendering path as real songs.
+// Demo songs for empty state — real songs from the gallery, gradients keep
+// their covers on the same rendering path as real songs.
 const DEMO_SONGS: SongWithMeta[] = [
   {
     id: "demo-1",
-    title: "Velvet Nocturne",
-    vibe: "Melancholic",
-    bpm: 72,
-    createdAt: "2026-06-11T10:00:00.000Z",
+    title: "Weightless DnB",
+    vibe: "Drum and Bass",
+    bpm: 80,
+    createdAt: "2026-06-19T17:04:56.832Z",
     visualConfig: {
-      preset: "end_credits",
-      gradient: "linear-gradient(148deg, #4E5D6E 0%, #8B96A6 48%, #D8D0C4 100%)",
-      particleDensity: 0.4,
-      pulseSource: "melody",
-      artwork: demoArtwork("nocturne_metro-commons-whistler-nocturne-southampton-water"),
+      preset: "confetti_pulse",
+      gradient: "linear-gradient(148deg, #646740 0%, #314036 48%, #3E4D3D 100%)",
+      particleDensity: 0.9,
+      pulseSource: "drums",
+      artwork: demoArtwork("hypermodern_void-commons-whistler-nocturne-black-gold-falling-rocket"),
     },
   },
   {
     id: "demo-2",
-    title: "Tokyo Rain",
-    vibe: "Lo-fi",
-    bpm: 88,
-    createdAt: "2026-06-08T10:00:00.000Z",
+    title: "Dreamy Celtic",
+    vibe: "Celtic Folk",
+    bpm: 100,
+    createdAt: "2026-06-17T23:32:41.212Z",
     visualConfig: {
-      preset: "rain_glass",
-      gradient: "linear-gradient(148deg, #5A8EAA 0%, #9DB8C0 48%, #DFE0DA 100%)",
-      particleDensity: 0.35,
+      preset: "warm_particles",
+      gradient: "linear-gradient(148deg, #8BAFC2 0%, #F0C7D8 48%, #B87FCC 100%)",
+      particleDensity: 0.45,
       pulseSource: "melody",
-      artwork: demoArtwork("nocturne_metro-commons-hassam-rainy-day-fifth-avenue"),
+      artwork: demoArtwork("pastoral_memory-met-436081"),
     },
   },
   {
     id: "demo-3",
-    title: "Wilderness Dream",
-    vibe: "Ethereal",
-    bpm: 105,
-    createdAt: "2026-06-05T10:00:00.000Z",
+    title: "Cozy Guzheng",
+    vibe: "Guzheng Meditation",
+    bpm: 94,
+    createdAt: "2026-06-17T03:08:47.543Z",
     visualConfig: {
-      preset: "warm_particles",
-      gradient: "linear-gradient(148deg, #A8C8E8 0%, #E8E2F4 48%, #7FA6CC 100%)",
-      particleDensity: 0.45,
+      preset: "rain_glass",
+      gradient: "linear-gradient(148deg, #E8956B 0%, #FFBA5A 48%, #B86B4C 100%)",
+      particleDensity: 0.3,
       pulseSource: "melody",
-      artwork: demoArtwork("sublime_terrain-manual-saam-1967.136.7"),
+      artwork: demoArtwork("pastoral_memory-manual-monet-haystack-morning-snow-effect"),
     },
   },
 ];
@@ -132,11 +132,6 @@ export function GalleryScreen() {
   }, [displaySongs, sort]);
 
   const handleSongClick = (song: SongWithMeta) => {
-    if (song.id.startsWith("demo-")) {
-      setDemoPreview(song);
-      return;
-    }
-
     memory
       .reportAction({
         content: `Opened "${song.title}" from gallery`,
@@ -295,7 +290,7 @@ export function GalleryScreen() {
               className="mb-6 md:mb-8 text-center"
             >
               <p className="font-serif-italic text-[#8C8780] text-[14px] md:text-[16px] mb-3">
-                {t("gallery.demo.hint") || "这些是示例歌曲，点击开始创作你的第一首 ↓"}
+                {t("gallery.demo.hint") || "这些是示例歌曲 ↓"}
               </p>
             </motion.div>
           )}

@@ -2,6 +2,7 @@ import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
   mp3DataUrl?: string | null;
+  mp3Url?: string | null;
   bpm?: number;
   keySignature?: string;
 };
@@ -68,14 +69,17 @@ export function getVideoExportSupport(): VideoExportSupport {
   return { supported: true };
 }
 
-export async function exportSongAsVideo(song: Song): Promise<void> {
-  // Export design intent:
-  // reuse the song's existing audio plus its current visual preset instead of
-  // inventing a separate "video mode". That keeps preview/export coherent and
-  // makes video feel like a true product output, not an afterthought.
-  // Container preference: MP4 when the browser can mux it, WebM otherwise —
-  // see pickSupportedMimeType.
-  if (!song.mp3DataUrl) {
+export interface RenderVideoOptions {
+  onProgress?: (pct: number) => void;
+  silent?: boolean;
+}
+
+export async function renderSongVideo(
+  song: Song,
+  opts?: RenderVideoOptions,
+): Promise<Blob> {
+  const audioSrc = song.mp3DataUrl || song.mp3Url;
+  if (!audioSrc) {
     throw new VideoExportError("audio_required", "Audio is required for video export");
   }
 
@@ -96,7 +100,7 @@ export async function exportSongAsVideo(song: Song): Promise<void> {
     throw new VideoExportError("canvas_unavailable", "Canvas context unavailable");
   }
 
-  const audio = new Audio(song.mp3DataUrl);
+  const audio = new Audio(audioSrc);
   audio.crossOrigin = "anonymous";
   audio.preload = "auto";
   audio.muted = false;
@@ -122,7 +126,9 @@ export async function exportSongAsVideo(song: Song): Promise<void> {
   const destination = audioContext.createMediaStreamDestination();
   const source = audioContext.createMediaElementSource(audio);
   source.connect(destination);
-  source.connect(audioContext.destination);
+  if (!opts?.silent) {
+    source.connect(audioContext.destination);
+  }
 
   const canvasStream = canvas.captureStream(FPS);
   const mixedStream = new MediaStream([
@@ -156,14 +162,13 @@ export async function exportSongAsVideo(song: Song): Promise<void> {
   };
 
   const draw = () => {
+    const dur = audio.duration && Number.isFinite(audio.duration) ? audio.duration : 1;
+    const progress = audio.currentTime / Math.max(dur, 0.001);
     paintPresetFrame(ctx, {
       preset,
       colors,
       frame,
-      progress:
-        audio.duration && Number.isFinite(audio.duration)
-          ? audio.currentTime / Math.max(audio.duration, 0.001)
-          : 0,
+      progress,
       particles,
       spawnParticle,
       title: song.title,
@@ -173,6 +178,7 @@ export async function exportSongAsVideo(song: Song): Promise<void> {
       keySig: song.keySignature ?? "C",
     });
     frame += 1;
+    opts?.onProgress?.(Math.min(progress, 1));
     rafId = requestAnimationFrame(draw);
   };
 
@@ -211,10 +217,27 @@ export async function exportSongAsVideo(song: Song): Promise<void> {
   mixedStream.getTracks().forEach((track) => track.stop());
   await audioContext.close().catch(() => {});
 
+  opts?.onProgress?.(1);
+  return blob;
+}
+
+export function getVideoMimeType(): string | null {
+  return pickSupportedMimeType();
+}
+
+export function getVideoExtension(): "mp4" | "webm" {
+  const mime = pickSupportedMimeType();
+  return mime ? extensionForMimeType(mime) : "mp4";
+}
+
+export async function exportSongAsVideo(song: Song): Promise<void> {
+  const blob = await renderSongVideo(song);
+  const mimeType = pickSupportedMimeType() ?? "video/mp4";
+
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `${slugify(song.title)}.${extensionForMimeType(supportedMimeType)}`;
+  anchor.download = `${slugify(song.title)}.${extensionForMimeType(mimeType)}`;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }

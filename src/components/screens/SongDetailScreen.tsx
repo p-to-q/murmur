@@ -38,7 +38,7 @@ import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { Spinner } from "@/components/ui/spinner";
 import { ShareTicketCard } from "@/components/song-detail/ShareTicketCard";
-import { buildShareHtml, downloadHtml } from "@/modules/export/render-share-html";
+import { exportSongAsVideo } from "@/modules/export/export-video";
 import {
   buildSavedSongRemixVersions,
   hydrateSavedSongToVersion,
@@ -50,12 +50,13 @@ import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
   mp3DataUrl?: string | null;
+  mp3Url?: string | null;
   bpm?: number;
   keySignature?: string;
   tags?: string[];
 };
 
-type ExportKey = "audio" | "html";
+type ExportKey = "audio" | "video";
 
 export function SongDetailScreen({ songId }: { songId: string }) {
   const router = useRouter();
@@ -187,10 +188,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
   const handlePlay = useCallback(async () => {
     if (!song) return;
-    if (song.mp3DataUrl) {
+    const audioSrc = song.mp3DataUrl || song.mp3Url;
+    if (audioSrc) {
       let el = audioRef.current;
       if (!el) {
-        el = new Audio(song.mp3DataUrl);
+        el = new Audio(audioSrc);
         el.preload = "auto";
         el.addEventListener("ended", () => setIsPlaying(false));
         el.addEventListener("pause", () => setIsPlaying(false));
@@ -229,15 +231,16 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   );
 
   const exportAudio = async () => {
-    if (!song?.mp3DataUrl) {
+    const audioSrc = song?.mp3DataUrl || song?.mp3Url;
+    if (!audioSrc) {
       toast(t("song.share.no_audio"));
       return;
     }
     setBusy("audio");
     try {
-      const ext = song.mp3DataUrl.startsWith("data:audio/wav") ? "wav" : "mp3";
+      const ext = audioSrc.startsWith("data:audio/wav") ? "wav" : "mp3";
       const a = document.createElement("a");
-      a.href = song.mp3DataUrl;
+      a.href = audioSrc;
       a.download = `${slug}.${ext}`;
       a.click();
       toast.success(t("song.export.ok"));
@@ -254,28 +257,18 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     }
   };
 
-  const exportHtml = async () => {
+  const exportVideo = useCallback(async () => {
     if (!song) return;
-    setBusy("html");
+    setBusy("video");
     try {
-      const html = buildShareHtml({
-        title: song.title,
-        vibe: song.vibe,
-        bpm: song.bpm ?? 80,
-        keySig: song.keySignature ?? "C",
-        duration: song.duration,
-        gradient,
-        preset: song.visualConfig.preset,
-        audioDataUrl: song.mp3DataUrl ?? undefined,
-      });
-      downloadHtml(`${slug}.html`, html);
+      await exportSongAsVideo(song);
       toast.success(t("song.export.ok"));
       memory
         .reportAction({
-          content: `Exported share card for "${song.title}"`,
+          content: `Exported video for "${song.title}"`,
           event_type: "update",
           page: "song-detail",
-          metadata: { type: "download_html", song_id: song.id },
+          metadata: { type: "download_video", song_id: song.id },
         })
         .catch(() => {});
     } catch (e) {
@@ -284,7 +277,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     } finally {
       setBusy(null);
     }
-  };
+  }, [song, t]);
 
   /* ── Delete ────────────────────────────────────────────────────────── */
 
@@ -616,16 +609,18 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.export.audio.label") || "Audio"}
                 hint={t("song.export.audio.hint") || "mp3"}
                 cost={t("song.export.free") || "free"}
-                disabled={!song.mp3DataUrl}
+                disabled={!song.mp3DataUrl && !song.mp3Url}
                 disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
                 busy={busy === "audio"}
                 onClick={exportAudio}
               />
               <ExportRow
-                label={t("song.export.html.label") || "Share card"}
-                hint={t("song.export.ticket.hint") || "ticket-style image"}
+                label={t("song.export.video.label") || "Video"}
+                hint={t("song.export.video.hint") || "mp4"}
                 cost={t("song.export.free") || "free"}
-                busy={false}
+                disabled={!song.mp3DataUrl && !song.mp3Url}
+                disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
+                busy={busy === "video"}
                 onClick={() => setShareCardOpen(true)}
               />
             </motion.div>
@@ -670,9 +665,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         bpm={song.bpm ?? 80}
         keySignature={song.keySignature ?? "C"}
         createdAt={song.createdAt}
-        mp3DataUrl={song.mp3DataUrl}
+        audioSrc={song.mp3DataUrl || song.mp3Url}
         open={shareCardOpen}
         onClose={() => setShareCardOpen(false)}
+        onDownloadVideo={exportVideo}
+        videoExporting={busy === "video"}
       />
 
       {/* Delete confirm */}

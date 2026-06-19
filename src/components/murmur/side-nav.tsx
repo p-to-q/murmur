@@ -149,69 +149,67 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
       }}
       aria-label="Primary navigation"
     >
-      {/* ── Brand area — fixed height so nav items stay aligned on collapse ── */}
-      <div
-        className={collapsed
-          ? "relative z-10 flex h-[52px] flex-col items-center justify-center gap-1.5"
-          : "relative z-10 flex h-[52px] items-center justify-between px-7 pr-5"
-        }
-      >
+      {/* ── Brand area — abs-positioned children for smooth transition ── */}
+      <div className="relative z-10 h-[60px]">
+        {/* Brand glyph — visible when collapsed */}
         <button
           onClick={goHome}
           aria-label="Murmur — home"
-          className={collapsed ? "group inline-flex items-center justify-center" : "group inline-flex items-center justify-start"}
+          className={`absolute inline-flex items-center justify-center transition-opacity duration-200 ${
+            collapsed ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+          style={{ left: 34, top: 4, transform: "translateX(-50%)" }}
         >
-          <AnimatePresence initial={false} mode="wait">
-            {collapsed ? (
-              <motion.span
-                key="collapsed-glyph"
-                initial={ENABLE_NAV_ENTRANCE_MOTION ? { opacity: 0, scale: 0.78, rotate: -8 } : false}
-                animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                exit={ENABLE_NAV_ENTRANCE_MOTION ? { opacity: 0, scale: 0.84, rotate: 8 } : undefined}
-                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                className="inline-flex"
-              >
-                <BrandGlyph audioActive={audioActive} />
-              </motion.span>
-            ) : (
-              <motion.span
-                key="expanded-mark"
-                initial={ENABLE_NAV_ENTRANCE_MOTION ? { opacity: 0, x: -10, scale: 0.96 } : false}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={ENABLE_NAV_ENTRANCE_MOTION ? { opacity: 0, x: -6, scale: 0.98 } : undefined}
-                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                className="transition-opacity group-hover:opacity-90"
-              >
-                <MurmurMark size={34} yOffset={0} className="h-[34px]" />
-              </motion.span>
-            )}
-          </AnimatePresence>
+          <BrandGlyph audioActive={audioActive} />
         </button>
 
-        {!collapsed && (
-          <button
-            onClick={() => setCollapsed(true)}
-            aria-label="Collapse navigation"
-            className="ml-7 shrink-0 text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
+        {/* Brand mark — visible when expanded */}
+        <button
+          onClick={goHome}
+          aria-label="Murmur — home"
+          className={`absolute group transition-opacity duration-200 ${
+            collapsed ? "opacity-0 pointer-events-none" : "opacity-100"
+          }`}
+          style={{ left: 28, top: "50%", transform: "translateY(-50%)" }}
+        >
+          <span className="transition-opacity group-hover:opacity-90">
+            <MurmurMark size={34} yOffset={0} className="h-[34px]" />
+          </span>
+        </button>
+
+        {/* Collapse/expand toggle — single button, position transitions */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+          className="absolute text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
+          style={{
+            left: collapsed ? 34 : 293,
+            top: collapsed ? 49 : 30,
+            transform: "translate(-50%, -50%)",
+            transition: "left 0.3s cubic-bezier(0.22, 1, 0.36, 1), top 0.3s cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
+          <span
+            className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
+              collapsed ? "opacity-0" : "opacity-100"
+            }`}
           >
             <ChevronsLeft className="h-3.5 w-3.5" />
-          </button>
-        )}
-        {collapsed && (
-          <button
-            onClick={() => setCollapsed(false)}
-            aria-label="Expand navigation"
-            className="text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
+          </span>
+          <span
+            className={`flex items-center justify-center transition-opacity duration-200 ${
+              collapsed ? "opacity-100" : "opacity-0"
+            }`}
           >
             <ChevronsRight className="h-3.5 w-3.5" />
-          </button>
-        )}
+          </span>
+        </button>
       </div>
 
       {/* ── Destinations ─────────────────────────────────────────── */}
       <LayoutGroup id="side-nav">
         <nav
-          className="relative z-10 mt-8"
+          className="relative z-10 mt-12"
           style={{
             paddingLeft: collapsed ? 0 : 28,
             paddingRight: collapsed ? 0 : 28,
@@ -261,10 +259,10 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                     collapsed ? "opacity-0 pointer-events-none" : "opacity-100"
                   }`}
                 >
-                  {isActive && !collapsed && (
+                  {isActive && (
                     <motion.span
                       layoutId="side-nav-active-marker"
-                      className="absolute -left-7 top-1/2 h-9 w-[3px] -translate-y-1/2 overflow-visible"
+                      className={`absolute -left-7 top-1/2 h-9 w-[3px] -translate-y-1/2 overflow-visible transition-opacity duration-200 ${collapsed ? "opacity-0" : "opacity-100"}`}
                       initial={false}
                       transition={{
                         layout: { duration: 0.46, ease: [0.16, 1, 0.3, 1] },

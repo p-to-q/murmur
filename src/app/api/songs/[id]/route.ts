@@ -6,6 +6,7 @@ import {
   getSongByIdForUser,
   updateSongForUser,
 } from "@/lib/db/queries/songs";
+import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import {
   deleteLocalSongForUserFallback,
@@ -44,6 +45,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const { id } = await params;
+
+  if (isDemoSongId(id)) {
+    const demo = getDemoSong(id);
+    if (!demo) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const { mp3Url, ...rest } = demo;
+    return NextResponse.json({ ...rest, mp3DataUrl: null, mp3Url });
+  }
+
   try {
     const song = await getSongByIdForUser(id, userId);
     if (!song) {

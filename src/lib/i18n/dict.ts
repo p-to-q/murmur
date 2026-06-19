@@ -376,7 +376,7 @@ export const DICT = {
   "gallery.delete.done": { zh: "已删除。", en: "Deleted." },
   "gallery.demo.preview_hint": { zh: "这是一首示例歌曲，哼一段旋律来创作属于你自己的。", en: "This is a demo song — hum a melody to create your own." },
   "gallery.demo.cta_create": { zh: "开始创作", en: "Start creating" },
-  "gallery.demo.hint":   { zh: "这些是示例歌曲，点击开始创作你的第一首 ↓", en: "These are demo songs — tap one to start your first ↓" },
+  "gallery.demo.hint":   { zh: "这些是示例歌曲 ↓", en: "These are demo songs ↓" },
   "gallery.start_hum":   { zh: "开始哼唱", en: "Start humming" },
 
   // ── Activity heatmap（Gallery 顶部）───────────────────────────────

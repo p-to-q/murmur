@@ -26,6 +26,8 @@ import { Play, Pause, Loader2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 
+import Image from "next/image";
+
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useTranslator, useI18nStore } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
@@ -38,6 +40,7 @@ import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import type { VibeVersion } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { MurmurWave } from "@/components/murmur/murmur-wave";
+import { buildMeshGradient } from "@/components/song-detail/mesh-gradient";
 import { VIBE_PRESETS } from "@/presets/vibes";
 
 /** Visual phases of the route arrival. */
@@ -429,6 +432,10 @@ function VibeCard({
   const isPending = genStatus === "pending";
   const isError = genStatus === "error";
 
+  const artwork = version.visualConfig.artwork;
+  const artworkPath = artwork?.backgroundImagePath ?? artwork?.imagePath;
+  const meshStyle = buildMeshGradient(version.visualConfig.gradient, artwork?.palette);
+
   // Background layer blur: idle = slight soft focus, auditioning = clear, others = blurred
   const bgBlur = isAuditioning ? 0 : someoneIsAuditioning ? 4.5 : 1.5;
   const bgBrightness = isAuditioning ? 1.05 : someoneIsAuditioning ? 0.82 : 1;
@@ -449,11 +456,22 @@ function VibeCard({
         }}
         transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
       >
-        {/* Gradient fill */}
-        <div
-          className="absolute inset-0"
-          style={{ background: version.visualConfig.gradient }}
-        />
+        {/* Mesh gradient fill */}
+        <div className="absolute inset-0" style={meshStyle} />
+        {artwork && artworkPath && (
+          <Image
+            src={artworkPath}
+            alt={artwork.title ?? ""}
+            fill
+            sizes="(max-width: 768px) 100vw, 60vw"
+            className="absolute inset-0 h-full w-full object-cover opacity-35"
+            style={{
+              objectPosition: `${((artwork.crop?.x ?? 0.5) * 100).toFixed(1)}% ${((artwork.crop?.y ?? 0.5) * 100).toFixed(1)}%`,
+              transform: `scale(${Math.max(1, artwork.crop?.scale ?? 1)})`,
+              transformOrigin: "center center",
+            }}
+          />
+        )}
         {/* Top darken for legibility */}
         <div
           className="absolute inset-x-0 top-0 h-2/5 pointer-events-none"

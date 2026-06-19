@@ -518,26 +518,21 @@
 
 @media (min-width: 1280px) {
   .hum-mirror-stage {
-    max-width: 880px;
-    grid-template-columns: minmax(0, 400px) 320px;
-    gap: 72px;
-    transform: translateX(48px);
+    max-width: clamp(780px, 62vw, 960px);
+    grid-template-columns: minmax(0, 1fr) clamp(280px, 22vw, 340px);
+    gap: clamp(48px, 5vw, 96px);
+    transform: translateX(clamp(24px, 3vw, 56px));
   }
 
   .hum-mirror-copy {
-    width: 400px;
     text-align: left;
   }
 
   html.nav-collapsed .hum-mirror-stage {
-    max-width: 940px;
-    grid-template-columns: minmax(0, 440px) 320px;
-    gap: 72px;
-    transform: translateX(16px);
-  }
-
-  html.nav-collapsed .hum-mirror-copy {
-    width: 440px;
+    max-width: clamp(820px, 66vw, 1040px);
+    grid-template-columns: minmax(0, 1fr) clamp(280px, 22vw, 340px);
+    gap: clamp(48px, 5vw, 96px);
+    transform: translateX(clamp(8px, 1vw, 24px));
   }
 }
 

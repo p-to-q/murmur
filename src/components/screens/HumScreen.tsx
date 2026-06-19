@@ -44,7 +44,6 @@ import {
   type TranscribeRequestErrorCode,
 } from "@/lib/api/transcribe";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
-import { MurmurMark } from "@/components/murmur/murmur-mark";
 import { formatHumSupportCode } from "@/lib/observability/support-code";
 
 const MAX_DURATION = 15;
@@ -802,20 +801,9 @@ export function HumScreen() {
 
       {/* ─── Content layout ──────────────────────────────────────── */}
       <div className="relative z-10 min-h-svh flex flex-col">
-        {/* Brand mark — mobile top-left */}
-        <span className="absolute left-5 z-20 inline-flex select-none md:hidden"
-          style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
-        >
-          <MurmurMark
-            size={36}
-            className="items-center"
-            imageClassName="drop-shadow-[0_10px_20px_rgba(26,26,26,0.07)]"
-          />
-        </span>
-
         {/* ── Desktop: side-by-side layout / Mobile: stacked ──── */}
         <div className="flex-1 flex items-center justify-center px-6 md:px-12 lg:px-14 xl:px-24">
-          <div className="hum-mirror-stage grid w-full max-w-md grid-cols-1 items-center justify-items-center gap-8">
+          <div className="hum-mirror-stage grid w-full max-w-md xl:max-w-none grid-cols-1 items-center justify-items-center gap-8">
             {/* The stage is one macro block, but the text and orb keep separate
                 locked boxes. The outer max-width controls composition; the inner
                 min-heights protect the orb from headline rotation and async copy. */}
@@ -889,10 +877,10 @@ export function HumScreen() {
             </div>
 
             {/* ── Right column: the orb ─────────────────────────── */}
-            <div className="relative flex min-h-[min(55vw,296px)] flex-col items-center justify-center md:min-h-[296px] xl:min-h-[320px]">
+            <div className="relative flex min-h-[min(55vw,296px)] flex-col items-center justify-center md:min-h-[296px] xl:min-h-[clamp(280px,22vw,340px)]">
             {/* Orb container — responsive sizing */}
             <div
-              className="relative h-[min(55vw,296px)] w-[min(55vw,296px)] xl:h-[320px] xl:w-[320px]"
+              className="relative h-[min(55vw,296px)] w-[min(55vw,296px)] xl:h-[clamp(280px,22vw,340px)] xl:w-[clamp(280px,22vw,340px)]"
             >
               {/* Rotating conic glow behind the orb */}
               <motion.div
