@@ -843,14 +843,14 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
         className={`relative ${buttonCls}`}
       >
         <BellIcon className="h-4 w-4" />
-        {isGranted && (
-          <span
-            className="absolute -right-1 -top-1 z-10 flex h-2.5 w-2.5 items-center justify-center rounded-full border border-[#E5DDD0] bg-white transition-colors group-hover:border-[#C8C0B4]"
-            aria-hidden
-          >
-            <span className="h-1 w-1 rounded-full bg-[#E5DDD0] transition-colors group-hover:bg-[#C8C0B4]" />
-          </span>
-        )}
+        <span
+          className={`absolute -right-1 -top-1 z-10 flex h-2.5 w-2.5 items-center justify-center rounded-full border border-[#E5DDD0] bg-white transition-[opacity,transform] duration-200 ease-out ${
+            alertsOn ? "scale-100 opacity-100" : "pointer-events-none scale-75 opacity-0"
+          }`}
+          aria-hidden
+        >
+          <span className="h-1 w-1 rounded-full bg-[#E5DDD0]" />
+        </span>
       </button>
       {mounted && createPortal(popoverContent, document.body)}
     </>
