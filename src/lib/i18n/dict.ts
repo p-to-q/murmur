@@ -16,6 +16,8 @@ export const DICT = {
   "nav.topup":         { zh: "补给",       en: "top up" },
   "nav.share":         { zh: "分享 Murmur", en: "Share Murmur" },
   "nav.share.reward":  { zh: "各得 100 音磅", en: "100 notes for both" },
+  "nav.login":         { zh: "登录 Murmur", en: "Log in to Murmur" },
+  "nav.login.reward":  { zh: "领取 15 欢迎音磅", en: "Claim 15 welcome notes" },
   "share.tagline":     { zh: "创造值得分享的快乐。", en: "Create joy worth sharing." },
   "share.google":      { zh: "使用Google登录",    en: "Sign in with Google" },
   "share.byline":      { zh: "By akira", en: "By akira" },

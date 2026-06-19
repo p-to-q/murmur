@@ -26,7 +26,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useSession } from "next-auth/react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import { ChevronsLeft, ChevronsRight, LinkIcon } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, LinkIcon, LogIn } from "lucide-react";
 import { createPortal } from "react-dom";
 
 import { getShareInviteUrl } from "@/lib/api/share-links";
@@ -37,6 +37,7 @@ import { versionPreview } from "@/lib/music/version-preview";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { useBrowserNotification } from "@/lib/hooks/use-browser-notification";
+import { useAuthProviders } from "@/lib/hooks/use-auth-providers";
 import { NAV_ITEMS, computeTrail, type ComputedStep } from "./nav-items";
 import { MurmurMark } from "./murmur-mark";
 import { ShareCardModal } from "./share-card-modal";
@@ -84,6 +85,9 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const { balance } = useUserBalance();
   const { resetFlow, isPlaying, auditioningVersionId } = useMurmurStore();
   const audioActive = isPlaying || auditioningVersionId !== null;
+  const { data: session } = useSession();
+  const { signInWithOAuth } = useAuthProviders();
+  const isLoggedIn = !!session?.user;
 
   const [slashFlash, setSlashFlash] = useState(false);
   const [optimisticPath, setOptimisticPath] = useState<string | null>(null);
@@ -290,25 +294,45 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
       {/* ── Footer ──────────────────────────────────────────────────── */}
       <div className={collapsed ? "relative z-10 px-0 flex flex-col items-center gap-3" : "relative z-10 px-7 space-y-4"}>
 
-        {/* Share referral card — expanded only */}
+        {/* Share / Login card — expanded only */}
         {!collapsed && (
-          <button
-            onClick={onShareClick}
-            className="group flex w-full items-center gap-3 rounded-[15px] border border-[#E5DDD0] bg-white/50 px-4 py-3.5 text-left transition-colors hover:border-[#FF5924]/40 hover:bg-white/70"
-          >
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F1EB] text-[#8C8780] group-hover:text-[#FF5924] transition-colors">
-              <LinkIcon className="h-3.5 w-3.5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-medium text-[#1A1A1A] leading-tight truncate">
-                {t("nav.share")}
-              </p>
-              <p className="text-[11px] text-[#B6B0A4] leading-tight mt-0.5">
-                {t("nav.share.reward")}
-              </p>
-            </div>
-            <span className="text-[#B6B0A4] group-hover:text-[#FF5924] transition-colors text-[13px]">›</span>
-          </button>
+          isLoggedIn ? (
+            <button
+              onClick={onShareClick}
+              className="group flex w-full items-center gap-3 rounded-[15px] border border-[#E5DDD0] bg-white/50 px-4 py-3.5 text-left transition-colors hover:border-[#FF5924]/40 hover:bg-white/70"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F1EB] text-[#8C8780] group-hover:text-[#FF5924] transition-colors">
+                <LinkIcon className="h-3.5 w-3.5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-[#1A1A1A] leading-tight truncate">
+                  {t("nav.share")}
+                </p>
+                <p className="text-[11px] text-[#B6B0A4] leading-tight mt-0.5">
+                  {t("nav.share.reward")}
+                </p>
+              </div>
+              <span className="text-[#B6B0A4] group-hover:text-[#FF5924] transition-colors text-[13px]">›</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => signInWithOAuth("google", "/")}
+              className="group flex w-full items-center gap-3 rounded-[15px] border border-[#FF5924]/30 bg-white/50 px-4 py-3.5 text-left transition-colors hover:border-[#FF5924]/50 hover:bg-white/70"
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F1EB] text-[#FF5924] transition-colors">
+                <LogIn className="h-3.5 w-3.5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-[#1A1A1A] leading-tight truncate">
+                  {t("nav.login")}
+                </p>
+                <p className="text-[11px] text-[#B6B0A4] leading-tight mt-0.5">
+                  {t("nav.login.reward")}
+                </p>
+              </div>
+              <span className="text-[#FF5924]/60 group-hover:text-[#FF5924] transition-colors text-[13px]">›</span>
+            </button>
+          )
         )}
 
         {/* Balance — two-pool expression: paid + daily-free, with top-up link right-aligned */}

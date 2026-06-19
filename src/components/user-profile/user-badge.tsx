@@ -148,7 +148,7 @@ export function UserBadge() {
               }
               setOpen(false);
             }}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-[#8C8780] hover:bg-[#F5F1EB] hover:text-[#1A1A1A]"
+            className="mt-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-[#8C8780] hover:bg-[#F5F1EB] hover:text-[#1A1A1A]"
           >
             <LogOut className="h-3.5 w-3.5" />
             {t("auth.sign_out")}
