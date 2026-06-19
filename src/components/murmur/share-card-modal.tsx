@@ -293,7 +293,7 @@ export function ShareCardModal({ open, onClose, shareUrl }: ShareCardModalProps)
                       className="flex w-full items-center justify-center gap-2.5 rounded-full border border-[#E0DDD5] bg-white px-6 py-3.5 text-[15px] font-medium text-[#1A1A1A] shadow-sm transition-all hover:shadow-md"
                     >
                       {copied ? (
-                        <Check className="h-4.5 w-4.5 text-[#34C759]" />
+                        <Check className="h-4.5 w-4.5 text-[#1A1A1A]" strokeWidth={2.1} />
                       ) : (
                         <LinkIcon className="h-4.5 w-4.5" />
                       )}
