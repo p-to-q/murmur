@@ -345,7 +345,7 @@ export function GalleryScreen() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-[#1A1A1A]/45 backdrop-blur-sm px-5"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-md px-5"
             onClick={() => setDeleteTarget(null)}
           >
             <motion.div
@@ -392,7 +392,7 @@ export function GalleryScreen() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-[#1A1A1A]/45 backdrop-blur-sm"
+            className="fixed inset-0 z-[60] flex items-end md:items-center justify-center bg-black/40 backdrop-blur-md"
             onClick={() => setDemoPreview(null)}
           >
             <motion.div

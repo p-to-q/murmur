@@ -20,17 +20,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { NAV_ITEMS } from "./nav-items";
-
-/** Routes where the footer line fades out so a focused flow owns the bottom.
- *  Hum (`/`) belongs here too: the user is already in the capture moment,
- *  the orb is the action, and Hum's own bottom bar (brand mark + CTA pill)
- *  is the only bottom content the page needs. */
-const HIDE_ON: string[] = ["/", "/studio", "/vibe", "/topup/checkout", "/studio/name"];
 
 export function BottomNav() {
   const pathname = usePathname();
@@ -38,10 +32,6 @@ export function BottomNav() {
   const t = useTranslator();
   const lang = useI18nStore((s) => s.lang);
   const { resetFlow } = useMurmurStore();
-
-  const isHidden = HIDE_ON.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`),
-  );
 
   const goHome = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -53,86 +43,78 @@ export function BottomNav() {
   const items = NAV_ITEMS.filter((it) => it.mobileNav !== false);
 
   return (
-    <AnimatePresence>
-      {!isHidden && (
-        <motion.nav
-          key="bottom-nav"
-          initial={{ y: 18, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 18, opacity: 0 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="fixed inset-x-0 bottom-0 z-50 flex justify-center md:hidden pointer-events-none"
-          style={{
-            paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
-          }}
-          aria-label="Primary navigation"
-        >
-          {/* Cream fade so the footer words stay legible when the page
-              scrolls dark covers underneath — no card, just air. */}
-          <div
-            className="absolute inset-x-0 bottom-0 h-[88px]"
-            style={{
-              background:
-                "linear-gradient(to top, #F5F1EB 38%, rgba(245,241,235,0.82) 64%, rgba(245,241,235,0) 100%)",
-            }}
-            aria-hidden
-          />
-          <ul className="pointer-events-auto relative inline-flex items-baseline gap-3 px-2">
-            {items.map((item, i) => {
-              const isActive =
-                item.href === "/"
-                  ? pathname === "/"
-                  : pathname.startsWith(item.href);
-              const label = t(item.labelKey) || item.fallback;
-              const showSep = i > 0;
+    <motion.nav
+      initial={{ y: 18, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      className="fixed inset-x-0 bottom-0 z-50 flex justify-center md:hidden pointer-events-none"
+      style={{
+        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)",
+      }}
+      aria-label="Primary navigation"
+    >
+      <div
+        className="absolute inset-x-0 bottom-0 h-[88px]"
+        style={{
+          background:
+            "linear-gradient(to top, #F5F1EB 38%, rgba(245,241,235,0.82) 64%, rgba(245,241,235,0) 100%)",
+        }}
+        aria-hidden
+      />
+      <ul className="pointer-events-auto relative inline-flex items-baseline gap-3 px-2">
+        {items.map((item, i) => {
+          const isActive =
+            item.href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(item.href);
+          const label = t(item.labelKey) || item.fallback;
+          const showSep = i > 0;
 
-              const inner = (
-                <span
-                  className={`relative inline-block transition-colors ${
-                    isActive
-                      ? lang === "zh"
-                        ? "font-chinese-title-italic text-[16px] text-[#FF5924] underline-mm"
-                        : "font-serif-italic text-[16px] text-[#FF5924] underline-mm"
-                      : lang === "zh"
-                        ? "font-chinese-title text-[14px] text-[#8C8780] hover:text-[#1A1A1A]"
-                        : "text-[13px] font-medium tracking-[0.01em] text-[#8C8780] hover:text-[#1A1A1A]"
-                  }`}
-                >
-                  {label}
+          const inner = (
+            <span
+              className={`relative inline-block transition-colors ${
+                isActive
+                  ? lang === "zh"
+                    ? "font-chinese-title-italic text-[16px] text-[#FF5924] underline-mm"
+                    : "font-serif-italic text-[16px] text-[#FF5924] underline-mm"
+                  : lang === "zh"
+                    ? "font-chinese-title text-[14px] text-[#8C8780] hover:text-[#1A1A1A]"
+                    : "text-[13px] font-medium tracking-[0.01em] text-[#8C8780] hover:text-[#1A1A1A]"
+              }`}
+            >
+              {label}
+            </span>
+          );
+
+          return (
+            <li key={item.href} className="inline-flex items-baseline gap-3">
+              {showSep && (
+                <span className="text-[#D2C9B6] text-[12px]" aria-hidden>
+                  ·
                 </span>
-              );
-
-              return (
-                <li key={item.href} className="inline-flex items-baseline gap-3">
-                  {showSep && (
-                    <span className="text-[#D2C9B6] text-[12px]" aria-hidden>
-                      ·
-                    </span>
-                  )}
-                  {item.href === "/" ? (
-                    <button
-                      onClick={goHome}
-                      aria-label={label}
-                      className="px-1 py-1 transition-transform active:scale-95"
-                    >
-                      {inner}
-                    </button>
-                  ) : (
-                    <Link
-                      href={item.href}
-                      aria-label={label}
-                      className="block px-1 py-1 transition-transform active:scale-95"
-                      suppressHydrationWarning
-                    >
-                      {inner}
-                    </Link>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </motion.nav>
-      )}
-    </AnimatePresence>
+              )}
+              {item.href === "/" ? (
+                <button
+                  onClick={goHome}
+                  aria-label={label}
+                  className="px-1 py-1 transition-transform active:scale-95"
+                >
+                  {inner}
+                </button>
+              ) : (
+                <Link
+                  href={item.href}
+                  aria-label={label}
+                  className="block px-1 py-1 transition-transform active:scale-95"
+                  suppressHydrationWarning
+                >
+                  {inner}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </motion.nav>
   );
 }

@@ -136,7 +136,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
       className="side-nav-paper hidden md:flex fixed top-0 left-0 bottom-0 z-40 flex-col"
       style={{
         width: "var(--side-nav-w)",
-        paddingTop: "max(env(safe-area-inset-top, 0px), 32px)",
+        paddingTop: "max(env(safe-area-inset-top, 0px), 44px)",
         paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 28px)",
         // Width: fast transition (0.3s)
         // Border-radius: delayed start (0.25s delay) + very slow transition (0.8s)
@@ -149,9 +149,12 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
       }}
       aria-label="Primary navigation"
     >
-      {/* ── Brand row ────────────────────────────────────────────── */}
+      {/* ── Brand area — fixed height so nav items stay aligned on collapse ── */}
       <div
-        className={collapsed ? "relative z-10 flex justify-center px-0 mb-5" : "relative z-10 flex items-center justify-between px-7 pr-5 mb-2"}
+        className={collapsed
+          ? "relative z-10 flex h-[52px] flex-col items-center justify-center gap-1.5"
+          : "relative z-10 flex h-[52px] items-center justify-between px-7 pr-5"
+        }
       >
         <button
           onClick={goHome}
@@ -194,21 +197,27 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
             <ChevronsLeft className="h-3.5 w-3.5" />
           </button>
         )}
+        {collapsed && (
+          <button
+            onClick={() => setCollapsed(false)}
+            aria-label="Expand navigation"
+            className="text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
+          >
+            <ChevronsRight className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
-      {collapsed && (
-        <button
-          onClick={() => setCollapsed(false)}
-          aria-label="Expand navigation"
-          className="relative z-10 mx-auto text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
-        >
-          <ChevronsRight className="h-3.5 w-3.5" />
-        </button>
-      )}
-
       {/* ── Destinations ─────────────────────────────────────────── */}
-      <LayoutGroup id={collapsed ? "side-nav-collapsed" : "side-nav-expanded"}>
-        <nav className={collapsed ? "relative z-10 mt-10 px-0 flex flex-col items-center gap-7" : "relative z-10 mt-10 px-7"}>
+      <LayoutGroup id="side-nav">
+        <nav
+          className="relative z-10 mt-8"
+          style={{
+            paddingLeft: collapsed ? 0 : 28,
+            paddingRight: collapsed ? 0 : 28,
+            transition: "padding 0.3s cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
           {items.map((item, i) => {
           const isActive =
             trail?.rootHref === item.href
@@ -218,27 +227,87 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                 : effectivePath.startsWith(item.href);
           const label = t(item.labelKey) || item.fallback;
 
-          if (collapsed) {
-            return (
-              <Fragment key={item.href}>
-                <CollapsedDot
-                  isActive={isActive}
+          const textCls = isActive
+            ? lang === "zh"
+              ? "font-chinese-title-italic text-[24px] text-[#1A1A1A]"
+              : "font-serif-italic text-[25px] text-[#1A1A1A]"
+            : lang === "zh"
+              ? "font-chinese-title text-[18px] text-[#8C8780] group-hover:text-[#1A1A1A]"
+              : "font-serif text-[20px] tracking-[0.005em] text-[#8C8780] group-hover:text-[#1A1A1A]";
+
+          const row = (
+            <div
+              className={i > 0 ? "pt-4 mt-4 border-t" : "pt-2"}
+              style={i > 0 ? { borderColor: collapsed ? "transparent" : "rgba(229,221,208,0.7)", transition: "border-color 0.3s" } : undefined}
+            >
+              <div className="relative flex h-9 items-center">
+                {/* Dot — crossfades in when collapsed */}
+                <div
+                  className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
+                    collapsed ? "opacity-100" : "opacity-0 pointer-events-none"
+                  }`}
+                >
+                  <span
+                    className={`h-[8px] w-[8px] rounded-full transition-all duration-200 ${
+                      isActive
+                        ? "bg-[#FF5924] scale-100"
+                        : "bg-transparent border border-[#B6B0A4] scale-90 group-hover:border-[#1A1A1A] group-hover:scale-100"
+                    }`}
+                  />
+                </div>
+                {/* Text — crossfades in when expanded */}
+                <div
+                  className={`w-full transition-opacity duration-200 ${
+                    collapsed ? "opacity-0 pointer-events-none" : "opacity-100"
+                  }`}
+                >
+                  {isActive && !collapsed && (
+                    <motion.span
+                      layoutId="side-nav-active-marker"
+                      className="absolute -left-7 top-1/2 h-9 w-[3px] -translate-y-1/2 overflow-visible"
+                      initial={false}
+                      transition={{
+                        layout: { duration: 0.46, ease: [0.16, 1, 0.3, 1] },
+                      }}
+                      aria-hidden
+                    >
+                      <span className="block h-full w-full rounded-r-[2px] bg-[#FF5924]" />
+                    </motion.span>
+                  )}
+                  <span
+                    className={`transition-all duration-200 group-hover:translate-x-[3px] ${textCls}`}
+                  >
+                    {label}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+
+          return (
+            <Fragment key={item.href}>
+              {item.href === "/" ? (
+                <button onClick={goHome} onPointerDown={() => setOptimisticPath("/")} className="block w-full text-left group">
+                  {row}
+                </button>
+              ) : (
+                <Link
+                  href={item.href}
                   onPointerDown={() => setOptimisticPath(item.href)}
-                  onActivate={(e) => {
-                    if (item.href === "/") {
-                      goHome(e);
-                    } else {
-                      setOptimisticPath(item.href);
-                      router.push(item.href);
-                    }
-                  }}
-                  label={label}
-                />
-                {/* Collapsed outline — one tiny coral dot per visible sub-step. */}
-                {trail && trail.rootHref === item.href &&
-                  trail.steps.map((cs) => (
+                  onClick={() => setOptimisticPath(item.href)}
+                  className="block group"
+                  suppressHydrationWarning
+                >
+                  {row}
+                </Link>
+              )}
+              {!collapsed && trail && trail.rootHref === item.href && trail.steps.length > 0 && (
+                <NestedTrail steps={trail.steps} lang={lang} t={t} />
+              )}
+              {collapsed && trail && trail.rootHref === item.href &&
+                trail.steps.map((cs) => (
+                  <div key={cs.step.match} className="mt-1.5 flex justify-center">
                     <span
-                      key={cs.step.match}
                       aria-label={t(cs.step.labelKey) || cs.step.fallback}
                       title={t(cs.step.labelKey) || cs.step.fallback}
                       className={
@@ -247,40 +316,8 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                           : "block h-[4px] w-[4px] rounded-full bg-[#FF5924]/45"
                       }
                     />
-                  ))}
-              </Fragment>
-            );
-          }
-
-          const body = (
-            <ManuscriptRow
-              label={label}
-              isActive={isActive}
-              showRule={i > 0}
-              lang={lang}
-              meta={undefined}
-            />
-          );
-          return (
-            <Fragment key={item.href}>
-              {item.href === "/" ? (
-                <button onClick={goHome} className="block w-full text-left">
-                  {body}
-                </button>
-              ) : (
-                <Link
-                  href={item.href}
-                  onPointerDown={() => setOptimisticPath(item.href)}
-                  onClick={() => setOptimisticPath(item.href)}
-                  className="block"
-                  suppressHydrationWarning
-                >
-                  {body}
-                </Link>
-              )}
-              {trail && trail.rootHref === item.href && trail.steps.length > 0 && (
-                <NestedTrail steps={trail.steps} lang={lang} t={t} />
-              )}
+                  </div>
+                ))}
             </Fragment>
           );
           })}
@@ -290,7 +327,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
       <div className="flex-1" />
 
       {/* ── Footer ──────────────────────────────────────────────────── */}
-      <div className={collapsed ? "relative z-10 px-0 flex flex-col items-center gap-3" : "relative z-10 px-7 space-y-4"}>
+      <div className={collapsed ? "relative z-10 px-0 flex flex-col items-center gap-5" : "relative z-10 px-7 space-y-4"}>
 
         {/* Share / Login card — expanded only */}
         {!collapsed && (
@@ -365,7 +402,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
         {collapsed && (
           <Link
             href="/topup"
-            className="block mb-2 text-[#1A1A1A] hover:text-[#FF5924] transition-colors"
+            className="block text-[#1A1A1A] hover:text-[#FF5924] transition-colors"
             suppressHydrationWarning
           >
             <span className="font-serif text-[14px] tabular-nums">
@@ -425,11 +462,11 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
         )}
 
         {collapsed && (
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-3.5">
             <NotificationBellButton chromeless />
             <button
               onClick={() => setLang(lang === "zh" ? "en" : "zh")}
-              className="text-[13px] text-[#1A1A1A] hover:text-[#FF5924] transition-colors py-1"
+              className="text-[11px] tracking-[0.06em] text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
             >
               {lang === "zh" ? "中" : "EN"}
             </button>
@@ -596,7 +633,7 @@ function ManuscriptRow({
           with the glyph's. Marker is taller than the active label glyph and
           one-third thicker so it reads as a real margin tick rather than a
           hair line. Left side is square (flush with edge), right side is rounded. */}
-      <div className="relative flex items-center justify-between gap-3">
+      <div className="relative flex h-9 items-center justify-between gap-3">
         {isActive && (
           <motion.span
             layoutId="side-nav-active-marker"

@@ -682,7 +682,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 flex items-center justify-center bg-[#1A1A1A]/45 backdrop-blur-sm px-5"
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-md px-5"
             onClick={() => setDeleteOpen(false)}
           >
             <motion.div

@@ -38,8 +38,6 @@ export function MeScreen() {
   const { balance, isLoading } = useUserBalance();
   const { data: session } = useSession();
   const isSignedIn = !!session?.user;
-  const repairBias = usePreferencesStore((state) => state.repairBias);
-  const setRepairBias = usePreferencesStore((state) => state.setRepairBias);
   const developerMode = usePreferencesStore((state) => state.developerMode);
 
   useEffect(() => {
@@ -141,81 +139,6 @@ export function MeScreen() {
             <Link href={shelfCtaHref} className="mm-btn-primary inline-flex shrink-0">
               {shelfCtaLabel}
             </Link>
-          </div>
-        </Card>
-
-        <Card>
-          <SectionLabel>{t("me.repair_bias.title") || "创作偏好"}</SectionLabel>
-          <div className="space-y-5">
-            <p className="max-w-[30rem] text-[13px] leading-[1.6] text-[#6F6A63] md:text-[14px]">
-              {t("me.repair_bias.helper") ||
-                "当 Murmur 拿不准该怎么理解你哼的那一段时，这个设置会影响它的判断。"}
-            </p>
-
-            <div className="space-y-3">
-              {/* Three choice buttons */}
-              <div className="grid grid-cols-3 gap-3">
-                <button
-                  onClick={() => setRepairBias(-1)}
-                  className={`relative flex flex-col items-start gap-1.5 rounded-[16px] border px-4 py-4 text-left transition-all ${
-                    repairBias <= -0.4
-                      ? "border-[#1A1A1A] bg-[#FFFCF7]"
-                      : "border-[#E7DCCB] bg-white/60 hover:border-[#D6C7B0]"
-                  }`}
-                >
-                  <span className="text-[14px] font-medium text-[#1A1A1A]">
-                    {lang === "zh" ? "偏原唱" : "Closer"}
-                  </span>
-                  {repairBias <= -0.4 && (
-                    <span className="text-[11px] leading-[1.45] text-[#B7AEA1]">
-                      {lang === "zh"
-                        ? "保留你哼出来的走向"
-                        : "Keep your hum as-is"}
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  onClick={() => setRepairBias(0)}
-                  className={`relative flex flex-col items-start gap-1.5 rounded-[16px] border px-4 py-4 text-left transition-all ${
-                    repairBias > -0.4 && repairBias < 0.4
-                      ? "border-[#1A1A1A] bg-[#FFFCF7]"
-                      : "border-[#E7DCCB] bg-white/60 hover:border-[#D6C7B0]"
-                  }`}
-                >
-                  <span className="text-[14px] font-medium text-[#1A1A1A]">
-                    {lang === "zh" ? "平衡" : "Balanced"}
-                  </span>
-                  {repairBias > -0.4 && repairBias < 0.4 && (
-                    <span className="text-[11px] leading-[1.45] text-[#B7AEA1]">
-                      {lang === "zh"
-                        ? "大部分时候刚刚好"
-                        : "Usually just right"}
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  onClick={() => setRepairBias(1)}
-                  className={`relative flex flex-col items-end gap-1.5 rounded-[16px] border px-4 py-4 text-right transition-all ${
-                    repairBias >= 0.4
-                      ? "border-[#1A1A1A] bg-[#FFFCF7]"
-                      : "border-[#E7DCCB] bg-white/60 hover:border-[#D6C7B0]"
-                  }`}
-                >
-                  <span className="text-[14px] font-medium text-[#1A1A1A]">
-                    {lang === "zh" ? "偏好听" : "Sweeter"}
-                  </span>
-                  {repairBias >= 0.4 && (
-                    <span className="text-[11px] leading-[1.45] text-[#B7AEA1]">
-                      {lang === "zh"
-                        ? "让它更像首完整的歌"
-                        : "More like a finished song"}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
           </div>
         </Card>
 

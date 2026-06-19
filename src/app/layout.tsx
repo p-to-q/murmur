@@ -15,6 +15,7 @@ import { I18nHydrator } from "@/lib/i18n";
 import { cn } from "@/utils/utils";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { FontHydrator } from "@/components/murmur/font-hydrator";
+import { MobileTopBar } from "@/components/murmur/mobile-top-bar";
 import { ShareReferralTracker } from "@/components/murmur/share-referral-tracker";
 import { getSiteUrl } from "@/lib/site-url";
 
@@ -121,6 +122,8 @@ export default function RootLayout({
           <ShareReferralTracker />
           {/* Desktop sidebar (md+) — mobile hides via internal media query */}
           <SideNav />
+          {/* Mobile top bar — logo + language toggle */}
+          <MobileTopBar />
           {/* Main content area:
               - mobile  → reserves bottom for nav (with safe-area)
               - desktop → reserves left 232px for sidebar */}
