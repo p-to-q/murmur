@@ -49,7 +49,6 @@ const DEMO_SONGS_MAP = new Map<string, DemoSong>([
           bucket: "hypermodern_void",
           source: "commons",
           license: "Public Domain",
-          palette: ["#314036", "#152219", "#243329", "#3E4D3D", "#646740"],
           imagePath: "/artworks/hypermodern_void/commons-whistler-nocturne-black-gold-falling-rocket.jpg",
           sourceUrl: "https://commons.wikimedia.org/wiki/File:Whistler-Nocturne_in_black_and_gold.jpg",
           renderTreatment: { grain: "light", intent: "background_field", contrast: "softened", cropFormat: "square", recommendedOverlay: 0.22 },
