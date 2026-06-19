@@ -755,7 +755,7 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
       const isCollapsed = document.documentElement.classList.contains("nav-collapsed");
       const popoverHeight = 70;
       if (isCollapsed) {
-        setPosition({ left: button.right + 12, top: button.top - 4, isCollapsed: true, width: 240 });
+        setPosition({ left: button.right + 12, top: button.top - 4, isCollapsed: true, width: 264 });
       } else {
         setPosition({ left: 28, top: button.top - popoverHeight - 8, isCollapsed: false, width: 264 });
       }
@@ -819,7 +819,7 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
           top: `${position.top}px`,
           transform: "none",
           zIndex: 9999,
-          width: position.isCollapsed ? "240px" : `${position.width}px`,
+          width: `${position.width}px`,
         }}
         className="min-h-[70px] rounded-[14px] border border-[#E5DDD0] bg-white p-4 shadow-[0_12px_36px_rgba(26,26,26,0.12)]"
       >
