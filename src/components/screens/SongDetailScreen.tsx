@@ -39,7 +39,6 @@ import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { Spinner } from "@/components/ui/spinner";
 import { ShareTicketCard } from "@/components/song-detail/ShareTicketCard";
 import { buildShareHtml, downloadHtml } from "@/modules/export/render-share-html";
-import { downloadBlob, renderPoster } from "@/modules/export/render-poster";
 import {
   buildSavedSongRemixVersions,
   hydrateSavedSongToVersion,
@@ -56,7 +55,7 @@ type Song = SongCard & {
   tags?: string[];
 };
 
-type ExportKey = "audio" | "html" | "poster";
+type ExportKey = "audio" | "html";
 
 export function SongDetailScreen({ songId }: { songId: string }) {
   const router = useRouter();
@@ -287,37 +286,6 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     }
   };
 
-  const exportPoster = async () => {
-    if (!song) return;
-    setBusy("poster");
-    try {
-      const blob = await renderPoster({
-        title: song.title,
-        vibe: song.vibe,
-        bpm: song.bpm ?? 80,
-        keySig: song.keySignature ?? "C",
-        gradient,
-        durationSec: song.duration,
-      });
-      if (!blob) throw new Error("poster blob null");
-      downloadBlob(`${slug}.png`, blob);
-      toast.success(t("song.export.ok"));
-      memory
-        .reportAction({
-          content: `Exported poster for "${song.title}"`,
-          event_type: "update",
-          page: "song-detail",
-          metadata: { type: "download_poster", song_id: song.id },
-        })
-        .catch(() => {});
-    } catch (e) {
-      console.error(e);
-      toast.error(t("song.export.err"));
-    } finally {
-      setBusy(null);
-    }
-  };
-
   /* ── Delete ────────────────────────────────────────────────────────── */
 
   const handleDelete = async () => {
@@ -520,7 +488,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 handlePlay();
               }}
             >
-              <SongVisualCanvas gradient={gradient} artwork={song.visualConfig.artwork} isPlaying={isPlaying} />
+              <SongVisualCanvas gradient={gradient} artwork={song.visualConfig.artwork} />
               <div
                 className="absolute inset-x-0 top-0 h-2/5 pointer-events-none"
                 style={{
@@ -660,13 +628,6 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 busy={false}
                 onClick={() => setShareCardOpen(true)}
               />
-              <ExportRow
-                label={t("song.export.poster.label") || "Poster"}
-                hint={t("song.export.poster.hint") || "png"}
-                cost={t("song.export.free") || "free"}
-                busy={busy === "poster"}
-                onClick={exportPoster}
-              />
             </motion.div>
 
             {/* Tertiary footer */}
@@ -709,6 +670,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         bpm={song.bpm ?? 80}
         keySignature={song.keySignature ?? "C"}
         createdAt={song.createdAt}
+        mp3DataUrl={song.mp3DataUrl}
         open={shareCardOpen}
         onClose={() => setShareCardOpen(false)}
       />

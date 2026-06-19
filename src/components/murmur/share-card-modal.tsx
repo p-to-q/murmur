@@ -2,16 +2,18 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { X, Link as LinkIcon, Check } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 import { useTranslator } from "@/lib/i18n";
 import { AuthButtons } from "@/components/auth/auth-buttons";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
+import { copyShareInviteLink } from "@/lib/platform/share-invite";
 
 interface ShareCardModalProps {
   open: boolean;
   onClose: () => void;
+  shareUrl?: string | null;
 }
 
 const CAROUSEL_SLIDES = [
@@ -95,20 +97,16 @@ function initialLayer(): CarouselLayer {
   };
 }
 
-export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
+export function ShareCardModal({ open, onClose, shareUrl }: ShareCardModalProps) {
   const t = useTranslator();
   const { data: session } = useSession();
+  const isLoggedIn = !!session?.user;
   const [showEmail, setShowEmail] = useState(false);
+  const [copied, setCopied] = useState(false);
   const animationFrameRef = useRef<number | null>(null);
   const cleanupTimerRef = useRef<number | null>(null);
   const [layers, setLayers] = useState<CarouselLayer[]>(() => [initialLayer()]);
   const [isMoving, setIsMoving] = useState(false);
-
-  useEffect(() => {
-    if (session?.user) {
-      onClose();
-    }
-  }, [session, onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -281,7 +279,27 @@ export function ShareCardModal({ open, onClose }: ShareCardModalProps) {
                     {t("share.tagline")}
                   </h2>
 
-                  {showEmail ? (
+                  {isLoggedIn ? (
+                    <button
+                      onClick={async () => {
+                        if (!shareUrl) return;
+                        await copyShareInviteLink(shareUrl, {
+                          copied: t("share.copied"),
+                          copyFailed: t("share.copy_failed"),
+                        });
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="flex w-full items-center justify-center gap-2.5 rounded-full border border-[#E0DDD5] bg-white px-6 py-3.5 text-[15px] font-medium text-[#1A1A1A] shadow-sm transition-all hover:shadow-md"
+                    >
+                      {copied ? (
+                        <Check className="h-4.5 w-4.5 text-[#34C759]" />
+                      ) : (
+                        <LinkIcon className="h-4.5 w-4.5" />
+                      )}
+                      {copied ? t("share.copied") : t("share.copy_link")}
+                    </button>
+                  ) : showEmail ? (
                     <EmailLoginForm className="text-left" />
                   ) : (
                     <AuthButtons

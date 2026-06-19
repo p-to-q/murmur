@@ -54,22 +54,13 @@ export function AuthButtons({
       ))}
 
       {providers.email && onEmailClick && (
-        <>
-          <div className="flex items-center gap-3 py-1">
-            <div className="h-px flex-1 bg-[#E0DDD5]" />
-            <span className="text-[12px] text-[#8C8780]">
-              {t("auth.or_email")}
-            </span>
-            <div className="h-px flex-1 bg-[#E0DDD5]" />
-          </div>
-          <button
-            onClick={onEmailClick}
-            className="flex w-full items-center justify-center gap-2.5 rounded-full border border-[#E0DDD5] bg-white px-5 py-2.5 text-[14px] font-medium text-[#1A1A1A] shadow-sm transition-all hover:shadow-md"
-          >
-            <EmailIcon />
-            {t("auth.continue_email")}
-          </button>
-        </>
+        <button
+          onClick={onEmailClick}
+          className="flex w-full items-center justify-center gap-2.5 rounded-full border border-[#E0DDD5] bg-white px-5 py-2.5 text-[14px] font-medium text-[#1A1A1A] shadow-sm transition-all hover:shadow-md"
+        >
+          <EmailIcon />
+          {t("auth.continue_email")}
+        </button>
       )}
     </div>
   );

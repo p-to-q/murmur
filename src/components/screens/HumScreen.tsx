@@ -859,20 +859,6 @@ export function HumScreen() {
                       {MAX_DURATION}s
                     </span>
                   </div>
-                  <AnimatePresence mode="wait">
-                    {(levelState !== "idle" && levelState !== "heard") && (
-                      <motion.p
-                        key={levelState}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="mt-4 text-[11px] tracking-[0.14em] uppercase text-[#B6B0A4]"
-                      >
-                        {t(inputLevelLabelKey(levelState))}
-                      </motion.p>
-                    )}
-                  </AnimatePresence>
                 </motion.div>
               )}
 
@@ -1117,7 +1103,7 @@ export function HumScreen() {
               </AnimatePresence>
             </div>
 
-              {/* ── "Heard" floating pill — below orb, absolute so no layout shift ── */}
+              {/* ── Level pill — below orb, absolute so no layout shift ── */}
               <AnimatePresence>
                 {showHeardMessage && (
                   <motion.div
@@ -1134,6 +1120,24 @@ export function HumScreen() {
                     </span>
                     <span className="text-[12px] tracking-[0.08em] text-[#1A1A1A]/70 font-medium">
                       {t("hum.level.heard")}
+                    </span>
+                  </motion.div>
+                )}
+                {!showHeardMessage && isRecording && levelState === "quiet" && (
+                  <motion.div
+                    key="quiet-pill"
+                    initial={{ opacity: 0, y: 6, scale: 0.92 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                    className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+12px)] flex items-center gap-2 rounded-full bg-white/60 backdrop-blur-md px-4 py-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
+                  >
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF5924] opacity-50" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-[#FF5924]" />
+                    </span>
+                    <span className="text-[12px] tracking-[0.08em] text-[#1A1A1A]/70 font-medium">
+                      {t(inputLevelLabelKey(levelState))}
                     </span>
                   </motion.div>
                 )}
@@ -1393,9 +1397,8 @@ function recoveryForState(
   if (error.code === "music_engine_unavailable") {
     return {
       primary: {
-        kind: "record",
+        kind: "dismiss",
         label: copy.retry,
-        requiresGuestGate: false,
       },
       secondary: null,
     };

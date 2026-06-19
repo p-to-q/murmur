@@ -30,14 +30,13 @@ import { ChevronsLeft, ChevronsRight, LinkIcon, LogIn } from "lucide-react";
 import { createPortal } from "react-dom";
 
 import { getShareInviteUrl } from "@/lib/api/share-links";
-import { copyShareInviteLink } from "@/lib/platform/share-invite";
+
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
 import { versionPreview } from "@/lib/music/version-preview";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { useBrowserNotification } from "@/lib/hooks/use-browser-notification";
-import { useAuthProviders } from "@/lib/hooks/use-auth-providers";
 import { NAV_ITEMS, computeTrail, type ComputedStep } from "./nav-items";
 import { MurmurMark } from "./murmur-mark";
 import { ShareCardModal } from "./share-card-modal";
@@ -86,7 +85,6 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const { resetFlow, isPlaying, auditioningVersionId } = useMurmurStore();
   const audioActive = isPlaying || auditioningVersionId !== null;
   const { data: session } = useSession();
-  const { signInWithOAuth } = useAuthProviders();
   const isLoggedIn = !!session?.user;
 
   const [slashFlash, setSlashFlash] = useState(false);
@@ -464,23 +462,20 @@ export function SideNavWithModal() {
 
   const handleShareClick = () => {
     setShareModalOpen(true);
-    void (async () => {
-      const url = shareInviteUrl
-        ?? (typeof window === "undefined"
+    if (!shareInviteUrl) {
+      void (async () => {
+        const url = typeof window === "undefined"
           ? ""
-          : await getShareInviteUrl(window.location.origin));
-      setShareInviteUrl(url);
-      await copyShareInviteLink(url, {
-        copied: t("share.copied"),
-        copyFailed: t("share.copy_failed"),
-      });
-    })();
+          : await getShareInviteUrl(window.location.origin);
+        setShareInviteUrl(url);
+      })();
+    }
   };
 
   return (
     <>
       <SideNavInner onShareClick={handleShareClick} />
-      <ShareCardModal open={shareModalOpen} onClose={() => setShareModalOpen(false)} />
+      <ShareCardModal open={shareModalOpen} onClose={() => setShareModalOpen(false)} shareUrl={shareInviteUrl} />
     </>
   );
 }

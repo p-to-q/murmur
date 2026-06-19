@@ -274,10 +274,11 @@ export function GalleryScreen() {
       {/* Spacer when no sort toggle shown */}
       {!isLoading && displaySongs.length <= 1 && <div className="pb-4" />}
 
-      {/* Loading — general spinner (the skeleton grid never matched the real
-          cover layout, so it read as a glitch rather than a placeholder) */}
+      {/* Loading — general spinner, centered in the full viewport like the
+          app's other loaders (the empty heatmap padding above would otherwise
+          push an in-flow spinner into the upper half) */}
       {isLoading && (
-        <div className="relative z-10 flex min-h-[60svh] items-center justify-center">
+        <div className="absolute inset-0 z-10 flex items-center justify-center">
           <Spinner size="lg" aria-label={t("loading.aria")} />
         </div>
       )}
