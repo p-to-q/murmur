@@ -41,9 +41,6 @@ const updateSongSchema = z.object({
 type SongUpdatePayload = z.infer<typeof updateSongSchema>;
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await resolveRequestAuth(req);
-  if (!auth.ok) return auth.response;
-  const userId = auth.user.id;
   const { id } = await params;
 
   if (isDemoSongId(id)) {
@@ -52,6 +49,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { mp3Url, ...rest } = demo;
     return NextResponse.json({ ...rest, mp3DataUrl: null, mp3Url });
   }
+
+  const auth = await resolveRequestAuth(req);
+  if (!auth.ok) return auth.response;
+  const userId = auth.user.id;
 
   try {
     const song = await getSongByIdForUser(id, userId);

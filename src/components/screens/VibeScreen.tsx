@@ -39,7 +39,6 @@ import {
 import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import type { VibeVersion } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
-import { MurmurWave } from "@/components/murmur/murmur-wave";
 import { buildMeshGradient } from "@/components/song-detail/mesh-gradient";
 import { VIBE_PRESETS } from "@/presets/vibes";
 
@@ -424,7 +423,6 @@ function VibeCard({
 }) {
   const lang = useI18nStore((state) => state.lang);
   const t = useTranslator();
-  const accent = extractFirstHex(version.visualConfig.gradient) ?? "#FF8A5C";
   const vibePreset = VIBE_PRESETS.find((p) => p.id === version.vibe);
   const vibeLabel =
     version.generation?.vibeLabel[lang] || vibePreset?.label[lang] || version.vibe;
@@ -487,14 +485,6 @@ function VibeCard({
             background:
               "linear-gradient(to top, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0) 100%)",
           }}
-        />
-        {/* Wave — bottom 55% */}
-        <MurmurWave
-          color={accent}
-          intensity={isAuditioning ? 0.85 : 0.52}
-          isPlaying={isAuditioning}
-          waveY={0.48}
-          className="absolute inset-x-0 bottom-0 h-[58%] w-full pointer-events-none"
         />
       </motion.div>
 
@@ -598,9 +588,3 @@ function VibeCard({
   );
 }
 
-/* ── Helpers ───────────────────────────────────────────────────────── */
-
-function extractFirstHex(gradient: string): string | null {
-  const m = gradient.match(/#([0-9a-fA-F]{6})/);
-  return m ? `#${m[1]}` : null;
-}

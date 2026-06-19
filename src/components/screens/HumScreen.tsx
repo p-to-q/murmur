@@ -808,7 +808,7 @@ export function HumScreen() {
                 locked boxes. The outer max-width controls composition; the inner
                 min-heights protect the orb from headline rotation and async copy. */}
             <div className="hum-mirror-copy min-w-0 w-full text-center pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
-              <div className="flex flex-col justify-center min-h-[116px] md:min-h-[208px]">
+              <div className="flex flex-col justify-center min-h-[116px] md:min-h-[240px]">
               <AnimatePresence mode="wait">
               {isIdle && !humError && (
                 <motion.h1
@@ -821,7 +821,7 @@ export function HumScreen() {
                     ease: "easeInOut",
                   }}
                   className={[
-                    "hero-serif text-[#1A1A1A] text-[37px] md:text-[49px] lg:text-[57px] xl:text-[52px] whitespace-pre-line leading-[1.1]",
+                    "hero-serif text-[#1A1A1A] text-[37px] md:text-[58px] lg:text-[68px] xl:text-[62px] whitespace-pre-line leading-[1.1]",
                     idleIndex === 3 || idleIndex === 4 ? "break-keep" : "",
                   ].join(" ")}
                 >
@@ -837,7 +837,7 @@ export function HumScreen() {
                   exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : undefined}
                   transition={{ duration: 0.4 }}
                 >
-                  <h1 className="hero-serif text-[#1A1A1A] text-[37px] md:text-[49px] lg:text-[57px] xl:text-[52px] leading-[1.1]">
+                  <h1 className="hero-serif text-[#1A1A1A] text-[37px] md:text-[58px] lg:text-[68px] xl:text-[62px] leading-[1.1]">
                     {t("hum.recording")}
                   </h1>
                   <div className="flex items-center justify-center xl:justify-start gap-2 mt-4">
@@ -865,7 +865,7 @@ export function HumScreen() {
                       animate={{ opacity: 1 }}
                       exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : undefined}
                       transition={{ duration: 0.3 }}
-                      className="hero-serif text-[#1A1A1A] text-[30px] md:text-[42px] lg:text-[49px] xl:text-[44px] leading-[1.15]"
+                      className="hero-serif text-[#1A1A1A] text-[30px] md:text-[50px] lg:text-[58px] xl:text-[52px] leading-[1.15]"
                     >
                       {processingMessage}
                     </motion.h1>
@@ -877,10 +877,10 @@ export function HumScreen() {
             </div>
 
             {/* ── Right column: the orb ─────────────────────────── */}
-            <div className="relative flex min-h-[min(55vw,296px)] flex-col items-center justify-center md:min-h-[296px] xl:min-h-[clamp(280px,22vw,340px)]">
+            <div className="relative flex min-h-[min(55vw,296px)] flex-col items-center justify-center md:min-h-[360px] xl:min-h-[clamp(340px,26vw,420px)]">
             {/* Orb container — responsive sizing */}
             <div
-              className="relative h-[min(55vw,296px)] w-[min(55vw,296px)] xl:h-[clamp(280px,22vw,340px)] xl:w-[clamp(280px,22vw,340px)]"
+              className="relative h-[min(55vw,296px)] w-[min(55vw,296px)] md:h-[360px] md:w-[360px] xl:h-[clamp(340px,26vw,420px)] xl:w-[clamp(340px,26vw,420px)]"
             >
               {/* Rotating conic glow behind the orb */}
               <motion.div

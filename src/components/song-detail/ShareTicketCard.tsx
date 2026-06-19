@@ -214,12 +214,12 @@ export function ShareTicketCard({
                   <div className="mt-5 flex items-center gap-3 px-7">
                     <button
                       onClick={togglePlay}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/40 bg-white/15 backdrop-blur-sm active:scale-95"
+                      className="flex shrink-0 items-center justify-center active:scale-95"
                     >
                       {playing ? (
-                        <Pause className="h-3.5 w-3.5 text-white" fill="white" />
+                        <Pause className="h-5 w-5 text-white" fill="white" />
                       ) : (
-                        <Play className="ml-0.5 h-3.5 w-3.5 text-white" fill="white" />
+                        <Play className="h-5 w-5 text-white" fill="white" />
                       )}
                     </button>
                     <div className="flex flex-1 items-center gap-2">

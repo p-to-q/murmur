@@ -8,19 +8,12 @@ type Song = SongCard & {
 };
 
 type RGB = { r: number; g: number; b: number };
-type Particle = {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  radius: number;
-  life: number;
-  maxLife: number;
-};
 
 const WIDTH = 1080;
 const HEIGHT = 1920;
 const FPS = 30;
+const SCALE = WIDTH / 420;
+const PAD = Math.round(28 * SCALE);
 
 export type VideoExportSupport = {
   supported: boolean;
@@ -107,6 +100,8 @@ export async function renderSongVideo(
 
   await waitForMedia(audio);
 
+  const artworkImg = await loadArtwork(song.visualConfig.artwork);
+
   const AudioCtx =
     window.AudioContext ||
     (window as typeof window & { webkitAudioContext?: typeof AudioContext })
@@ -142,42 +137,25 @@ export async function renderSongVideo(
     if (event.data.size > 0) chunks.push(event.data);
   };
 
-  const colors = extractGradientColors(song.visualConfig.gradient);
-  const preset = song.visualConfig.preset;
-  const particles: Particle[] = [];
+  const gradient = song.visualConfig.gradient;
+  const palette = song.visualConfig.artwork?.palette;
+  const year = new Date(song.createdAt).getFullYear();
   let rafId = 0;
-  let frame = 0;
-
-  const spawnParticle = () => {
-    const dense = Math.max(0.2, song.visualConfig.particleDensity || 0.35);
-    return {
-      x: Math.random() * WIDTH,
-      y: HEIGHT + 40,
-      vx: (Math.random() - 0.5) * (1.1 + dense * 1.4),
-      vy: -(Math.random() * (2.1 + dense) + 0.8),
-      radius: Math.random() * (7 + dense * 6) + 2,
-      life: 0,
-      maxLife: Math.random() * 120 + 100,
-    };
-  };
 
   const draw = () => {
     const dur = audio.duration && Number.isFinite(audio.duration) ? audio.duration : 1;
     const progress = audio.currentTime / Math.max(dur, 0.001);
-    paintPresetFrame(ctx, {
-      preset,
-      colors,
-      frame,
-      progress,
-      particles,
-      spawnParticle,
+    paintTicketFrame(ctx, {
+      gradient,
+      palette,
+      artworkImg,
       title: song.title,
-      vibe: song.vibe,
+      year,
       bpm: song.bpm ?? 80,
-      durationSec: song.duration,
       keySig: song.keySignature ?? "C",
+      durationSec: song.duration,
+      progress,
     });
-    frame += 1;
     opts?.onProgress?.(Math.min(progress, 1));
     rafId = requestAnimationFrame(draw);
   };
@@ -231,7 +209,7 @@ export function getVideoExtension(): "mp4" | "webm" {
 }
 
 export async function exportSongAsVideo(song: Song): Promise<void> {
-  const blob = await renderSongVideo(song);
+  const blob = await renderSongVideo(song, { silent: true });
   const mimeType = pickSupportedMimeType() ?? "video/mp4";
 
   const url = URL.createObjectURL(blob);
@@ -242,10 +220,9 @@ export async function exportSongAsVideo(song: Song): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
+// ─── Infrastructure helpers ───────────────────────────────
+
 function pickSupportedMimeType(): string | null {
-  // MP4 (H.264 + AAC) first — it's what chat apps, Photos, and WeChat accept
-  // without re-encoding. Safari has recorded MP4 for years and Chromium ships
-  // it too; WebM stays as the fallback for browsers that can't mux MP4.
   const candidates = [
     'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
     "video/mp4;codecs=avc1,mp4a.40.2",
@@ -283,59 +260,54 @@ function waitForMedia(audio: HTMLAudioElement): Promise<void> {
   });
 }
 
-function extractGradientColors(gradient: string): [RGB, RGB] {
-  const matches = gradient.match(/#[0-9A-Fa-f]{6}/g) ?? ["#F4C87A", "#E9A06D"];
-  const parse = (hex: string): RGB => ({
-    r: Number.parseInt(hex.slice(1, 3), 16),
-    g: Number.parseInt(hex.slice(3, 5), 16),
-    b: Number.parseInt(hex.slice(5, 7), 16),
+function loadArtwork(
+  artwork?: { backgroundImagePath?: string; imagePath: string },
+): Promise<HTMLImageElement | null> {
+  if (!artwork) return Promise.resolve(null);
+  const src = artwork.backgroundImagePath ?? artwork.imagePath;
+  if (!src) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
   });
-  return [parse(matches[0] ?? "#F4C87A"), parse(matches[matches.length - 1] ?? "#E9A06D")];
 }
 
 function slugify(value: string): string {
   return value.replace(/\s+/g, "-").toLowerCase() || "murmur";
 }
 
-function lerp(a: number, b: number, ratio: number): number {
-  return a + (b - a) * ratio;
-}
-
-function rgbString(rgb: RGB): string {
-  return `rgb(${Math.round(rgb.r)}, ${Math.round(rgb.g)}, ${Math.round(rgb.b)})`;
-}
-
-function mixColors(a: RGB, b: RGB, ratio: number): RGB {
-  return {
-    r: lerp(a.r, b.r, ratio),
-    g: lerp(a.g, b.g, ratio),
-    b: lerp(a.b, b.b, ratio),
-  };
-}
+// ─── Drawing primitives ───────────────────────────────────
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-function wrapText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  maxWidth: number,
-): string[] {
-  const words = text.split(" ");
-  const lines: string[] = [];
-  let current = words[0] ?? "";
-  for (let i = 1; i < words.length; i++) {
-    const test = current + " " + words[i];
-    if (ctx.measureText(test).width > maxWidth) {
-      lines.push(current);
-      current = words[i]!;
-    } else {
-      current = test;
-    }
-  }
-  lines.push(current);
-  return lines;
+function parseHex(hex: string): RGB {
+  return {
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16),
+  };
+}
+
+function darkenRgb(c: RGB, amount: number): RGB {
+  const f = 1 - amount;
+  return {
+    r: Math.round(c.r * f),
+    g: Math.round(c.g * f),
+    b: Math.round(c.b * f),
+  };
+}
+
+function rgbStr(c: RGB): string {
+  return `rgb(${c.r},${c.g},${c.b})`;
+}
+
+function rgbaStr(c: RGB, a: number): string {
+  return `rgba(${c.r},${c.g},${c.b},${a})`;
 }
 
 function roundRect(
@@ -359,446 +331,281 @@ function roundRect(
   ctx.closePath();
 }
 
-function drawMeta(
+function wrapText(
   ctx: CanvasRenderingContext2D,
-  title: string,
-  vibe: string,
-  bpm: number,
-  progress: number,
-  durationSec: number,
-  keySig: string,
+  text: string,
+  maxWidth: number,
+): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let current = words[0] ?? "";
+  for (let i = 1; i < words.length; i++) {
+    const test = current + " " + words[i];
+    if (ctx.measureText(test).width > maxWidth) {
+      lines.push(current);
+      current = words[i]!;
+    } else {
+      current = test;
+    }
+  }
+  lines.push(current);
+  return lines;
+}
+
+// ─── Mesh gradient (replicates buildMeshGradient on canvas) ─
+
+function drawMeshGradient(
+  ctx: CanvasRenderingContext2D,
+  gradient: string,
+  palette?: string[],
+) {
+  const hexes =
+    palette && palette.length >= 2
+      ? palette
+      : gradient.match(/#[0-9A-Fa-f]{6}/g) ?? ["#4A9B8E", "#2D6B5F"];
+
+  const c1 = parseHex(hexes[0] ?? "#4A9B8E");
+  const c2 = parseHex(hexes[1] ?? hexes[0] ?? "#2D6B5F");
+  const c3 = hexes[2] ? parseHex(hexes[2]) : darkenRgb(c1, 0.3);
+  const c4 = hexes[3] ? parseHex(hexes[3]) : darkenRgb(c2, 0.2);
+
+  const d1 = darkenRgb(c1, 0.2);
+  const d2 = darkenRgb(c2, 0.35);
+  const base = ctx.createLinearGradient(0, 0, WIDTH * 0.94, HEIGHT);
+  base.addColorStop(0, rgbStr(d1));
+  base.addColorStop(1, rgbStr(d2));
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  drawRadialLayer(ctx, 0.15, 0.75, 1.3, 0.9, c1, 0.8, 0.55);
+  drawRadialLayer(ctx, 0.85, 0.15, 1.1, 1.1, c2, 0.53, 0.5);
+  drawRadialLayer(ctx, 0.45, 0.5, 0.9, 1.3, c3, 0.33, 0.55);
+  drawRadialLayer(ctx, 0.75, 0.85, 1.5, 0.7, c4, 0.27, 0.45);
+}
+
+function drawRadialLayer(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  color: RGB,
+  alpha: number,
+  fade: number,
 ) {
   ctx.save();
+  const centerX = cx * WIDTH;
+  const centerY = cy * HEIGHT;
+  const radX = (rx * WIDTH) / 2;
+  const radY = (ry * HEIGHT) / 2;
+  const maxR = Math.max(radX, radY);
 
-  // ── "FOR YOU" pill at top center ──
-  ctx.font = "700 26px system-ui, sans-serif";
-  ctx.letterSpacing = "3px";
-  const pillText = "FOR YOU";
-  const pillW = ctx.measureText(pillText).width + 48;
-  const pillX = (WIDTH - pillW) / 2;
-  ctx.fillStyle = "rgba(26,26,26,0.58)";
-  roundRect(ctx, pillX, 56, pillW, 44, 8);
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.90)";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(pillText, WIDTH / 2, 78);
-  ctx.textAlign = "start";
-  ctx.textBaseline = "alphabetic";
-  ctx.letterSpacing = "0px";
+  ctx.translate(centerX, centerY);
+  ctx.scale(radX / maxR, radY / maxR);
 
-  // ── Close (X) circle at top right ──
-  ctx.beginPath();
-  ctx.arc(WIDTH - 72, 78, 26, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255,255,255,0.16)";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.72)";
-  ctx.lineWidth = 3;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(WIDTH - 82, 68);
-  ctx.lineTo(WIDTH - 62, 88);
-  ctx.moveTo(WIDTH - 62, 68);
-  ctx.lineTo(WIDTH - 82, 88);
-  ctx.stroke();
-
-  // ── Right-side action icons ──
-  const iconBaseY = HEIGHT - 520;
-  const iconSpacing = 78;
-  const iconCx = WIDTH - 72;
-  for (let i = 0; i < 5; i++) {
-    const iy = iconBaseY + i * iconSpacing;
-    if (i < 4) {
-      ctx.beginPath();
-      ctx.arc(iconCx, iy, 32, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(255,255,255,0.10)";
-      ctx.fill();
-    }
-    ctx.fillStyle = "rgba(255,255,255,0.75)";
-    if (i === 4) {
-      for (let d = -10; d <= 10; d += 10) {
-        ctx.beginPath();
-        ctx.arc(iconCx + d, iy, 3.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else {
-      ctx.beginPath();
-      ctx.arc(iconCx, iy, 10, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  // ── Title text (large, wrapped) ──
-  ctx.font = "600 96px Georgia, serif";
-  ctx.fillStyle = "rgba(255,255,255,0.96)";
-  ctx.shadowColor = "rgba(0,0,0,0.35)";
-  ctx.shadowBlur = 16;
-  const maxTitleW = WIDTH - 220;
-  const lines = wrapText(ctx, title, maxTitleW);
-  const lineH = 96;
-  const titleBaseY = HEIGHT - 380 - Math.max(0, lines.length - 2) * lineH;
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i]!, 60, titleBaseY + i * lineH);
-  }
-  ctx.shadowBlur = 0;
-
-  // ── User avatar + name ──
-  const userY = titleBaseY + lines.length * lineH + 32;
-  const avatarGrad = ctx.createLinearGradient(60, userY - 20, 100, userY + 20);
-  avatarGrad.addColorStop(0, "hsl(210, 45%, 72%)");
-  avatarGrad.addColorStop(1, "hsl(250, 55%, 78%)");
-  ctx.beginPath();
-  ctx.arc(80, userY, 20, 0, Math.PI * 2);
-  ctx.fillStyle = avatarGrad;
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.32)";
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,0.90)";
-  ctx.font = "600 18px system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("C", 80, userY + 6);
-  ctx.textAlign = "start";
-  ctx.fillStyle = "rgba(255,255,255,0.80)";
-  ctx.font = "500 28px system-ui, sans-serif";
-  ctx.shadowColor = "rgba(0,0,0,0.25)";
-  ctx.shadowBlur = 6;
-  ctx.fillText("Creator", 114, userY + 8);
-  ctx.shadowBlur = 0;
-
-  // ── BPM + Key badges ──
-  const badgeY = userY + 50;
-  ctx.font = "600 22px system-ui, sans-serif";
-  ctx.letterSpacing = "2px";
-  const bpmLabel = `${bpm} BPM`;
-  const bpmW = ctx.measureText(bpmLabel).width + 28;
-  ctx.fillStyle = "rgba(255,255,255,0.12)";
-  roundRect(ctx, 60, badgeY - 15, bpmW, 30, 15);
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.68)";
-  ctx.fillText(bpmLabel, 74, badgeY + 6);
-  const keyW = ctx.measureText(keySig).width + 28;
-  ctx.fillStyle = "rgba(255,255,255,0.12)";
-  roundRect(ctx, 60 + bpmW + 12, badgeY - 15, keyW, 30, 15);
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.68)";
-  ctx.fillText(keySig, 74 + bpmW + 12, badgeY + 6);
-  ctx.letterSpacing = "0px";
-
-  // ── Playback bar ──
-  const barY = HEIGHT - 72;
-  // Skip back
-  ctx.fillStyle = "rgba(255,255,255,0.50)";
-  ctx.beginPath();
-  ctx.moveTo(72, barY - 8);
-  ctx.lineTo(56, barY);
-  ctx.lineTo(72, barY + 8);
-  ctx.fill();
-  ctx.fillRect(53, barY - 8, 4, 16);
-  // Pause
-  ctx.fillStyle = "rgba(255,255,255,0.80)";
-  ctx.fillRect(104, barY - 10, 7, 20);
-  ctx.fillRect(118, barY - 10, 7, 20);
-  // Track
-  const trackX = 154;
-  const trackW = WIDTH - 310;
-  const progW = trackW * progress;
-  ctx.fillStyle = "rgba(255,255,255,0.22)";
-  roundRect(ctx, trackX, barY - 2, trackW, 4, 2);
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.85)";
-  roundRect(ctx, trackX, barY - 2, Math.max(progW, 1), 4, 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(trackX + progW, barY, 7, 0, Math.PI * 2);
-  ctx.fillStyle = "white";
-  ctx.shadowColor = "rgba(255,255,255,0.4)";
-  ctx.shadowBlur = 8;
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  // Duration
-  const totalSec = Math.round(durationSec);
-  const durLabel = `${pad2(Math.floor(totalSec / 60))}:${pad2(totalSec % 60)}`;
-  ctx.fillStyle = "rgba(255,255,255,0.50)";
-  ctx.font = "500 24px system-ui, sans-serif";
-  ctx.textAlign = "right";
-  ctx.fillText(durLabel, WIDTH - 60, barY + 7);
-  ctx.textAlign = "start";
-
+  const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, maxR);
+  grad.addColorStop(0, rgbaStr(color, alpha));
+  grad.addColorStop(fade, rgbaStr(color, 0));
+  grad.addColorStop(1, rgbaStr(color, 0));
+  ctx.fillStyle = grad;
+  ctx.fillRect(-maxR, -maxR, maxR * 2, maxR * 2);
   ctx.restore();
 }
 
-function paintPresetFrame(
+// ─── Artwork cover-fit ────────────────────────────────────
+
+function drawImageCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+) {
+  const imgRatio = img.naturalWidth / img.naturalHeight;
+  const boxRatio = WIDTH / HEIGHT;
+  let sx: number, sy: number, sw: number, sh: number;
+  if (imgRatio > boxRatio) {
+    sh = img.naturalHeight;
+    sw = sh * boxRatio;
+    sx = (img.naturalWidth - sw) / 2;
+    sy = 0;
+  } else {
+    sw = img.naturalWidth;
+    sh = sw / boxRatio;
+    sx = 0;
+    sy = (img.naturalHeight - sh) / 2;
+  }
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, WIDTH, HEIGHT);
+}
+
+// ─── Ticket-card frame ───────────────────────────────────
+
+function paintTicketFrame(
   ctx: CanvasRenderingContext2D,
   input: {
-    preset: string;
-    colors: [RGB, RGB];
-    frame: number;
-    progress: number;
-    particles: Particle[];
-    spawnParticle: () => Particle;
+    gradient: string;
+    palette?: string[];
+    artworkImg: HTMLImageElement | null;
     title: string;
-    vibe: string;
+    year: number;
     bpm: number;
-    durationSec: number;
     keySig: string;
+    durationSec: number;
+    progress: number;
   },
 ) {
   const {
-    preset, colors, frame, progress, particles, spawnParticle,
-    title, vibe, bpm, durationSec, keySig,
+    gradient, palette, artworkImg,
+    title, year, bpm, keySig, durationSec, progress,
   } = input;
-  const [from, to] = colors;
-  const drift = (Math.sin(frame * 0.02) + 1) / 2;
-  const top = mixColors(from, to, drift * 0.35);
-  const bottom = mixColors(to, from, drift * 0.18);
 
-  const background = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
-  background.addColorStop(0, rgbString(top));
-  background.addColorStop(1, rgbString(bottom));
-  ctx.fillStyle = background;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  drawMeshGradient(ctx, gradient, palette);
 
-  ctx.fillStyle = "rgba(255,255,255,0.03)";
-  for (let y = 0; y < HEIGHT; y += 6) {
-    ctx.fillRect(0, y, WIDTH, 1);
+  if (artworkImg) {
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    drawImageCover(ctx, artworkImg);
+    ctx.restore();
   }
 
-  switch (preset) {
-    case "dust_room":
-      drawDustRoom(ctx, particles, spawnParticle, frame);
-      break;
-    case "end_credits":
-      drawEndCredits(ctx, particles, spawnParticle, frame, progress);
-      break;
-    case "confetti_pulse":
-      drawConfetti(ctx, particles, spawnParticle, frame, progress);
-      break;
-    case "rain_glass":
-      drawRainGlass(ctx, particles, spawnParticle, frame);
-      break;
-    case "synth_glow":
-      drawSynthGlow(ctx, particles, spawnParticle, frame, progress);
-      break;
-    case "warm_particles":
-    default:
-      drawWarmParticles(ctx, particles, spawnParticle, frame);
-      break;
-  }
-
-  // Top vignette
-  const topGrad = ctx.createLinearGradient(0, 0, 0, HEIGHT * 0.2);
-  topGrad.addColorStop(0, "rgba(0,0,0,0.22)");
+  const topGrad = ctx.createLinearGradient(0, 0, 0, HEIGHT * 0.25);
+  topGrad.addColorStop(0, "rgba(0,0,0,0.18)");
   topGrad.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = topGrad;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT * 0.2);
+  ctx.fillRect(0, 0, WIDTH, HEIGHT * 0.25);
 
-  // Overall dim
-  ctx.fillStyle = "rgba(0,0,0,0.12)";
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  const botGrad = ctx.createLinearGradient(0, HEIGHT * 0.4, 0, HEIGHT);
+  botGrad.addColorStop(0, "rgba(0,0,0,0)");
+  botGrad.addColorStop(0.5, "rgba(0,0,0,0.20)");
+  botGrad.addColorStop(1, "rgba(0,0,0,0.55)");
+  ctx.fillStyle = botGrad;
+  ctx.fillRect(0, HEIGHT * 0.4, WIDTH, HEIGHT * 0.6);
 
-  // Bottom vignette for text readability
-  const bottomGrad = ctx.createLinearGradient(0, HEIGHT * 0.38, 0, HEIGHT);
-  bottomGrad.addColorStop(0, "rgba(0,0,0,0)");
-  bottomGrad.addColorStop(0.45, "rgba(0,0,0,0.16)");
-  bottomGrad.addColorStop(1, "rgba(0,0,0,0.52)");
-  ctx.fillStyle = bottomGrad;
-  ctx.fillRect(0, HEIGHT * 0.38, WIDTH, HEIGHT * 0.62);
-
-  drawMeta(ctx, title, vibe, bpm, progress, durationSec, keySig);
+  drawTicketElements(ctx, title, year, bpm, keySig, durationSec, progress);
 }
 
-function stepParticles(
+function drawTicketElements(
   ctx: CanvasRenderingContext2D,
-  particles: Particle[],
-  spawnParticle: () => Particle,
-  frame: number,
-  config: {
-    cap: number;
-    interval: number;
-    color: string;
-    alphaScale?: number;
-    stretch?: boolean;
-  },
-) {
-  if (particles.length < config.cap && frame % config.interval === 0) {
-    particles.push(spawnParticle());
-  }
-
-  for (let index = particles.length - 1; index >= 0; index--) {
-    const particle = particles[index]!;
-    particle.x += particle.vx;
-    particle.y += particle.vy;
-    particle.vy -= 0.01;
-    particle.life += 1;
-    if (particle.life >= particle.maxLife) {
-      particles.splice(index, 1);
-      continue;
-    }
-
-    const alpha =
-      (1 - particle.life / particle.maxLife) * (config.alphaScale ?? 0.55);
-    ctx.beginPath();
-    if (config.stretch) {
-      ctx.ellipse(
-        particle.x,
-        particle.y,
-        particle.radius * 0.65,
-        particle.radius * 2.2,
-        Math.atan2(particle.vy, particle.vx),
-        0,
-        Math.PI * 2,
-      );
-    } else {
-      ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-    }
-    ctx.fillStyle = config.color.replace("__A__", alpha.toFixed(3));
-    ctx.fill();
-  }
-}
-
-function drawWarmParticles(
-  ctx: CanvasRenderingContext2D,
-  particles: Particle[],
-  spawnParticle: () => Particle,
-  frame: number,
-) {
-  stepParticles(ctx, particles, spawnParticle, frame, {
-    cap: 55,
-    interval: 3,
-    color: "rgba(255,255,255,__A__)",
-  });
-}
-
-function drawDustRoom(
-  ctx: CanvasRenderingContext2D,
-  particles: Particle[],
-  spawnParticle: () => Particle,
-  frame: number,
-) {
-  stepParticles(ctx, particles, spawnParticle, frame, {
-    cap: 70,
-    interval: 5,
-    color: "rgba(255,248,235,__A__)",
-    alphaScale: 0.32,
-  });
-
-  ctx.fillStyle = "rgba(255,255,255,0.08)";
-  for (let index = 0; index < 8; index++) {
-    const x = ((frame * 0.3 + index * 130) % (WIDTH + 240)) - 120;
-    ctx.fillRect(x, 0, 1.5, HEIGHT);
-  }
-}
-
-function drawEndCredits(
-  ctx: CanvasRenderingContext2D,
-  particles: Particle[],
-  spawnParticle: () => Particle,
-  frame: number,
+  title: string,
+  year: number,
+  bpm: number,
+  keySig: string,
+  durationSec: number,
   progress: number,
 ) {
-  stepParticles(ctx, particles, spawnParticle, frame, {
-    cap: 32,
-    interval: 6,
-    color: "rgba(255,255,255,__A__)",
-    alphaScale: 0.22,
-  });
+  ctx.save();
 
-  const glow = 120 + Math.sin(frame * 0.035) * 40;
+  const S = SCALE;
+  const btm = HEIGHT - PAD;
+
+  // ── Mini player ──
+  const iconSize = Math.round(20 * S);
+  const playerCenterY = btm - iconSize / 2;
+
+  // Play triangle (filled, no circle — matches the ticket card)
+  ctx.fillStyle = "white";
   ctx.beginPath();
-  ctx.arc(WIDTH * 0.72, HEIGHT * 0.28, glow, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255,255,255,0.10)";
+  const triH = iconSize * 0.78;
+  const triW = triH * 0.72;
+  const triCx = PAD + iconSize / 2;
+  ctx.moveTo(triCx - triW * 0.38, playerCenterY - triH / 2);
+  ctx.lineTo(triCx + triW * 0.62, playerCenterY);
+  ctx.lineTo(triCx - triW * 0.38, playerCenterY + triH / 2);
+  ctx.closePath();
   ctx.fill();
 
-  const horizonY = HEIGHT * (0.68 - progress * 0.06);
-  ctx.strokeStyle = "rgba(255,255,255,0.12)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, horizonY);
-  ctx.bezierCurveTo(WIDTH * 0.25, horizonY - 40, WIDTH * 0.75, horizonY + 25, WIDTH, horizonY - 30);
-  ctx.stroke();
-}
+  // Progress bar
+  const barGap = Math.round(12 * S);
+  const barX = PAD + iconSize + barGap;
+  const durFontSize = Math.round(11 * S);
+  ctx.font = `400 ${durFontSize}px Georgia, serif`;
+  const totalSec = Math.round(durationSec);
+  const durLabel = `${pad2(Math.floor(totalSec / 60))}:${pad2(totalSec % 60)}`;
+  const durLabelW = ctx.measureText(durLabel).width;
+  const durGap = Math.round(8 * S);
+  const barEndX = WIDTH - PAD - durLabelW - durGap;
+  const barW = barEndX - barX;
+  const barH = Math.round(3 * S);
+  const barR = barH / 2;
 
-function drawConfetti(
-  ctx: CanvasRenderingContext2D,
-  particles: Particle[],
-  spawnParticle: () => Particle,
-  frame: number,
-  progress: number,
-) {
-  stepParticles(ctx, particles, spawnParticle, frame, {
-    cap: 95,
-    interval: 2,
-    color: "rgba(255,255,255,__A__)",
-    alphaScale: 0.65,
-  });
+  ctx.fillStyle = "rgba(255,255,255,0.20)";
+  roundRect(ctx, barX, playerCenterY - barH / 2, barW, barH, barR);
+  ctx.fill();
 
-  const pulse = 0.7 + Math.sin(frame * 0.12) * 0.25 + progress * 0.15;
-  ctx.beginPath();
-  ctx.arc(WIDTH / 2, HEIGHT / 2, 180 * pulse, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(255,255,255,0.16)";
-  ctx.lineWidth = 4;
-  ctx.stroke();
-}
+  const progW = Math.max(barW * Math.min(progress, 1), 1);
+  ctx.fillStyle = "rgba(255,255,255,0.70)";
+  roundRect(ctx, barX, playerCenterY - barH / 2, progW, barH, barR);
+  ctx.fill();
 
-function drawRainGlass(
-  ctx: CanvasRenderingContext2D,
-  particles: Particle[],
-  spawnParticle: () => Particle,
-  frame: number,
-) {
-  stepParticles(ctx, particles, spawnParticle, frame, {
-    cap: 80,
-    interval: 3,
-    color: "rgba(255,255,255,__A__)",
-    alphaScale: 0.22,
-    stretch: true,
-  });
+  // Duration label
+  ctx.fillStyle = "rgba(255,255,255,0.50)";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.fillText(durLabel, WIDTH - PAD, playerCenterY);
 
-  ctx.strokeStyle = "rgba(255,255,255,0.08)";
-  for (let index = 0; index < 12; index++) {
-    const x = ((frame * 1.6 + index * 92) % (WIDTH + 160)) - 80;
-    ctx.beginPath();
-    ctx.moveTo(x, -40);
-    ctx.lineTo(x - 40, HEIGHT + 40);
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-}
+  // ── Fields: TIME / BPM / KEY ──
+  const fieldGapAbove = Math.round(20 * S);
+  const playerRowTop = btm - iconSize;
+  const fieldsBottomY = playerRowTop - fieldGapAbove;
 
-function drawSynthGlow(
-  ctx: CanvasRenderingContext2D,
-  particles: Particle[],
-  spawnParticle: () => Particle,
-  frame: number,
-  progress: number,
-) {
-  stepParticles(ctx, particles, spawnParticle, frame, {
-    cap: 58,
-    interval: 3,
-    color: "rgba(255,255,255,__A__)",
-    alphaScale: 0.42,
-  });
+  const labelFontSize = Math.round(11 * S);
+  const valueFontSize = Math.round(38 * S);
+  const labelValueGap = Math.round(6 * S);
 
-  ctx.strokeStyle = "rgba(255,255,255,0.10)";
-  ctx.lineWidth = 1;
-  for (let x = 0; x <= WIDTH; x += 80) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, HEIGHT);
-    ctx.stroke();
-  }
-  for (let y = 0; y <= HEIGHT; y += 80) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(WIDTH, y);
-    ctx.stroke();
+  const fields = [
+    { label: "TIME", value: String(year) },
+    { label: "BPM", value: String(bpm) },
+    { label: "KEY", value: keySig },
+  ];
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  const fieldAreaW = WIDTH - PAD * 2;
+  const fieldSpacing = fieldAreaW / fields.length;
+
+  for (let i = 0; i < fields.length; i++) {
+    const fx = PAD + i * fieldSpacing;
+
+    ctx.font = `400 ${valueFontSize}px Georgia, serif`;
+    ctx.fillStyle = "rgba(255,255,255,0.80)";
+    ctx.fillText(fields[i]!.value, fx, fieldsBottomY);
+
+    ctx.font = `400 ${labelFontSize}px Georgia, serif`;
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.fillText(fields[i]!.label, fx, fieldsBottomY - valueFontSize - labelValueGap);
   }
 
-  const ringRadius = 180 + Math.sin(frame * 0.07) * 36 + progress * 50;
+  // ── Dashed line ──
+  const fieldGroupH = valueFontSize + labelValueGap + labelFontSize;
+  const dashGap = Math.round(16 * S);
+  const dashY = fieldsBottomY - fieldGroupH - dashGap;
+
+  ctx.setLineDash([Math.round(8 * S), Math.round(6 * S)]);
+  ctx.strokeStyle = "rgba(255,255,255,0.42)";
+  ctx.lineWidth = Math.round(1 * S);
   ctx.beginPath();
-  ctx.arc(WIDTH * 0.5, HEIGHT * 0.42, ringRadius, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(255,255,255,0.18)";
-  ctx.lineWidth = 3;
+  ctx.moveTo(0, dashY);
+  ctx.lineTo(WIDTH, dashY);
   ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ── Title ──
+  const titleGap = Math.round(20 * S);
+  const titleBottomY = dashY - titleGap;
+  const titleFontSize = Math.round(52 * S);
+
+  ctx.font = `400 ${titleFontSize}px Georgia, serif`;
+  ctx.fillStyle = "white";
+  ctx.textBaseline = "alphabetic";
+  ctx.shadowColor = "rgba(0,0,0,0.25)";
+  ctx.shadowBlur = 12;
+
+  const maxTitleW = WIDTH - PAD * 2;
+  const lines = wrapText(ctx, title, maxTitleW);
+  const lineH = Math.round(titleFontSize * 0.95);
+
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const y = titleBottomY - (lines.length - 1 - i) * lineH;
+    ctx.fillText(lines[i]!, PAD, y);
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
 }

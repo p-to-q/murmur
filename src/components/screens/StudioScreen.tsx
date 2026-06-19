@@ -32,7 +32,6 @@ import type {
 } from "@/modules/shared/types";
 
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
-import { MurmurWave } from "@/components/murmur/murmur-wave";
 import { buildMeshGradient } from "@/components/song-detail/mesh-gradient";
 import { AurisPanel } from "@/components/studio/auris-panel";
 import { TrackMixer } from "@/components/studio/track-mixer";
@@ -369,14 +368,6 @@ function StudioContent({ version }: { version: VibeVersion }) {
             {/* Darken overlays */}
             <div className="absolute inset-0 bg-gradient-to-b from-black/12 via-transparent to-black/48 pointer-events-none" />
 
-            {/* Wave */}
-            <MurmurWave
-              color={waveAccent}
-              intensity={0.62}
-              isPlaying={isPlaying}
-              waveY={0.46}
-              className="absolute inset-x-0 bottom-0 h-[55%] w-full pointer-events-none"
-            />
 
             {/* Play disc — center */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
