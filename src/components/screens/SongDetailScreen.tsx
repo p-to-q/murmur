@@ -58,6 +58,7 @@ type Song = SongCard & {
 
 type ExportKey = "audio" | "video" | "share";
 type ShareCardMode = "image" | "video";
+const CJK_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
 
 export function SongDetailScreen({ songId }: { songId: string }) {
   const router = useRouter();
@@ -354,6 +355,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     rootSong?.id === song.rootSongId && rootSong?.id !== song.id
       ? rootSong
       : null;
+  const titleFontClass = titleSerifClass(song.title, {
+    latin: "hero-serif-latin-italic",
+    cjk: "hero-serif-italic",
+  });
 
   const handleEditAgain = () => {
     const version = hydrateSavedSongToVersion(song);
@@ -504,7 +509,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                   {displayVibeLabel(song.vibe, song.tags)}
                 </p>
                 <h1
-                  className="hero-serif-italic mt-3 text-[34px] leading-[0.98] text-white md:text-[52px]"
+                  className={`${titleFontClass} mt-3 text-[34px] leading-[0.98] text-white md:text-[52px]`}
                   style={{ letterSpacing: "-0.018em" }}
                 >
                   {song.title}
@@ -763,6 +768,13 @@ async function fetchRelatedSong(songId: string | null): Promise<Song | null> {
 
 /* ── Sub-components ───────────────────────────────────────────────── */
 
+function titleSerifClass(
+  text: string,
+  classes: { latin: string; cjk: string },
+) {
+  return CJK_TEXT_RE.test(text) ? classes.cjk : classes.latin;
+}
+
 function ExportRow({
   label,
   hint,
@@ -1002,7 +1014,14 @@ function LineageTrailCard({
       } disabled:opacity-100`}
     >
       <p className="text-[10px] uppercase tracking-[0.18em] text-[#B3AA9C]">{label}</p>
-      <p className="mt-1 font-serif text-[16px] leading-tight text-[#1A1A1A]">{song.title}</p>
+      <p
+        className={`mt-1 ${titleSerifClass(song.title, {
+          latin: "font-serif-latin",
+          cjk: "font-serif",
+        })} text-[16px] leading-tight text-[#1A1A1A]`}
+      >
+        {song.title}
+      </p>
       {song.vibe ? (
         <p className="mt-1 text-[12px] text-[#8C8780]">
           {displayVibeLabel(song.vibe, song.tags)}
