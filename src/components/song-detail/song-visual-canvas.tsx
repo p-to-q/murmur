@@ -2,6 +2,10 @@
 import { useMemo } from "react";
 import Image from "next/image";
 import { buildMeshGradient } from "@/components/song-detail/mesh-gradient";
+import {
+  coverArtworkImageStyle,
+  coverBrightnessCompensationStyle,
+} from "@/lib/music/cover-visual-treatment";
 import type { VisualArtwork } from "@/modules/shared/types";
 
 export function SongVisualCanvas({
@@ -28,8 +32,16 @@ export function SongVisualCanvas({
             fill
             className="object-cover"
             sizes="(max-width: 768px) 100vw, 672px"
+            style={coverArtworkImageStyle(artwork)}
           />
         </div>
+      )}
+      {artworkPath && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={coverBrightnessCompensationStyle}
+        />
       )}
     </div>
   );

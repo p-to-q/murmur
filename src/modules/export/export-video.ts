@@ -1,4 +1,5 @@
 import type { SongCard } from "@/modules/shared/types";
+import { applyCoverBrightnessCompensation } from "@/lib/music/cover-visual-treatment";
 
 type Song = SongCard & {
   mp3DataUrl?: string | null;
@@ -16,6 +17,14 @@ type Particle = {
   radius: number;
   life: number;
   maxLife: number;
+};
+type LoadedArtwork = {
+  image: HTMLImageElement;
+  crop: {
+    x: number;
+    y: number;
+    scale: number;
+  };
 };
 
 const WIDTH = 1080;
@@ -144,6 +153,7 @@ export async function renderSongVideo(
 
   const colors = extractGradientColors(song.visualConfig.gradient);
   const preset = song.visualConfig.preset;
+  const artwork = await loadArtwork(song.visualConfig.artwork).catch(() => null);
   const particles: Particle[] = [];
   let rafId = 0;
   let frame = 0;
@@ -167,6 +177,7 @@ export async function renderSongVideo(
     paintPresetFrame(ctx, {
       preset,
       colors,
+      artwork,
       frame,
       progress,
       particles,
@@ -305,12 +316,56 @@ function rgbString(rgb: RGB): string {
   return `rgb(${Math.round(rgb.r)}, ${Math.round(rgb.g)}, ${Math.round(rgb.b)})`;
 }
 
+function loadArtwork(artwork: Song["visualConfig"]["artwork"]): Promise<LoadedArtwork | null> {
+  const src = artwork?.backgroundImagePath ?? artwork?.imagePath;
+  if (!src) return Promise.resolve(null);
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      resolve({
+        image,
+        crop: {
+          x: artwork?.crop?.x ?? 0.5,
+          y: artwork?.crop?.y ?? 0.5,
+          scale: Math.max(1, artwork?.crop?.scale ?? 1),
+        },
+      });
+    };
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
+}
+
 function mixColors(a: RGB, b: RGB, ratio: number): RGB {
   return {
     r: lerp(a.r, b.r, ratio),
     g: lerp(a.g, b.g, ratio),
     b: lerp(a.b, b.b, ratio),
   };
+}
+
+function drawArtworkBackground(
+  ctx: CanvasRenderingContext2D,
+  artwork: LoadedArtwork,
+) {
+  const imageWidth = artwork.image.naturalWidth || artwork.image.width;
+  const imageHeight = artwork.image.naturalHeight || artwork.image.height;
+  if (imageWidth <= 0 || imageHeight <= 0) return;
+
+  const coverScale = Math.max(WIDTH / imageWidth, HEIGHT / imageHeight);
+  const scale = coverScale * artwork.crop.scale;
+  const drawnWidth = imageWidth * scale;
+  const drawnHeight = imageHeight * scale;
+  const x = (WIDTH - drawnWidth) * artwork.crop.x;
+  const y = (HEIGHT - drawnHeight) * artwork.crop.y;
+
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.filter = "brightness(1.18) saturate(1.04) contrast(1.02)";
+  ctx.drawImage(artwork.image, x, y, drawnWidth, drawnHeight);
+  ctx.restore();
 }
 
 function pad2(n: number): string {
@@ -533,6 +588,7 @@ function paintPresetFrame(
   input: {
     preset: string;
     colors: [RGB, RGB];
+    artwork: LoadedArtwork | null;
     frame: number;
     progress: number;
     particles: Particle[];
@@ -545,7 +601,7 @@ function paintPresetFrame(
   },
 ) {
   const {
-    preset, colors, frame, progress, particles, spawnParticle,
+    preset, colors, artwork, frame, progress, particles, spawnParticle,
     title, vibe, bpm, durationSec, keySig,
   } = input;
   const [from, to] = colors;
@@ -558,6 +614,11 @@ function paintPresetFrame(
   background.addColorStop(1, rgbString(bottom));
   ctx.fillStyle = background;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  if (artwork) {
+    drawArtworkBackground(ctx, artwork);
+    applyCoverBrightnessCompensation(ctx, WIDTH, HEIGHT);
+  }
 
   ctx.fillStyle = "rgba(255,255,255,0.03)";
   for (let y = 0; y < HEIGHT; y += 6) {

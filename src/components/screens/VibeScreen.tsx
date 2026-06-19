@@ -41,6 +41,10 @@ import type { VibeVersion } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { MurmurWave } from "@/components/murmur/murmur-wave";
 import { buildMeshGradient } from "@/components/song-detail/mesh-gradient";
+import {
+  coverArtworkImageStyle,
+  coverBrightnessCompensationStyle,
+} from "@/lib/music/cover-visual-treatment";
 import { VIBE_PRESETS } from "@/presets/vibes";
 
 /** Visual phases of the route arrival. */
@@ -465,11 +469,14 @@ function VibeCard({
             fill
             sizes="(max-width: 768px) 100vw, 60vw"
             className="absolute inset-0 h-full w-full object-cover opacity-35"
-            style={{
-              objectPosition: `${((artwork.crop?.x ?? 0.5) * 100).toFixed(1)}% ${((artwork.crop?.y ?? 0.5) * 100).toFixed(1)}%`,
-              transform: `scale(${Math.max(1, artwork.crop?.scale ?? 1)})`,
-              transformOrigin: "center center",
-            }}
+            style={coverArtworkImageStyle(artwork)}
+          />
+        )}
+        {artworkPath && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={coverBrightnessCompensationStyle}
           />
         )}
         {/* Top darken for legibility */}

@@ -61,11 +61,13 @@ export function ShareTicketCard({
   const progress = durationSec > 0 ? currentTime / durationSec : 0;
 
   useEffect(() => {
-    if (!open) {
-      audioRef.current?.pause();
+    if (open) return;
+    audioRef.current?.pause();
+    const resetTimer = window.setTimeout(() => {
       setPlaying(false);
       setCurrentTime(0);
-    }
+    }, 0);
+    return () => window.clearTimeout(resetTimer);
   }, [open]);
 
   useEffect(() => {
