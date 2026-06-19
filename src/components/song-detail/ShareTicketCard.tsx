@@ -26,6 +26,12 @@ function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
+const ticketSerifStyle = {
+  fontFamily: "var(--font-instrument-serif), var(--murmur-font-chinese)",
+  fontWeight: 400,
+  letterSpacing: 0,
+};
+
 export function ShareTicketCard({
   songId,
   title,
@@ -164,7 +170,15 @@ export function ShareTicketCard({
             <div
               ref={cardRef}
               className="relative overflow-hidden rounded-[28px]"
-              style={{ aspectRatio: "9/16" }}
+              style={{
+                aspectRatio: "9/16",
+                WebkitMaskImage:
+                  "radial-gradient(circle 20px at 0 calc(100% - 100px), transparent 19px, #000 20px), radial-gradient(circle 20px at 100% calc(100% - 100px), transparent 19px, #000 20px)",
+                WebkitMaskComposite: "source-in",
+                maskImage:
+                  "radial-gradient(circle 20px at 0 calc(100% - 100px), transparent 19px, #000 20px), radial-gradient(circle 20px at 100% calc(100% - 100px), transparent 19px, #000 20px)",
+                maskComposite: "intersect",
+              }}
             >
               <div className="absolute inset-0">
                 {artworkPath ? (
@@ -205,8 +219,8 @@ export function ShareTicketCard({
                   <h2
                     className="hero-serif text-white leading-[0.95]"
                     style={{
+                      ...ticketSerifStyle,
                       fontSize: "clamp(38px, 10vw, 52px)",
-                      letterSpacing: 0,
                     }}
                   >
                     {title}
@@ -214,19 +228,9 @@ export function ShareTicketCard({
                 </div>
 
                 <div className="relative mt-5">
-                  <span
-                    aria-hidden
-                    className="absolute left-0 top-1/2 z-10 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#0A0A0A]"
-                    style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.10)" }}
-                  />
                   <div
                     className="border-t border-dashed"
                     style={{ borderColor: "rgba(255,255,255,0.42)" }}
-                  />
-                  <span
-                    aria-hidden
-                    className="absolute right-0 top-1/2 z-10 h-10 w-10 -translate-y-1/2 translate-x-1/2 rounded-full bg-[#0A0A0A]"
-                    style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.10)" }}
                   />
                 </div>
 
@@ -292,13 +296,14 @@ function TicketField({ label, value }: { label: string; value: string }) {
     <div className="flex flex-col items-start">
       <span
         className="text-[11px] uppercase leading-none tracking-[0.18em]"
-        style={{ color: "rgba(255,255,255,0.55)" }}
+        style={{ ...ticketSerifStyle, color: "rgba(255,255,255,0.55)" }}
       >
         {label}
       </span>
       <span
         className="hero-serif mt-1.5 tabular-nums leading-none"
         style={{
+          ...ticketSerifStyle,
           fontSize: "clamp(28px, 7vw, 38px)",
           color: "rgba(255,255,255,0.80)",
         }}
