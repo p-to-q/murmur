@@ -821,7 +821,7 @@ export function HumScreen() {
                     ease: "easeInOut",
                   }}
                   className={[
-                    "hero-serif text-[#1A1A1A] text-[37px] md:text-[58px] lg:text-[68px] xl:text-[62px] whitespace-pre-line leading-[1.1]",
+                    "hero-serif text-[#1A1A1A] text-[37px] md:text-[49px] lg:text-[57px] xl:text-[56px] whitespace-pre-line leading-[1.1]",
                     idleIndex === 3 || idleIndex === 4 ? "break-keep" : "",
                   ].join(" ")}
                 >
@@ -837,7 +837,7 @@ export function HumScreen() {
                   exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : undefined}
                   transition={{ duration: 0.4 }}
                 >
-                  <h1 className="hero-serif text-[#1A1A1A] text-[37px] md:text-[58px] lg:text-[68px] xl:text-[62px] leading-[1.1]">
+                  <h1 className="hero-serif text-[#1A1A1A] text-[37px] md:text-[49px] lg:text-[57px] xl:text-[56px] leading-[1.1]">
                     {t("hum.recording")}
                   </h1>
                   <div className="flex items-center justify-center xl:justify-start gap-2 mt-4">
@@ -865,7 +865,7 @@ export function HumScreen() {
                       animate={{ opacity: 1 }}
                       exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : undefined}
                       transition={{ duration: 0.3 }}
-                      className="hero-serif text-[#1A1A1A] text-[30px] md:text-[50px] lg:text-[58px] xl:text-[52px] leading-[1.15]"
+                      className="hero-serif text-[#1A1A1A] text-[30px] md:text-[42px] lg:text-[49px] xl:text-[48px] leading-[1.15]"
                     >
                       {processingMessage}
                     </motion.h1>
