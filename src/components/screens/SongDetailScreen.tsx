@@ -56,7 +56,8 @@ type Song = SongCard & {
   tags?: string[];
 };
 
-type ExportKey = "audio" | "video";
+type ExportKey = "audio" | "video" | "share";
+type ShareCardMode = "image" | "video";
 
 export function SongDetailScreen({ songId }: { songId: string }) {
   const router = useRouter();
@@ -75,6 +76,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const [busy, setBusy] = useState<ExportKey | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [shareCardOpen, setShareCardOpen] = useState(false);
+  const [shareCardMode, setShareCardMode] = useState<ShareCardMode>("image");
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   /* ── Load ──────────────────────────────────────────────────────────── */
@@ -615,13 +617,26 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 onClick={exportAudio}
               />
               <ExportRow
+                label={t("song.export.image.label") || "Share image"}
+                hint={t("song.export.image.hint") || "png"}
+                cost={t("song.export.free") || "free"}
+                busy={busy === "share"}
+                onClick={() => {
+                  setShareCardMode("image");
+                  setShareCardOpen(true);
+                }}
+              />
+              <ExportRow
                 label={t("song.export.video.label") || "Video"}
                 hint={t("song.export.video.hint") || "mp4"}
                 cost={t("song.export.free") || "free"}
                 disabled={!song.mp3DataUrl && !song.mp3Url}
                 disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
                 busy={busy === "video"}
-                onClick={() => setShareCardOpen(true)}
+                onClick={() => {
+                  setShareCardMode("video");
+                  setShareCardOpen(true);
+                }}
               />
             </motion.div>
 
@@ -657,7 +672,6 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
       {/* Share ticket card */}
       <ShareTicketCard
-        songId={song.id}
         title={song.title}
         gradient={gradient}
         artwork={song.visualConfig.artwork}
@@ -668,6 +682,22 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         audioSrc={song.mp3DataUrl || song.mp3Url}
         open={shareCardOpen}
         onClose={() => setShareCardOpen(false)}
+        mode={shareCardMode}
+        onImageDownloaded={() => {
+          toast.success(t("song.export.ok"));
+          memory
+            .reportAction({
+              content: `Exported share image for "${song.title}"`,
+              event_type: "update",
+              page: "song-detail",
+              metadata: { type: "download_share_image", song_id: song.id },
+            })
+            .catch(() => {});
+        }}
+        onImageDownloadError={(error) => {
+          console.error(error);
+          toast.error(t("song.export.err"));
+        }}
         onDownloadVideo={exportVideo}
         videoExporting={busy === "video"}
       />

@@ -26,6 +26,7 @@ type SongWithMeta = Omit<SongCardType, "visualConfig" | "duration" | "arrangemen
     tags?: string[];
   };
 type SortMode = "newest" | "alpha";
+const LOCAL_CREATOR_BOOTSTRAP_TIMEOUT_MS = 2_000;
 
 function demoArtwork(id: string) {
   const artwork = ARTWORK_CATALOG.find((entry) => entry.id === id);
@@ -84,6 +85,24 @@ function displayVibe(song: SongWithMeta): string {
   return displayVibeLabel(song.vibe, song.tags);
 }
 
+async function withSoftTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallback: T,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timeoutId = setTimeout(() => resolve(fallback), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export function GalleryScreen() {
   const router = useRouter();
   const t = useTranslator();
@@ -102,11 +121,16 @@ export function GalleryScreen() {
     let cancelled = false;
     async function load() {
       try {
-        await ensureLocalCreatorSession({ background: true });
+        const hasSession = await withSoftTimeout(
+          ensureLocalCreatorSession({ background: true }),
+          LOCAL_CREATOR_BOOTSTRAP_TIMEOUT_MS,
+          false,
+        );
+        if (!hasSession) return;
         const res = await fetch("/api/songs");
-        if (res.ok) {
+        if (res.ok && !cancelled) {
           const data = (await res.json()) as SongWithMeta[];
-          if (!cancelled) setSongs(data);
+          setSongs(data);
         }
       } catch {
         /* offline — keep whatever we have */

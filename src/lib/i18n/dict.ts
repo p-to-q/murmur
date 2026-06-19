@@ -449,6 +449,8 @@ export const DICT = {
   "song.export.audio.hint":   { zh: "mp3", en: "mp3" },
   "song.export.html.label":   { zh: "分享卡", en: "Share card" },
   "song.export.html.hint":    { zh: "单文件 html", en: "self-contained html" },
+  "song.export.image.label":  { zh: "分享图片", en: "Share image" },
+  "song.export.image.hint":   { zh: "png", en: "png" },
   "song.export.ticket.hint":  { zh: "票券风格图片", en: "ticket-style image" },
   "song.export.poster.label": { zh: "海报", en: "Poster" },
   "song.export.poster.hint":  { zh: "png", en: "png" },
@@ -622,6 +624,7 @@ export const DICT = {
   "nav.flow.delete_account":     { zh: "删除账号", en: "Delete account" },
   "nav.flow.topup":              { zh: "补给",     en: "Top up" },
   "nav.flow.checkout":           { zh: "结账",     en: "Checkout" },
+  "nav.flow.song":               { zh: "歌曲",     en: "Song" },
 
   // ── SideNav footer popovers + dual-pool balance ────────────────────
   "nav.daily":                   { zh: "今日",     en: "today" },

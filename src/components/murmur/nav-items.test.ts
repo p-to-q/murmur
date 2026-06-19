@@ -25,4 +25,12 @@ describe("computeTrail", () => {
       "/studio/name",
     ]);
   });
+
+  it("shows song detail as a Gallery child row", () => {
+    const trail = computeTrail("/song/song_123");
+
+    expect(trail?.rootHref).toBe("/gallery");
+    expect(trail?.steps.map((step) => step.step.match)).toEqual(["/song"]);
+    expect(trail?.steps.map((step) => step.isActive)).toEqual([true]);
+  });
 });

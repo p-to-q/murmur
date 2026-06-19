@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Spinner } from "@/components/ui/spinner";
-import { X, Download, Play, Pause } from "lucide-react";
+import { X, Play, Pause, Image as ImageIcon, Video } from "lucide-react";
 import type { VisualArtwork } from "@/modules/shared/types";
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
 
 interface ShareTicketCardProps {
-  songId: string;
   title: string;
   gradient: string;
   artwork?: VisualArtwork;
@@ -19,6 +18,9 @@ interface ShareTicketCardProps {
   audioSrc?: string | null;
   open: boolean;
   onClose: () => void;
+  mode?: "image" | "video";
+  onImageDownloaded?: () => void;
+  onImageDownloadError?: (error: unknown) => void;
   onDownloadVideo?: () => void;
   videoExporting?: boolean;
 }
@@ -31,6 +33,10 @@ function formatTime(sec: number): string {
   return `${pad2(Math.floor(sec / 60))}:${pad2(Math.round(sec % 60))}`;
 }
 
+function slugify(value: string): string {
+  return value.replace(/\s+/g, "-").toLowerCase() || "murmur";
+}
+
 const ticketSerifStyle = {
   fontFamily: "var(--font-instrument-serif), var(--murmur-font-chinese)",
   fontWeight: 400,
@@ -38,7 +44,6 @@ const ticketSerifStyle = {
 };
 
 export function ShareTicketCard({
-  songId,
   title,
   gradient,
   artwork,
@@ -49,6 +54,9 @@ export function ShareTicketCard({
   audioSrc,
   open,
   onClose,
+  mode = "image",
+  onImageDownloaded,
+  onImageDownloadError,
   onDownloadVideo,
   videoExporting = false,
 }: ShareTicketCardProps) {
@@ -56,9 +64,14 @@ export function ShareTicketCard({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [imageExporting, setImageExporting] = useState(false);
 
   const year = new Date(createdAt).getFullYear();
   const progress = durationSec > 0 ? currentTime / durationSec : 0;
+  const showMiniPlayer = mode === "video" && Boolean(audioSrc);
+  const ticketStyle = {
+    "--ticket-perf-bottom": showMiniPlayer ? "140px" : "100px",
+  } as CSSProperties;
 
   useEffect(() => {
     if (open) return;
@@ -94,6 +107,49 @@ export function ShareTicketCard({
     }
   }, [audioSrc]);
 
+  const downloadImage = useCallback(async () => {
+    const node = cardRef.current;
+    if (!node || imageExporting) return;
+    setImageExporting(true);
+    try {
+      const mod = (await import("html2canvas")) as unknown as {
+        default: (
+          el: HTMLElement,
+          opts?: {
+            backgroundColor?: string | null;
+            scale?: number;
+            useCORS?: boolean;
+            logging?: boolean;
+          },
+        ) => Promise<HTMLCanvasElement>;
+      };
+      const scale = Math.max(2, 1080 / Math.max(node.offsetWidth, 1));
+      const canvas = await mod.default(node, {
+        backgroundColor: null,
+        scale,
+        useCORS: true,
+        logging: false,
+      });
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((result) => resolve(result), "image/png", 0.95),
+      );
+      if (!blob) {
+        throw new Error("Image export failed");
+      }
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${slugify(title)}-share-card.png`;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      onImageDownloaded?.();
+    } catch (error) {
+      onImageDownloadError?.(error);
+    } finally {
+      setImageExporting(false);
+    }
+  }, [imageExporting, onImageDownloadError, onImageDownloaded, title]);
+
   return (
     <AnimatePresence>
       {open && (
@@ -119,17 +175,31 @@ export function ShareTicketCard({
             className="absolute right-4 flex items-center gap-3"
             style={{ top: "max(env(safe-area-inset-top, 0px), 16px)" }}
           >
-            {onDownloadVideo && (
+            <button
+              onClick={downloadImage}
+              disabled={imageExporting}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2A2A2A] text-white/90 transition-colors hover:bg-[#3A3A3A] active:scale-95 disabled:opacity-50"
+              aria-label="Download image"
+              title="Download image"
+            >
+              {imageExporting ? (
+                <Spinner size="sm" variant="light" />
+              ) : (
+                <ImageIcon className="h-[18px] w-[18px]" strokeWidth={2.2} />
+              )}
+            </button>
+            {mode === "video" && onDownloadVideo && (
               <button
                 onClick={onDownloadVideo}
                 disabled={videoExporting}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2A2A2A] text-white/90 transition-colors hover:bg-[#3A3A3A] active:scale-95 disabled:opacity-50"
                 aria-label="Download video"
+                title="Download video"
               >
                 {videoExporting ? (
                   <Spinner size="sm" variant="light" />
                 ) : (
-                  <Download className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                  <Video className="h-[18px] w-[18px]" strokeWidth={2.2} />
                 )}
               </button>
             )}
@@ -156,12 +226,13 @@ export function ShareTicketCard({
               ref={cardRef}
               className="relative overflow-hidden rounded-[28px]"
               style={{
+                ...ticketStyle,
                 aspectRatio: "9/16",
                 WebkitMaskImage:
-                  "radial-gradient(circle 20px at 0 calc(100% - 100px), transparent 19px, #000 20px), radial-gradient(circle 20px at 100% calc(100% - 100px), transparent 19px, #000 20px)",
+                  "radial-gradient(circle 20px at 0 calc(100% - var(--ticket-perf-bottom)), transparent 19px, #000 20px), radial-gradient(circle 20px at 100% calc(100% - var(--ticket-perf-bottom)), transparent 19px, #000 20px)",
                 WebkitMaskComposite: "source-in",
                 maskImage:
-                  "radial-gradient(circle 20px at 0 calc(100% - 100px), transparent 19px, #000 20px), radial-gradient(circle 20px at 100% calc(100% - 100px), transparent 19px, #000 20px)",
+                  "radial-gradient(circle 20px at 0 calc(100% - var(--ticket-perf-bottom)), transparent 19px, #000 20px), radial-gradient(circle 20px at 100% calc(100% - var(--ticket-perf-bottom)), transparent 19px, #000 20px)",
                 maskComposite: "intersect",
               }}
             >
@@ -185,8 +256,19 @@ export function ShareTicketCard({
                 }}
               />
 
-              <div className="absolute inset-x-0 bottom-0 pb-7">
-                <div className="px-7">
+              <div
+                className="pointer-events-none absolute inset-x-0 border-t border-dashed"
+                style={{
+                  bottom: "var(--ticket-perf-bottom)",
+                  borderColor: "rgba(255,255,255,0.42)",
+                }}
+              />
+
+              <div className="absolute inset-x-0 bottom-0 top-0">
+                <div
+                  className="absolute inset-x-0 px-7"
+                  style={{ bottom: "calc(var(--ticket-perf-bottom) + 20px)" }}
+                >
                   <h2
                     className="hero-serif text-white leading-[0.95]"
                     style={{
@@ -198,48 +280,43 @@ export function ShareTicketCard({
                   </h2>
                 </div>
 
-                <div className="relative mt-5">
-                  <div
-                    className="border-t border-dashed"
-                    style={{ borderColor: "rgba(255,255,255,0.42)" }}
-                  />
-                </div>
-
-                <div className="mt-4 flex items-end justify-between px-7">
-                  <TicketField label="time" value={String(year)} />
-                  <TicketField label="bpm" value={String(bpm)} />
-                  <TicketField label="key" value={keySignature} />
-                </div>
-
-                {/* Mini player */}
-                {audioSrc && (
-                  <div className="mt-5 flex items-center gap-3 px-7">
-                    <button
-                      onClick={togglePlay}
-                      className="flex shrink-0 items-center justify-center active:scale-95"
-                    >
-                      {playing ? (
-                        <Pause className="h-5 w-5 text-white" fill="white" />
-                      ) : (
-                        <Play className="h-5 w-5 text-white" fill="white" />
-                      )}
-                    </button>
-                    <div className="flex flex-1 items-center gap-2">
-                      <div className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/20">
-                        <div
-                          className="h-full rounded-full bg-white/70 transition-[width] duration-200"
-                          style={{ width: `${Math.min(progress * 100, 100)}%` }}
-                        />
-                      </div>
-                      <span
-                        className="shrink-0 text-[11px] tabular-nums text-white/50"
-                        style={ticketSerifStyle}
-                      >
-                        {formatTime(durationSec)}
-                      </span>
-                    </div>
+                <div className="absolute inset-x-0 bottom-0 pb-7">
+                  <div className="flex items-end justify-between px-7">
+                    <TicketField label="time" value={String(year)} />
+                    <TicketField label="bpm" value={String(bpm)} />
+                    <TicketField label="key" value={keySignature} />
                   </div>
-                )}
+
+                  {/* Mini player */}
+                  {showMiniPlayer && (
+                    <div className="mt-5 flex items-center gap-3 px-7">
+                      <button
+                        onClick={togglePlay}
+                        className="flex shrink-0 items-center justify-center active:scale-95"
+                      >
+                        {playing ? (
+                          <Pause className="h-5 w-5 text-white" fill="white" />
+                        ) : (
+                          <Play className="h-5 w-5 text-white" fill="white" />
+                        )}
+                      </button>
+                      <div className="flex flex-1 items-center gap-2">
+                        <div className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/20">
+                          <div
+                            className="h-full rounded-full bg-white/70 transition-[width] duration-200"
+                            style={{ width: `${Math.min(progress * 100, 100)}%` }}
+                          />
+                        </div>
+                        <span
+                          className="shrink-0 text-[11px] tabular-nums text-white/50"
+                          style={ticketSerifStyle}
+                        >
+                          {formatTime(durationSec)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </motion.div>

@@ -91,6 +91,13 @@ export const TRAIL_ROOTS: TrailRoot[] = [
       { match: "/topup/checkout", labelKey: "nav.flow.checkout",        fallback: "Checkout"        },
     ],
   },
+  {
+    href: "/gallery",
+    mode: "single",
+    steps: [
+      { match: "/song", labelKey: "nav.flow.song", fallback: "Song" },
+    ],
+  },
 ];
 
 export interface ComputedStep {

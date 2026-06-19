@@ -880,7 +880,7 @@ export function HumScreen() {
             <div className="relative flex min-h-[min(55vw,296px)] flex-col items-center justify-center md:min-h-[360px] xl:min-h-[clamp(340px,26vw,420px)]">
             {/* Orb container — responsive sizing */}
             <div
-              className="relative h-[min(55vw,296px)] w-[min(55vw,296px)] md:h-[360px] md:w-[360px] xl:h-[clamp(340px,26vw,420px)] xl:w-[clamp(340px,26vw,420px)]"
+              className="relative isolate h-[min(55vw,296px)] w-[min(55vw,296px)] shrink-0 overflow-visible md:h-[360px] md:w-[360px] xl:h-[clamp(340px,26vw,420px)] xl:w-[clamp(340px,26vw,420px)]"
             >
               {/* Rotating conic glow behind the orb */}
               <motion.div
@@ -904,9 +904,9 @@ export function HumScreen() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.4 }}
-                    className="absolute z-20 pointer-events-none"
-                    style={{ inset: "-4%" }}
+                    className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-[108%] w-[108%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
                     viewBox="0 0 300 300"
+                    preserveAspectRatio="xMidYMid meet"
                   >
                     {/* Track */}
                     <circle
