@@ -18,6 +18,12 @@ act as a background field rather than the whole subject of the card.
   reopen with the same cover image.
 - Gallery cards render the selected image first, then layer Murmur's generated
   record/waveform cover treatment above it.
+- Cover surfaces apply a shared brightness compensation treatment after the
+  curated artwork image is blended with Murmur's generated color layer. The
+  shared constants live in `src/lib/music/cover-visual-treatment.ts` and are
+  used by Gallery, Vibe, Studio, song detail, the share ticket, and video
+  export so the same saved song does not get progressively darker across
+  surfaces.
 - When present, `backgroundImagePath` is preferred over `imagePath` for cover
   rendering. These files are square, softened, and tuned for record / waveform
   overlays; the original `imagePath` remains available for future recrops.

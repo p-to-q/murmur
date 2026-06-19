@@ -1,4 +1,8 @@
 import type { SongCard } from "@/modules/shared/types";
+import {
+  COVER_ARTWORK_BRIGHTNESS_FILTER,
+  applyCoverBrightnessCompensation,
+} from "@/lib/music/cover-visual-treatment";
 
 type Song = SongCard & {
   mp3DataUrl?: string | null;
@@ -461,8 +465,10 @@ function paintTicketFrame(
   if (artworkImg) {
     ctx.save();
     ctx.globalAlpha = 0.35;
+    ctx.filter = COVER_ARTWORK_BRIGHTNESS_FILTER;
     drawImageCover(ctx, artworkImg);
     ctx.restore();
+    applyCoverBrightnessCompensation(ctx, WIDTH, HEIGHT);
   }
 
   const topGrad = ctx.createLinearGradient(0, 0, 0, HEIGHT * 0.25);

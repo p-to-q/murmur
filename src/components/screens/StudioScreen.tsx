@@ -33,6 +33,10 @@ import type {
 
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { buildMeshGradient } from "@/components/song-detail/mesh-gradient";
+import {
+  coverArtworkImageStyle,
+  coverBrightnessCompensationStyle,
+} from "@/lib/music/cover-visual-treatment";
 import { AurisPanel } from "@/components/studio/auris-panel";
 import { TrackMixer } from "@/components/studio/track-mixer";
 import { SceneGrid } from "@/components/studio/scene-grid";
@@ -335,11 +339,14 @@ function StudioContent({ version }: { version: VibeVersion }) {
               fill
               sizes="100vw"
               className="absolute inset-0 h-full w-full object-cover opacity-35"
-              style={{
-                objectPosition: `${((artwork.crop?.x ?? 0.5) * 100).toFixed(1)}% ${((artwork.crop?.y ?? 0.5) * 100).toFixed(1)}%`,
-                transform: `scale(${Math.max(1, artwork.crop?.scale ?? 1)})`,
-                transformOrigin: "center center",
-              }}
+              style={coverArtworkImageStyle(artwork)}
+            />
+          )}
+          {artworkPath && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={coverBrightnessCompensationStyle}
             />
           )}
 
