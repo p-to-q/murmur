@@ -2,14 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { createVibePromptBatch } from "./vibe-prompts";
 
 describe("createVibePromptBatch", () => {
-  const surfaceHints = [
-    "soft surface texture",
-    "tiny percussive hits",
-    "gentle analog grain",
-    "delicate room air",
-    "light transient sparkle",
-  ];
-
   test("returns the requested count with non-empty prompts and labels", () => {
     const batch = createVibePromptBatch({ seed: "draft-a", batchIndex: 0 });
     expect(batch).toHaveLength(3);
@@ -24,10 +16,17 @@ describe("createVibePromptBatch", () => {
     }
   });
 
-  test("adds a small surface cue for generated-music texture", () => {
+  test("keeps texture surface cues out of generated prompts", () => {
+    const surfaceHints = [
+      "soft surface texture",
+      "tiny percussive hits",
+      "gentle analog grain",
+      "delicate room air",
+      "light transient sparkle",
+    ];
     const batch = createVibePromptBatch({ seed: "draft-a", batchIndex: 0 });
     for (const spec of batch) {
-      expect(surfaceHints.some((hint) => spec.prompt.includes(hint))).toBe(true);
+      expect(surfaceHints.some((hint) => spec.prompt.includes(hint))).toBe(false);
     }
   });
 

@@ -34,7 +34,6 @@ type GenreEntry = { en: string; zh: string; energy: number; title: string };
 type MoodEntry = { en: string; zh: string; palette: [string, string, string] };
 type InstrumentEntry = { en: string; zh: string };
 type SceneEntry = { en: string; zh: string };
-type SurfaceEntry = { en: string; zh: string };
 
 const GENRES: GenreEntry[] = [
   { en: "lo-fi hip hop", zh: "慵懒节拍", energy: 0.35, title: "Lo-fi" },
@@ -130,14 +129,6 @@ const SCENES: SceneEntry[] = [
   { en: "drifting through fog", zh: "雾中漂浮" },
 ];
 
-const SURFACES: SurfaceEntry[] = [
-  { en: "soft surface texture", zh: "轻微表面质感" },
-  { en: "tiny percussive hits", zh: "细小敲击点" },
-  { en: "gentle analog grain", zh: "柔和模拟颗粒" },
-  { en: "delicate room air", zh: "细微空间空气感" },
-  { en: "light transient sparkle", zh: "轻微瞬态亮点" },
-];
-
 const VISUAL_PRESETS_BY_ENERGY: Array<{ max: number; presets: string[] }> = [
   { max: 0.4, presets: ["rain_glass", "dust_room"] },
   { max: 0.62, presets: ["warm_particles", "end_credits"] },
@@ -201,11 +192,9 @@ export function createVibePromptBatch(options: {
     const mood = MOODS[pickIndex(rng, MOODS.length)]!;
     const instrument = INSTRUMENTS[pickIndex(rng, INSTRUMENTS.length)]!;
     const scene = rng() < 0.5 ? SCENES[pickIndex(rng, SCENES.length)]! : null;
-    const surface = SURFACES[pickIndex(rng, SURFACES.length)]!;
 
     const parts = [`${mood.en} ${genre.en}`, `with ${instrument.en}`];
     if (scene) parts.push(scene.en);
-    parts.push(surface.en);
     const hint = tempoHint(options.melody);
     if (hint) parts.push(hint);
     if (options.melody?.scale === "minor") parts.push("in a minor key");
