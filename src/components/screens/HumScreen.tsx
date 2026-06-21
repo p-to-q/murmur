@@ -7,7 +7,6 @@ import {
   hasLocalNotes,
   spendLocalNotes,
 } from "@/lib/balance/balance-manager";
-import { useAuthProviders } from "@/lib/hooks/use-auth-providers";
 import { Spinner } from "@/components/ui/spinner";
 import { AuthButtons } from "@/components/auth/auth-buttons";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
@@ -194,7 +193,6 @@ export function HumScreen() {
   const [showHeardMessage, setShowHeardMessage] = useState(false);
   const { refresh: refreshBalance } = useUserBalance();
   const { status: sessionStatus } = useSession();
-  const { providers: authProviders } = useAuthProviders();
   const [showEmailForm, setShowEmailForm] = useState(false);
   // During "loading" we do NOT gate, so a returning signed-in user is never
   // briefly walled by a stale guest counter on their device.
@@ -202,7 +200,10 @@ export function HumScreen() {
   const [showLoginWall, setShowLoginWall] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
   // Onboarding: frosted glass reveal on first visit
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !window.localStorage.getItem("murmur:onboarding-seen");
+  });
   const [onboardingRippling, setOnboardingRippling] = useState(false);
   const orbButtonRef = useRef<HTMLButtonElement>(null);
   const [orbCenter, setOrbCenter] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -309,12 +310,6 @@ export function HumScreen() {
 
   useEffect(() => {
     prefetchMusicEngineStatus();
-  }, []);
-
-  // Onboarding: show frosted glass on first browser visit
-  useEffect(() => {
-    const seen = window.localStorage.getItem("murmur:onboarding-seen");
-    if (!seen) setShowOnboarding(true);
   }, []);
 
   // Measure orb center for the reveal mask
