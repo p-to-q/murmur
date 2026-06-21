@@ -15,7 +15,7 @@ export const QA_ROUTE_CONTRACTS: QaRouteContract[] = [
     href: "/",
     label: "Hum",
     note: "Start of the mainline flow.",
-    markers: ["示例旋律", "脑海里的旋律"],
+    markers: ["开始录音", "脑海里的旋律"],
   },
   {
     name: "gallery-page",
