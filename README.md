@@ -215,14 +215,18 @@ For the most reliable local startup, set:
 
 ```bash
 AUDIO_WORKER_URL=http://localhost:8001
-AUDIO_ENGINE_PITCH_PROVIDER=pyin
+AUDIO_ENGINE_PITCH_PROVIDER=auto
 MURMUR_ALLOW_DEV_BILLING_FALLBACK=1
 MURMUR_DEV_NOTES_BALANCE=9999
 ```
 
-`pyin` is slower than SwiftF0 but is more predictable for first-run local
-development because it avoids SwiftF0 model warmup surprises. Once the worker
-is stable on your machine, you can switch back to `AUDIO_ENGINE_PITCH_PROVIDER=auto`.
+`auto` tries RMVPE first, then falls back to SwiftF0 and pYIN. For RMVPE-backed
+local work, set `AUDIO_ENGINE_RMVPE_MODEL_PATH` to a prepared `rmvpe.onnx`
+file, or set `AUDIO_ENGINE_RMVPE_ALLOW_DOWNLOAD=1` when you explicitly want the
+worker to fetch the default model. Without an RMVPE model, `auto` still keeps
+the local demo alive through the existing SwiftF0 / pYIN fallback. Advanced
+RMVPE tuning can adjust `AUDIO_ENGINE_RMVPE_CONFIDENCE_THRESHOLD`; leave it at
+`0.03` unless you are comparing saved Melo Lab samples.
 
 The base worker keeps local demos light. To enable server denoise, install the
 optional PyTorch stack and choose the denoise provider explicitly:
@@ -247,9 +251,11 @@ bun dev
 Open `/me/debug/melo-lab?debug=1`. The lab is a hidden debug-room surface: the
 page may be visible, but its test APIs send requests only to loopback workers
 (`MELO_LAB_AUDIO_WORKER_URL`, `MELO_LAB_MUSIC_WORKER_URL`) and never route
-through billing, RunPod/serverless, or the main Hum -> Vibe product path. It
-renders each returned melody JSON layer through the same browser piano/voice
-synth before any music-worker probe.
+through billing, RunPod/serverless, or the main Hum -> Vibe product path. The
+Lab uses the same product `auto` pitch route and renders its returned melody JSON
+layers through the same browser piano/voice synth before any music-worker probe.
+Detector details stay in diagnostics/export metadata rather than becoming a Lab
+selection surface.
 
 ## Environment Variables
 
@@ -267,7 +273,11 @@ cp .env.example .env
 | `AI_GATEWAY_BASE_URL` | Optional base URL for a custom AI gateway. |
 | `AUDIO_WORKER_URL` | Server-only audio worker base URL used by `/api/transcribe`. |
 | `AUDIO_WORKER_TOKEN` | Optional bearer token for Next.js → audio worker calls. |
-| `AUDIO_ENGINE_PITCH_PROVIDER` | Worker pitch detector provider. `auto` uses SwiftF0 first, then pYIN fallback. |
+| `AUDIO_ENGINE_PITCH_PROVIDER` | Worker pitch detector provider. `auto` uses RMVPE first, then SwiftF0 and pYIN fallback. |
+| `AUDIO_ENGINE_RMVPE_MODEL_PATH` | Optional path to a baked `rmvpe.onnx` model for the RMVPE provider. |
+| `AUDIO_ENGINE_RMVPE_DEVICE` | RMVPE ONNX Runtime device hint. Defaults to `cpu`; GPU workers can set `cuda` or another supported provider. |
+| `AUDIO_ENGINE_RMVPE_ALLOW_DOWNLOAD` | Optional local/dev opt-in to let `rmvpe-onnx` download the default model when no model path exists. Defaults off. |
+| `AUDIO_ENGINE_RMVPE_CONFIDENCE_THRESHOLD` | RMVPE voiced-frame confidence threshold. Defaults to `0.03`; tune only with audio sample review. |
 | `AUDIO_ENGINE_DENOISE_PROVIDER` | Worker denoise provider. `auto` uses DeepFilterNet when optional deps are installed; `deepfilternet` fails loudly if they are missing. |
 | `MURMUR_ENABLE_MELO_LAB` | Explicit production diagnostic flag for the test-only MeLo Lab APIs. Local development enables them by default; worker URLs still must be loopback. |
 | `MELO_LAB_AUDIO_WORKER_URL` | Optional loopback audio worker override for `/api/test/melo-lab/transcribe`. Defaults to `http://127.0.0.1:8001`. |

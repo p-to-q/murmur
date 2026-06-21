@@ -268,6 +268,40 @@ def midi_frames_to_notes(
     return notes
 
 
+def f0_to_notes(
+    f0: Sequence[float],
+    voiced: Sequence[bool],
+    confidence: Sequence[float],
+    *,
+    hop_length: int,
+    sample_rate: int,
+    min_confidence: float = DEFAULT_MIN_CONFIDENCE,
+    low_midi: int = DEFAULT_LOW_MIDI,
+    high_midi: int = DEFAULT_HIGH_MIDI,
+    min_note_duration: float = DEFAULT_MIN_NOTE_DURATION,
+    onset_confirm_frames: int = DEFAULT_ONSET_CONFIRM_FRAMES,
+    pitch_change_confirm_frames: int = DEFAULT_PITCH_CHANGE_CONFIRM_FRAMES,
+) -> list[NoteEvent]:
+    """Convert detector f0 frames to compact monophonic note events."""
+    midi_frames = stabilize_midi_frames(
+        f0,
+        voiced,
+        confidence,
+        min_confidence=min_confidence,
+        low_midi=low_midi,
+        high_midi=high_midi,
+    )
+    return midi_frames_to_notes(
+        midi_frames,
+        confidence,
+        hop_length=hop_length,
+        sample_rate=sample_rate,
+        min_note_duration=min_note_duration,
+        onset_confirm_frames=onset_confirm_frames,
+        pitch_change_confirm_frames=pitch_change_confirm_frames,
+    )
+
+
 def pyin_to_notes(
     f0: Sequence[float],
     voiced: Sequence[bool],
@@ -282,20 +316,16 @@ def pyin_to_notes(
     onset_confirm_frames: int = DEFAULT_ONSET_CONFIRM_FRAMES,
     pitch_change_confirm_frames: int = DEFAULT_PITCH_CHANGE_CONFIRM_FRAMES,
 ) -> list[NoteEvent]:
-    """Convert pYIN frames to compact monophonic note events."""
-    midi_frames = stabilize_midi_frames(
+    """Backward-compatible alias for older pYIN-oriented call sites."""
+    return f0_to_notes(
         f0,
         voiced,
         confidence,
+        hop_length=hop_length,
+        sample_rate=sample_rate,
         min_confidence=min_confidence,
         low_midi=low_midi,
         high_midi=high_midi,
-    )
-    return midi_frames_to_notes(
-        midi_frames,
-        confidence,
-        hop_length=hop_length,
-        sample_rate=sample_rate,
         min_note_duration=min_note_duration,
         onset_confirm_frames=onset_confirm_frames,
         pitch_change_confirm_frames=pitch_change_confirm_frames,

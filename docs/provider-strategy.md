@@ -32,7 +32,7 @@ defensively and remains authoritative for transcription.
 
 ```ts
 {
-  provider: "swiftf0" | "pyin" | "yin" | "parselmouth" | "fixture";
+  provider: "rmvpe" | "swiftf0" | "pyin" | "yin" | "parselmouth" | "fixture";
   rawNotes: MelodyNote[];
   contour?: TranscriptionContour;
   melodyIntent?: MelodyIntentProfile;
@@ -59,6 +59,13 @@ defensively and remains authoritative for transcription.
     pitchMs?: number;
     polishMs?: number;
     totalMs?: number;
+    rmvpeFrames?: number;
+    rmvpeVoicedFrames?: number;
+    rmvpeHopMs?: number;
+    rmvpeConfidenceThreshold?: number;
+    rmvpeDevice?: string;
+    rmvpeModel?: string;
+    rmvpeExecutionProvider?: string | null;
     workerMs?: number;
     targetInstrument?: string;
     rangeClampApplied?: boolean;
@@ -81,20 +88,41 @@ the final melody to the target instrument range.
 AUDIO_WORKER_URL=http://localhost:8001
 AUDIO_WORKER_TOKEN=
 AUDIO_ENGINE_PITCH_PROVIDER=auto
+AUDIO_ENGINE_RMVPE_MODEL_PATH=
+AUDIO_ENGINE_RMVPE_DEVICE=cpu
+AUDIO_ENGINE_RMVPE_ALLOW_DOWNLOAD=0
+AUDIO_ENGINE_RMVPE_CONFIDENCE_THRESHOLD=0.03
 AUDIO_ENGINE_DENOISE_PROVIDER=auto
 ```
 
 No transcription URL is exposed as `NEXT_PUBLIC_*`. The browser product flow
 does not pick providers and does not call the worker directly. The hidden Melo
-Lab can pass a request-level `pitchProvider` to loopback-only test APIs for
-local diagnostics; production test APIs still require `MURMUR_ENABLE_MELO_LAB=1`
-and never route to the product worker.
+Lab also defaults to the product auto route; its loopback-only test API still
+accepts a request-level `pitchProvider` for low-level diagnostics, but the Lab
+client and UI send `auto` and do not expose detector selection. Production test
+APIs still require `MURMUR_ENABLE_MELO_LAB=1` and never route to the product
+worker.
 
 ## Worker Roadmap
 
-The current product worker defaults to `auto`: SwiftF0 primary with pYIN
-fallback. The worker also exposes `yin` and `parselmouth` as light lab providers
-for local comparison; they do not participate in the product auto reroute.
+The current product worker defaults to `auto`: RMVPE primary with SwiftF0 and
+pYIN fallback. RMVPE requires a prepared ONNX model path or explicit local
+download opt-in; if the model is absent, `auto` continues through the fallback
+chain instead of blocking a product request. `AUDIO_ENGINE_RMVPE_CONFIDENCE_THRESHOLD`
+controls RMVPE voiced-frame gating and should move only after saved Melo Lab
+sample review. Explicit `rmvpe`, `swiftf0`,
+`pyin`, `yin`, and `parselmouth` requests are diagnostic probes: they stay on
+the requested detector and do not silently reroute. The worker also exposes
+`yin` and `parselmouth` as light lab providers for local comparison; they do not
+participate in the product auto reroute.
+
+Deployment treats the RMVPE ONNX file as a third-party model asset, not a
+hidden runtime download. The production Docker image bakes the file during build
+and points `AUDIO_ENGINE_RMVPE_MODEL_PATH` at it. The first implementation uses
+the MIT-licensed `rmvpe-onnx` wrapper; its default download target is
+`lj1995/VoiceConversionWebUI`'s `rmvpe.onnx`, so release review should verify
+both wrapper and model-weight licensing before updating production baselines.
+
 It also has an independent denoise provider seam selected by
 `AUDIO_ENGINE_DENOISE_PROVIDER`:
 
@@ -108,7 +136,7 @@ The next Phase 1 stops deepen the implementation behind the same route:
 
 1. worker rename/containerization under `workers/audio-engine/`;
 2. silence trim and optional DeepFilterNet-family denoise;
-3. SwiftF0 primary detection with pYIN fallback through the
+3. RMVPE primary detection with SwiftF0 / pYIN fallback through the
    `audio_engine.detectors` provider seam, plus lab-only YIN/Parselmouth
    comparison providers;
 4. worker-native diagnostics for `snr`, `voicedRatio`, `denoiseProvider`,

@@ -246,7 +246,7 @@ layer.
 workers/audio-engine/tests/
 ├── test_decode.py            # webm + m4a + mp3 + wav decode paths
 ├── test_denoise.py           # denoise provider selection/fallback behavior
-├── test_pitch.py             # SwiftF0 returns expected note count for fixtures
+├── test_pitch.py             # pitch providers return expected note counts for fixtures
 ├── test_pipeline.py          # end-to-end: blob in → ScoredMelody out
 └── __fixtures__/
     ├── hum-clean.wav         # 10 s, clean room
@@ -257,10 +257,10 @@ workers/audio-engine/tests/
 
 Required cases:
 
-- `test_pitch.py`: SwiftF0 on `hum-clean.wav` produces ≥6 notes with
-  ≥0.5 confidence; on `hum-silence.wav` returns empty.
-- `test_pipeline.py`: end-to-end returns 200 with `provider="swiftf0"`
-  for the clean fixture; 422 for `hum-silence.wav`.
+- `test_pitch.py`: the configured pitch path on `hum-clean.wav` produces ≥6
+  notes with ≥0.5 confidence; on `hum-silence.wav` returns empty.
+- `test_pipeline.py`: end-to-end returns 200 with a concrete worker provider
+  from the `auto` chain for the clean fixture; 422 for `hum-silence.wav`.
 - `test_decode.py`: every supported format decodes to mono 22.05 kHz
   float32 with non-zero length.
 
@@ -398,7 +398,7 @@ GitHub Actions currently lives under `.github/workflows/ci.yml` and should keep
 covering:
 
 - A Postgres service container.
-- The audio worker's deps + SwiftF0 runtime.
+- The audio worker's deps, RMVPE model prep, and SwiftF0/pYIN fallback runtime.
 - `bun install`, `bun test`, `pytest workers/audio-engine`.
 
 Failure of any job blocks merge.

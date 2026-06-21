@@ -9,7 +9,7 @@ reference implementations and records the highest-value next moves.
 
 | Area | External signal | Landed in Murmur now | Still open |
 |---|---|---|---|
-| Continuous contour truth | SwiftF0 / CREPE | `SwiftF0` main path, `pYIN` fallback, contour frames returned through worker contract | offline CREPE benchmark on Murmur eval sets |
+| Continuous contour truth | RMVPE / SwiftF0 / CREPE | `RMVPE` primary path when a model is available, `SwiftF0` / `pYIN` fallback, contour frames returned through worker contract | offline CREPE benchmark on Murmur eval sets |
 | Note proposals | Basic Pitch | contour-driven hypothesis bundle (`balanced` / `agile` / `steady` plus glide / wobble / urgent flavors) | true onset-evidence stream, bend-aware proposal objects |
 | Front-end cleanup | DeepFilterNet | denoise seam + capture diagnostics + optional repair reruns | stricter policy for when to denoise vs. ask for rerecord |
 | Confidence-first repair | pYIN / modern pitch stacks | contour-aware melody choice, acceptance scores, repair-biased selection | full stage-by-stage confidence map and note provenance |
@@ -32,7 +32,7 @@ Current local boundaries:
 What Murmur already does well:
 
 - the worker is behind a stable contract;
-- `SwiftF0` with `pYIN` fallback is already part of the direction of travel;
+- `RMVPE` now sits in front of the existing `SwiftF0` / `pYIN` fallback path;
 - denoise is optional and hidden behind a provider seam;
 - Murmur already distinguishes `intent`, `corrected`, and `musical` melody
   layers.

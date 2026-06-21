@@ -1,8 +1,8 @@
 # Murmur audio-engine (transcription worker) container.
-# Lightweight CPU image: FastAPI + librosa + swift-f0. The optional torch/
-# deepfilternet denoise stack (requirements-denoise.txt) is intentionally NOT
-# installed — the worker degrades to its pure-numpy path (denoiseProvider
-# "auto"), which is exactly how production has been running.
+# Lightweight CPU image: FastAPI + librosa + RMVPE-ONNX + swift-f0. The
+# optional torch/deepfilternet denoise stack (requirements-denoise.txt) is
+# intentionally NOT installed — the worker degrades to its pure-numpy path
+# (denoiseProvider "auto"), which is exactly how production has been running.
 FROM python:3.11-slim
 
 # ffmpeg: decode webm/m4a uploads → wav. libsndfile1: soundfile backend.
@@ -19,6 +19,17 @@ WORKDIR /app
 # Install deps first so the layer caches across code-only changes.
 COPY requirements.txt .
 RUN pip install -r requirements.txt
+
+# Production should ship with the RMVPE ONNX model already present. Local dev can
+# still run without it and fall back through auto, but the deploy image should be
+# honest: if the model cannot be prepared, the build fails before traffic moves.
+RUN python -m rmvpe_onnx.cli download --model /app/models/rmvpe.onnx
+
+ENV AUDIO_ENGINE_PITCH_PROVIDER=auto \
+    AUDIO_ENGINE_RMVPE_MODEL_PATH=/app/models/rmvpe.onnx \
+    AUDIO_ENGINE_RMVPE_DEVICE=cpu \
+    AUDIO_ENGINE_RMVPE_ALLOW_DOWNLOAD=0 \
+    AUDIO_ENGINE_RMVPE_CONFIDENCE_THRESHOLD=0.03
 
 # App code. .dockerignore keeps out .venv, tests, tools, __pycache__.
 COPY . .
