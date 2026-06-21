@@ -7,6 +7,7 @@ import {
   chooseGenerationMelodyKind,
   selectGenerationMelody,
 } from "./humming-engine";
+import { polishMelody } from "./melody-polisher";
 
 function melody(
   notes: MelodyNote[],
@@ -136,6 +137,71 @@ describe("humming-engine musical layer", () => {
     expect(profile.correctionPolicy.formantPolicy).toBe("preserve");
   });
 
+  it("selects intent directly when the take and global metadata are stable", () => {
+    const raw = [
+      { pitch: 60, start: 0, duration: 0.42, velocity: 0.7, confidence: 0.9 },
+      { pitch: 62, start: 0.5, duration: 0.38, velocity: 0.7, confidence: 0.88 },
+      { pitch: 64, start: 1, duration: 0.42, velocity: 0.72, confidence: 0.9 },
+      { pitch: 67, start: 1.5, duration: 0.5, velocity: 0.74, confidence: 0.91 },
+      { pitch: 72, start: 2.1, duration: 0.55, velocity: 0.75, confidence: 0.92 },
+    ];
+    const diagnostics = {
+      duration: 2.65,
+      snr: 18,
+      voicedRatio: 0.9,
+      acceptanceScore: 0.82,
+      musicFeelScore: 0.78,
+      onsetFragmentation: 0.08,
+      firstOnsetLag: 0.02,
+    };
+    const melodies = buildTranscriptionMelodies(raw, undefined, { diagnostics });
+    const melodyIntent = buildMelodyIntentProfile(raw, melodies.corrected, { diagnostics });
+
+    expect(
+      chooseGenerationMelodyKind({
+        melodies,
+        melodyIntent,
+        diagnostics,
+      }),
+    ).toBe("intent");
+    expect(
+      selectGenerationMelody({
+        melodies,
+        melodyIntent,
+        diagnostics,
+      }).kind,
+    ).toBe("intent");
+  });
+
+  it("does not let a short pickup note dominate the inferred key", () => {
+    const polished = polishMelody([
+      { pitch: 64, start: 0, duration: 0.12, velocity: 0.7, confidence: 0.72 },
+      { pitch: 60, start: 0.18, duration: 0.42, velocity: 0.7, confidence: 0.9 },
+      { pitch: 62, start: 0.68, duration: 0.38, velocity: 0.7, confidence: 0.88 },
+      { pitch: 64, start: 1.14, duration: 0.42, velocity: 0.72, confidence: 0.9 },
+      { pitch: 67, start: 1.62, duration: 0.5, velocity: 0.74, confidence: 0.91 },
+      { pitch: 72, start: 2.18, duration: 0.55, velocity: 0.75, confidence: 0.92 },
+    ]);
+
+    expect(polished.key).toBe("C");
+    expect(polished.scale).toBe("major");
+  });
+
+  it("preserves confident chromatic approach tones during correction", () => {
+    const polished = polishMelody([
+      { pitch: 60, start: 0, duration: 0.4, velocity: 0.7, confidence: 0.9 },
+      { pitch: 64, start: 0.5, duration: 0.34, velocity: 0.7, confidence: 0.88 },
+      { pitch: 68, start: 0.92, duration: 0.22, velocity: 0.7, confidence: 0.84 },
+      { pitch: 69, start: 1.32, duration: 0.42, velocity: 0.72, confidence: 0.9 },
+      { pitch: 72, start: 1.85, duration: 0.5, velocity: 0.74, confidence: 0.91 },
+    ]);
+
+    expect(polished.key).toBe("C");
+    expect(polished.scale).toBe("major");
+    expect(polished.notes.map((note) => note.pitch)).toContain(68);
+    expect(polished.notes.map((note) => note.pitch)).toContain(69);
+  });
+
   it("does not weaken intent just because a stable melody avoids the tonic", () => {
     const corrected = melody(
       [
@@ -187,6 +253,71 @@ describe("humming-engine musical layer", () => {
     expect(Math.abs((melodies.corrected.notes[0]?.start ?? 1) - raw[0]!.start)).toBeLessThanOrEqual(0.06);
     expect(melodies.corrected.notes[2]?.pitch).toBe(64);
     expect(melodies.corrected.notes.at(-1)?.pitch).toBe(67);
+  });
+
+  it("uses a strong repeated phrase to softly repair a weaker phrase family member", () => {
+    const raw = [
+      { pitch: 60, start: 0, duration: 0.42, velocity: 0.74, confidence: 0.92 },
+      { pitch: 62, start: 0.5, duration: 0.36, velocity: 0.72, confidence: 0.88 },
+      { pitch: 64, start: 1, duration: 0.4, velocity: 0.73, confidence: 0.9 },
+      { pitch: 67, start: 1.5, duration: 0.5, velocity: 0.75, confidence: 0.91 },
+      { pitch: 67, start: 2.7, duration: 0.36, velocity: 0.7, confidence: 0.86 },
+      { pitch: 65, start: 3.16, duration: 0.34, velocity: 0.7, confidence: 0.84 },
+      { pitch: 64, start: 3.62, duration: 0.46, velocity: 0.7, confidence: 0.86 },
+      { pitch: 60, start: 4.8, duration: 0.42, velocity: 0.68, confidence: 0.5 },
+      { pitch: 62, start: 5.3, duration: 0.36, velocity: 0.66, confidence: 0.46 },
+      { pitch: 64, start: 5.8, duration: 0.4, velocity: 0.68, confidence: 0.48 },
+      { pitch: 67, start: 6.3, duration: 0.5, velocity: 0.7, confidence: 0.5 },
+    ];
+    const weakDraft = melody(
+      [
+        ...raw.slice(0, 7),
+        { pitch: 60, start: 4.8, duration: 0.42, velocity: 0.68, confidence: 0.5 },
+        { pitch: 63, start: 5.3, duration: 0.36, velocity: 0.66, confidence: 0.46 },
+        { pitch: 66, start: 5.8, duration: 0.4, velocity: 0.68, confidence: 0.48 },
+        { pitch: 67, start: 6.3, duration: 0.5, velocity: 0.7, confidence: 0.5 },
+      ],
+      {
+        bpm: 120,
+        key: "C",
+        scale: "major",
+        contour: "wave",
+      },
+    );
+
+    const melodies = buildTranscriptionMelodies(raw, weakDraft);
+
+    expect(weakDraft.notes[8]?.pitch).toBe(63);
+    expect(weakDraft.notes[9]?.pitch).toBe(66);
+    expect(melodies.corrected.notes[8]?.pitch).toBe(62);
+    expect(Math.abs((melodies.corrected.notes[9]?.pitch ?? 0) - 64)).toBeLessThan(
+      Math.abs((weakDraft.notes[9]?.pitch ?? 0) - 64),
+    );
+    expect(melodies.corrected.notes[10]?.pitch).toBe(67);
+  });
+
+  it("does not force clear repeated phrases to share the same cadence", () => {
+    const raw = [
+      { pitch: 60, start: 0, duration: 0.42, velocity: 0.74, confidence: 0.92 },
+      { pitch: 62, start: 0.5, duration: 0.36, velocity: 0.72, confidence: 0.88 },
+      { pitch: 64, start: 1, duration: 0.4, velocity: 0.73, confidence: 0.9 },
+      { pitch: 67, start: 1.5, duration: 0.5, velocity: 0.75, confidence: 0.91 },
+      { pitch: 60, start: 2.7, duration: 0.42, velocity: 0.74, confidence: 0.91 },
+      { pitch: 62, start: 3.2, duration: 0.36, velocity: 0.72, confidence: 0.9 },
+      { pitch: 64, start: 3.7, duration: 0.4, velocity: 0.73, confidence: 0.9 },
+      { pitch: 72, start: 4.2, duration: 0.5, velocity: 0.75, confidence: 0.91 },
+    ];
+    const clearDraft = melody(raw, {
+      bpm: 120,
+      key: "C",
+      scale: "major",
+      contour: "rising",
+    });
+
+    const melodies = buildTranscriptionMelodies(raw, clearDraft);
+
+    expect(melodies.corrected.notes[3]?.pitch).toBe(67);
+    expect(melodies.corrected.notes[7]?.pitch).toBe(72);
   });
 
   it("keeps each candidate inside a single tonal center", () => {
