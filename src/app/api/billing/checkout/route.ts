@@ -224,12 +224,12 @@ export async function POST(request: NextRequest) {
     return rateLimitedResponse(rateLimit, requestId);
   }
 
-  // CNY + zpay configured → use zpay (Alipay / WeChat Pay)
+  // CNY + zpay configured + WeChat Pay → use zpay
   const payMethod = typeof body.payMethod === "string" ? body.payMethod : "";
   const useZpay =
     product.currency === "CNY" &&
     isZpayConfigured() &&
-    (payMethod === "alipay" || payMethod === "wxpay");
+    payMethod === "wxpay";
 
   if (useZpay) {
     return handleZpayCheckout(request, userId, product, payMethod as ZpayPaymentType, requestId, auth.sessionId);

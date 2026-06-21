@@ -40,7 +40,14 @@ export function BottomNav() {
     router.push("/");
   };
 
+  const flowPage =
+    pathname.startsWith("/vibe") ||
+    pathname.startsWith("/studio") ||
+    pathname.startsWith("/topup");
+
   const items = NAV_ITEMS.filter((it) => it.mobileNav !== false);
+
+  if (flowPage) return null;
 
   return (
     <motion.nav

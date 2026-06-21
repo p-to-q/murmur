@@ -30,7 +30,7 @@ export function PageBackdrop({ variant = "default", className = "" }: PageBackdr
   const o = variant === "soft" ? 0.55 : 1;
   return (
     <div
-      className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}
+      className={`pointer-events-none fixed inset-0 overflow-hidden ${className}`}
       aria-hidden
       style={{ opacity: o }}
     >

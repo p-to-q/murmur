@@ -467,6 +467,9 @@
    desktop (md+) — no bottom nav, minimal padding */
 :root {
   --main-pb: 0px;
+  /* Mobile top bar clearance — logo (22px) + padding above/below */
+  --mobile-top-bar-h: calc(env(safe-area-inset-top, 0px) + 56px);
+  --content-h: calc(100svh - var(--mobile-top-bar-h));
   /* Side nav width — driven by .nav-collapsed on <html> for the collapsed state.
      Mobile keeps 0 (no side nav). Desktop default 208px (expanded). */
   --side-nav-w: 0px;
@@ -475,6 +478,7 @@
   :root {
     --main-pb: 2rem;
     --side-nav-w: 320px;
+    --mobile-top-bar-h: 0px;
   }
   html.nav-collapsed {
     --side-nav-w: 68px;

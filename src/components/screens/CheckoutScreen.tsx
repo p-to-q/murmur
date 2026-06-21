@@ -188,7 +188,7 @@ export function CheckoutScreen() {
             : { customAmountUsd: purchase.customAmountUsd, currency: purchase.currency }
           : { sku: purchase.id, currency: purchase.currency };
       const checkoutBody =
-        payMethodParam === "alipay" || payMethodParam === "wxpay"
+        payMethodParam === "wxpay"
           ? { ...baseBody, payMethod: payMethodParam }
           : baseBody;
 

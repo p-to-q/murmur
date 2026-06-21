@@ -680,10 +680,9 @@ export const DICT = {
   "topup.restoring":     { zh: "恢复中…", en: "Restoring…" },
   "checkout.confirming_grant": { zh: "正在确认到账…", en: "Confirming your notes…" },
 
-  // ── Payment methods (CNY region) ──────────────────────────────────
-  "topup.payment.alipay":    { zh: "支付宝",                       en: "Alipay" },
+  // ── Payment methods ─────────────────────────────────────────────────
+  "topup.payment.card":      { zh: "信用卡",                       en: "Card" },
   "topup.payment.wechat":    { zh: "微信支付",                     en: "WeChat Pay" },
-  "topup.payment.supported": { zh: "支持 支付宝 · 微信支付",       en: "Supports Alipay · WeChat Pay" },
 } as const;
 
 export type TKey = keyof typeof DICT;

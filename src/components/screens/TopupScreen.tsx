@@ -4,9 +4,11 @@
  * TopupScreen — asset-style balance view + package selection.
  *
  * Shows live notes balance, top-up summary, and purchasable SKUs.
+ * Currency toggle (USD / CNY) with localStorage persistence.
+ * Payment methods: Card (Waffo) and WeChat Pay (ZPay).
  */
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useSpring, useTransform, animate } from "framer-motion";
 import { RefreshCw } from "lucide-react";
@@ -16,10 +18,15 @@ import {
   CUSTOM_TOPUP_MAX_USD,
   getCustomTopupQuote,
   TOPUP_SKUS,
+  type Currency,
 } from "@murmur/core";
 
 import { useI18nStore, useTranslator } from "@/lib/i18n";
-import { useRegionalSkus } from "@/lib/hooks/use-regional-skus";
+import {
+  useRegionalSkus,
+  getSavedCurrency,
+  saveCurrencyPreference,
+} from "@/lib/hooks/use-regional-skus";
 import { useTopupSurface } from "@/lib/hooks/use-topup-surface";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
@@ -32,7 +39,6 @@ const PLAN_LABEL_KEYS: Record<string, string> = {
   topup_400_notes: "topup.plan.patron",
 };
 
-// Paper texture style for all black elements
 const paperTextureStyle = {
   background: `
     linear-gradient(135deg,
@@ -76,11 +82,47 @@ export function TopupScreen() {
   const lang = useI18nStore((s) => s.lang);
   const { balance, isLoading, refresh } = useUserBalance();
   const { data: topupSurface, refresh: refreshTopupSurface } = useTopupSurface();
-  const { skus: regionalSkus, currency, customConfig } = useRegionalSkus();
 
-  // Use regional SKUs when available, fall back to hardcoded
+  // ── Currency state ────────────────────────────────────────────────
+  const [manualCurrency, setManualCurrency] = useState<Currency | undefined>(
+    () => getSavedCurrency() ?? undefined,
+  );
+  const { skus: regionalSkus, currency, customConfig } = useRegionalSkus(manualCurrency);
+
+  // Sync detected currency on first load when no saved preference
+  const initializedRef = useRef(false);
+  useEffect(() => {
+    if (!initializedRef.current && currency && !getSavedCurrency()) {
+      initializedRef.current = true;
+      setManualCurrency(currency);
+      if (currency === "CNY") setPayMethod("wxpay");
+    }
+  }, [currency]);
+
+  const effectiveCurrency: Currency = manualCurrency ?? currency;
+  const isCny = effectiveCurrency === "CNY";
+
+  // ── Payment method state ──────────────────────────────────────────
+  const [payMethod, setPayMethod] = useState<"card" | "wxpay">(() =>
+    (getSavedCurrency() ?? "USD") === "CNY" ? "wxpay" : "card",
+  );
+
+  const handleCurrencyToggle = (c: Currency) => {
+    setManualCurrency(c);
+    saveCurrencyPreference(c);
+    if (c !== "CNY" && payMethod === "wxpay") setPayMethod("card");
+  };
+
+  const handlePayMethodChange = (m: "card" | "wxpay") => {
+    setPayMethod(m);
+    if (m === "wxpay" && effectiveCurrency !== "CNY") {
+      setManualCurrency("CNY");
+      saveCurrencyPreference("CNY");
+    }
+  };
+
+  // ── SKU / pricing ─────────────────────────────────────────────────
   const effectiveSkus = regionalSkus.length > 0 ? regionalSkus : TOPUP_SKUS;
-  const isCny = currency === "CNY";
   const currencySymbol = isCny ? "¥" : "$";
   const sliderMin = customConfig.minAmount;
   const sliderMax = isCny ? Math.min(SLIDER_MAX_CNY, customConfig.maxAmount) : SLIDER_MAX_USD;
@@ -96,20 +138,20 @@ export function TopupScreen() {
   const [customAmountByCurrency, setCustomAmountByCurrency] = useState<Record<string, number>>({});
   const [isRestoring, setIsRestoring] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [payMethod, setPayMethod] = useState<"alipay" | "wxpay">("alipay");
+
   const customAmount = Math.min(
     customConfig.maxAmount,
-    Math.max(sliderMin, customAmountByCurrency[currency] ?? defaultCustomAmount),
+    Math.max(sliderMin, customAmountByCurrency[effectiveCurrency] ?? defaultCustomAmount),
   );
   const sliderAmount = Math.min(customAmount, sliderMax);
   const setCustomAmount = useCallback(
     (amount: number) => {
       setCustomAmountByCurrency((current) => ({
         ...current,
-        [currency]: amount,
+        [effectiveCurrency]: amount,
       }));
     },
-    [currency],
+    [effectiveCurrency],
   );
 
   const notesSpring = useSpring(0, { stiffness: 100, damping: 20 });
@@ -147,14 +189,15 @@ export function TopupScreen() {
     : null;
   const balanceUSD = (topupSurface?.lifetimeTopupCents ?? 0) / 100;
 
+  // ── Actions ───────────────────────────────────────────────────────
   const handleProceed = () => {
-    const methodParam = isCny ? `&payMethod=${payMethod}` : "";
+    const methodParam = payMethod === "wxpay" ? "&payMethod=wxpay" : "";
     if (selectedId === CUSTOM_TOPUP_ID) {
       if (isCny) {
         router.push(`/topup/checkout?customAmountCny=${encodeURIComponent(String(customAmount))}&currency=CNY${methodParam}`);
       } else {
         if (!customQuote) return;
-        router.push(`/topup/checkout?customAmountUsd=${encodeURIComponent(String(customQuote.faceAmount))}`);
+        router.push(`/topup/checkout?customAmountUsd=${encodeURIComponent(String(customQuote.faceAmount))}${methodParam}`);
       }
       return;
     }
@@ -259,16 +302,18 @@ export function TopupScreen() {
   const displayBalanceUSD = useTransform(balanceUSDSpring, (v) => v.toFixed(2));
   const sliderSpan = sliderMax - sliderMin;
 
+  // ── Render ────────────────────────────────────────────────────────
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
 
       <div className="relative z-10 flex min-h-svh flex-col">
-        <div className="flex-1 px-5 pb-32">
+        <div className="flex-1 px-5 pb-48 md:pb-24">
           <div
             className="mx-auto max-w-lg"
-            style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 20px)" }}
+            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 52px)" }}
           >
+            {/* ── Assets ─────────────────────────────────────────── */}
             <section>
               <motion.h2
                 initial={{ opacity: 0 }}
@@ -335,19 +380,23 @@ export function TopupScreen() {
               </motion.div>
             </section>
 
+            {/* ── Packages ───────────────────────────────────────── */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.2, duration: 0.5 }}
               className="mt-8"
             >
-              <div className="mb-6">
-                <h3 className="text-[18px] font-semibold text-[#8C8780] mb-2">
-                  {t("topup.packages")}
-                </h3>
-                <p className="text-[14px] text-[#B7AEA1]">
-                  {t("topup.packages.sub")}
-                </p>
+              <div className="mb-6 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-[18px] font-semibold text-[#8C8780] mb-2">
+                    {t("topup.packages")}
+                  </h3>
+                  <p className="text-[14px] text-[#B7AEA1]">
+                    {t("topup.packages.sub")}
+                  </p>
+                </div>
+                <CurrencyToggle value={effectiveCurrency} onChange={handleCurrencyToggle} />
               </div>
 
               <div className="grid grid-cols-3 gap-3 mb-6">
@@ -400,6 +449,7 @@ export function TopupScreen() {
                 })}
               </div>
 
+              {/* Custom amount */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -495,7 +545,10 @@ export function TopupScreen() {
                 </div>
               </motion.div>
 
+              {/* ── Desktop: payment + CTA + restore ─────────────── */}
               <div className="mt-6 hidden md:block">
+                <PayMethodPicker value={payMethod} onChange={handlePayMethodChange} t={t} className="mb-3" />
+
                 <motion.button
                   whileTap={{ scale: 0.98 }}
                   onClick={handleProceed}
@@ -507,36 +560,37 @@ export function TopupScreen() {
                     .replace("{price}", displayAmount)}
                 </motion.button>
 
-                {isCny ? (
-                  <PayMethodPicker value={payMethod} onChange={setPayMethod} t={t} />
-                ) : (
-                  <div className="mt-3 flex items-center justify-center gap-3 text-[11px] text-[#8C8780]">
-                    <button
-                      onClick={handleRestorePurchases}
-                      disabled={isRestoring}
-                      className="hover:text-[#1A1A1A] transition-colors disabled:opacity-50"
-                    >
-                      {isRestoring ? t("topup.restoring") : `↻ ${t("topup.restore")}`}
-                    </button>
-                  </div>
-                )}
+                <div className="mt-3 flex items-center justify-center gap-3 text-[11px] text-[#8C8780]">
+                  <button
+                    onClick={handleRestorePurchases}
+                    disabled={isRestoring}
+                    className="hover:text-[#1A1A1A] transition-colors disabled:opacity-50"
+                  >
+                    {isRestoring ? t("topup.restoring") : `↻ ${t("topup.restore")}`}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
         </div>
 
+        {/* ── Mobile: fixed bottom bar ────────────────────────────── */}
         <div
-          className="fixed left-0 right-0 z-40 px-6 pt-3 pb-3 md:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 px-6 pt-3 md:hidden"
           style={{
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 64px)",
-            background:
-              "linear-gradient(to top, #F5F1EB 70%, rgba(245,241,235,0) 100%)",
+            paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 14px)",
+            backgroundColor: "#F5F1EB",
           }}
         >
+          <div
+            className="pointer-events-none absolute inset-x-0 -top-8 h-8"
+            style={{
+              background: "linear-gradient(to top, #F5F1EB, rgba(245,241,235,0))",
+            }}
+            aria-hidden
+          />
           <div className="mx-auto max-w-lg">
-            {isCny && (
-              <PayMethodPicker value={payMethod} onChange={setPayMethod} t={t} className="mb-2.5 mt-0" />
-            )}
+            <PayMethodPicker value={payMethod} onChange={handlePayMethodChange} t={t} className="mb-2" />
 
             <motion.button
               whileTap={{ scale: 0.98 }}
@@ -549,17 +603,15 @@ export function TopupScreen() {
                 .replace("{price}", displayAmount)}
             </motion.button>
 
-            {!isCny && (
-              <div className="mt-3 flex items-center justify-center gap-3 text-[11px] text-[#8C8780]">
-                <button
-                  onClick={handleRestorePurchases}
-                  disabled={isRestoring}
-                  className="hover:text-[#1A1A1A] transition-colors disabled:opacity-50"
-                >
-                  {isRestoring ? t("topup.restoring") : `↻ ${t("topup.restore")}`}
-                </button>
-              </div>
-            )}
+            <div className="mt-2 flex items-center justify-center text-[11px] text-[#8C8780]">
+              <button
+                onClick={handleRestorePurchases}
+                disabled={isRestoring}
+                className="hover:text-[#1A1A1A] transition-colors disabled:opacity-50"
+              >
+                {isRestoring ? t("topup.restoring") : `↻ ${t("topup.restore")}`}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -567,10 +619,49 @@ export function TopupScreen() {
   );
 }
 
-function AlipayIcon({ size = 16 }: { size?: number }) {
+/* ── Sub-components ──────────────────────────────────────────────────── */
+
+function CurrencyToggle({
+  value,
+  onChange,
+}: {
+  value: Currency;
+  onChange: (c: Currency) => void;
+}) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="#1677FF" xmlns="http://www.w3.org/2000/svg">
-      <path d="M19.695 15.07c3.426 1.158 4.203 1.22 4.203 1.22V3.846c0-2.124-1.705-3.845-3.81-3.845H3.914C1.808.001.102 1.722.102 3.846v16.31c0 2.123 1.706 3.845 3.813 3.845h16.173c2.105 0 3.81-1.722 3.81-3.845v-.157s-6.19-2.602-9.315-4.119c-2.096 2.602-4.8 4.181-7.607 4.181-4.75 0-6.361-4.19-4.112-6.949.49-.602 1.324-1.175 2.617-1.497 2.025-.502 5.247.313 8.266 1.317a16.796 16.796 0 0 0 1.341-3.302H5.781v-.952h4.799V6.975H4.77v-.953h5.81V3.591s0-.409.411-.409h2.347v2.84h5.744v.951h-5.744v1.704h4.69a19.453 19.453 0 0 1-1.986 5.06c1.424.52 2.702 1.011 3.654 1.333m-13.81-2.032c-.596.06-1.71.325-2.321.869-1.83 1.608-.735 4.55 2.968 4.55 2.151 0 4.301-1.388 5.99-3.61-2.403-1.182-4.438-2.028-6.637-1.809" />
+    <div className="flex shrink-0 rounded-full bg-[#E5DDD0]/50 p-[3px]">
+      {(["USD", "CNY"] as const).map((c) => (
+        <button
+          key={c}
+          onClick={() => onChange(c)}
+          className={`rounded-full px-3 py-1 text-[12px] font-medium transition-all ${
+            value === c
+              ? "bg-white text-[#1A1A1A] shadow-sm"
+              : "text-[#8C8780] hover:text-[#1A1A1A]"
+          }`}
+        >
+          {c === "USD" ? "$ USD" : "¥ CNY"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CreditCardIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+      <line x1="1" y1="10" x2="23" y2="10" />
     </svg>
   );
 }
@@ -589,28 +680,28 @@ function PayMethodPicker({
   t,
   className,
 }: {
-  value: "alipay" | "wxpay";
-  onChange: (v: "alipay" | "wxpay") => void;
+  value: "card" | "wxpay";
+  onChange: (v: "card" | "wxpay") => void;
   t: (k: string) => string;
   className?: string;
 }) {
   return (
-    <div className={`flex items-center justify-center gap-1.5 ${className ?? "mt-3"}`}>
+    <div className={`flex items-center justify-center gap-1.5 ${className ?? ""}`}>
       <button
-        onClick={() => onChange("alipay")}
-        className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] transition-all ${
-          value === "alipay"
-            ? "bg-[#1677FF]/10 text-[#1677FF] font-medium"
+        onClick={() => onChange("card")}
+        className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] transition-all ${
+          value === "card"
+            ? "bg-[#1A1A1A]/8 text-[#1A1A1A] font-medium"
             : "text-[#B7AEA1] hover:text-[#8C8780]"
         }`}
       >
-        <AlipayIcon size={14} />
-        {t("topup.payment.alipay")}
+        <CreditCardIcon size={14} />
+        {t("topup.payment.card")}
       </button>
       <span className="text-[#D2C9B6] text-[10px]">|</span>
       <button
         onClick={() => onChange("wxpay")}
-        className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] transition-all ${
+        className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] transition-all ${
           value === "wxpay"
             ? "bg-[#07C160]/10 text-[#07C160] font-medium"
             : "text-[#B7AEA1] hover:text-[#8C8780]"

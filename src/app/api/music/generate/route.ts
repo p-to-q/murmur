@@ -11,19 +11,16 @@ import {
 import { RunpodError, runJob } from "@/lib/platform/runpod-serverless";
 
 export const runtime = "nodejs";
-// Generation proxies a 10-30s model call (plus a possible cold-start / model
-// load on RunPod Serverless); don't let the platform's default function timeout
-// cut it off mid-render.
-export const maxDuration = 120;
+// Vercel Pro ceiling (300 s). Let RunPod finish at its own pace — the client
+// spinner already has no cap, so the only real gate is this platform limit.
+export const maxDuration = 300;
 
 const ROUTE = "/api/music/generate";
 // One hum fans out into three clips and rerolls fan out again — the budget
 // is per-clip, so keep it well above the transcribe route's.
 const GENERATE_RATE_LIMIT = { capacity: 30, refillWindowMs: 60_000 };
-// Must stay below maxDuration (120 s): if the worker call outlives the
-// function, the platform kills us mid-wait and the client gets an opaque
-// 502 instead of our structured timeout error.
-const WORKER_TIMEOUT_MS = 110_000;
+// Must stay below maxDuration so our structured error beats the platform 502.
+const WORKER_TIMEOUT_MS = 295_000;
 const MAX_PROMPT_CHARS = 300;
 const MAX_HUM_BYTES = 4 * 1024 * 1024;
 const MIN_DURATION = 2;

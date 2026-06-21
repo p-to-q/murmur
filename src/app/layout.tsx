@@ -130,6 +130,7 @@ export default function RootLayout({
           <main
             className="flex-1"
             style={{
+              paddingTop: "var(--mobile-top-bar-h)",
               paddingLeft: "var(--side-nav-w)",
               paddingBottom: "var(--main-pb)",
               transition: "padding-left 0.32s cubic-bezier(0.22, 1, 0.36, 1)",

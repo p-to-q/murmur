@@ -1,10 +1,13 @@
 "use client";
 
 /**
- * useRegionalSkus — fetches /api/billing/skus once and caches the result.
+ * useRegionalSkus — fetches /api/billing/skus and caches per currency.
  *
  * Returns region-appropriate SKU pricing (CNY for mainland China, USD
  * elsewhere) plus custom topup config for the detected currency.
+ *
+ * Accepts an optional `forceCurrency` to let the TopupScreen currency
+ * toggle drive re-fetches without a page reload.
  */
 
 import { useEffect, useState } from "react";
@@ -34,23 +37,47 @@ export interface RegionalSkusResult {
   isLoading: boolean;
 }
 
-let cached: { currency: Currency; skus: RegionalSku[]; custom: CustomConfig } | null = null;
+type CacheEntry = { currency: Currency; skus: RegionalSku[]; custom: CustomConfig };
+const cacheMap: Record<string, CacheEntry> = {};
 
-export function useRegionalSkus(): RegionalSkusResult {
-  const [data, setData] = useState(cached);
-  const [isLoading, setIsLoading] = useState(cached === null);
+const STORAGE_KEY = "murmur-currency";
+
+export function getSavedCurrency(): Currency | null {
+  if (typeof window === "undefined") return null;
+  const v = localStorage.getItem(STORAGE_KEY);
+  return v === "CNY" || v === "USD" ? v : null;
+}
+
+export function saveCurrencyPreference(currency: Currency) {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(STORAGE_KEY, currency);
+  }
+}
+
+export function useRegionalSkus(forceCurrency?: Currency): RegionalSkusResult {
+  const urlCurrency =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("currency")?.toUpperCase()
+      : null;
+  const target: string | undefined =
+    forceCurrency ?? (urlCurrency === "CNY" || urlCurrency === "USD" ? urlCurrency : undefined);
+  const cacheKey = target ?? "_auto";
+  const hit = cacheMap[cacheKey] ?? null;
+
+  const [data, setData] = useState<CacheEntry | null>(hit);
+  const [isLoading, setIsLoading] = useState(hit === null);
 
   useEffect(() => {
-    const urlCurrency =
-      typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("currency")
-        : null;
-    if (cached && !urlCurrency) return;
+    if (cacheMap[cacheKey]) {
+      setData(cacheMap[cacheKey]);
+      setIsLoading(false);
+      return;
+    }
 
     let cancelled = false;
     (async () => {
       try {
-        const qs = urlCurrency ? `?currency=${encodeURIComponent(urlCurrency)}` : "";
+        const qs = target ? `?currency=${encodeURIComponent(target)}` : "";
         const res = await fetch(`/api/billing/skus${qs}`);
         if (!res.ok) return;
         const payload = (await res.json()) as {
@@ -58,10 +85,8 @@ export function useRegionalSkus(): RegionalSkusResult {
           skus: RegionalSku[];
           custom: CustomConfig;
         };
-        cached = payload;
-        if (!cancelled) {
-          setData(payload);
-        }
+        cacheMap[cacheKey] = payload;
+        if (!cancelled) setData(payload);
       } catch {
         // Silent — callers fall back to hardcoded TOPUP_SKUS
       } finally {
@@ -72,7 +97,7 @@ export function useRegionalSkus(): RegionalSkusResult {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [cacheKey, target]);
 
   return {
     skus: data?.skus ?? [],
