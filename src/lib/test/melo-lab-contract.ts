@@ -6,41 +6,48 @@ import type {
   TranscriptionResult,
 } from "@/modules/shared/types";
 
-export const MELO_LAB_CONTRACT_VERSION = 2;
+export const MELO_LAB_CONTRACT_VERSION = 3;
 
 export const MELO_LAB_PITCH_PROVIDERS = [
   {
     id: "auto",
-    title: "Auto ensemble",
-    subtitle: "Murmur worker selection",
+    title: "Auto product route",
+    subtitle: "RMVPE -> SwiftF0 -> pYIN",
     group: "murmur",
     kind: "route",
   },
   {
+    id: "rmvpe",
+    title: "RMVPE",
+    subtitle: "explicit RMVPE-only F0",
+    group: "murmur",
+    kind: "detector",
+  },
+  {
     id: "swiftf0",
     title: "SwiftF0",
-    subtitle: "Murmur fast local F0",
+    subtitle: "explicit SwiftF0-only F0",
     group: "murmur",
     kind: "detector",
   },
   {
     id: "pyin",
     title: "pYIN",
-    subtitle: "Murmur fallback baseline",
+    subtitle: "explicit pYIN fallback",
     group: "murmur",
     kind: "detector",
   },
   {
     id: "yin",
     title: "YIN",
-    subtitle: "external librosa test",
+    subtitle: "lab-only librosa YIN",
     group: "external",
     kind: "detector",
   },
   {
     id: "parselmouth",
     title: "Praat",
-    subtitle: "external speech-F0 test",
+    subtitle: "lab-only Praat speech F0",
     group: "external",
     kind: "detector",
   },
@@ -107,6 +114,13 @@ export const MELO_LAB_DIAGNOSTIC_KEYS = [
   "pitchMs",
   "polishMs",
   "totalMs",
+  "rmvpeFrames",
+  "rmvpeVoicedFrames",
+  "rmvpeHopMs",
+  "rmvpeConfidenceThreshold",
+  "rmvpeDevice",
+  "rmvpeModel",
+  "rmvpeExecutionProvider",
   "workerMs",
   "targetInstrument",
   "rangeClampApplied",

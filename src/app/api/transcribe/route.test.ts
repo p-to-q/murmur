@@ -285,6 +285,28 @@ describe("POST /api/transcribe", () => {
     }
   });
 
+  it("allows RMVPE worker results through the stable transcribe route", async () => {
+    nextWorkerImpl = async () => ({
+      ...stubTranscription,
+      provider: "rmvpe",
+      diagnostics: {
+        ...stubTranscription.diagnostics,
+        rmvpeFrames: 120,
+        rmvpeVoicedFrames: 98,
+      },
+    });
+    const form = new FormData();
+    form.append("audio", audioFile());
+    form.append("targetInstrument", "piano");
+
+    const response = await POST(buildRequest(form, { requestId: "req_rmvpe" }));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as TranscriptionResult;
+    expect(body.provider).toBe("rmvpe");
+    expect(body.diagnostics?.rmvpeFrames).toBe(120);
+    expect(lastSpendInputs).toHaveLength(1);
+  });
+
   it("spends Local Creator ledger notes on localhost when a balance row exists", async () => {
     nextAuth = {
       ok: true,
