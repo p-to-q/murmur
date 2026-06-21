@@ -18,6 +18,7 @@
  *   502 checkout_failed
  */
 
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
   CUSTOM_TOPUP_ID,
@@ -37,6 +38,13 @@ import {
   getWaffoTopupProductId,
   isWaffoConfigured,
 } from "@/lib/billing/waffo";
+import {
+  isZpayConfigured,
+  zpayCreateOrder,
+  type ZpayPaymentType,
+} from "@/lib/billing/zpay";
+import { db } from "@/lib/db/client";
+import { purchases } from "@/lib/db/schema/purchases";
 import { log } from "@/lib/observability/log";
 import { TaxCategory } from "@waffo/pancake-ts";
 
@@ -50,6 +58,7 @@ type CheckoutRequestBody = {
   customAmountUsd?: unknown;
   customAmountCny?: unknown;
   currency?: unknown;
+  payMethod?: unknown;
 };
 
 type CheckoutProduct =
@@ -188,17 +197,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!isWaffoConfigured()) {
-    return NextResponse.json(
-      {
-        error: "waffo_not_configured",
-        message: "Waffo payments are not configured on this deployment.",
-        requestId,
-      },
-      { status: 503, headers: { "X-Request-Id": requestId } },
-    );
-  }
-
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
@@ -224,6 +222,28 @@ export async function POST(request: NextRequest) {
   });
   if (!rateLimit.allowed) {
     return rateLimitedResponse(rateLimit, requestId);
+  }
+
+  // CNY + zpay configured → use zpay (Alipay / WeChat Pay)
+  const payMethod = typeof body.payMethod === "string" ? body.payMethod : "";
+  const useZpay =
+    product.currency === "CNY" &&
+    isZpayConfigured() &&
+    (payMethod === "alipay" || payMethod === "wxpay");
+
+  if (useZpay) {
+    return handleZpayCheckout(request, userId, product, payMethod as ZpayPaymentType, requestId, auth.sessionId);
+  }
+
+  if (!isWaffoConfigured()) {
+    return NextResponse.json(
+      {
+        error: "waffo_not_configured",
+        message: "Waffo payments are not configured on this deployment.",
+        requestId,
+      },
+      { status: 503, headers: { "X-Request-Id": requestId } },
+    );
   }
 
   const client = getWaffoClient()!;
@@ -273,6 +293,93 @@ export async function POST(request: NextRequest) {
         requestId,
         userId,
         sessionId: auth.sessionId,
+        level: "error",
+      },
+    );
+    return NextResponse.json(
+      {
+        error: "checkout_failed",
+        message: "Could not start checkout. Please try again.",
+        requestId,
+      },
+      { status: 502, headers: { "X-Request-Id": requestId } },
+    );
+  }
+}
+
+function newId(prefix: string): string {
+  return `${prefix}_${Date.now().toString(36)}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+}
+
+async function handleZpayCheckout(
+  request: NextRequest,
+  userId: string,
+  product: CheckoutProduct,
+  payMethod: ZpayPaymentType,
+  requestId: string,
+  sessionId: string | null,
+) {
+  const origin = resolveAppOrigin(request);
+  const outTradeNo = `${userId}:${product.skuId}:${randomUUID()}`;
+  const moneyYuan = (product.amountCents / 100).toFixed(2);
+  const notifyUrl = `${origin}/api/billing/zpay-notify`;
+  const returnUrl = `${origin}/topup/checkout?${product.successQuery}&status=success`;
+  const clientIp =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "127.0.0.1";
+
+  try {
+    // Insert a pending purchase record so the webhook can resolve it
+    await db.insert(purchases).values({
+      id: newId("pur"),
+      userId,
+      provider: "zpay",
+      productId: product.skuId,
+      providerRef: outTradeNo,
+      amountCents: product.amountCents,
+      currency: "CNY",
+      notesGranted: product.notesGranted,
+      status: "pending",
+      rawPayload: {
+        payMethod,
+        outTradeNo,
+        moneyYuan,
+      },
+    });
+
+    const result = await zpayCreateOrder({
+      outTradeNo,
+      money: moneyYuan,
+      name: `Murmur — ${product.notesGranted} 音磅`,
+      type: payMethod,
+      notifyUrl,
+      returnUrl,
+      clientIp,
+    });
+
+    return NextResponse.json(
+      {
+        checkoutUrl: result.payUrl,
+        sessionId: outTradeNo,
+        provider: "zpay",
+        requestId,
+      },
+      { headers: { "X-Request-Id": requestId } },
+    );
+  } catch (err) {
+    log(
+      "billing.zpay_checkout_failed",
+      {
+        error: err instanceof Error ? err.message : String(err),
+        skuId: product.skuId,
+        payMethod,
+      },
+      {
+        route: ROUTE,
+        requestId,
+        userId,
+        sessionId,
         level: "error",
       },
     );

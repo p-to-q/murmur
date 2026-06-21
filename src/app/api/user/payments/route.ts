@@ -6,7 +6,7 @@
  * provider payloads.
  */
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 import { resolveRequestAuth } from "@/lib/auth";
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
         updatedAt: purchases.updatedAt,
       })
       .from(purchases)
-      .where(and(eq(purchases.userId, userId), eq(purchases.provider, "waffo")))
+      .where(and(eq(purchases.userId, userId), inArray(purchases.provider, ["waffo", "zpay"])))
       .orderBy(desc(purchases.createdAt))
       .limit(100);
 

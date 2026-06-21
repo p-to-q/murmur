@@ -57,6 +57,7 @@ export function CheckoutScreen() {
   const currencyParam = params?.get("currency");
   const requestedCurrency: Currency =
     currencyParam?.toUpperCase() === "CNY" ? "CNY" : "USD";
+  const payMethodParam = params?.get("payMethod");
   const returnStatus = params?.get("status");
   const purchase = useMemo(
     () => {
@@ -180,12 +181,16 @@ export function CheckoutScreen() {
 
   const beginCheckout = useCallback(async () => {
     try {
-      const checkoutBody =
+      const baseBody =
         purchase.kind === "custom"
           ? "customAmountCny" in purchase && purchase.customAmountCny != null
             ? { customAmountCny: purchase.customAmountCny, currency: "CNY" }
             : { customAmountUsd: purchase.customAmountUsd, currency: purchase.currency }
           : { sku: purchase.id, currency: purchase.currency };
+      const checkoutBody =
+        payMethodParam === "alipay" || payMethodParam === "wxpay"
+          ? { ...baseBody, payMethod: payMethodParam }
+          : baseBody;
 
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
@@ -233,7 +238,7 @@ export function CheckoutScreen() {
       setFailureKind("generic");
       setPhase("failed");
     }
-  }, [finishSucceeded, purchase, skuNotes, t]);
+  }, [finishSucceeded, payMethodParam, purchase, skuNotes, t]);
 
   const retryCheckout = () => {
     setFailureMessage(null);

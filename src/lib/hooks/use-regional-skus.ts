@@ -41,12 +41,17 @@ export function useRegionalSkus(): RegionalSkusResult {
   const [isLoading, setIsLoading] = useState(cached === null);
 
   useEffect(() => {
-    if (cached) return;
+    const urlCurrency =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("currency")
+        : null;
+    if (cached && !urlCurrency) return;
 
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/billing/skus");
+        const qs = urlCurrency ? `?currency=${encodeURIComponent(urlCurrency)}` : "";
+        const res = await fetch(`/api/billing/skus${qs}`);
         if (!res.ok) return;
         const payload = (await res.json()) as {
           currency: Currency;
