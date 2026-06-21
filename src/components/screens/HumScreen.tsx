@@ -1275,11 +1275,11 @@ export function HumScreen() {
             {/* Guidance text — positioned just above the button cutout */}
             {!onboardingRippling && orbCenter.y > 0 && (
               <motion.div
-                className="absolute left-0 right-0 flex flex-col items-center pointer-events-none"
+                className="absolute flex flex-col items-center pointer-events-none"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
-                style={{ top: orbCenter.y - 260 }}
+                style={{ top: orbCenter.y - 260, left: orbCenter.x, x: '-50%' }}
               >
                 <p className="hero-serif text-[#1A1A1A]/75 text-[26px] md:text-[34px] leading-[1.2] text-center">
                   {t("hum.onboarding")}
