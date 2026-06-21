@@ -5,5 +5,5 @@
 deepfilternet==0.5.6
 # torch >= 2.8.0 clears GHSA-53q9-r3pm-6pq6 (critical, torch.load RCE) and
 # GHSA-887c-mr87-cxwp; keep torch/torchaudio versions in lockstep.
-torch==2.8.0
+torch==2.12.1
 torchaudio==2.8.0
