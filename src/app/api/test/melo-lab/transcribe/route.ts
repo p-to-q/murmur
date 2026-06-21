@@ -3,7 +3,7 @@ import {
   AudioWorkerError,
   isInstrumentId,
   isMelodyCarrier,
-  normalizeWorkerResponse,
+  transcribeWithAudioWorker,
 } from "@/lib/platform/audio-worker";
 import {
   MELO_LAB_CONTRACT_VERSION,
@@ -15,6 +15,7 @@ import {
   resolveLocalWorkerUrl,
   summarizeMelody,
 } from "@/lib/test/melo-lab";
+import type { TranscriptionResult } from "@/modules/shared/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -79,46 +80,16 @@ export async function POST(request: NextRequest) {
     }
 
     const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
-    const workerForm = new FormData();
-    workerForm.append("audio", audio, audio.name || "hum.webm");
-    workerForm.append("targetInstrument", targetInstrument);
-    workerForm.append("pitchProvider", pitchProvider);
-
-    const headers = new Headers({ "X-Request-Id": requestId });
-    const token = process.env.AUDIO_WORKER_TOKEN?.trim();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-
     const workerUrl = workerBase.endsWith("/transcribe")
       ? workerBase
-      : `${workerBase}/transcribe`;
-    const startedAt = performance.now();
-    const workerResponse = await fetch(workerUrl, {
-      method: "POST",
-      body: workerForm,
-      headers,
-      signal: AbortSignal.timeout(90_000),
+      : `${workerBase.replace(/\/+$/, "")}/transcribe`;
+    const result = await transcribeWithAudioWorker({
+      audio,
+      targetInstrument,
+      requestId,
+      workerBaseUrl: workerBase,
+      pitchProvider,
     });
-
-    if (!workerResponse.ok) {
-      const detail = await readJsonSafely(workerResponse);
-      return NextResponse.json(
-        {
-          error: "audio_worker_failed",
-          message: `Local audio worker returned HTTP ${workerResponse.status}`,
-          detail,
-        },
-        { status: workerResponse.status === 422 ? 422 : 502 },
-      );
-    }
-
-    const workerJson = await workerResponse.json();
-    const result = normalizeWorkerResponse(
-      workerJson as Parameters<typeof normalizeWorkerResponse>[0],
-      {
-        targetInstrument,
-        workerMs: Math.round(performance.now() - startedAt),
-      },
-    );
 
     return NextResponse.json({
       testOnly: true,
@@ -126,7 +97,7 @@ export async function POST(request: NextRequest) {
       workerUrl,
       requestId,
       pitchProvider,
-      requestedProvider: requestedProviderFromWorker(workerJson, pitchProvider),
+      requestedProvider: pitchProvider,
       result,
       stages: {
         raw: {
@@ -186,7 +157,7 @@ async function readFormData(request: NextRequest): Promise<FormData> {
 }
 
 function summarizeMelodyIntent(
-  profile: ReturnType<typeof normalizeWorkerResponse>["melodyIntent"],
+  profile: TranscriptionResult["melodyIntent"],
 ) {
   if (!profile) return null;
   return {
@@ -207,28 +178,7 @@ function parsePitchProvider(value: FormDataEntryValue | null) {
   }
   throw new AudioWorkerError(
     "validation_error",
-    "pitchProvider must be auto, swiftf0, pyin, yin, or parselmouth.",
+    "pitchProvider must be auto, rmvpe, swiftf0, pyin, yin, or parselmouth.",
     400,
   );
-}
-
-function requestedProviderFromWorker(
-  value: unknown,
-  fallback: string,
-): string {
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    if (typeof record.requestedProvider === "string") {
-      return record.requestedProvider;
-    }
-  }
-  return fallback;
-}
-
-async function readJsonSafely(response: Response): Promise<unknown> {
-  try {
-    return await response.json();
-  } catch {
-    return null;
-  }
 }

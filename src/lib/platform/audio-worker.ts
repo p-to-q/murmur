@@ -21,9 +21,9 @@ import type {
 
 // Per-attempt and total budgets stay under the /api/transcribe route's 60s
 // maxDuration so a transient blip can be retried inside the same request
-// instead of failing the user immediately. The SwiftF0 model is now preloaded
-// at worker startup, so a warm transcription is only a few seconds — leaving
-// room for a couple of retries within the total budget.
+// instead of failing the user immediately. The worker pitch stack is warmed on
+// the audio-engine side, so a normal transcription leaves room for a couple of
+// retries within the total budget.
 const WORKER_ATTEMPT_TIMEOUT_MS = 20_000;
 const WORKER_TOTAL_BUDGET_MS = 40_000;
 const WORKER_MAX_ATTEMPTS = 3;
@@ -75,6 +75,13 @@ const diagnosticsSchema = z
     pitchMs: z.number().optional(),
     polishMs: z.number().optional(),
     totalMs: z.number().optional(),
+    rmvpeFrames: z.number().optional(),
+    rmvpeVoicedFrames: z.number().optional(),
+    rmvpeHopMs: z.number().optional(),
+    rmvpeConfidenceThreshold: z.number().optional(),
+    rmvpeDevice: z.string().optional(),
+    rmvpeModel: z.string().optional(),
+    rmvpeExecutionProvider: z.string().nullable().optional(),
     noteHypothesis: z.string().optional(),
     noteProposalProfile: z.string().optional(),
     noteProposalCandidates: z.string().optional(),
@@ -141,18 +148,24 @@ export interface AudioWorkerRequest {
   audio: File;
   targetInstrument: InstrumentId;
   requestId: string;
+  /** Loopback-only test routes can inject a worker URL without changing process env. */
+  workerBaseUrl?: string;
+  /** Product routes omit this and let the worker's configured auto route decide. */
+  pitchProvider?: string;
 }
 
 /**
- * Call the server-side audio worker and normalize both the current pYIN
- * response and the v2 SwiftF0 response into Murmur's `TranscriptionResult`.
+ * Call the server-side audio worker and normalize the current RMVPE/SwiftF0/pYIN
+ * response shape into Murmur's `TranscriptionResult`.
  */
 export async function transcribeWithAudioWorker({
   audio,
   targetInstrument,
   requestId,
+  workerBaseUrl,
+  pitchProvider,
 }: AudioWorkerRequest): Promise<TranscriptionResult> {
-  const workerBase = getAudioWorkerUrl();
+  const workerBase = workerBaseUrl?.trim() || getAudioWorkerUrl();
   if (!workerBase) {
     throw new AudioWorkerError(
       "worker_unconfigured",
@@ -198,6 +211,7 @@ export async function transcribeWithAudioWorker({
         targetInstrument,
         requestId,
         token,
+        pitchProvider,
         timeoutMs: attemptTimeout,
       });
     } catch (error) {
@@ -228,6 +242,7 @@ async function runTranscribeAttempt({
   targetInstrument,
   requestId,
   token,
+  pitchProvider,
   timeoutMs,
 }: {
   workerUrl: string;
@@ -237,11 +252,15 @@ async function runTranscribeAttempt({
   targetInstrument: InstrumentId;
   requestId: string;
   token?: string;
+  pitchProvider?: string;
   timeoutMs: number;
 }): Promise<TranscriptionResult> {
   const form = new FormData();
   form.append("audio", new Blob([audioBytes], { type: audioType }), audioName);
   form.append("targetInstrument", targetInstrument);
+  if (pitchProvider) {
+    form.append("pitchProvider", pitchProvider);
+  }
 
   const headers = new Headers({ "X-Request-Id": requestId });
   if (token) {
@@ -381,6 +400,7 @@ function getAudioWorkerUrl(): string | null {
 
 function normalizeProvider(value: string | undefined): TranscriptionProvider {
   const lower = value?.toLowerCase() ?? "";
+  if (lower.includes("rmvpe")) return "rmvpe";
   if (lower.includes("swift")) return "swiftf0";
   if (lower.includes("parselmouth") || lower.includes("praat")) return "parselmouth";
   if (lower.includes("pyin")) return "pyin";
@@ -402,10 +422,12 @@ async function readWorkerError(
       return {
         code: typeof detail.error === "string" ? detail.error : null,
         message:
-          typeof detail.error === "string"
-            ? detail.error
+          typeof detail.message === "string"
+            ? detail.message
             : typeof data.message === "string"
               ? data.message
+              : typeof detail.error === "string"
+                ? detail.error
               : `Audio worker returned HTTP ${response.status}`,
       };
     }
@@ -555,6 +577,15 @@ function normalizeDiagnostics(
     pitchMs: numberOrUndefined(diagnostics.pitchMs),
     polishMs: numberOrUndefined(diagnostics.polishMs),
     totalMs: numberOrUndefined(diagnostics.totalMs),
+    rmvpeFrames: numberOrUndefined(diagnostics.rmvpeFrames),
+    rmvpeVoicedFrames: numberOrUndefined(diagnostics.rmvpeVoicedFrames),
+    rmvpeHopMs: numberOrUndefined(diagnostics.rmvpeHopMs),
+    rmvpeConfidenceThreshold: numberOrUndefined(
+      diagnostics.rmvpeConfidenceThreshold,
+    ),
+    rmvpeDevice: stringOrUndefined(diagnostics.rmvpeDevice),
+    rmvpeModel: stringOrUndefined(diagnostics.rmvpeModel),
+    rmvpeExecutionProvider: stringOrNull(diagnostics.rmvpeExecutionProvider),
     workerMs: options.workerMs,
     targetInstrument: options.targetInstrument,
     rangeClampApplied: options.rangeClampApplied,

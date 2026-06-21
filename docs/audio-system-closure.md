@@ -557,7 +557,7 @@ Operator stance:
 
 Shape:
 
-- `auto` ends up selecting `SwiftF0`;
+- `auto` ends up selecting RMVPE or a lighter fallback such as `SwiftF0`;
 - `providerPitchMs` is much smaller than final `pitchMs`;
 - most of the delay is comparison / alternate-review overhead.
 
@@ -662,8 +662,8 @@ Good:
 - local unattended validation exists;
 - typed errors and supportability are improving.
 - the client is no longer carrying too much hidden music logic.
-- the `auto` detector path now has a SwiftF0 fast path, so a clearly strong
-  first-pass melody no longer always pays the full pYIN review cost.
+- the `auto` detector path now has RMVPE / SwiftF0 fast paths, so a clearly
+  strong first-pass melody no longer always pays the full pYIN review cost.
 
 Still soft:
 

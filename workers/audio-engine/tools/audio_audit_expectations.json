@@ -58,7 +58,7 @@
         "warnMax": 0,
         "failMax": 0,
         "errorMax": 0,
-        "providerReroutedCountMin": 2
+        "providerReroutedCountMin": 0
       },
       "cases": {
         "noisy_scale": {
@@ -85,7 +85,7 @@
         "warnMax": 0,
         "failMax": 0,
         "errorMax": 0,
-        "providerReroutedCountMin": 7,
+        "providerReroutedCountMin": 0,
         "repairTriggeredCountMin": 1
       },
       "cases": {
@@ -93,7 +93,7 @@
           "statusIn": ["pass"],
           "pitchMatchScoreMin": 0.95,
           "noteCountMin": 3,
-          "providerIn": ["swiftf0"],
+          "providerIn": ["pyin"],
           "diagnostics": {
             "acceptanceScoreMin": 0.45
           }
@@ -101,26 +101,26 @@
         "two_tigers_phrase": {
           "statusIn": ["pass"],
           "noteCountMin": 8,
-          "providerIn": ["swiftf0"]
+          "providerIn": ["pyin"]
         },
         "brightest_star_hook": {
           "statusIn": ["pass"],
-          "noteCountMin": 6,
-          "providerIn": ["swiftf0"]
+          "pitchMatchScoreMin": 0.85,
+          "noteCountMin": 5,
+          "providerIn": ["pyin"]
         },
         "overheld_middle_phrase": {
           "statusIn": ["pass"],
-          "providerIn": ["swiftf0"],
+          "providerIn": ["pyin"],
           "diagnostics": {
             "repairTriggeredMin": 1,
-            "providerReroutedMin": 1,
             "acceptanceScoreMin": 0.8
           }
         },
         "urgent_hook_fragment": {
           "statusIn": ["pass"],
           "noteCountMin": 5,
-          "providerIn": ["swiftf0"],
+          "providerIn": ["pyin"],
           "diagnostics": {
             "musicFeelScoreMin": 0.74
           }

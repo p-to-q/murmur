@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import {
   filenameForBlob,
   generateMeloLabMusic,
-  transcribeMeloLabProvider,
+  transcribeMeloLabAuto,
 } from "@/lib/test/melo-lab-client";
 import type { CleanMelody } from "@/modules/shared/types";
 
@@ -13,19 +13,21 @@ afterEach(() => {
 });
 
 describe("MeLo Lab client adapter", () => {
-  it("normalizes provider errors into provider run results", async () => {
-    globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ detail: { message: "worker unavailable" } }), {
+  it("normalizes transcription errors into run results", async () => {
+    let receivedForm: FormData | null = null;
+    globalThis.fetch = (async (_url, init) => {
+      receivedForm = init?.body as FormData;
+      return new Response(JSON.stringify({ detail: { message: "worker unavailable" } }), {
         status: 503,
-      })) as typeof fetch;
+      });
+    }) as typeof fetch;
 
-    const result = await transcribeMeloLabProvider(
+    const result = await transcribeMeloLabAuto(
       new Blob(["audio"], { type: "audio/webm" }),
-      "yin",
     );
 
     expect(result.status).toBe("error");
-    expect(result.provider).toBe("yin");
+    expect(receivedForm?.get("pitchProvider")).toBe("auto");
     expect(result.error).toBe("worker unavailable");
   });
 

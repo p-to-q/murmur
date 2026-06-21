@@ -24,7 +24,7 @@ flowchart LR
     gate --> route["/api/transcribe"]
     route --> worker["Audio worker"]
     worker --> denoise["Optional denoise"]
-    denoise --> pitch["Pitch detector\nSwiftF0 / pYIN fallback"]
+    denoise --> pitch["Pitch detector\nRMVPE / SwiftF0 / pYIN fallback"]
     pitch --> contour["Contour + raw notes"]
     contour --> engine["Humming engine\nintent / corrected / musical"]
     engine --> arrange["Arrange / render"]
@@ -117,6 +117,8 @@ Responsibilities:
 
 | Failure / condition | Primary path | Fallback |
 |---|---|---|
+| RMVPE unavailable in `auto` | `rmvpe` | `swiftf0`, then `pyin` |
+| RMVPE returns weak/no notes in `auto` | `rmvpe` | compare against `swiftf0` / `pyin` candidates |
 | SwiftF0 unavailable in `auto` | `swiftf0` | `pyin` |
 | SwiftF0 returns no notes in `auto` | `swiftf0` | retry with `pyin` |
 | Billing unavailable in local dev | ledger | dev billing bypass |
@@ -134,8 +136,9 @@ Murmur now treats slow audio paths as two architecture-level families:
    where `auto` ends up selecting `pYIN`, and the extra time is still buying a
    better melody answer.
 2. `engineering_tail`
-   where `auto` still ends up selecting `SwiftF0`, so most of the delay is
-   alternate-review overhead rather than the final musical decision.
+   where `auto` still ends up selecting a lighter fallback such as `SwiftF0`,
+   so most of the delay is alternate-review overhead rather than the final
+   musical decision.
 
 Current enforced stance:
 
@@ -243,13 +246,15 @@ and reports:
 The compare mode runs:
 
 - `auto`
+- `rmvpe`
 - `swiftf0`
 - `pyin`
 
 side by side, so fallback quality can be reviewed instead of assumed.
 The audit now follows the worker's real note-hypothesis selection path instead
-of a parallel simplified segmentation path, including explicit-provider reroute
-when the configured detector underperforms.
+of a parallel simplified segmentation path. Product fallback is reviewed through
+`auto`; explicit provider runs stay on the requested detector so the comparison
+shows each detector's own contour and repair behavior.
 When the worker emits selected-candidate acceptance diagnostics, the audit now
 prefers those values over a second approximate scorer, so closure artifacts
 describe the same melody judgment path the shipped system actually used.

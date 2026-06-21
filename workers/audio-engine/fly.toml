@@ -13,12 +13,19 @@ primary_region = "iad"
 [env]
   # Container disk is ephemeral; don't try to persist captured hums here.
   MURMUR_CAPTURE_HUMS = "0"
+  # The Docker image bakes this file during build; keep Fly explicit so /health
+  # and runtime logs match the production pitch route.
+  AUDIO_ENGINE_PITCH_PROVIDER = "auto"
+  AUDIO_ENGINE_RMVPE_MODEL_PATH = "/app/models/rmvpe.onnx"
+  AUDIO_ENGINE_RMVPE_DEVICE = "cpu"
+  AUDIO_ENGINE_RMVPE_ALLOW_DOWNLOAD = "0"
+  AUDIO_ENGINE_RMVPE_CONFIDENCE_THRESHOLD = "0.03"
 
 [http_service]
   internal_port = 8001
   force_https = true
-  # Keep one machine always warm: swift-f0 loads on first request and we want
-  # transcription instantly available, not cold-started per hum.
+  # Keep one machine always warm: RMVPE/SwiftF0 model warmup should happen
+  # before users are waiting on a hum transcription.
   auto_stop_machines = false
   auto_start_machines = true
   min_machines_running = 1

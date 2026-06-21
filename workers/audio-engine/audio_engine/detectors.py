@@ -6,8 +6,8 @@ from dataclasses import dataclass, field
 from os import environ
 from typing import Literal
 
-ConfiguredPitchProviderId = Literal["auto", "pyin", "swiftf0", "yin", "parselmouth"]
-PitchProviderId = Literal["pyin", "swiftf0", "yin", "parselmouth"]
+ConfiguredPitchProviderId = Literal["auto", "rmvpe", "pyin", "swiftf0", "yin", "parselmouth"]
+PitchProviderId = Literal["rmvpe", "pyin", "swiftf0", "yin", "parselmouth"]
 
 
 @dataclass(frozen=True)
@@ -46,7 +46,7 @@ def configured_pitch_provider() -> ConfiguredPitchProviderId:
     configured = environ.get("AUDIO_ENGINE_PITCH_PROVIDER", "auto").strip().lower()
     if configured in ("", "auto"):
         return "auto"
-    if configured in ("pyin", "swiftf0", "yin", "parselmouth"):
+    if configured in ("rmvpe", "pyin", "swiftf0", "yin", "parselmouth"):
         return configured
     raise DetectorUnavailable(f"Unsupported pitch provider: {configured}")
 
@@ -54,28 +54,37 @@ def configured_pitch_provider() -> ConfiguredPitchProviderId:
 def detect_pitch(audio: object, config: DetectorConfig) -> PitchDetection:
     """Run the configured pitch detector.
 
-    `auto` tries SwiftF0 first, then falls back to pYIN if the package/model
-    is unavailable. Explicit `swiftf0` fails loudly so deploy diagnostics stay
-    honest.
+    `auto` tries RMVPE first, then falls back to SwiftF0 and pYIN if a
+    package/model is unavailable. Explicit providers fail loudly so deploy
+    diagnostics stay honest.
     """
     if config.provider == "auto":
-        try:
-            from audio_engine.swift_f0_provider import detect_swiftf0
+        unavailable_warnings: list[str] = []
+        for provider in ("rmvpe", "swiftf0", "pyin"):
+            try:
+                detection = detect_pitch(audio, replace_provider(config, provider))
+                return PitchDetection(
+                    provider=detection.provider,
+                    timestamps=detection.timestamps,
+                    f0=detection.f0,
+                    voiced=detection.voiced,
+                    confidence=detection.confidence,
+                    diagnostics=detection.diagnostics,
+                    warnings=[*unavailable_warnings, *detection.warnings],
+                    sample_rate=detection.sample_rate,
+                    hop_length=detection.hop_length,
+                )
+            except DetectorUnavailable as exc:
+                unavailable_warnings.append(f"{provider}_unavailable:{exc}")
+                continue
+        raise DetectorUnavailable(
+            "No auto pitch provider is available: " + "; ".join(unavailable_warnings)
+        )
 
-            return detect_swiftf0(audio, config)
-        except DetectorUnavailable as exc:
-            detection = detect_pitch(audio, replace_provider(config, "pyin"))
-            return PitchDetection(
-                provider=detection.provider,
-                timestamps=detection.timestamps,
-                f0=detection.f0,
-                voiced=detection.voiced,
-                confidence=detection.confidence,
-                diagnostics=detection.diagnostics,
-                warnings=[f"swiftf0_unavailable:{exc}", *detection.warnings],
-                sample_rate=detection.sample_rate,
-                hop_length=detection.hop_length,
-            )
+    if config.provider == "rmvpe":
+        from audio_engine.rmvpe_provider import detect_rmvpe
+
+        return detect_rmvpe(audio, config)
 
     if config.provider == "pyin":
         from audio_engine.pyin_provider import detect_pyin

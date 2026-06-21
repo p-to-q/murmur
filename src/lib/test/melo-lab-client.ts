@@ -1,20 +1,15 @@
 "use client";
 
 import type { CleanMelody } from "@/modules/shared/types";
-import {
-  type MeloLabPitchProviderId,
-  type MeloLabTranscribeResponse,
-} from "@/lib/test/melo-lab-contract";
+import type { MeloLabTranscribeResponse } from "@/lib/test/melo-lab-contract";
 
-export type MeloLabProviderRun =
+export type MeloLabTranscriptionRun =
   | {
-      provider: MeloLabPitchProviderId;
       status: "ready";
       response: MeloLabTranscribeResponse;
       elapsedMs: number;
     }
   | {
-      provider: MeloLabPitchProviderId;
       status: "error";
       error: string;
       elapsedMs: number;
@@ -36,15 +31,12 @@ export type MeloLabMusicResponse = {
   cfgNotes: string | null;
 };
 
-export async function transcribeMeloLabProvider(
-  blob: Blob,
-  provider: MeloLabPitchProviderId,
-): Promise<MeloLabProviderRun> {
+export async function transcribeMeloLabAuto(blob: Blob): Promise<MeloLabTranscriptionRun> {
   const startedAt = performance.now();
   const form = new FormData();
   form.append("audio", blob, filenameForBlob(blob));
   form.append("targetInstrument", "piano");
-  form.append("pitchProvider", provider);
+  form.append("pitchProvider", "auto");
 
   try {
     const response = await fetch("/api/test/melo-lab/transcribe", {
@@ -57,14 +49,12 @@ export async function transcribeMeloLabProvider(
       throw new Error(errorMessageFromPayload(payload, response.status));
     }
     return {
-      provider,
       status: "ready",
       response: payload as MeloLabTranscribeResponse,
       elapsedMs: Math.round(performance.now() - startedAt),
     };
   } catch (err) {
     return {
-      provider,
       status: "error",
       error: err instanceof Error ? err.message : String(err),
       elapsedMs: Math.round(performance.now() - startedAt),

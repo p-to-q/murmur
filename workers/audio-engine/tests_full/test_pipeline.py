@@ -14,6 +14,12 @@ def has_worker_deps() -> bool:
     )
 
 
+def raise_detector_unavailable(message: str):
+    from audio_engine.detectors import DetectorUnavailable
+
+    raise DetectorUnavailable(message)
+
+
 @unittest.skipUnless(has_worker_deps(), "audio worker runtime deps are not installed")
 class WorkerPipelineTests(unittest.TestCase):
     def test_auto_ensemble_can_pick_pyin_when_it_scores_better(self):
@@ -44,6 +50,8 @@ class WorkerPipelineTests(unittest.TestCase):
         )
 
         def fake_detect(_audio, config):
+            if config.provider == "rmvpe":
+                raise_detector_unavailable("RMVPE missing")
             return swift_detection if config.provider == "swiftf0" else pyin_detection
 
         def fake_collect(detection, *, allow_repair_rerun=True, allowed_base_hypothesis_ids=None):
@@ -82,6 +90,125 @@ class WorkerPipelineTests(unittest.TestCase):
         self.assertGreaterEqual(len(notes), 1)
         self.assertTrue(any("ensemble_pick:pyin" in warning for warning in detection.warnings))
 
+    def test_auto_ensemble_can_fast_path_rmvpe_when_it_is_already_strong(self):
+        from audio_engine.detectors import PitchDetection
+        from main import detect_with_optional_ensemble
+
+        rmvpe_detection = PitchDetection(
+            provider="rmvpe",
+            timestamps=[0.0, 0.01, 0.02, 0.03],
+            f0=[261.63, 293.66, 329.63, 349.23],
+            voiced=[True, True, True, True],
+            confidence=[0.94, 0.95, 0.94, 0.93],
+            diagnostics={"pitchMs": 86},
+            warnings=[],
+            sample_rate=16000,
+            hop_length=160,
+        )
+
+        def fake_detect(_audio, config):
+            if config.provider in {"swiftf0", "pyin"}:
+                raise AssertionError("alternate providers should not run when rmvpe fast-path triggers")
+            return rmvpe_detection
+
+        def fake_collect(_detection, *, allow_repair_rerun=True, allowed_base_hypothesis_ids=None):
+            return [
+                ("balanced", [
+                    {"pitch": 60, "start": 0.0, "duration": 0.24, "velocity": 0.84, "confidence": 0.93},
+                    {"pitch": 62, "start": 0.24, "duration": 0.24, "velocity": 0.84, "confidence": 0.94},
+                ], {
+                    "score": 0.85,
+                    "musicFeelScore": 0.79,
+                    "excessiveHoldRatio": 0.0,
+                    "interiorHoldRatio": 0.0,
+                    "onsetFragmentation": 0.08,
+                    "firstOnsetLag": 0.0,
+                }, 3.48)
+            ], None
+
+        with (
+            patch("main.detect_pitch", side_effect=fake_detect),
+            patch("main.collect_note_candidates", side_effect=fake_collect),
+        ):
+            detection, notes = detect_with_optional_ensemble([0.0] * 100, "auto")
+
+        self.assertEqual(detection.provider, "rmvpe")
+        self.assertEqual(len(notes), 2)
+        self.assertEqual(detection.diagnostics["ensembleDecision"], "rmvpe_fast_path")
+        self.assertFalse(detection.diagnostics["providerRerouted"])
+        self.assertEqual(detection.diagnostics["providerPitchMs"], 86)
+
+    def test_auto_ensemble_can_fall_back_from_weak_rmvpe_to_swiftf0(self):
+        from audio_engine.detectors import PitchDetection
+        from main import detect_with_optional_ensemble
+
+        rmvpe_detection = PitchDetection(
+            provider="rmvpe",
+            timestamps=[0.0, 0.01, 0.02, 0.03],
+            f0=[261.63, 392.0, 261.63, 392.0],
+            voiced=[True, True, True, True],
+            confidence=[0.42, 0.4, 0.41, 0.39],
+            diagnostics={"pitchMs": 90},
+            warnings=[],
+            sample_rate=16000,
+            hop_length=160,
+        )
+        swift_detection = PitchDetection(
+            provider="swiftf0",
+            timestamps=[0.0, 0.02, 0.04, 0.06],
+            f0=[261.63, 293.66, 329.63, 349.23],
+            voiced=[True, True, True, True],
+            confidence=[0.9, 0.91, 0.9, 0.89],
+            diagnostics={"pitchMs": 120},
+            warnings=[],
+            sample_rate=22050,
+            hop_length=512,
+        )
+
+        def fake_detect(_audio, config):
+            if config.provider == "rmvpe":
+                return rmvpe_detection
+            if config.provider == "swiftf0":
+                return swift_detection
+            raise_detector_unavailable("pYIN missing")
+
+        def fake_collect(detection, *, allow_repair_rerun=True, allowed_base_hypothesis_ids=None):
+            if detection.provider == "rmvpe":
+                return [
+                    ("balanced", [{"pitch": 60, "start": 0.0, "duration": 0.12, "velocity": 0.4, "confidence": 0.4}], {
+                        "score": 0.42,
+                        "musicFeelScore": 0.43,
+                        "excessiveHoldRatio": 0.0,
+                        "interiorHoldRatio": 0.0,
+                        "onsetFragmentation": 0.5,
+                        "firstOnsetLag": 0.18,
+                    }, 1.8)
+                ], "acceptance_low"
+            return [
+                ("balanced", [
+                    {"pitch": 60, "start": 0.0, "duration": 0.24, "velocity": 0.82, "confidence": 0.9},
+                    {"pitch": 62, "start": 0.24, "duration": 0.24, "velocity": 0.83, "confidence": 0.91},
+                ], {
+                    "score": 0.84,
+                    "musicFeelScore": 0.78,
+                    "excessiveHoldRatio": 0.0,
+                    "interiorHoldRatio": 0.0,
+                    "onsetFragmentation": 0.08,
+                    "firstOnsetLag": 0.0,
+                }, 3.46)
+            ], None
+
+        with (
+            patch("main.detect_pitch", side_effect=fake_detect),
+            patch("main.collect_note_candidates", side_effect=fake_collect),
+        ):
+            detection, notes = detect_with_optional_ensemble([0.0] * 100, "auto")
+
+        self.assertEqual(detection.provider, "swiftf0")
+        self.assertEqual(len(notes), 2)
+        self.assertEqual(detection.diagnostics["ensembleSelected"], "swiftf0/balanced")
+        self.assertTrue(any("ensemble_pick:swiftf0" in warning for warning in detection.warnings))
+
     def test_auto_ensemble_can_fast_path_swiftf0_when_it_is_already_strong(self):
         from audio_engine.detectors import PitchDetection
         from main import detect_with_optional_ensemble
@@ -99,6 +226,8 @@ class WorkerPipelineTests(unittest.TestCase):
         )
 
         def fake_detect(_audio, config):
+            if config.provider == "rmvpe":
+                raise_detector_unavailable("RMVPE missing")
             if config.provider == "pyin":
                 raise AssertionError("pyin should not run when swift fast-path triggers")
             return swift_detection
@@ -127,7 +256,7 @@ class WorkerPipelineTests(unittest.TestCase):
         self.assertEqual(detection.provider, "swiftf0")
         self.assertEqual(len(notes), 2)
         self.assertEqual(detection.diagnostics["ensembleDecision"], "swift_fast_path")
-        self.assertFalse(detection.diagnostics["providerRerouted"])
+        self.assertTrue(detection.diagnostics["providerRerouted"])
         self.assertEqual(detection.diagnostics["providerPitchMs"], 120)
 
     def test_auto_ensemble_can_long_take_fast_path_swiftf0_when_it_is_clearly_good_enough(self):
@@ -148,6 +277,8 @@ class WorkerPipelineTests(unittest.TestCase):
         )
 
         def fake_detect(_audio, config):
+            if config.provider == "rmvpe":
+                raise_detector_unavailable("RMVPE missing")
             if config.provider == "pyin":
                 raise AssertionError("pyin should not run when long-take swift fast-path triggers")
             return swift_detection
@@ -176,7 +307,7 @@ class WorkerPipelineTests(unittest.TestCase):
         self.assertEqual(detection.provider, "swiftf0")
         self.assertEqual(len(notes), 2)
         self.assertEqual(detection.diagnostics["ensembleDecision"], "swift_long_take_fast_path")
-        self.assertFalse(detection.diagnostics["providerRerouted"])
+        self.assertTrue(detection.diagnostics["providerRerouted"])
         self.assertEqual(detection.diagnostics["providerPitchMs"], 124)
 
     def test_auto_ensemble_can_use_light_alternate_review_for_long_swiftf0_led_takes(self):
@@ -208,6 +339,8 @@ class WorkerPipelineTests(unittest.TestCase):
         )
 
         def fake_detect(_audio, config):
+            if config.provider == "rmvpe":
+                raise_detector_unavailable("RMVPE missing")
             return swift_detection if config.provider == "swiftf0" else pyin_detection
 
         def fake_collect(detection, *, allow_repair_rerun=True, allowed_base_hypothesis_ids=None):
@@ -281,6 +414,8 @@ class WorkerPipelineTests(unittest.TestCase):
         )
 
         def fake_detect(_audio, config):
+            if config.provider == "rmvpe":
+                raise_detector_unavailable("RMVPE missing")
             return swift_detection if config.provider == "swiftf0" else pyin_detection
 
         def fake_collect(detection, *, allow_repair_rerun=True, allowed_base_hypothesis_ids=None):
@@ -360,6 +495,8 @@ class WorkerPipelineTests(unittest.TestCase):
         )
 
         def fake_detect(_audio, config):
+            if config.provider == "rmvpe":
+                raise_detector_unavailable("RMVPE missing")
             return swift_detection if config.provider == "swiftf0" else pyin_detection
 
         def fake_collect(detection, *, allow_repair_rerun=True, allowed_base_hypothesis_ids=None):
@@ -443,6 +580,8 @@ class WorkerPipelineTests(unittest.TestCase):
         )
 
         def fake_detect(_audio, config):
+            if config.provider == "rmvpe":
+                raise_detector_unavailable("RMVPE missing")
             return swift_detection if config.provider == "swiftf0" else pyin_detection
 
         def fake_collect(detection, *, allow_repair_rerun=True, allowed_base_hypothesis_ids=None):
@@ -497,7 +636,7 @@ class WorkerPipelineTests(unittest.TestCase):
         )
         self.assertEqual(detection.diagnostics["ensembleDecision"], "highest_score")
 
-    def test_explicit_provider_can_reroute_after_acceptance_repair_review(self):
+    def test_explicit_provider_does_not_reroute_after_acceptance_repair_review(self):
         from audio_engine.detectors import PitchDetection
         from main import detect_with_optional_ensemble
 
@@ -512,44 +651,21 @@ class WorkerPipelineTests(unittest.TestCase):
             sample_rate=22050,
             hop_length=512,
         )
-        pyin_detection = PitchDetection(
-            provider="pyin",
-            timestamps=[0.00, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12, 0.14],
-            f0=[261.63, 261.7, 293.66, 293.7, 329.63, 329.7, 293.66, 293.7],
-            voiced=[True, True, True, True, True, True, True, True],
-            confidence=[0.9, 0.91, 0.92, 0.91, 0.93, 0.94, 0.92, 0.93],
-            diagnostics={},
-            warnings=[],
-            sample_rate=22050,
-            hop_length=512,
-        )
 
         def fake_detect(_audio, config):
-            return swift_detection if config.provider == "swiftf0" else pyin_detection
+            if config.provider != "swiftf0":
+                raise AssertionError("explicit provider probes should not run alternates")
+            return swift_detection
 
         def fake_collect(detection, *, allow_repair_rerun=True, allowed_base_hypothesis_ids=None):
-            if detection.provider == "swiftf0":
-                return [
-                    ("balanced", [{"pitch": 60, "start": 0.0, "duration": 0.88, "velocity": 0.64, "confidence": 0.61}], {
-                        "score": 0.41,
-                        "musicFeelScore": 0.46,
-                        "excessiveHoldRatio": 0.42,
-                        "onsetFragmentation": 0.0,
-                        "firstOnsetLag": 0.0,
-                    }, 1.4)
-                ], "acceptance_low"
             return [
-                ("repair_split", [
-                    {"pitch": 60, "start": 0.0, "duration": 0.18, "velocity": 0.78, "confidence": 0.9},
-                    {"pitch": 62, "start": 0.2, "duration": 0.18, "velocity": 0.8, "confidence": 0.91},
-                    {"pitch": 64, "start": 0.4, "duration": 0.18, "velocity": 0.82, "confidence": 0.92},
-                ], {
-                    "score": 0.83,
-                    "musicFeelScore": 0.81,
-                    "excessiveHoldRatio": 0.0,
+                ("balanced", [{"pitch": 60, "start": 0.0, "duration": 0.88, "velocity": 0.64, "confidence": 0.61}], {
+                    "score": 0.41,
+                    "musicFeelScore": 0.46,
+                    "excessiveHoldRatio": 0.42,
                     "onsetFragmentation": 0.0,
                     "firstOnsetLag": 0.0,
-                }, 4.6)
+                }, 1.4)
             ], "interior_hold"
 
         with (
@@ -558,11 +674,11 @@ class WorkerPipelineTests(unittest.TestCase):
         ):
             detection, notes = detect_with_optional_ensemble([0.0] * 100, "swiftf0")
 
-        self.assertEqual(detection.provider, "pyin")
-        self.assertEqual(len(notes), 3)
-        self.assertTrue(detection.diagnostics["providerRerouted"])
-        self.assertEqual(detection.diagnostics["ensembleDecision"], "explicit_highest_score")
-        self.assertTrue(
+        self.assertEqual(detection.provider, "swiftf0")
+        self.assertEqual(len(notes), 1)
+        self.assertFalse(detection.diagnostics["providerRerouted"])
+        self.assertEqual(detection.diagnostics["ensembleDecision"], "configured_provider")
+        self.assertFalse(
             any("provider_reroute:swiftf0->pyin" in warning for warning in detection.warnings)
         )
 
@@ -802,7 +918,7 @@ class WorkerPipelineTests(unittest.TestCase):
             }
 
         with (
-            patch("main.pyin_to_notes", side_effect=fake_notes),
+            patch("main.f0_to_notes", side_effect=fake_notes),
             patch("main.score_note_acceptance", side_effect=fake_acceptance),
             patch("main.score_detection_candidate", return_value=1.6),
             patch("main.score_proposal_fit", return_value=0.0),
