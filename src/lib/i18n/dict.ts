@@ -588,17 +588,10 @@ export const DICT = {
   "topup.restore.failed":        { zh: "恢复购买失败，请稍后重试",  en: "Couldn't restore purchases — try again later" },
 
   // ── Checkout ───────────────────────────────────────────────────────
-  "checkout.headline.review":    { zh: "确认这次补给。",       en: "Confirm this top up." },
-  "checkout.headline.requesting":{ zh: "正在为你开通…",       en: "Holding the door open." },
-  "checkout.headline.awaiting":  { zh: "请在另一个标签页完成支付。", en: "Finish in the other tab." },
-  "checkout.headline.confirming":{ zh: "正在确认到账…",       en: "Confirming your notes…" },
   "checkout.awaiting_payment":   { zh: "请在另一个标签页完成支付。", en: "Complete payment in the other tab." },
   "checkout.awaiting_payment_hint": { zh: "支付完成后会自动回到这里；也可以重新打开 {provider} 支付页。", en: "When you finish, you'll return here automatically. You can also reopen the {provider} checkout." },
   "checkout.already_paid":       { zh: "我已经付好了",       en: "I already paid" },
   "checkout.open_again":         { zh: "重新打开安全支付页", en: "Open secure checkout" },
-  "checkout.headline.ok":        { zh: "搞定，慢慢享受。",     en: "Done. Enjoy." },
-  "checkout.headline.canceled":  { zh: "你刚刚退回来了。",     en: "You stepped back." },
-  "checkout.headline.failed":    { zh: "没顺利完成。",         en: "Couldn't finish that." },
   "checkout.description":        { zh: "项目", en: "Description" },
   "checkout.subtotal":           { zh: "小计", en: "Subtotal" },
   "checkout.payment_route":      { zh: "支付路线", en: "Payment route" },

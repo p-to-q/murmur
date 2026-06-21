@@ -384,19 +384,8 @@ export function CheckoutScreen() {
           <div className="h-9 w-9" />
         </header>
 
-        <main className="min-w-0 flex-1 overflow-x-hidden px-4 pb-16 md:px-8">
-          <div className="mx-auto grid min-h-[calc(100svh-120px)] w-full min-w-0 max-w-5xl grid-cols-[minmax(0,1fr)] gap-8 py-4 md:grid-cols-[0.78fr_minmax(0,1.22fr)] md:items-center md:py-8">
-            <section className="min-w-0 flex flex-col justify-center md:pb-10">
-              <motion.h1
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
-                className="hero-serif max-w-[10ch] text-[44px] leading-[1.02] text-[#1A1A1A] md:text-[70px]"
-              >
-                {phaseHeadline(phase, t)}
-              </motion.h1>
-            </section>
-
+        <main className="min-w-0 flex-1 overflow-x-hidden px-4 pb-10 md:px-8 md:pb-16">
+          <div className="mx-auto flex min-h-[calc(100svh-120px)] w-full min-w-0 max-w-[500px] items-start justify-center py-1 sm:items-center sm:py-6">
             <AnimatePresence mode="wait">
               <ReceiptCard
                 key={phase}
@@ -475,30 +464,31 @@ function ReceiptCard({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      className="mx-auto w-full max-w-[452px] overflow-hidden rounded-[8px] border border-white/70 bg-[#FFFEFB] shadow-[0_24px_80px_rgba(74,55,31,0.16)] sm:max-w-[470px]"
+      className="mx-auto w-full max-w-[456px] overflow-hidden rounded-[8px] border border-white/75 bg-[#FFFEFB] shadow-[0_26px_90px_rgba(74,55,31,0.15)] sm:max-w-[470px]"
     >
-      <div className="flex items-center justify-between gap-4 bg-[#1A1A1A] px-5 py-5 text-[#FFFEFB] sm:px-7 sm:py-6">
+      <div className="flex min-h-[76px] items-center justify-between gap-4 bg-[#1A1A1A] px-5 text-[#FFFEFB] sm:min-h-[82px] sm:px-8">
         <MurmurMark
-          size={24}
+          size={32}
           yOffset={-1}
           className="shrink-0"
           imageClassName="brightness-0 invert drop-shadow-none"
         />
-        <p className="shrink-0 font-mono text-[10px] tracking-[0.12em] text-[#F5F1EB]/65 sm:text-[12px]">
+        <p className="shrink-0 font-mono text-[10px] tracking-[0.16em] text-[#F5F1EB]/58 sm:text-[12px]">
           {dateLabel}
         </p>
       </div>
 
-      <div className="relative bg-[#FFFEFB] px-4 py-6 sm:px-7 sm:py-7">
-        <div className="grid grid-cols-[1fr_auto] border-b border-[#E7DCCB] pb-3 text-[11px] uppercase tracking-[0.22em] text-[#B6B0A4]">
+      <div className="relative bg-[#FFFEFB] px-5 py-5 sm:px-8 sm:py-7">
+        <div className="grid grid-cols-[1fr_auto] border-b border-[#E7DCCB] pb-3 text-[10px] uppercase tracking-[0.24em] text-[#B6B0A4] sm:text-[11px]">
           <span>{t("checkout.description") || "Description"}</span>
           <span>{t("checkout.subtotal") || "Subtotal"}</span>
         </div>
 
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-2.5">
           <ReceiptLine
             label={packageLabel(purchase, t)}
             value={purchase.display}
+            emphasis
           />
           <ReceiptLine
             label={t("checkout.notes_granted") || "Notes granted"}
@@ -516,11 +506,11 @@ function ReceiptCard({
           />
         </div>
 
-        <div className="mt-7 flex items-end justify-between gap-4 border-t border-[#E7DCCB] pt-5">
-          <p className="font-mono text-[15px] tracking-[0.1em] text-[#6F6A63]">
+        <div className="mt-7 flex items-end justify-between gap-4">
+          <p className="pb-1 font-mono text-[13px] uppercase tracking-[0.18em] text-[#6F6A63] sm:text-[14px]">
             {t("checkout.total") || "Total"}
           </p>
-          <p className="min-w-0 max-w-[70%] truncate text-right font-serif text-[38px] leading-none text-[#1A1A1A] tabular-nums sm:text-[46px]">
+          <p className="min-w-0 max-w-[70%] truncate text-right font-serif text-[40px] leading-none text-[#1A1A1A] tabular-nums sm:text-[48px]">
             {purchase.display}
           </p>
         </div>
@@ -567,7 +557,7 @@ function ReviewControls({
     : t("checkout.continue") || "Pay securely";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3.5">
       {routeBlocked && (
         <div className="rounded-[8px] border border-[#F0C7B6] bg-[#FFF1EC] p-3 text-left">
           <p className="text-[13px] leading-[1.55] text-[#7A3B27]">
@@ -593,23 +583,25 @@ function ReviewControls({
         </div>
       )}
 
-      <div className="rounded-[8px] bg-[#F5F1EB]/65 p-3 text-left">
-        <p className="flex items-center gap-2 text-[12px] font-medium text-[#1A1A1A]">
-          <CreditCard className="h-3.5 w-3.5 text-[#8C8780]" />
-          {paymentMethodLabel(payMethod, t)}
-        </p>
-        <p className="mt-1 text-[11px] leading-[1.45] text-[#8C8780]">
-          {payMethod === "wxpay"
-            ? t("checkout.wechat_route_note") ||
-              "WeChat Pay opens through the China payment route."
-            : t("checkout.card_route_note") ||
-              "Card checkout opens through Waffo."}
-        </p>
+      <div className="grid grid-cols-[20px_minmax(0,1fr)] gap-3 border-b border-[#E7DCCB] pb-3.5 text-left">
+        <CreditCard className="mt-0.5 h-4 w-4 text-[#8C8780]" />
+        <div className="min-w-0">
+          <p className="text-[12px] font-medium leading-none text-[#1A1A1A]">
+            {paymentMethodLabel(payMethod, t)}
+          </p>
+          <p className="mt-1.5 text-[11px] leading-[1.45] text-[#8C8780]">
+            {payMethod === "wxpay"
+              ? t("checkout.wechat_route_note") ||
+                "WeChat Pay opens through the China payment route."
+              : t("checkout.card_route_note") ||
+                "Card checkout opens through Waffo."}
+          </p>
+        </div>
       </div>
 
-      <label className="flex cursor-pointer items-start gap-3 text-left">
+      <label className="grid cursor-pointer grid-cols-[20px_minmax(0,1fr)] gap-3 text-left">
         <span
-          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border transition-colors ${
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border transition-colors ${
             acceptedPolicy
               ? "border-[#FF5924] bg-[#FF5924] text-white"
               : "border-[#CFC5B7] bg-white text-transparent"
@@ -623,7 +615,7 @@ function ReviewControls({
           type="checkbox"
           className="sr-only"
         />
-        <span className="text-[12px] leading-[1.6] text-[#6F6A63]">
+        <span className="pt-px text-[11.5px] leading-[1.55] text-[#6F6A63] sm:text-[12px]">
           {t("checkout.agree_prefix") || "I have read and agree to the"}{" "}
           <Link
             href="/me/terms"
@@ -659,7 +651,7 @@ function ReviewControls({
         type="button"
         onClick={onPrimaryAction}
         disabled={primaryDisabled}
-        className="mm-btn-primary h-12 w-full justify-center disabled:pointer-events-none disabled:opacity-45"
+        className="mm-btn-primary h-11 w-full justify-center disabled:pointer-events-none disabled:opacity-45 sm:h-12"
       >
         <ShieldCheck className="h-4 w-4" />
         {primaryLabel}
@@ -807,16 +799,18 @@ function StatusControls({
 function ReceiptLine({
   label,
   value,
+  emphasis = false,
   valueClassName,
 }: {
   label: string;
   value: string;
+  emphasis?: boolean;
   valueClassName?: string;
 }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 font-mono text-[12px] leading-[1.5] sm:gap-4 sm:text-[13px]">
-      <span className="min-w-0 truncate text-[#6F6A63]">{label}</span>
-      <span className={`max-w-[10rem] truncate text-right text-[#1A1A1A] sm:max-w-[13rem] ${valueClassName ?? ""}`}>
+      <span className={`min-w-0 truncate ${emphasis ? "text-[#1A1A1A]" : "text-[#6F6A63]"}`}>{label}</span>
+      <span className={`max-w-[10rem] truncate text-right ${emphasis ? "font-medium text-[#1A1A1A]" : "text-[#1A1A1A]"} sm:max-w-[13rem] ${valueClassName ?? ""}`}>
         {value}
       </span>
     </div>
@@ -833,7 +827,7 @@ function BillingEmailLine({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-2 font-mono text-[12px] leading-[1.5] sm:grid-cols-[minmax(0,1fr)_minmax(9rem,13rem)] sm:items-center sm:gap-4 sm:text-[13px]">
+    <div className="grid grid-cols-1 gap-1.5 pt-1 font-mono text-[12px] leading-[1.5] sm:grid-cols-[minmax(0,1fr)_minmax(9rem,13rem)] sm:items-end sm:gap-4 sm:text-[13px]">
       <label
         htmlFor="checkout-billing-email"
         className="flex min-w-0 items-center gap-2 text-[#6F6A63]"
@@ -850,7 +844,7 @@ function BillingEmailLine({
         onChange={(event) => onChange(event.target.value)}
         placeholder={t("checkout.email_placeholder") || "you@example.com"}
         autoComplete="email"
-        className="min-w-0 rounded-[6px] border border-[#E7DCCB] bg-white/70 px-2.5 py-1.5 text-left text-[#1A1A1A] outline-none transition-colors placeholder:text-[#B6B0A4] focus:border-[#FF5924] focus:bg-white sm:text-right"
+        className="min-w-0 rounded-none border-0 border-b border-[#D8CDBB] bg-transparent px-0 pb-1.5 pt-0 text-left text-[#1A1A1A] outline-none transition-colors placeholder:text-[#B6B0A4] focus:border-[#FF5924] sm:text-right"
       />
     </div>
   );
@@ -858,11 +852,7 @@ function BillingEmailLine({
 
 function ReceiptTearLine() {
   return (
-    <div className="relative -mx-4 my-7 h-8 sm:-mx-7" aria-hidden>
-      <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-[#D8CDBB]" />
-      <span className="absolute left-[-15px] top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-[#F5F1EB] shadow-[inset_-1px_0_0_rgba(210,201,182,0.65)]" />
-      <span className="absolute right-[-15px] top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-[#F5F1EB] shadow-[inset_1px_0_0_rgba(210,201,182,0.65)]" />
-    </div>
+    <div className="-mx-5 my-6 border-t border-dashed border-[#D8CDBB] sm:-mx-8" aria-hidden />
   );
 }
 
@@ -905,24 +895,5 @@ function formatReceiptDate(lang: "zh" | "en"): string {
     }).format(new Date());
   } catch {
     return new Date().toISOString().slice(0, 10);
-  }
-}
-
-function phaseHeadline(phase: Phase, t: (key: string) => string): string {
-  switch (phase) {
-    case "review":
-      return t("checkout.headline.review") || "Confirm this top up.";
-    case "requesting":
-      return t("checkout.headline.requesting") || "Holding the door open.";
-    case "awaiting_payment":
-      return t("checkout.headline.awaiting") || "Finish in the other tab.";
-    case "confirming":
-      return t("checkout.headline.confirming") || "Confirming your notes...";
-    case "succeeded":
-      return t("checkout.headline.ok") || "Done. Enjoy.";
-    case "canceled":
-      return t("checkout.headline.canceled") || "You stepped back.";
-    case "failed":
-      return t("checkout.headline.failed") || "Couldn't finish that.";
   }
 }

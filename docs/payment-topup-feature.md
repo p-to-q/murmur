@@ -179,9 +179,9 @@ checkout itself.
 The unified UI element is a single state machine:
 
 ```
-review → requesting → succeeded   ← happy path
-                    ↘ canceled    ← user dismissed
-                    ↘ failed      ← provider error, show retry
+review → requesting → awaiting_payment → confirming → succeeded
+                    ↘ canceled
+                    ↘ failed
 ```
 
 On success, the client polls `GET /api/user/balance` once and reflects

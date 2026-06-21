@@ -701,12 +701,10 @@ before the hosted provider page opens.
 
 ```
 ┌────────────────────────────────────────┐
-│   hero-serif: "Confirm this top up."   │
-│                                        │
-│   ticket receipt:                      │
+│   centered ticket receipt:             │
 │     white Murmur mark on ink header    │
 │     notes / total / editable email     │
-│     horizontal tear line + side cuts   │
+│     horizontal tear line               │
 │                                        │
 │   payment route note + terms checkbox  │
 │   primary: "Pay securely" / "Sign in"  │
