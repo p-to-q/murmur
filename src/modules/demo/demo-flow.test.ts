@@ -22,6 +22,6 @@ describe("buildDemoFlowState", () => {
     expect(demo.versions).toHaveLength(3);
     expect(demo.currentVersion.id).toBe(demo.versions[0]?.id);
     expect(demo.currentVersion.sourceType).toBe("demo");
-    expect(demo.currentVersion.sourceMelodyKind).toBe("corrected");
+    expect(demo.currentVersion.sourceMelodyKind).toBe("intent");
   });
 });
