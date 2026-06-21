@@ -39,10 +39,13 @@ export function HumOnboardingOverlay({
   const maskEdge = useTransform(revealRadius, (r) => (r || 0) + 44);
   const ringSize = useTransform(revealRadius, (r) => Math.max(180, (r || 0) * 2));
   const whisperSize = useTransform(revealRadius, (r) => Math.max(204, (r || 0) * 2.18));
+  const copyTop = useTransform(
+    revealRadius,
+    (r) => orbCenter.y - Math.max(150, Math.min(214, (r || 0) + 34)),
+  );
   const revealMask = useMotionTemplate`radial-gradient(circle at ${orbCenter.x}px ${orbCenter.y}px, transparent ${maskRadius}px, black ${maskEdge}px)`;
-  const copyTop = Math.max(88, orbCenter.y - 258);
-  const introDelay = reduceMotion ? 0.05 : 1.05;
-  const copyDelay = reduceMotion ? 0.1 : 1.62;
+  const introDelay = reduceMotion ? 0.45 : 1.05;
+  const copyDelay = reduceMotion ? 0.72 : 1.62;
   const rippleSize =
     typeof window === "undefined"
       ? 1800
@@ -153,25 +156,25 @@ export function HumOnboardingOverlay({
             {!rippling && (
               <motion.div
                 key="onboarding-copy"
-                className="absolute flex w-[min(78vw,340px)] flex-col items-center text-center"
-                initial={{ opacity: 0, y: 10 }}
+                className="absolute flex w-[min(76vw,300px)] flex-col items-center text-center"
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
+                exit={{ opacity: 0, y: -4 }}
                 transition={{
-                  duration: reduceMotion ? 0.22 : 0.72,
+                  duration: reduceMotion ? 0.24 : 0.62,
                   delay: copyDelay,
                   ease: MYMIND_EASE,
                 }}
                 style={{ top: copyTop, left: orbCenter.x, x: "-50%" }}
               >
-                <p className="hero-serif text-[#1A1A1A]/82 text-[27px] leading-[1.16] md:text-[34px]">
+                <p className="hero-serif text-[#1A1A1A]/80 text-[23px] leading-[1.12] md:text-[30px]">
                   {title}
                 </p>
-                <p className="mt-3 max-w-[260px] text-[12px] leading-relaxed text-[#8C8780] md:max-w-[300px] md:text-[13px]">
+                <p className="font-serif mt-2 max-w-[250px] text-[12px] leading-relaxed text-[#8C8780] md:max-w-[280px] md:text-[13px]">
                   {hint}
                 </p>
                 <motion.span
-                  className="mt-5 h-8 w-px bg-gradient-to-b from-[#1A1A1A]/20 to-transparent"
+                  className="mt-4 h-7 w-px bg-gradient-to-b from-[#1A1A1A]/18 to-transparent"
                   animate={reduceMotion ? undefined : { scaleY: [0.72, 1, 0.72] }}
                   transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
                 />
