@@ -695,21 +695,21 @@ What this is: a friendly purchase page that doesn't feel like a paywall.
 
 ## 10. Checkout `/topup/checkout` — *renew (handoff)*
 
-**New screen.** Specced in `docs/page-contracts.md` §9. Always brief:
-the user is being handed off to a provider.
+**Receipt review + handoff.** Specced in `docs/page-contracts.md` §9. The
+user confirms the top-up, receipt email, payment route, and policy acceptance
+before the hosted provider page opens.
 
 ```
 ┌────────────────────────────────────────┐
-│   eyebrow: CHECKOUT                    │
-│   hero-serif: "Almost there."          │
+│   hero-serif: "Confirm this top up."   │
 │                                        │
-│   selected SKU summary:                 │
-│     120 notes  ·  $5.99                 │
+│   ticket receipt:                      │
+│     white Murmur mark on ink header    │
+│     notes / total / editable email     │
+│     horizontal tear line + side cuts   │
 │                                        │
-│   provider transition:                 │
-│     "Opening Stripe Checkout…"         │
-│   spinner + the rotating editorial      │
-│   copy idiom                           │
+│   payment route note + terms checkbox  │
+│   primary: "Pay securely" / "Sign in"  │
 │                                        │
 │   on success → toast + redirect /       │
 │   on cancel → "No worries. Try again?"  │
@@ -717,10 +717,9 @@ the user is being handed off to a provider.
 └────────────────────────────────────────┘
 ```
 
-This screen does not have its own design surface beyond the rotating
-copy + spinner. It exists to host the state machine
-`idle → requesting → succeeded | canceled | failed`. On most shells
-the user blinks past it.
+The review state is a real design surface; the provider transition remains
+brief and uses the canonical Murmur loading note. The state machine is
+`review → requesting → awaiting_payment → confirming → succeeded | canceled | failed`.
 
 On `succeeded`: toast `+120 notes added.` + redirect to wherever the
 user came from (referrer query param). If unset → `/me`.

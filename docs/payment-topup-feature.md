@@ -166,9 +166,12 @@ display rules (App Store tiers, ¥-rounded WeChat tiers).
 
 ### 5.2 支付页 (PaymentScreen) — `/topup/checkout`
 
-This is the **provider-handoff** screen, not a checkout itself.
+This is the **receipt review + provider-handoff** screen, not a card-entry
+checkout itself.
 
 - Web shell: opens a Waffo checkout URL (or WeChat Pay JSAPI flow in CN).
+- Review state: shows the top-up receipt, editable billing email, selected
+  payment route, and policy acceptance before opening the hosted checkout.
 - iOS / Android shell: triggers native sheet via RevenueCat, never
   navigates away.
 - 微信 MP shell: invokes `wx.requestPayment` directly.
@@ -176,9 +179,9 @@ This is the **provider-handoff** screen, not a checkout itself.
 The unified UI element is a single state machine:
 
 ```
-idle → requesting → succeeded   ← happy path
-                 ↘ canceled    ← user dismissed
-                 ↘ failed      ← provider error, show retry
+review → requesting → succeeded   ← happy path
+                    ↘ canceled    ← user dismissed
+                    ↘ failed      ← provider error, show retry
 ```
 
 On success, the client polls `GET /api/user/balance` once and reflects

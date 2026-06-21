@@ -76,14 +76,15 @@ cost-table is the single source of truth — never hardcode prices elsewhere.
 
 ```
 TopupScreen
-   │  POST /api/billing/checkout  { sku }  |  { customAmountUsd }
+   │  POST /api/billing/checkout  { sku, billingEmail? }  |  { customAmountUsd, billingEmail? }
    ▼
 /api/billing/checkout
    │  • auth required (guest → 403 sign_in_required)
    │  • rate-limit 10 / 60s
    │  • resolve SKU / custom quote from @murmur/core
    │  • client.checkout.createSession({ productId, currency,
-   │      priceSnapshot, metadata, successUrl, orderMerchantExternalId })
+   │      buyerEmail?, priceSnapshot, metadata, successUrl,
+   │      orderMerchantExternalId })
    ▼
    { checkoutUrl }  ──▶  client opens Waffo-hosted checkout (new tab)
                               │  user pays
@@ -116,6 +117,8 @@ verified webhook.
 - `metadata` — `{ userId, skuId, notesGranted, purchaseKind, customAmountUsd? }`.
   This is the trust anchor: the webhook reads the SKU and grant amount back out
   of metadata, never from the client.
+- `buyerEmail` — optional editable billing/receipt email from checkout review,
+  falling back to the signed-in account email when present.
 - `successUrl` — `${origin}/topup/checkout?…&status=success`.
 - `orderMerchantExternalId` — `${userId}:${skuId}:${uuid}`.
 

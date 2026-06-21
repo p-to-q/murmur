@@ -19,6 +19,12 @@ const checkoutCreate = mock(async (payload: Record<string, unknown>) => {
 });
 const createdSessions: Array<Record<string, unknown>> = [];
 let waffoConfigured = true;
+let zpayConfigured = false;
+const zpayCreateOrder = mock(async () => ({
+  payUrl: "https://zpay.test/pay",
+  tradeNo: "zpay_trade_123",
+}));
+const purchaseInserts: Array<Record<string, unknown>> = [];
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
@@ -31,6 +37,22 @@ mock.module("@/lib/billing/waffo", () => ({
   isWaffoConfigured: () => waffoConfigured,
   centsToDisplayAmount: (cents: number) => (cents / 100).toFixed(2),
   displayAmountToCents: (amount: string) => Math.round(Number(amount) * 100),
+}));
+
+mock.module("@/lib/billing/zpay", () => ({
+  isZpayConfigured: () => zpayConfigured,
+  zpayCreateOrder,
+}));
+
+mock.module("@/lib/db/client", () => ({
+  db: {
+    insert: () => ({
+      values: (row: Record<string, unknown>) => {
+        purchaseInserts.push(row);
+        return Promise.resolve([]);
+      },
+    }),
+  },
 }));
 
 const { POST } = await import("./route");
@@ -57,19 +79,27 @@ beforeEach(async () => {
     sessionId: "sess_checkout",
   };
   createdSessions.length = 0;
+  purchaseInserts.length = 0;
   checkoutCreate.mockClear();
+  zpayCreateOrder.mockClear();
   waffoConfigured = true;
+  zpayConfigured = false;
 });
 
 describe("POST /api/billing/checkout", () => {
   it("creates a Waffo checkout session for a fixed SKU", async () => {
-    const response = await POST(buildRequest({ sku: "topup_120_notes" }));
+    const response = await POST(
+      buildRequest({
+        sku: "topup_120_notes",
+        billingEmail: " Receipt@Test.Local ",
+      }),
+    );
     expect(response.status).toBe(200);
     expect(createdSessions).toHaveLength(1);
     expect(createdSessions[0]).toMatchObject({
       productId: "PROD_test_topup",
       currency: "USD",
-      buyerEmail: "checkout@test.local",
+      buyerEmail: "receipt@test.local",
       metadata: {
         userId: "usr_checkout",
         skuId: "topup_120_notes",
@@ -82,6 +112,24 @@ describe("POST /api/billing/checkout", () => {
       successUrl: "http://test.local/topup/checkout?sku=topup_120_notes&currency=USD&status=success",
       priceSnapshot: { amount: "5.99", taxCategory: "digital_goods" },
     });
+  });
+
+  it("falls back to the signed-in account email when no billing email is supplied", async () => {
+    const response = await POST(buildRequest({ sku: "topup_120_notes" }));
+    expect(response.status).toBe(200);
+    expect(createdSessions[0]).toMatchObject({
+      buyerEmail: "checkout@test.local",
+    });
+  });
+
+  it("rejects malformed billing emails", async () => {
+    const response = await POST(
+      buildRequest({ sku: "topup_120_notes", billingEmail: "not-an-email" }),
+    );
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe("invalid_billing_email");
+    expect(createdSessions).toHaveLength(0);
   });
 
   it("creates a Waffo checkout session for a custom amount", async () => {
@@ -99,6 +147,31 @@ describe("POST /api/billing/checkout", () => {
       },
       successUrl: "http://test.local/topup/checkout?customAmountUsd=12&status=success",
       priceSnapshot: { amount: "12.00", taxCategory: "digital_goods" },
+    });
+  });
+
+  it("keeps the billing email on pending Zpay purchases", async () => {
+    zpayConfigured = true;
+
+    const response = await POST(
+      buildRequest({
+        sku: "topup_120_notes",
+        currency: "CNY",
+        payMethod: "wxpay",
+        billingEmail: "wechat-receipt@test.local",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(zpayCreateOrder).toHaveBeenCalledTimes(1);
+    expect(purchaseInserts).toHaveLength(1);
+    expect(purchaseInserts[0]).toMatchObject({
+      provider: "zpay",
+      currency: "CNY",
+      rawPayload: {
+        payMethod: "wxpay",
+        billingEmail: "wechat-receipt@test.local",
+      },
     });
   });
 

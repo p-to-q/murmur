@@ -154,7 +154,9 @@ resolves.
 selected pack to a wave-intensity bump. Priority: low (works, looks fine).
 
 ### B11. Checkout `/topup/checkout` — *handoff* 🟢
-**Now:** state machine (requesting→succeeded), rotating copy, centered Murmur loading note.
+**Now:** receipt review with editable billing email, terms acceptance, polished
+ticket-style receipt, then provider handoff state machine with centered Murmur
+loading note.
 **Plan:** keep minimal; tune copy + success moment. Priority: low.
 
 ### B12. VersionCardsOverlay.tsx — 🔴 ORPHAN
