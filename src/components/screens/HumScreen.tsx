@@ -133,7 +133,7 @@ function stopMediaStream(stream: MediaStream | null) {
 }
 
 function hasSeenOnboarding() {
-  if (typeof window === "undefined") return true;
+  if (typeof window === "undefined") return false;
   try {
     return !!window.localStorage.getItem(ONBOARDING_SEEN_STORAGE_KEY);
   } catch {
@@ -219,10 +219,15 @@ export function HumScreen() {
   const [showLoginWall, setShowLoginWall] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
   // Onboarding: first visit gently focuses the already-visible stage.
-  const [showOnboarding, setShowOnboarding] = useState(() => !hasSeenOnboarding());
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingRippling, setOnboardingRippling] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
   const orbButtonRef = useRef<HTMLButtonElement>(null);
-  const [orbCenter, setOrbCenter] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [orbCenter, setOrbCenter] = useState<{ x: number; y: number; size: number }>({
+    x: 0,
+    y: 0,
+    size: 0,
+  });
   const revealRadius = useMotionValue(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const unmountingRef = useRef(false);
@@ -328,6 +333,12 @@ export function HumScreen() {
     prefetchMusicEngineStatus();
   }, []);
 
+  useEffect(() => {
+    if (hasSeenOnboarding()) return;
+    setOnboardingStep(0);
+    setShowOnboarding(true);
+  }, []);
+
   // Measure orb center for the reveal mask
   useEffect(() => {
     if (!showOnboarding) return;
@@ -335,7 +346,11 @@ export function HumScreen() {
       const el = orbButtonRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      setOrbCenter({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      setOrbCenter({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        size: rect.width,
+      });
       if (revealRadius.get() === 0) {
         revealRadius.set(rect.width / 2 + 16);
       }
@@ -354,7 +369,11 @@ export function HumScreen() {
     const el = orbButtonRef.current;
     if (el) {
       const rect = el.getBoundingClientRect();
-      setOrbCenter({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      setOrbCenter({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        size: rect.width,
+      });
     }
     const maxDim = Math.max(window.innerWidth, window.innerHeight) * 1.5;
     fmAnimate(revealRadius, maxDim, {
@@ -766,6 +785,15 @@ export function HumScreen() {
     }
   };
 
+  const handleOnboardingPress = () => {
+    if (onboardingStep < 2) {
+      setOnboardingStep((step) => step + 1);
+      return;
+    }
+    triggerOnboardingReveal();
+    beginIdleCapture();
+  };
+
   const handleRecoveryAction = (action: HumRecoveryAction) => {
     switch (action.kind) {
       case "topup":
@@ -873,7 +901,7 @@ export function HumScreen() {
                 locked boxes. The outer max-width controls composition; the inner
                 min-heights protect the orb from headline rotation and async copy. */}
             <div className="hum-mirror-copy min-w-0 w-full text-center pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
-              <div className="flex flex-col justify-center min-h-[116px] md:min-h-[240px]">
+              <div className="flex flex-col justify-center min-h-[128px] md:min-h-[240px]">
               <AnimatePresence mode="wait">
               {isIdle && !humError && (
                 <motion.h1
@@ -942,10 +970,10 @@ export function HumScreen() {
             </div>
 
             {/* ── Right column: the orb ─────────────────────────── */}
-            <div className="relative flex min-h-[min(55vw,296px)] flex-col items-center justify-center md:min-h-[360px] xl:min-h-[clamp(340px,26vw,420px)]">
+            <div className="hum-orb-column relative flex flex-col items-center justify-center">
             {/* Orb container — responsive sizing */}
             <div
-              className="relative isolate h-[min(55vw,296px)] w-[min(55vw,296px)] shrink-0 overflow-visible md:h-[360px] md:w-[360px] xl:h-[clamp(340px,26vw,420px)] xl:w-[clamp(340px,26vw,420px)]"
+              className="hum-orb-shell relative isolate shrink-0 overflow-visible"
             >
               {/* Rotating conic glow behind the orb */}
               <motion.div
@@ -1008,8 +1036,7 @@ export function HumScreen() {
                 ref={orbButtonRef}
                 onClick={() => {
                   if (showOnboarding && !onboardingRippling) {
-                    triggerOnboardingReveal();
-                    beginIdleCapture();
+                    handleOnboardingPress();
                     return;
                   }
                   if (isRecording) {
@@ -1023,8 +1050,7 @@ export function HumScreen() {
                   if (e.key === " " || e.key === "Enter") {
                     e.preventDefault();
                     if (showOnboarding && !onboardingRippling) {
-                      triggerOnboardingReveal();
-                      beginIdleCapture();
+                      handleOnboardingPress();
                       return;
                     }
                     if (isRecording) {
@@ -1035,14 +1061,12 @@ export function HumScreen() {
                   }
                 }}
                 disabled={isProcessing}
-                // Keep the state-driven scale anchored so recording never
-                // drifts out of the glow/ring; idle hover restores the
-                // tactile "grow while held under the cursor" feel.
-                animate={{ scale: isRecording ? 0.92 : 1 }}
+                // Keep the button, glow, and progress ring on one fixed
+                // geometry; interaction feedback lives in light, not size.
+                animate={{ scale: 1 }}
                 whileHover={
                   isIdle
                     ? {
-                        scale: 1.05,
                         boxShadow:
                           "0 6px 48px rgba(255,255,255,0.78), 0 0 0 1px rgba(255,255,255,0.92)",
                       }
@@ -1275,8 +1299,8 @@ export function HumScreen() {
         orbCenter={orbCenter}
         revealRadius={revealRadius}
         rippling={onboardingRippling}
-        title={t("hum.onboarding.title")}
-        hint={t("hum.onboarding.hint")}
+        line={t(`hum.onboarding.line${onboardingStep + 1}`)}
+        step={onboardingStep}
       />
     </div>
   );
