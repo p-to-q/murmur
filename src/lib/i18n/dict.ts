@@ -172,6 +172,7 @@ export const DICT = {
   "hum.onboarding.line1": { zh: "嗯嗯↗嗯↘嗯嗯嗯？", en: "Mm-hm↗ mm↘ mm-mm?" },
   "hum.onboarding.line2": { zh: "Murmur 收集人类\n在散步、洗澡、拉大便时\n诞生的音乐灵感", en: "Murmur collects the songs\nhumans accidentally summon\non walks, in showers,\nand on the toilet." },
   "hum.onboarding.line3": { zh: "点这个圆圈\n先给它一点声音", en: "Tap this circle.\nGive it a little sound first." },
+  "hum.onboarding.next": { zh: "下一步", en: "Next" },
   "hum.eyebrow":       { zh: "从一句哼唱开始", en: "Start with a hum" },
   "hum.start":         { zh: "开始录音",   en: "Start recording" },
   "hum.stop":          { zh: "停止录音",   en: "Stop recording" },

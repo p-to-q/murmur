@@ -334,9 +334,12 @@ export function HumScreen() {
   }, []);
 
   useEffect(() => {
-    if (hasSeenOnboarding()) return;
-    setOnboardingStep(0);
-    setShowOnboarding(true);
+    const frame = window.requestAnimationFrame(() => {
+      if (!hasSeenOnboarding()) {
+        setShowOnboarding(true);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   // Measure orb center for the reveal mask
@@ -772,6 +775,16 @@ export function HumScreen() {
   const isIdle = recordingState === "idle";
   const isRecording = recordingState === "recording";
   const isProcessing = recordingState === "processing";
+  const onboardingLine = t(`hum.onboarding.line${onboardingStep + 1}`);
+  const onboardingA11yLine = onboardingLine.replace(/\s+/g, " ");
+  const orbAriaLabel =
+    showOnboarding && !onboardingRippling
+      ? onboardingStep < 2
+        ? `${t("hum.onboarding.next")}: ${onboardingA11yLine}`
+        : `${t("hum.start")}: ${onboardingA11yLine}`
+      : isIdle
+        ? t("hum.start")
+        : t("hum.stop");
 
   const errorCopy = humError ? copyForState(humError, t) : null;
   const recoveryPlan =
@@ -1086,7 +1099,7 @@ export function HumScreen() {
                   boxShadow:
                     "0 4px 40px rgba(255,255,255,0.6), 0 0 0 1px rgba(255,255,255,0.8)",
                 }}
-                aria-label={isIdle ? t("hum.start") : t("hum.stop")}
+                aria-label={orbAriaLabel}
               >
                 <AnimatePresence mode="wait">
                   {isIdle && !humError && (
@@ -1299,7 +1312,7 @@ export function HumScreen() {
         orbCenter={orbCenter}
         revealRadius={revealRadius}
         rippling={onboardingRippling}
-        line={t(`hum.onboarding.line${onboardingStep + 1}`)}
+        line={onboardingLine}
         step={onboardingStep}
       />
     </div>
