@@ -21,6 +21,8 @@ import { audioBufferToWav, blobToDataUrl } from "./render-wav";
 
 const MP3_BITRATE = 128;
 const SAMPLE_RATE = 44100;
+type ToneModule = typeof import("tone");
+type ToneModuleWithDefault = ToneModule & { default?: ToneModule };
 
 export type RenderedAudio = {
   dataUrl: string;
@@ -127,8 +129,9 @@ async function transcodeGeneratedClip(
 
 async function renderToBuffer(version: VibeVersion): Promise<AudioBuffer> {
   const ToneMod = await import("tone");
-  const Tone = ("default" in ToneMod && ToneMod.default && typeof (ToneMod.default as any).Offline === "function")
-    ? (ToneMod.default as typeof ToneMod)
+  const defaultTone = (ToneMod as ToneModuleWithDefault).default;
+  const Tone = defaultTone && typeof defaultTone.Offline === "function"
+    ? defaultTone
     : ToneMod;
   if (typeof Tone.Offline !== "function") {
     throw new Error("Tone.Offline unavailable after dynamic import");

@@ -169,8 +169,8 @@ export const DICT = {
   // ── HumScreen ───────────────────────────────────────────────────────
   "hum.brand.tagline": { zh: "MURMUR",     en: "MURMUR" },
   "hum.onboarding":    { zh: "轻触，开始创作", en: "Tap to begin" },
-  "hum.onboarding.title": { zh: "从一句哼唱开始", en: "Start with a hum" },
-  "hum.onboarding.hint":  { zh: "轻触白色圆圈，哼 15 秒以内。", en: "Tap the white circle and hum up to 15 seconds." },
+  "hum.onboarding.title": { zh: "轻触开始哼唱", en: "Tap to hum" },
+  "hum.onboarding.hint":  { zh: "15 秒以内，随时点停。", en: "Up to 15 seconds. Tap again to stop." },
   "hum.eyebrow":       { zh: "从一句哼唱开始", en: "Start with a hum" },
   "hum.start":         { zh: "开始录音",   en: "Start recording" },
   "hum.stop":          { zh: "停止录音",   en: "Stop recording" },

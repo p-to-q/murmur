@@ -88,6 +88,9 @@ export function TopupScreen() {
     () => getSavedCurrency() ?? undefined,
   );
   const { skus: regionalSkus, currency, customConfig } = useRegionalSkus(manualCurrency);
+  const [payMethodPreference, setPayMethodPreference] = useState<"card" | "wxpay">(() =>
+    (getSavedCurrency() ?? "USD") === "CNY" ? "wxpay" : "card",
+  );
 
   // Sync detected currency on first load when no saved preference
   const initializedRef = useRef(false);
@@ -95,26 +98,22 @@ export function TopupScreen() {
     if (!initializedRef.current && currency && !getSavedCurrency()) {
       initializedRef.current = true;
       setManualCurrency(currency);
-      if (currency === "CNY") setPayMethod("wxpay");
     }
   }, [currency]);
 
   const effectiveCurrency: Currency = manualCurrency ?? currency;
   const isCny = effectiveCurrency === "CNY";
+  const payMethod = isCny ? payMethodPreference : "card";
 
   // ── Payment method state ──────────────────────────────────────────
-  const [payMethod, setPayMethod] = useState<"card" | "wxpay">(() =>
-    (getSavedCurrency() ?? "USD") === "CNY" ? "wxpay" : "card",
-  );
-
   const handleCurrencyToggle = (c: Currency) => {
     setManualCurrency(c);
     saveCurrencyPreference(c);
-    if (c !== "CNY" && payMethod === "wxpay") setPayMethod("card");
+    if (c !== "CNY" && payMethodPreference === "wxpay") setPayMethodPreference("card");
   };
 
   const handlePayMethodChange = (m: "card" | "wxpay") => {
-    setPayMethod(m);
+    setPayMethodPreference(m);
     if (m === "wxpay" && effectiveCurrency !== "CNY") {
       setManualCurrency("CNY");
       saveCurrencyPreference("CNY");

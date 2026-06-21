@@ -64,15 +64,21 @@ export function useRegionalSkus(forceCurrency?: Currency): RegionalSkusResult {
   const cacheKey = target ?? "_auto";
   const hit = cacheMap[cacheKey] ?? null;
 
-  const [data, setData] = useState<CacheEntry | null>(hit);
-  const [isLoading, setIsLoading] = useState(hit === null);
+  const [state, setState] = useState<{
+    cacheKey: string;
+    data: CacheEntry | null;
+    isLoading: boolean;
+  }>(() => ({
+    cacheKey,
+    data: hit,
+    isLoading: hit === null,
+  }));
+
+  const currentData = hit ?? (state.cacheKey === cacheKey ? state.data : null);
+  const currentIsLoading = currentData === null && (state.cacheKey !== cacheKey || state.isLoading);
 
   useEffect(() => {
-    if (cacheMap[cacheKey]) {
-      setData(cacheMap[cacheKey]);
-      setIsLoading(false);
-      return;
-    }
+    if (cacheMap[cacheKey]) return;
 
     let cancelled = false;
     (async () => {
@@ -86,11 +92,15 @@ export function useRegionalSkus(forceCurrency?: Currency): RegionalSkusResult {
           custom: CustomConfig;
         };
         cacheMap[cacheKey] = payload;
-        if (!cancelled) setData(payload);
+        if (!cancelled) {
+          setState({ cacheKey, data: payload, isLoading: false });
+        }
       } catch {
         // Silent — callers fall back to hardcoded TOPUP_SKUS
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled && !cacheMap[cacheKey]) {
+          setState({ cacheKey, data: null, isLoading: false });
+        }
       }
     })();
 
@@ -100,14 +110,14 @@ export function useRegionalSkus(forceCurrency?: Currency): RegionalSkusResult {
   }, [cacheKey, target]);
 
   return {
-    skus: data?.skus ?? [],
-    currency: data?.currency ?? "USD",
-    customConfig: data?.custom ?? {
+    skus: currentData?.skus ?? [],
+    currency: currentData?.currency ?? "USD",
+    customConfig: currentData?.custom ?? {
       minAmount: 1,
       maxAmount: 999,
       notesPerUnit: 20,
       currency: "USD",
     },
-    isLoading,
+    isLoading: currentIsLoading,
   };
 }
