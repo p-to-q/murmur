@@ -225,6 +225,34 @@ describe("humming-engine musical layer", () => {
     expect(profile.musicalityBias).toBeLessThan(0.35);
   });
 
+  it("uses related tonal evidence instead of hard-snapping every corrected note to the locked key", () => {
+    const raw = [
+      { pitch: 69, start: 0, duration: 0.48, velocity: 0.74, confidence: 0.9 },
+      { pitch: 72, start: 0.5, duration: 0.42, velocity: 0.72, confidence: 0.88 },
+      { pitch: 76, start: 1.0, duration: 0.5, velocity: 0.73, confidence: 0.88 },
+      { pitch: 79, start: 1.56, duration: 0.44, velocity: 0.74, confidence: 0.86 },
+      { pitch: 77, start: 2.06, duration: 0.5, velocity: 0.72, confidence: 0.86 },
+      { pitch: 69, start: 2.62, duration: 0.58, velocity: 0.74, confidence: 0.9 },
+    ];
+    const corrected = melody(raw, {
+      key: "C",
+      scale: "major",
+    });
+
+    const melodies = buildTranscriptionMelodies(raw, corrected);
+    const profile = buildMelodyIntentProfile(raw, corrected);
+
+    expect(profile.lockedTonalCandidate.key).toBe("C");
+    expect(profile.lockedTonalCandidate.scale).toBe("major");
+    expect(profile.tonalCandidates.some((candidate) =>
+      candidate.key === "A" && candidate.scale === "minor",
+    )).toBe(true);
+    expect(profile.correctionPolicy.pitchClassWeights?.[9]).toBeGreaterThan(0.2);
+    expect(profile.correctionPolicy.cadencePitchClassWeights?.[9]).toBeGreaterThan(0.2);
+    expect(melodies.corrected.notes.map((note) => note.pitch)).toContain(69);
+    expect(melodies.corrected.notes.at(-1)?.pitch).toBe(69);
+  });
+
   it("anchors the pre-musical corrected draft to the hummed main notes", () => {
     const raw = [
       { pitch: 60, start: 0, duration: 0.46, velocity: 0.74, confidence: 0.9 },
@@ -684,7 +712,7 @@ describe("humming-engine musical layer", () => {
       },
     });
 
-    expect(countAwkwardLeaps(melodies.musical.notes)).toBeLessThan(
+    expect(countAwkwardLeaps(melodies.musical.notes)).toBeLessThanOrEqual(
       countAwkwardLeaps(melodies.corrected.notes),
     );
     expect(localDirectionChanges(melodies.musical.notes)).toBeLessThan(

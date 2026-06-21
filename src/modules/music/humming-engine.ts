@@ -39,6 +39,13 @@ const DORIAN_INTERVALS = [0, 2, 3, 5, 7, 9, 10] as const;
 const PHRYGIAN_INTERVALS = [0, 1, 3, 5, 7, 8, 10] as const;
 const PENTATONIC_MAJOR_INTERVALS = [0, 2, 4, 7, 9] as const;
 const PENTATONIC_MINOR_INTERVALS = [0, 3, 5, 7, 10] as const;
+const TONAL_RELATION_WEIGHTS = {
+  correct: 1,
+  fifth: 0.5,
+  relative: 0.3,
+  parallel: 0.2,
+  other: 0,
+} as const;
 
 export function buildTranscriptionMelodies(
   rawNotes: MelodyNote[],
@@ -70,8 +77,8 @@ export function buildTranscriptionMelodies(
 
   return {
     intent,
-    corrected: alignMelodyToOwnTonalCenter(corrected),
-    musical: alignMelodyToOwnTonalCenter(musical),
+    corrected: alignMelodyToOwnTonalCenter(corrected, melodyIntent),
+    musical: alignMelodyToOwnTonalCenter(musical, melodyIntent),
   };
 }
 
@@ -135,6 +142,7 @@ export function buildMelodyIntentProfile(
     ),
     correctionPolicy: buildCorrectionPolicy(
       lockedTonalCandidate,
+      tonalCandidates,
       confidence,
       musicalityBias,
       options.diagnostics,
@@ -1227,6 +1235,98 @@ function normalizeTonalConfidence(score: number, bestScore: number): number {
   return clamp((shifted * 0.65) + (relative * 0.35), 0, 1);
 }
 
+function buildRelatedTonalPitchClassWeights(
+  locked: TonalCandidate,
+  candidates: TonalCandidate[],
+): number[] {
+  const weights = new Array(12).fill(0);
+  const lockedRoot = KEY_NAMES.indexOf(locked.key as (typeof KEY_NAMES)[number]);
+  if (lockedRoot < 0) return weights;
+
+  const weightedCandidates = candidates.length > 0 ? candidates : [locked];
+  for (const candidate of weightedCandidates) {
+    const root = KEY_NAMES.indexOf(candidate.key as (typeof KEY_NAMES)[number]);
+    if (root < 0) continue;
+    const relation = tonalRelationToLocked(candidate, locked);
+    const relationWeight = TONAL_RELATION_WEIGHTS[relation];
+    if (relationWeight <= 0) continue;
+    const confidenceWeight = clamp(candidate.confidence, 0, 1);
+    const scalePcs = getScalePitchClasses(root, candidate.scale);
+    for (const pc of scalePcs) {
+      weights[pc] += relationWeight * confidenceWeight;
+    }
+  }
+
+  const lockedPcs = getScalePitchClasses(lockedRoot, locked.scale);
+  for (const pc of lockedPcs) {
+    weights[pc] = Math.max(weights[pc] ?? 0, TONAL_RELATION_WEIGHTS.correct);
+  }
+
+  const maxWeight = Math.max(...weights, 1);
+  return weights.map((weight) => clamp(weight / maxWeight, 0, 1));
+}
+
+function buildRelatedTonalCadencePitchClassWeights(
+  locked: TonalCandidate,
+  candidates: TonalCandidate[],
+): number[] {
+  const weights = new Array(12).fill(0);
+  const lockedRoot = KEY_NAMES.indexOf(locked.key as (typeof KEY_NAMES)[number]);
+  if (lockedRoot < 0) return weights;
+
+  const weightedCandidates = candidates.length > 0 ? candidates : [locked];
+  for (const candidate of weightedCandidates) {
+    const root = KEY_NAMES.indexOf(candidate.key as (typeof KEY_NAMES)[number]);
+    if (root < 0) continue;
+    const relation = tonalRelationToLocked(candidate, locked);
+    const relationWeight = TONAL_RELATION_WEIGHTS[relation];
+    if (relationWeight <= 0) continue;
+    const confidenceWeight = clamp(candidate.confidence, 0, 1);
+    for (const pc of getCadenceTargets(root, candidate.scale)) {
+      weights[pc] += relationWeight * confidenceWeight;
+    }
+  }
+
+  for (const pc of getCadenceTargets(lockedRoot, locked.scale)) {
+    weights[pc] = Math.max(weights[pc] ?? 0, TONAL_RELATION_WEIGHTS.correct);
+  }
+
+  const maxWeight = Math.max(...weights, 1);
+  return weights.map((weight) => clamp(weight / maxWeight, 0, 1));
+}
+
+function tonalRelationToLocked(
+  candidate: TonalCandidate,
+  locked: TonalCandidate,
+): keyof typeof TONAL_RELATION_WEIGHTS {
+  const candidateRoot = KEY_NAMES.indexOf(candidate.key as (typeof KEY_NAMES)[number]);
+  const lockedRoot = KEY_NAMES.indexOf(locked.key as (typeof KEY_NAMES)[number]);
+  if (candidateRoot < 0 || lockedRoot < 0) return "other";
+
+  const rootDelta = mod12(candidateRoot - lockedRoot);
+  const sameMode = tonalMode(candidate.scale) === tonalMode(locked.scale);
+  if (rootDelta === 0 && sameMode) return "correct";
+  if ((rootDelta === 7 || rootDelta === 5) && sameMode) return "fifth";
+  if (!sameMode) {
+    const candidateMode = tonalMode(candidate.scale);
+    const lockedMode = tonalMode(locked.scale);
+    if (
+      (candidateMode === "minor" && lockedMode === "major" && rootDelta === 9) ||
+      (candidateMode === "major" && lockedMode === "minor" && rootDelta === 3)
+    ) {
+      return "relative";
+    }
+    if (rootDelta === 0) return "parallel";
+  }
+  return "other";
+}
+
+function tonalMode(scale: CleanMelody["scale"]): "major" | "minor" {
+  return scale === "minor" || scale === "dorian" || scale === "phrygian"
+    ? "minor"
+    : "major";
+}
+
 function collectStableAnchorPitches(notes: MelodyNote[]): number[] {
   return notes
     .filter((note) => note.duration >= 0.32 || note.confidence >= 0.82)
@@ -1282,6 +1382,7 @@ function scoreIntentConfidence(
 
 function buildCorrectionPolicy(
   locked: TonalCandidate,
+  candidates: TonalCandidate[],
   confidence: number,
   musicalityBias: number,
   diagnostics: Partial<TranscriptionDiagnostics> | undefined,
@@ -1300,6 +1401,8 @@ function buildCorrectionPolicy(
 
   return {
     allowedPitchClasses: scalePcs,
+    pitchClassWeights: buildRelatedTonalPitchClassWeights(locked, candidates),
+    cadencePitchClassWeights: buildRelatedTonalCadencePitchClassWeights(locked, candidates),
     correctionStrength: weakInput ? 0.82 : 0.52,
     retuneSpeed: weakInput ? 0.78 : 0.4,
     timingQuantize: weakInput ? 0.6 : 0.3,
@@ -1660,12 +1763,18 @@ function buildAcceptanceRepairMelody(
   };
 }
 
-function alignMelodyToOwnTonalCenter(melody: CleanMelody): CleanMelody {
+function alignMelodyToOwnTonalCenter(
+  melody: CleanMelody,
+  melodyIntent?: MelodyIntentProfile,
+): CleanMelody {
   const root = KEY_NAMES.indexOf(melody.key as (typeof KEY_NAMES)[number]);
   if (melody.notes.length === 0 || root < 0) return melody;
 
   const scalePcs = getScalePitchClasses(root, melody.scale);
   const cadencePcs = getCadenceTargets(root, melody.scale);
+  const pitchClassWeights = melodyIntent?.correctionPolicy.pitchClassWeights;
+  const cadencePitchClassWeights = melodyIntent?.correctionPolicy.cadencePitchClassWeights;
+  const tonalConfidence = melodyIntent?.lockedTonalCandidate.confidence ?? 1;
   const notes = melody.notes.map((note, index) => {
     const notePc = mod12(note.pitch);
     if (
@@ -1674,11 +1783,21 @@ function alignMelodyToOwnTonalCenter(melody: CleanMelody): CleanMelody {
     ) {
       return { ...note };
     }
-    const snapped = nearestScalePitch(note.pitch, scalePcs);
+    const snapped = nearestWeightedScalePitch(
+      note,
+      scalePcs,
+      pitchClassWeights,
+      tonalConfidence,
+    );
     const isFinal = index === melody.notes.length - 1;
     const targetPitch =
       isFinal && cadencePcs.length > 0
-        ? nearestCadencePitch(snapped, cadencePcs)
+        ? nearestWeightedCadencePitch(
+            snapped,
+            cadencePcs,
+            cadencePitchClassWeights,
+            tonalConfidence,
+          )
         : snapped;
     return {
       ...note,
@@ -2721,6 +2840,104 @@ function nearestScalePitch(referencePitch: number, scalePcs: Set<number>): numbe
     }
   }
   return bestPitch;
+}
+
+function nearestWeightedScalePitch(
+  note: MelodyNote,
+  scalePcs: Set<number>,
+  pitchClassWeights: number[] | undefined,
+  tonalConfidence: number,
+): number {
+  if (!pitchClassWeights || pitchClassWeights.length < 12) {
+    return nearestScalePitch(note.pitch, scalePcs);
+  }
+
+  let bestPitch = nearestScalePitch(note.pitch, scalePcs);
+  let bestScore = Number.NEGATIVE_INFINITY;
+  const lockedCertainty = clamp(tonalConfidence, 0, 1);
+  const distanceWeight = 1.1 + note.confidence * 0.65 + lockedCertainty * 0.42;
+  const tonalWeight = 0.52 + (1 - lockedCertainty) * 0.42;
+  const structureWeight = note.duration >= 0.45 || note.confidence >= 0.86 ? 0.18 : 0;
+
+  for (let delta = -6; delta <= 6; delta++) {
+    const candidate = note.pitch + delta;
+    const pc = mod12(candidate);
+    const tonalSupportValue = pitchClassWeights[pc] ?? 0;
+    const relatedSupportThreshold = lockedCertainty >= 0.82 ? 1.1 : lockedCertainty >= 0.7 ? 0.62 : 0.38;
+    const supportedByRelatedKey =
+      tonalSupportValue >= relatedSupportThreshold &&
+      (pc === mod12(note.pitch) || note.confidence < 0.78 || Math.abs(delta) <= 1);
+    if (!scalePcs.has(pc) && !supportedByRelatedKey) continue;
+    const distancePenalty = Math.abs(delta) * distanceWeight;
+    const tonalSupport = tonalSupportValue * tonalWeight;
+    const lockedScaleSupport = scalePcs.has(pc) ? 0.16 * lockedCertainty : 0;
+    const preservesOriginalPc = pc === mod12(note.pitch) ? structureWeight : 0;
+    const score = tonalSupport + lockedScaleSupport + preservesOriginalPc - distancePenalty;
+    if (
+      score > bestScore ||
+      (score === bestScore && Math.abs(delta) < Math.abs(bestPitch - note.pitch))
+    ) {
+      bestPitch = candidate;
+      bestScore = score;
+    }
+  }
+
+  return bestPitch;
+}
+
+function nearestWeightedCadencePitch(
+  referencePitch: number,
+  cadencePcs: number[],
+  pitchClassWeights: number[] | undefined,
+  tonalConfidence: number,
+): number {
+  if (!pitchClassWeights || pitchClassWeights.length < 12) {
+    return nearestCadencePitch(referencePitch, cadencePcs);
+  }
+
+  const lockedCertainty = clamp(tonalConfidence, 0, 1);
+  const relatedCadencePcs = pitchClassWeights
+    .map((weight, pc) => ({ pc, weight }))
+    .filter(({ pc, weight }) =>
+      weight >= (lockedCertainty >= 0.82 ? 1.1 : lockedCertainty >= 0.7 ? 0.62 : 0.38) ||
+      (
+        pc === mod12(referencePitch) &&
+        weight >= 0.2 &&
+        nearestCadenceDistance(referencePitch, cadencePcs) >= 2
+      ) ||
+      cadencePcs.includes(pc),
+    );
+  if (relatedCadencePcs.length === 0) {
+    return nearestCadencePitch(referencePitch, cadencePcs);
+  }
+
+  let bestPitch = nearestCadencePitch(referencePitch, cadencePcs);
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const { pc, weight } of relatedCadencePcs) {
+    const candidate = nearestPitchForClass(referencePitch, pc);
+    const distance = Math.abs(candidate - referencePitch);
+    if (distance > 4 && !cadencePcs.includes(pc)) continue;
+    const lockedCadenceBonus = cadencePcs.includes(pc) ? 0.22 * lockedCertainty : 0;
+    const score = weight * (0.66 + (1 - lockedCertainty) * 0.34) + lockedCadenceBonus - distance * 0.72;
+    if (
+      score > bestScore ||
+      (score === bestScore && distance < Math.abs(bestPitch - referencePitch))
+    ) {
+      bestPitch = candidate;
+      bestScore = score;
+    }
+  }
+
+  return bestPitch;
+}
+
+function nearestCadenceDistance(referencePitch: number, cadencePcs: number[]): number {
+  if (cadencePcs.length === 0) return Number.POSITIVE_INFINITY;
+  return Math.min(
+    ...cadencePcs.map((pc) =>
+      Math.abs(nearestPitchForClass(referencePitch, pc) - referencePitch),
+    ),
+  );
 }
 
 function alignRhythmicSkeleton(

@@ -32,6 +32,7 @@ The profile records:
 
 - ranked key / scale candidates;
 - the locked tonal reading used for correction policy;
+- related-key pitch-class support used by corrected / musical snapping;
 - stable anchor pitches and phrase endings;
 - the rhythmic / pitch trace that the musical layer must still step on after
   stronger repair;
@@ -80,6 +81,16 @@ raw material rather than sacred truth:
 This layer is intentionally opinionated: a hummed sketch is allowed to stay a
 little human and imperfect, but it should not produce musically awkward or
 accidentally atonal lead lines downstream.
+
+The later melody-intent layer keeps the ranked tonal distribution around for
+related-key correction. Following the MIREX-style key-error taxonomy used by
+Korzeniowski/Widmer (correct, fifth, relative major/minor, parallel
+major/minor, other), nearby tonal candidates contribute soft pitch-class and
+cadence support before notes are snapped. Cadence support is tracked separately
+from broad scale membership, so related-key evidence can preserve a plausible
+relative-minor ending without treating every shared pitch class as a final
+resolution. This helps a hum that is really sitting in a relative minor / major
+or fifth relation avoid being made worse by one brittle global-key guess.
 
 ## 2. rhythm-engine — `src/lib/music/rhythm-engine.ts`
 
