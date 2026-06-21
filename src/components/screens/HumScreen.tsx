@@ -11,7 +11,7 @@ import { useAuthProviders } from "@/lib/hooks/use-auth-providers";
 import { Spinner } from "@/components/ui/spinner";
 import { AuthButtons } from "@/components/auth/auth-buttons";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate, animate as fmAnimate } from "framer-motion";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import {
@@ -201,6 +201,12 @@ export function HumScreen() {
   const isGuest = sessionStatus === "unauthenticated";
   const [showLoginWall, setShowLoginWall] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
+  // Onboarding: frosted glass reveal on first visit
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingRippling, setOnboardingRippling] = useState(false);
+  const orbButtonRef = useRef<HTMLButtonElement>(null);
+  const [orbCenter, setOrbCenter] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const revealRadius = useMotionValue(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const unmountingRef = useRef(false);
   const activeStreamRef = useRef<MediaStream | null>(null);
@@ -304,6 +310,49 @@ export function HumScreen() {
   useEffect(() => {
     prefetchMusicEngineStatus();
   }, []);
+
+  // Onboarding: show frosted glass on first browser visit
+  useEffect(() => {
+    const seen = window.localStorage.getItem("murmur:onboarding-seen");
+    if (!seen) setShowOnboarding(true);
+  }, []);
+
+  // Measure orb center for the reveal mask
+  useEffect(() => {
+    if (!showOnboarding) return;
+    const measure = () => {
+      const el = orbButtonRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setOrbCenter({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      if (revealRadius.get() === 0) {
+        revealRadius.set(rect.width / 2 + 16);
+      }
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [showOnboarding, revealRadius]);
+
+  const triggerOnboardingReveal = useCallback(() => {
+    setOnboardingRippling(true);
+    const el = orbButtonRef.current;
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      setOrbCenter({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+    }
+    const maxDim = Math.max(window.innerWidth, window.innerHeight) * 1.5;
+    fmAnimate(revealRadius, maxDim, {
+      duration: 1.4,
+      ease: [0.22, 1, 0.36, 1],
+      delay: 0.3,
+    });
+    setTimeout(() => {
+      setShowOnboarding(false);
+      setOnboardingRippling(false);
+      window.localStorage.setItem("murmur:onboarding-seen", "1");
+    }, 1700);
+  }, [revealRadius]);
 
   // Rotate idle headlines only while the landing state is truly quiet.
   useEffect(() => {
@@ -730,12 +779,12 @@ export function HumScreen() {
     ringCircumference - (recordingTime / MAX_DURATION) * ringCircumference;
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div className="relative overflow-hidden bg-[#F5F1EB]" style={{ minHeight: 'var(--content-h)' }}>
       {/* ─── Aurora background blobs — audio-reactive ───────────── */}
       {/* scale and opacity are driven by amplitudeSpring (0→1 RMS).
           CSS drift animations still run; framer-motion adds a reactivity
           layer on top via the `style` prop — seamless composition. */}
-      <div className="absolute inset-0 overflow-hidden" aria-hidden>
+      <div className="fixed inset-0 overflow-hidden" aria-hidden>
         {/* Pink/magenta blob — left side */}
         <motion.div
           className="aurora-blob-1 absolute rounded-full"
@@ -800,7 +849,7 @@ export function HumScreen() {
       </div>
 
       {/* ─── Content layout ──────────────────────────────────────── */}
-      <div className="relative z-10 min-h-svh flex flex-col">
+      <div className="relative z-10 flex flex-col" style={{ minHeight: 'var(--content-h)' }}>
         {/* ── Desktop: side-by-side layout / Mobile: stacked ──── */}
         <div className="flex-1 flex items-center justify-center px-6 md:px-12 lg:px-14 xl:px-24">
           <div className="hum-mirror-stage grid w-full max-w-md xl:max-w-none grid-cols-1 items-center justify-items-center gap-8">
@@ -940,40 +989,35 @@ export function HumScreen() {
 
               {/* White orb button */}
               <motion.button
-                onPointerDown={() => {
+                ref={orbButtonRef}
+                onClick={() => {
+                  if (showOnboarding && !onboardingRippling) {
+                    triggerOnboardingReveal();
+                    return;
+                  }
+                  if (isRecording) {
+                    stopRecording();
+                    return;
+                  }
                   if (isIdle && !humError && startPhaseRef.current === "idle") {
                     cancelPendingStartRef.current = false;
                     if (!passGuestGate()) return;
                     void startRecording();
                   }
                 }}
-                onPointerUp={() => {
-                  releaseCapture();
-                }}
-                onPointerLeave={() => {
-                  releaseCapture();
-                }}
-                onPointerCancel={() => {
-                  releaseCapture();
-                }}
                 onKeyDown={(e) => {
                   if (e.repeat) return;
-                  if (
-                    (e.key === " " || e.key === "Enter") &&
-                    isIdle &&
-                    !humError &&
-                    startPhaseRef.current === "idle"
-                  ) {
-                    e.preventDefault();
-                    cancelPendingStartRef.current = false;
-                    if (!passGuestGate()) return;
-                    void startRecording();
-                  }
-                }}
-                onKeyUp={(e) => {
                   if (e.key === " " || e.key === "Enter") {
                     e.preventDefault();
-                    releaseCapture();
+                    if (isRecording) {
+                      stopRecording();
+                      return;
+                    }
+                    if (isIdle && !humError && startPhaseRef.current === "idle") {
+                      cancelPendingStartRef.current = false;
+                      if (!passGuestGate()) return;
+                      void startRecording();
+                    }
                   }
                 }}
                 disabled={isProcessing}
@@ -1207,8 +1251,125 @@ export function HumScreen() {
             </motion.div>
           )}
         </AnimatePresence>
+
       </div>
+
+      {/* ── Onboarding frosted glass overlay ─────────────────────── */}
+      {/* Rendered outside the z-10 content container so z-[60] can
+          cover the bottom nav (z-50) at the layout level. */}
+      <AnimatePresence>
+        {showOnboarding && (
+          <motion.div
+            key="onboarding-frost"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="fixed inset-0 z-[60] pointer-events-none"
+          >
+            <OnboardingFrost
+              orbCenter={orbCenter}
+              revealRadius={revealRadius}
+              rippling={onboardingRippling}
+            />
+            {/* Guidance text — positioned just above the button cutout */}
+            {!onboardingRippling && orbCenter.y > 0 && (
+              <motion.div
+                className="absolute left-0 right-0 flex flex-col items-center pointer-events-none"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
+                style={{ top: orbCenter.y - 260 }}
+              >
+                <p className="hero-serif text-[#1A1A1A]/75 text-[26px] md:text-[34px] leading-[1.2] text-center">
+                  {t("hum.onboarding")}
+                </p>
+                <motion.svg
+                  width="20" height="20" viewBox="0 0 24 24" fill="none"
+                  className="mt-4 text-[#1A1A1A]/25"
+                  animate={{ y: [0, 5, 0] }}
+                  transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </motion.svg>
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+function OnboardingFrost({
+  orbCenter,
+  revealRadius,
+  rippling,
+}: {
+  orbCenter: { x: number; y: number };
+  revealRadius: ReturnType<typeof useMotionValue<number>>;
+  rippling: boolean;
+}) {
+  const maskRadius = useTransform(revealRadius, (r) => r || 0);
+  const maskEdge = useTransform(revealRadius, (r) => (r || 0) + 40);
+  const revealMask = useMotionTemplate`radial-gradient(circle at ${orbCenter.x}px ${orbCenter.y}px, transparent ${maskRadius}px, black ${maskEdge}px)`;
+
+  return (
+    <>
+      {/* Frosted glass with button cutout — mask always active */}
+      <motion.div
+        className="absolute inset-0"
+        style={{
+          backdropFilter: "blur(28px) saturate(1.5)",
+          WebkitBackdropFilter: "blur(28px) saturate(1.5)",
+          background: "rgba(245, 241, 235, 0.5)",
+          maskImage: revealMask,
+          WebkitMaskImage: revealMask,
+        }}
+      />
+      {/* Soft luminous edge around the button cutout */}
+      <motion.div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: `radial-gradient(circle at ${orbCenter.x}px ${orbCenter.y}px, transparent 0%, rgba(255,255,255,0.3) 48%, transparent 62%)`,
+          maskImage: revealMask,
+          WebkitMaskImage: revealMask,
+        }}
+      />
+
+      {/* Ripple rings */}
+      <AnimatePresence>
+        {rippling && (
+          <>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <motion.div
+                key={`ripple-${i}`}
+                className="absolute rounded-full pointer-events-none"
+                style={{
+                  left: orbCenter.x,
+                  top: orbCenter.y,
+                  translateX: "-50%",
+                  translateY: "-50%",
+                  border: `${1.5 - i * 0.15}px solid rgba(255, 255, 255, ${0.55 - i * 0.07})`,
+                  boxShadow: `0 0 ${12 - i * 1.5}px rgba(255,255,255,${0.18 - i * 0.02})`,
+                }}
+                initial={{ width: 0, height: 0, opacity: 0.85 }}
+                animate={{
+                  width: [0, Math.max(window.innerWidth, window.innerHeight) * 2.2],
+                  height: [0, Math.max(window.innerWidth, window.innerHeight) * 2.2],
+                  opacity: [0.85, 0],
+                }}
+                transition={{
+                  duration: 2.0,
+                  delay: i * 0.1,
+                  ease: [0.16, 1, 0.3, 1],
+                }}
+              />
+            ))}
+          </>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
