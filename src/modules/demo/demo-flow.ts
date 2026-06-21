@@ -17,8 +17,8 @@ export type DemoFlowState = {
 function buildDemoMelodyContext() {
   const result = buildFixtureTranscriptionResult(0);
   const selectedMelody = selectGenerationMelody(result, { repairBias: 0 });
-  const draftId = "demo-fixture-draft";
-  const flowId = "demo-fixture-flow";
+  const draftId = `demo-${crypto.randomUUID()}`;
+  const flowId = `demo-flow-${crypto.randomUUID()}`;
   return { selectedMelody, draftId, flowId };
 }
 

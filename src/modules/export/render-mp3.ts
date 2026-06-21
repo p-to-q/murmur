@@ -126,7 +126,13 @@ async function transcodeGeneratedClip(
 // ── Tone.Offline render ───────────────────────────────────────────────
 
 async function renderToBuffer(version: VibeVersion): Promise<AudioBuffer> {
-  const Tone = await import("tone");
+  const ToneMod = await import("tone");
+  const Tone = ("default" in ToneMod && ToneMod.default && typeof (ToneMod.default as any).Offline === "function")
+    ? (ToneMod.default as typeof ToneMod)
+    : ToneMod;
+  if (typeof Tone.Offline !== "function") {
+    throw new Error("Tone.Offline unavailable after dynamic import");
+  }
   const arr = version.arrangementState;
   const song = assembleSong(version);
 

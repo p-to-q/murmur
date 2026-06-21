@@ -76,7 +76,7 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
   if (!currentVersion) {
     if (demoEnabled) {
       return (
-        <div className="min-h-svh flex flex-col items-center justify-center bg-[#F5F1EB] px-6 text-center">
+        <div className="flex flex-col items-center justify-center bg-[#F5F1EB] px-6 text-center" style={{ minHeight: 'var(--content-h)' }}>
           <p className="mb-4 text-base text-[#8C8780]">{t("hum.proc.polishing")}</p>
         </div>
       );
@@ -313,20 +313,19 @@ function StudioContent({ version }: { version: VibeVersion }) {
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
-    <div className="relative min-h-svh bg-[#F5F1EB]">
+    <div className="relative bg-[#F5F1EB]" style={{ minHeight: 'var(--content-h)' }}>
       <PageBackdrop />
 
-      <div className="relative z-10 min-h-svh flex flex-col">
-        {/* ── Hero Card — full-width, squared top corners, rounded bottom ─────────── */}
+      <div className="relative z-10 mx-auto flex w-full max-w-[560px] flex-col px-4 md:pt-6" style={{ minHeight: 'var(--content-h)' }}>
+        {/* ── Hero Card — inset floating card, all corners rounded ─────────── */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, scale: 0.96, y: 8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ delay: 0.06, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-          className="relative cursor-pointer select-none overflow-hidden flex-shrink-0"
+          className="relative cursor-pointer select-none overflow-hidden flex-shrink-0 rounded-[28px]"
           style={{
-            height: "clamp(320px, 62vh, 600px)",
-            borderBottomLeftRadius: "24px",
-            borderBottomRightRadius: "24px",
+            height: "clamp(300px, 56vh, 540px)",
+            boxShadow: "0 8px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)",
           }}
           onClick={togglePlay}
         >
@@ -350,14 +349,11 @@ function StudioContent({ version }: { version: VibeVersion }) {
             />
           )}
 
-          {/* ── Header controls — positioned absolutely inside hero ──────────────────────── */}
-          <div
-            className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 md:px-8 py-3 z-20"
-            style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 24px)" }}
-          >
+          {/* ── Header controls ──────────────────────── */}
+          <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 md:px-7 pt-5 pb-3 z-20">
             <button
               onClick={(e) => { e.stopPropagation(); versionPreview.stop(); router.back(); }}
-              className="text-[12px] tracking-[0.04em] text-white hover:text-white/70 active:text-[#E5DDD0] transition-colors"
+              className="flex h-8 items-center gap-1 rounded-full bg-black/20 backdrop-blur-md px-3 text-[12px] tracking-[0.04em] text-white hover:bg-black/30 active:bg-black/40 transition-colors"
               aria-label={t("studio.back")}
             >
               ← {t("studio.back")}
@@ -365,7 +361,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
             {!magenta && (
               <button
                 onClick={(e) => { e.stopPropagation(); handleRestore(); }}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E5DDD0] bg-white/70 transition-colors hover:bg-white"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 backdrop-blur-md transition-colors hover:bg-white"
                 aria-label={t("studio.restore_toast")}
               >
                 <RotateCcw className="h-3.5 w-3.5 text-[#8C8780]" />
@@ -373,8 +369,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
             )}
           </div>
             {/* Darken overlays */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/12 via-transparent to-black/48 pointer-events-none" />
-
+            <div className="absolute inset-0 rounded-[28px] bg-gradient-to-b from-black/10 via-transparent to-black/50 pointer-events-none" />
 
             {/* Play disc — center */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -382,33 +377,35 @@ function StudioContent({ version }: { version: VibeVersion }) {
                 whileTap={{ scale: 0.88 }}
                 animate={isPlaying ? { scale: [1, 1.06, 1] } : { scale: 1 }}
                 transition={isPlaying ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" } : {}}
-                className={`flex h-16 w-16 items-center justify-center rounded-full border border-white/50 backdrop-blur-sm pointer-events-auto transition-colors ${
-                  isPlaying ? "bg-white/28" : "bg-white/12 hover:bg-white/20"
+                className={`flex h-[60px] w-[60px] items-center justify-center rounded-full backdrop-blur-md pointer-events-auto transition-all ${
+                  isPlaying
+                    ? "bg-white/30 shadow-[0_0_24px_rgba(255,255,255,0.2)]"
+                    : "bg-white/15 hover:bg-white/25 hover:shadow-[0_0_16px_rgba(255,255,255,0.1)]"
                 }`}
               >
                 {isPlaying ? (
-                  <Pause className="h-6 w-6 text-white" fill="white" />
+                  <Pause className="h-5 w-5 text-white" fill="white" />
                 ) : (
-                  <Play className="ml-1 h-6 w-6 text-white" fill="white" />
+                  <Play className="ml-0.5 h-5 w-5 text-white" fill="white" />
                 )}
               </motion.div>
             </div>
 
-            {/* Turntable — record + tonearm as one unit; needle drops when playing */}
+            {/* Turntable */}
             <Turntable
               isPlaying={isPlaying}
               accent={waveAccent}
-              className="absolute bottom-5 right-5 md:bottom-7 md:right-7 z-10 w-[132px] md:w-[180px] pointer-events-none"
+              className="absolute bottom-5 right-5 md:bottom-6 md:right-6 z-10 w-[120px] md:w-[160px] pointer-events-none"
             />
 
-            {/* Song info — lower left; right padding keeps clear of the turntable */}
-            <div className="absolute inset-x-0 bottom-0 p-6 pr-40 md:p-8 md:pr-60">
+            {/* Song info — lower left */}
+            <div className="absolute inset-x-0 bottom-0 p-5 pr-36 md:p-7 md:pr-52">
               <p className="text-[10px] uppercase tracking-[0.3em] text-white/55 mb-1.5">
                 {magenta ? magenta.vibeLabel[lang] : currentVersion.vibe}
               </p>
               <h2
-                className="hero-serif text-white leading-[1.0] md:text-[40px] lg:text-[48px]"
-                style={{ fontSize: "clamp(24px, 4vw, 48px)", letterSpacing: "-0.015em" }}
+                className="hero-serif text-white leading-[1.0] md:text-[36px] lg:text-[44px]"
+                style={{ fontSize: "clamp(22px, 3.8vw, 44px)", letterSpacing: "-0.015em" }}
               >
                 {currentVersion.title}
               </h2>
@@ -423,11 +420,11 @@ function StudioContent({ version }: { version: VibeVersion }) {
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.18, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="mx-5 md:mx-8 mt-3 relative"
+          className="mt-3 relative"
         >
           {/* ── Panel body — the control deck ── */}
           <div
-            className="overflow-hidden relative z-[1]"
+            className="overflow-hidden relative z-[1] rounded-[22px]"
             style={{
               background: [
                 "repeating-linear-gradient(90deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 8px)",
@@ -435,8 +432,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
                 "linear-gradient(160deg, #2A2118 0%, #1E1A12 45%, #241D14 100%)",
               ].join(", "),
               paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
-              borderBottomLeftRadius: "22px",
-              borderBottomRightRadius: "22px",
+              boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
             }}
           >
             {/* Breathing room above the prompt bar */}

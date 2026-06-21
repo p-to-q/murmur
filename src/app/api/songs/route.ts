@@ -253,8 +253,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    const cause = err instanceof Error && "cause" in err ? err.cause : undefined;
     log("song.create_failed", {
       error: err instanceof Error ? err.message : String(err),
+      code: isObject(err) && "code" in err ? (err as any).code : undefined,
+      detail: isObject(cause) && "message" in cause ? String((cause as any).message) : undefined,
       databaseUnavailable: isDatabaseUnavailable(err),
     }, {
       route: ROUTE,

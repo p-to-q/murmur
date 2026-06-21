@@ -17,8 +17,8 @@ describe("buildDemoFlowState", () => {
 
     const demo = buildDemoFlowState();
 
-    expect(demo.draftId).toBe("demo-fixture-draft");
-    expect(demo.flowId).toBe("demo-fixture-flow");
+    expect(demo.draftId).toStartWith("demo-");
+    expect(demo.flowId).toStartWith("demo-flow-");
     expect(demo.versions).toHaveLength(3);
     expect(demo.currentVersion.id).toBe(demo.versions[0]?.id);
     expect(demo.currentVersion.sourceType).toBe("demo");

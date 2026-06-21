@@ -60,7 +60,29 @@ export async function getSongByIdForUser(songId: string, userId: string) {
 }
 
 export async function createSong(data: typeof songs.$inferInsert) {
-  const rows = await db.insert(songs).values(data).returning();
+  const rows = await db
+    .insert(songs)
+    .values(data)
+    .onConflictDoUpdate({
+      target: songs.id,
+      set: {
+        title: data.title,
+        vibe: data.vibe,
+        vibeEn: data.vibeEn,
+        bpm: data.bpm,
+        keySignature: data.keySignature,
+        scaleType: data.scaleType,
+        duration: data.duration,
+        editCount: data.editCount,
+        editDepth: data.editDepth,
+        mp3DataUrl: data.mp3DataUrl,
+        visualConfig: data.visualConfig,
+        arrangementState: data.arrangementState,
+        tags: data.tags,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
   return rows[0];
 }
 
