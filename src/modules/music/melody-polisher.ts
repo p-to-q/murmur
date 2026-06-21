@@ -410,7 +410,10 @@ function anchorBonus(root: number, notes: MelodyNote[]): number {
   return boost;
 }
 
-function openingAnchorWeight(notes: MelodyNote[]): number {
+export function openingAnchorWeight(
+  notes: MelodyNote[],
+  opts?: { stableConfidence?: number },
+): number {
   const first = notes[0];
   if (!first) return 1;
   const next = notes[1];
@@ -429,14 +432,15 @@ function openingAnchorWeight(notes: MelodyNote[]): number {
         note.duration >= 0.18 &&
         note.confidence >= 0.7,
     );
-  const stable = first.duration >= 0.34 || first.confidence >= 0.88;
+  const stable =
+    first.duration >= 0.34 || first.confidence >= (opts?.stableConfidence ?? 0.88);
 
   if (pickupLike && !repeatedLater) return 0.9;
   if (stable || repeatedLater) return 1.25;
   return 1.05;
 }
 
-function closingAnchorWeight(notes: MelodyNote[]): number {
+export function closingAnchorWeight(notes: MelodyNote[]): number {
   const last = notes.at(-1);
   if (!last) return 1;
   const previous = notes.at(-2);
@@ -530,11 +534,11 @@ function fitNotesToTonalProfile(
   });
 }
 
-function shouldPreserveExpressiveNonScaleTone(
+export function shouldPreserveExpressiveNonScaleTone(
   notes: MelodyNote[],
   index: number,
   scalePcs: Set<number>,
-  anchorPcs: Set<number>,
+  resolutionPcs: ReadonlySet<number> | readonly number[],
 ): boolean {
   const note = notes[index];
   const prev = index > 0 ? notes[index - 1] : null;
@@ -557,12 +561,16 @@ function shouldPreserveExpressiveNonScaleTone(
     Math.abs(prev.pitch - next.pitch) <= 1 &&
     Math.abs(note.pitch - prev.pitch) <= 3 &&
     (prevInScale || nextInScale);
+  const nextPc = mod12(next.pitch);
+  const resolutionMatch = Array.isArray(resolutionPcs)
+    ? resolutionPcs.includes(nextPc)
+    : (resolutionPcs as ReadonlySet<number>).has(nextPc);
   const impliedHarmonyColor =
     note.duration >= 0.16 &&
     note.confidence >= 0.72 &&
     nextInScale &&
     Math.abs(next.pitch - note.pitch) <= 2 &&
-    (anchorPcs.has(mod12(next.pitch)) || Math.abs(note.pitch - prev.pitch) <= 5);
+    (resolutionMatch || Math.abs(note.pitch - prev.pitch) <= 5);
 
   return passingTone || neighborTone || impliedHarmonyColor;
 }

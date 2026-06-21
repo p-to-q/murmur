@@ -10,7 +10,13 @@ import type {
   TranscriptionMelodies,
 } from "@/modules/shared/types";
 import { detectBpm, detectPhrases } from "@/lib/music/rhythm-engine";
-import { estimateKey, polishMelody } from "./melody-polisher";
+import {
+  estimateKey,
+  polishMelody,
+  openingAnchorWeight,
+  closingAnchorWeight,
+  shouldPreserveExpressiveNonScaleTone,
+} from "./melody-polisher";
 
 const KEY_NAMES = [
   "C",
@@ -1142,50 +1148,9 @@ function buildPitchClassWeights(notes: MelodyNote[]): number[] {
 function intentTonalAnchorWeight(notes: MelodyNote[], index: number): number {
   const note = notes[index];
   if (!note) return 1;
-  if (index === 0) return intentOpeningAnchorWeight(notes);
-  if (index === notes.length - 1) return intentClosingAnchorWeight(notes);
+  if (index === 0) return openingAnchorWeight(notes, { stableConfidence: 0.86 });
+  if (index === notes.length - 1) return closingAnchorWeight(notes);
   return note.duration >= 0.42 || note.confidence >= 0.82 ? 1.3 : 1;
-}
-
-function intentOpeningAnchorWeight(notes: MelodyNote[]): number {
-  const first = notes[0];
-  if (!first) return 1;
-  const next = notes[1];
-  const firstEnd = first.start + first.duration;
-  const gapToNext = next ? Math.max(0, next.start - firstEnd) : 0;
-  const pickupLike =
-    Boolean(next) &&
-    first.duration <= 0.24 &&
-    gapToNext <= 0.16 &&
-    Math.abs(next!.pitch - first.pitch) >= 2;
-  const repeatedLater = notes
-    .slice(1)
-    .some(
-      (note) =>
-        mod12(note.pitch) === mod12(first.pitch) &&
-        note.duration >= 0.18 &&
-        note.confidence >= 0.7,
-    );
-  const stable = first.duration >= 0.34 || first.confidence >= 0.86;
-
-  if (pickupLike && !repeatedLater) return 0.9;
-  if (stable || repeatedLater) return 1.25;
-  return 1.05;
-}
-
-function intentClosingAnchorWeight(notes: MelodyNote[]): number {
-  const last = notes.at(-1);
-  if (!last) return 1;
-  const previous = notes.at(-2);
-  const tailLike =
-    Boolean(previous) &&
-    last.duration <= 0.18 &&
-    last.confidence < 0.72 &&
-    Math.abs(last.pitch - previous!.pitch) <= 2;
-
-  if (tailLike) return 0.95;
-  if (last.duration >= 0.38 || last.confidence >= 0.84) return 1.38;
-  return 1.12;
 }
 
 function scoreTonalCandidate(
@@ -1678,43 +1643,6 @@ function alignMelodyToOwnTonalCenter(melody: CleanMelody): CleanMelody {
     duration: melodyDuration(notes),
     contour: estimateContour(notes),
   };
-}
-
-function shouldPreserveExpressiveNonScaleTone(
-  notes: MelodyNote[],
-  index: number,
-  scalePcs: Set<number>,
-  cadencePcs: number[],
-): boolean {
-  const note = notes[index];
-  const prev = index > 0 ? notes[index - 1] : null;
-  const next = index < notes.length - 1 ? notes[index + 1] : null;
-  if (!note || !prev || !next) return false;
-  if (note.confidence < 0.68) return false;
-
-  const prevInScale = scalePcs.has(mod12(prev.pitch));
-  const nextInScale = scalePcs.has(mod12(next.pitch));
-  const directionInto = Math.sign(note.pitch - prev.pitch);
-  const directionOut = Math.sign(next.pitch - note.pitch);
-  const passingTone =
-    directionInto !== 0 &&
-    directionInto === directionOut &&
-    Math.abs(note.pitch - prev.pitch) <= 5 &&
-    Math.abs(next.pitch - note.pitch) <= 5 &&
-    Math.abs(next.pitch - prev.pitch) >= 2 &&
-    (prevInScale || nextInScale);
-  const neighborTone =
-    Math.abs(prev.pitch - next.pitch) <= 1 &&
-    Math.abs(note.pitch - prev.pitch) <= 3 &&
-    (prevInScale || nextInScale);
-  const impliedHarmonyColor =
-    note.duration >= 0.16 &&
-    note.confidence >= 0.72 &&
-    nextInScale &&
-    Math.abs(next.pitch - note.pitch) <= 2 &&
-    (cadencePcs.includes(mod12(next.pitch)) || Math.abs(note.pitch - prev.pitch) <= 5);
-
-  return passingTone || neighborTone || impliedHarmonyColor;
 }
 
 function finalizeSonglikeMusicalMelody(
