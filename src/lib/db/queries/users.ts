@@ -5,6 +5,7 @@ import { users, type User } from "../schema/users";
 import { externalIdentities } from "../schema/external-identities";
 import { notesLedger } from "../schema/notes-ledger";
 import { GRANTS, LOCAL_CREATOR_FREE_NOTES } from "@murmur/core";
+import type { UserRegistrationKind } from "@/lib/auth/registration-kind";
 
 export async function getUserById(id: string): Promise<User | undefined> {
   const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
@@ -129,7 +130,7 @@ export async function createLocalCreatorUser(): Promise<User> {
  */
 export async function upsertOAuthUser(
   profile: OAuthProfileInput,
-): Promise<{ userId: string; created: boolean }> {
+): Promise<{ userId: string; created: boolean; registrationKind: UserRegistrationKind }> {
   const { provider, externalId } = profile;
   const email = normalizeEmail(profile.email);
   const name = profile.name?.trim() || email.split("@")[0];
@@ -152,7 +153,7 @@ export async function upsertOAuthUser(
       .update(users)
       .set({ name, avatarUrl, updatedAt: new Date() })
       .where(eq(users.id, identity.userId));
-    return { userId: identity.userId, created: false };
+    return { userId: identity.userId, created: false, registrationKind: "existing_identity" };
   }
 
   return db.transaction(async (tx) => {
@@ -164,9 +165,11 @@ export async function upsertOAuthUser(
 
     let userId: string;
     let created: boolean;
+    let registrationKind: UserRegistrationKind;
     if (existingByEmail) {
       userId = existingByEmail.id;
       created = false;
+      registrationKind = "existing_user";
       await tx
         .update(users)
         .set({ name, avatarUrl, updatedAt: new Date() })
@@ -179,6 +182,7 @@ export async function upsertOAuthUser(
       if (localCreator) {
         userId = localCreator.id;
         created = false;
+        registrationKind = "local_creator_promotion";
         await promoteLocalCreatorToRegistered(tx, {
           userId,
           email,
@@ -188,6 +192,7 @@ export async function upsertOAuthUser(
       } else {
         userId = ulid();
         created = true;
+        registrationKind = "new_user";
         await tx.insert(users).values({
           id: userId,
           email,
@@ -214,7 +219,7 @@ export async function upsertOAuthUser(
       })
       .returning({ userId: externalIdentities.userId });
 
-    if (inserted[0]) return { userId: inserted[0].userId, created };
+    if (inserted[0]) return { userId: inserted[0].userId, created, registrationKind };
 
     const [winner] = await tx
       .select({ userId: externalIdentities.userId })
@@ -230,14 +235,14 @@ export async function upsertOAuthUser(
     if (!winner) {
       throw new Error("identity upsert: conflict fired with no resolvable row");
     }
-    return { userId: winner.userId, created: false };
+    return { userId: winner.userId, created: false, registrationKind: "existing_identity" };
   });
 }
 
 /** @deprecated Use {@link upsertOAuthUser}. */
 export async function upsertGoogleUser(
   profile: GoogleProfileInput,
-): Promise<{ userId: string; created: boolean }> {
+): Promise<{ userId: string; created: boolean; registrationKind: UserRegistrationKind }> {
   return upsertOAuthUser({
     provider: "google",
     externalId: profile.googleId,

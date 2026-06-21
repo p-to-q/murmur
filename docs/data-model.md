@@ -40,8 +40,9 @@ v2-0005  purchases
 v2-0006  songs.alter           (add melody jsonb + mp3Url; nullable)
 v2-0007  songs.backfill        (one-off, see §3.1)
 v2-0008  events-webhook
-v2-0009  rate-limits           (optional; redis preferred)
-v2-0010  audit-events          (optional; clickhouse preferred)
+v2-0009  share-referrals       (invite-link attribution)
+v2-0010  rate-limits           (optional; redis preferred)
+v2-0011  audit-events          (optional; clickhouse preferred)
 ```
 
 Each migration must be reversible. Drizzle generates `up.sql` +
@@ -200,7 +201,40 @@ Acquires `SELECT ... FOR UPDATE` on the user row, checks balance,
 inserts ledger row, updates balance, commits. Returns the typed
 result.
 
-### 3.5 `purchases` (NEW)
+### 3.5 `share_referrals` (NEW)
+
+```ts
+export const shareReferrals = pgTable(
+  "share_referrals",
+  {
+    id:               text("id").primaryKey(),
+    referrerUserId:   text("referrer_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    inviteeUserId:    text("invitee_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    status:           varchar("status", { length: 16 }).notNull().default("settled"),
+    source:           varchar("source", { length: 32 }).notNull(),
+    registrationKind: varchar("registration_kind", { length: 32 }).notNull(),
+    rewardNotes:      integer("reward_notes").notNull(),
+    referrerLedgerId: text("referrer_ledger_id").notNull(),
+    inviteeLedgerId:  text("invitee_ledger_id").notNull(),
+    metadata:         jsonb("metadata").$type<Record<string, unknown>>().notNull().default(sql`'{}'`),
+    createdAt:        timestamp("created_at").notNull().defaultNow(),
+    settledAt:        timestamp("settled_at"),
+  },
+  (t) => ({
+    byReferrer:    index("share_referrals_referrer_idx").on(t.referrerUserId, t.createdAt),
+    byStatus:      index("share_referrals_status_idx").on(t.status, t.createdAt),
+    uniqueInvitee: uniqueIndex("share_referrals_invitee_idx").on(t.inviteeUserId),
+  }),
+);
+```
+
+Referral rewards settle only during a new registration or Local Creator ->
+registered promotion. Existing registered users who later open a `?ref=` link
+cannot create a referral reward. The notes ledger remains the balance audit
+trail; this table records product attribution, enforces one settled referrer per
+invitee, and stores the ledger row ids created in the same transaction.
+
+### 3.6 `purchases` (NEW)
 
 ```ts
 export const purchases = pgTable(
@@ -239,7 +273,7 @@ Lifecycle:
 The live web write path (Waffo `order.completed` → `purchases` +
 `notes_ledger`) is documented in [billing-waffo.md](billing-waffo.md).
 
-### 3.6 `songs` (extended)
+### 3.7 `songs` (extended)
 
 Current shape in
 [songs.ts](../src/lib/db/schema/songs.ts). v2
@@ -288,7 +322,7 @@ Indexes:
 - `songs_user_id_idx ON (user_id, created_at DESC)` (already present
   in effect; verify).
 
-### 3.7 `events_webhook` (NEW)
+### 3.8 `events_webhook` (NEW)
 
 ```ts
 export const eventsWebhook = pgTable(
@@ -316,7 +350,7 @@ export const eventsWebhook = pgTable(
 Used by every webhook route (`api-conventions.md` §10). Hard-deleted
 after 90 days by a retention job.
 
-### 3.8 `audit_events` (OPTIONAL; postpone if backed externally)
+### 3.9 `audit_events` (OPTIONAL; postpone if backed externally)
 
 If Codex backs the `memory.reportAction` adapter with Postgres rather
 than Clickhouse, this table exists:
@@ -345,7 +379,7 @@ Codex picks Postgres for v2 and migrates to Clickhouse only when row
 counts demand. Retention: 180 days, downsample weekly to a slim
 aggregate table.
 
-### 3.9 `rate_limits` (OPTIONAL; Redis preferred)
+### 3.10 `rate_limits` (OPTIONAL; Redis preferred)
 
 If Codex runs without Redis, fall back to:
 

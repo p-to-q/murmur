@@ -2,17 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { resolveRequestAuth } from "@/lib/auth";
 import {
-  claimShareReferral,
   canUseShareReferral,
+  getSettledShareReferralForInvitee,
   normalizeReferralUserId,
-  SHARE_REFERRAL_REWARD_NOTES,
 } from "@/lib/db/queries/share-referrals";
-import { SHARE_REFERRAL_COOKIE } from "@/lib/api/share-referral-constants";
-import { log } from "@/lib/observability/log";
+import { clearShareReferralCookie, readShareReferrerFromRequest } from "@/lib/api/share-referral-server";
 
 export const runtime = "nodejs";
-
-const ROUTE = "/api/share/claim";
 
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
@@ -37,49 +33,32 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const result = await claimShareReferral({ referrerId, inviteeId });
+  const result = await getSettledShareReferralForInvitee({ referrerId, inviteeId });
   if (!result.ok) {
-    const status = result.reason === "invalid_referrer" ? 404 : 400;
-    return NextResponse.json(
+    const response = NextResponse.json(
       { error: result.reason, requestId },
-      { status, headers: { "X-Request-Id": requestId } },
+      {
+        status: statusForReferralError(result.reason),
+        headers: { "X-Request-Id": requestId },
+      },
     );
+    return clearShareReferralCookie(response);
   }
-
-  log("notes.granted", {
-    reason: "grant:referral",
-    amount: SHARE_REFERRAL_REWARD_NOTES,
-    referrerId,
-    inviteeId,
-    duplicate: result.duplicate,
-  }, {
-    route: ROUTE,
-    requestId,
-    userId: inviteeId,
-    sessionId: auth.sessionId,
-  });
 
   const response = NextResponse.json(
     {
       ok: true,
-      notesGranted: result.duplicate ? 0 : SHARE_REFERRAL_REWARD_NOTES,
-      duplicate: result.duplicate,
+      notesGranted: 0,
+      duplicate: true,
       requestId,
     },
     { headers: { "X-Request-Id": requestId } },
   );
-  response.cookies.set(SHARE_REFERRAL_COOKIE, "", {
-    path: "/",
-    maxAge: 0,
-    sameSite: "lax",
-  });
-  return response;
+  return clearShareReferralCookie(response);
 }
 
 async function readReferrerId(request: NextRequest): Promise<string | null> {
-  const cookieReferrer =
-    request.cookies?.get(SHARE_REFERRAL_COOKIE)?.value ??
-    parseCookieHeader(request.headers.get("cookie"), SHARE_REFERRAL_COOKIE);
+  const cookieReferrer = readShareReferrerFromRequest(request);
   if (cookieReferrer) return cookieReferrer;
 
   try {
@@ -90,11 +69,11 @@ async function readReferrerId(request: NextRequest): Promise<string | null> {
   }
 }
 
-function parseCookieHeader(cookieHeader: string | null, name: string): string | null {
-  if (!cookieHeader) return null;
-  for (const part of cookieHeader.split(";")) {
-    const [rawKey, ...rawValue] = part.trim().split("=");
-    if (rawKey === name) return decodeURIComponent(rawValue.join("="));
-  }
-  return null;
+function statusForReferralError(
+  reason: Exclude<Awaited<ReturnType<typeof getSettledShareReferralForInvitee>>, { ok: true }>["reason"],
+): number {
+  if (reason === "invalid_referrer") return 404;
+  if (reason === "grant_failed") return 500;
+  if (reason === "registration_required" || reason === "ineligible_invitee") return 409;
+  return 400;
 }

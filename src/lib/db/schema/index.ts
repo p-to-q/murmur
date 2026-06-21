@@ -6,3 +6,4 @@ export * from "./sessions";
 export * from "./external-identities";
 export * from "./events-webhook";
 export * from "./email-verification-codes";
+export * from "./share-referrals";
