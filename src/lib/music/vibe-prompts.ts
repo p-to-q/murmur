@@ -1,4 +1,6 @@
 import { mulberry32, hashString } from "@/lib/music/seeded-random";
+import { buildEnglishTitleCandidates } from "@/lib/music/title-suggestions";
+import type { Lang } from "@/lib/i18n/dict";
 import type { CleanMelody } from "@/modules/shared/types";
 
 /**
@@ -36,42 +38,42 @@ type InstrumentEntry = { en: string; zh: string };
 type SceneEntry = { en: string; zh: string };
 
 const GENRES: GenreEntry[] = [
-  { en: "lo-fi hip hop", zh: "慵懒节拍", energy: 0.35, title: "Lo-fi" },
-  { en: "synthwave", zh: "霓虹合成", energy: 0.7, title: "Synthwave" },
-  { en: "city pop", zh: "都市流行", energy: 0.65, title: "City Pop" },
-  { en: "bossa nova", zh: "巴萨诺瓦", energy: 0.45, title: "Bossa" },
-  { en: "ambient electronic", zh: "氛围电子", energy: 0.25, title: "Ambient" },
-  { en: "jazz fusion", zh: "爵士融合", energy: 0.6, title: "Fusion" },
-  { en: "dream pop instrumental", zh: "梦境流行", energy: 0.45, title: "Dream Pop" },
-  { en: "funk groove", zh: "放克律动", energy: 0.8, title: "Funk" },
-  { en: "disco", zh: "迪斯科", energy: 0.85, title: "Disco" },
-  { en: "deep house", zh: "深邃浩室", energy: 0.75, title: "Deep House" },
-  { en: "drum and bass", zh: "鼓打贝斯", energy: 0.9, title: "DnB" },
-  { en: "trip hop", zh: "迷幻节拍", energy: 0.4, title: "Trip Hop" },
-  { en: "post-rock", zh: "后摇滚", energy: 0.55, title: "Post-rock" },
-  { en: "neo-soul", zh: "新灵魂乐", energy: 0.5, title: "Neo-soul" },
-  { en: "afrobeat", zh: "非洲节拍", energy: 0.8, title: "Afrobeat" },
-  { en: "reggae dub", zh: "雷鬼回响", energy: 0.55, title: "Dub" },
-  { en: "flamenco guitar", zh: "弗拉门戈", energy: 0.65, title: "Flamenco" },
-  { en: "celtic folk", zh: "凯尔特民谣", energy: 0.45, title: "Celtic" },
-  { en: "bluegrass", zh: "蓝草乡村", energy: 0.7, title: "Bluegrass" },
-  { en: "solo piano", zh: "独白钢琴", energy: 0.3, title: "Piano" },
-  { en: "baroque chamber strings", zh: "巴洛克弦乐", energy: 0.5, title: "Baroque" },
-  { en: "cinematic film score", zh: "电影配乐", energy: 0.55, title: "Score" },
-  { en: "epic orchestral", zh: "史诗管弦", energy: 0.75, title: "Orchestral" },
-  { en: "vaporwave", zh: "蒸汽波", energy: 0.4, title: "Vaporwave" },
-  { en: "chillwave", zh: "冷感浪潮", energy: 0.45, title: "Chillwave" },
-  { en: "UK garage", zh: "英伦车库", energy: 0.8, title: "Garage" },
-  { en: "breakbeat", zh: "碎拍", energy: 0.85, title: "Breakbeat" },
-  { en: "surf rock", zh: "冲浪摇滚", energy: 0.7, title: "Surf Rock" },
-  { en: "psychedelic rock", zh: "迷幻摇滚", energy: 0.65, title: "Psych Rock" },
-  { en: "tango", zh: "探戈", energy: 0.6, title: "Tango" },
-  { en: "gamelan ensemble", zh: "甘美兰", energy: 0.5, title: "Gamelan" },
-  { en: "koto and shakuhachi", zh: "和风筝笛", energy: 0.35, title: "Koto" },
-  { en: "guzheng meditation", zh: "古筝冥想", energy: 0.3, title: "Guzheng" },
-  { en: "minimal techno", zh: "极简铁克诺", energy: 0.7, title: "Techno" },
-  { en: "swing jazz", zh: "摇摆爵士", energy: 0.7, title: "Swing" },
-  { en: "music box lullaby", zh: "八音盒摇篮", energy: 0.25, title: "Lullaby" },
+  { en: "lo-fi hip hop", zh: "小楼昨夜", energy: 0.35, title: "Lo-fi Hip Hop" },
+  { en: "synthwave", zh: "星河欲转", energy: 0.7, title: "Synthwave" },
+  { en: "city pop", zh: "灯火阑珊", energy: 0.65, title: "City Pop" },
+  { en: "bossa nova", zh: "醉后清风", energy: 0.45, title: "Bossa Nova" },
+  { en: "ambient electronic", zh: "风烟俱净", energy: 0.25, title: "Ambient Electronic" },
+  { en: "jazz fusion", zh: "风花雪月", energy: 0.6, title: "Jazz Fusion" },
+  { en: "dream pop instrumental", zh: "如花美眷", energy: 0.45, title: "Dream Pop" },
+  { en: "funk groove", zh: "落日熔金", energy: 0.8, title: "Funk Groove" },
+  { en: "disco", zh: "千年万岁", energy: 0.85, title: "Disco" },
+  { en: "deep house", zh: "烟波江上", energy: 0.75, title: "Deep House" },
+  { en: "drum and bass", zh: "长风万里", energy: 0.9, title: "Drum & Bass" },
+  { en: "trip hop", zh: "烟波江上", energy: 0.4, title: "Trip Hop" },
+  { en: "post-rock", zh: "苍山负雪", energy: 0.55, title: "Post-Rock" },
+  { en: "neo-soul", zh: "似水流年", energy: 0.5, title: "Neo-Soul" },
+  { en: "afrobeat", zh: "长风万里", energy: 0.8, title: "Afrobeat" },
+  { en: "reggae dub", zh: "一滩鸥鹭", energy: 0.55, title: "Reggae Dub" },
+  { en: "flamenco guitar", zh: "胡笳十八", energy: 0.65, title: "Flamenco Guitar" },
+  { en: "celtic folk", zh: "春山可望", energy: 0.45, title: "Celtic Folk" },
+  { en: "bluegrass", zh: "小楼昨夜", energy: 0.7, title: "Bluegrass" },
+  { en: "solo piano", zh: "疏影横斜", energy: 0.3, title: "Solo Piano" },
+  { en: "baroque chamber strings", zh: "素月流天", energy: 0.5, title: "Chamber Strings" },
+  { en: "cinematic film score", zh: "无心可猜", energy: 0.55, title: "Cinematic Score" },
+  { en: "epic orchestral", zh: "千年万岁", energy: 0.75, title: "Orchestral" },
+  { en: "vaporwave", zh: "似水流年", energy: 0.4, title: "Vaporwave" },
+  { en: "chillwave", zh: "醉后清风", energy: 0.45, title: "Chillwave" },
+  { en: "UK garage", zh: "夜雨寄北", energy: 0.8, title: "UK Garage" },
+  { en: "breakbeat", zh: "无心可猜", energy: 0.85, title: "Breakbeat" },
+  { en: "surf rock", zh: "一滩鸥鹭", energy: 0.7, title: "Surf Rock" },
+  { en: "psychedelic rock", zh: "风花雪月", energy: 0.65, title: "Psych Rock" },
+  { en: "tango", zh: "两处闲愁", energy: 0.6, title: "Tango" },
+  { en: "gamelan ensemble", zh: "落日熔金", energy: 0.5, title: "Gamelan" },
+  { en: "koto and shakuhachi", zh: "春山可望", energy: 0.35, title: "Koto & Shakuhachi" },
+  { en: "guzheng meditation", zh: "素月流天", energy: 0.3, title: "Guzheng Meditation" },
+  { en: "minimal techno", zh: "风烟俱净", energy: 0.7, title: "Minimal Techno" },
+  { en: "swing jazz", zh: "醉后清风", energy: 0.7, title: "Swing Jazz" },
+  { en: "music box lullaby", zh: "如花美眷", energy: 0.25, title: "Music Box Lullaby" },
 ];
 
 const MOODS: MoodEntry[] = [
@@ -128,6 +130,12 @@ const SCENES: SceneEntry[] = [
   { en: "while rain taps the window", zh: "雨点敲窗" },
   { en: "drifting through fog", zh: "雾中漂浮" },
 ];
+
+export function displayStyleLabelForGenre(genre: string, lang: Lang = "en"): string {
+  const match = GENRES.find((entry) => normalized(entry.en) === normalized(genre));
+  if (!match) return genre;
+  return lang === "zh" ? match.zh : match.title;
+}
 
 const VISUAL_PRESETS_BY_ENERGY: Array<{ max: number; presets: string[] }> = [
   { max: 0.4, presets: ["rain_glass", "dust_room"] },
@@ -214,7 +222,15 @@ export function createVibePromptBatch(options: {
         scene: scene?.en,
         energy,
       },
-      title: `${capitalize(mood.en)} ${genre.title}`,
+      title: buildEnglishTitleCandidates(
+        {
+          seed: `${options.seed}:${options.batchIndex}:${slot}:${genre.en}`,
+          genre: genre.en,
+          mood: mood.en,
+          scene: scene?.en,
+        },
+        1,
+      )[0]!,
       gradient: gradientFor(mood, rng),
       energy,
       visualPreset: visualPresetFor(energy, rng),
@@ -222,6 +238,6 @@ export function createVibePromptBatch(options: {
   });
 }
 
-function capitalize(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
+function normalized(value: string): string {
+  return value.toLowerCase().trim();
 }

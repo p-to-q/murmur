@@ -31,7 +31,8 @@ import { toast } from "sonner";
 
 import { memory } from "@/lib/platform/memory";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
-import { useTranslator } from "@/lib/i18n";
+import { useI18nStore, useTranslator } from "@/lib/i18n";
+import type { Lang } from "@/lib/i18n/dict";
 import { getPlayer, startAudioContext } from "@/lib/music/tone-player";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
@@ -64,6 +65,7 @@ const CJK_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
 export function SongDetailScreen({ songId }: { songId: string }) {
   const router = useRouter();
   const t = useTranslator();
+  const lang = useI18nStore((s) => s.lang);
   const setCurrentVersion = useMurmurStore((state) => state.setCurrentVersion);
   const setVibeVersions = useMurmurStore((state) => state.setVibeVersions);
   const setCurrentDraftId = useMurmurStore((state) => state.setCurrentDraftId);
@@ -500,7 +502,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
               <div className="absolute left-6 top-6 right-6">
                 <p className="text-[10px] uppercase tracking-[0.32em] text-white/72">
-                  {displayVibeLabel(song.vibe, song.tags)}
+                  {displayVibeLabel(song.vibe, song.tags, lang)}
                 </p>
                 <h1
                   className={`${titleFontClass} mt-3 text-[34px] leading-[0.98] text-white md:text-[52px]`}
@@ -588,6 +590,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               parentSong={effectiveParentSong}
               rootSong={effectiveRootSong}
               t={t}
+              lang={lang}
               onOpenSong={(id) => router.push(`/song/${id}`)}
             />
 
@@ -828,12 +831,14 @@ function LineagePanel({
   parentSong,
   rootSong,
   t,
+  lang,
   onOpenSong,
 }: {
   song: Song;
   parentSong: Song | null;
   rootSong: Song | null;
   t: (key: string) => string;
+  lang: Lang;
   onOpenSong: (id: string) => void;
 }) {
   const hasBranchContext =
@@ -893,6 +898,7 @@ function LineagePanel({
               }
               song={node.song}
               current={node.song.id === song.id}
+              lang={lang}
               onOpenSong={onOpenSong}
             />
           </div>
@@ -987,11 +993,13 @@ function LineageTrailCard({
   label,
   song,
   current,
+  lang,
   onOpenSong,
 }: {
   label: string;
   song: Song;
   current: boolean;
+  lang: Lang;
   onOpenSong: (id: string) => void;
 }) {
   return (
@@ -1018,7 +1026,7 @@ function LineageTrailCard({
       </p>
       {song.vibe ? (
         <p className="mt-1 text-[12px] text-[#8C8780]">
-          {displayVibeLabel(song.vibe, song.tags)}
+          {displayVibeLabel(song.vibe, song.tags, lang)}
         </p>
       ) : null}
     </button>
