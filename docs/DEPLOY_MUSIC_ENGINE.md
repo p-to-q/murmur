@@ -4,7 +4,7 @@ Vercel 上跑的只是 Next.js 壳；真正干活的是两个 Python worker：
 
 | worker | 端口 | 职责 | 模型 |
 | --- | --- | --- | --- |
-| `workers/audio-engine` | 8001 | 哼唱 → 旋律转谱 | SwiftF0（CPU 即可） |
+| `workers/audio-engine` | 8001 | 哼唱 → 旋律转谱 | RMVPE（主路，CPU）+ SwiftF0/pYIN fallback |
 | `workers/music-engine` | 8002 | prompt + 哼唱 → 音乐 | Magenta RT2（需要算力） |
 
 音乐生成有两条线：**生产走 RunPod Serverless**（设 `RUNPOD_SERVERLESS_ENDPOINT_ID`
@@ -18,6 +18,13 @@ RUNPOD_SERVERLESS_ENDPOINT_ID=   RUNPOD_API_KEY=
 AUDIO_WORKER_URL=   AUDIO_WORKER_TOKEN=
 MUSIC_WORKER_URL=   MUSIC_WORKER_TOKEN=
 ```
+
+audio-engine 的生产镜像会在 Docker build 阶段准备
+`/app/models/rmvpe.onnx`，Fly 环境固定
+`AUDIO_ENGINE_PITCH_PROVIDER=auto` 和
+`AUDIO_ENGINE_RMVPE_MODEL_PATH=/app/models/rmvpe.onnx`。这样线上默认主路是
+RMVPE；只有 RMVPE 运行失败或候选太弱时，worker 内部才会继续比较
+SwiftF0/pYIN。
 
 ---
 

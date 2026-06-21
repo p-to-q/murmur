@@ -49,8 +49,8 @@ dependencies.
 | [WORLD](https://github.com/mmorise/World) | F0 + spectral envelope + aperiodicity for voice manipulation | research/reference only until melody confidence is solved |
 
 The first stage should avoid adding a DSP dependency. Murmur already has
-SwiftF0 / pYIN contour data and enough TypeScript-side melody logic to make the
-intent layer explainable and testable.
+RMVPE / SwiftF0 / pYIN contour data and enough TypeScript-side melody logic to
+make the intent layer explainable and testable.
 
 ## Dependency Risk
 

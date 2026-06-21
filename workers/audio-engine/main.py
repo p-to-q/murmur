@@ -1,7 +1,7 @@
 """
 Murmur Audio Engine.
 
-Current detector: SwiftF0 with pYIN fallback. The worker also exposes an
+Current detector: RMVPE with SwiftF0 and pYIN fallback. The worker also exposes an
 optional DeepFilterNet denoise seam behind the stable v2 audio-engine contract,
 so algorithm changes do not leak into the Next.js /api/transcribe route.
 """
@@ -36,7 +36,7 @@ from audio_engine.detectors import (
     configured_pitch_provider,
     detect_pitch,
 )
-from audio_engine.frames import pyin_to_notes
+from audio_engine.frames import f0_to_notes, pyin_to_notes  # noqa: F401 - legacy import surface
 
 logger = logging.getLogger(__name__)
 
@@ -68,30 +68,53 @@ MAX_AUDIO_SECONDS = 30
 def _preload_pitch_model() -> None:
     """Warm the pitch detector at startup.
 
-    SwiftF0 (and any fallback) lazy-loads its model on first use, which can add
-    tens of seconds to the very first hum after a deploy or restart and shows up
-    to users as a "service is napping" timeout. Running one tiny synthetic clip
-    through the same detection path forces that load to happen at boot instead.
-    Best-effort: a preload failure must never stop the worker from serving.
+    RMVPE and SwiftF0 lazy-load their models on first use, which can add seconds
+    to the first hum after a deploy or restart. In auto mode, warm each product
+    candidate independently so a weak RMVPE result does not push SwiftF0 cold
+    start cost onto a user request. Best-effort: preload failures never stop the
+    worker from serving because auto can still fall through the remaining stack.
     """
-    try:
-        warm_seconds = 1.0
-        t = np.linspace(0, warm_seconds, int(SR * warm_seconds), endpoint=False)
-        warm_audio = (0.1 * np.sin(2 * np.pi * 220.0 * t)).astype(np.float32)
-        detect_pitch(
-            warm_audio,
-            DetectorConfig(
-                provider=configured_pitch_provider(),
-                sample_rate=SR,
-                fmin=FMIN,
-                fmax=FMAX,
-                frame_length=FRAME_LEN,
-                hop_length=HOP_LEN,
-            ),
-        )
-        logger.info("audio engine: pitch model preloaded at startup")
-    except Exception as exc:  # noqa: BLE001 - best-effort warm, never fatal
-        logger.warning("audio engine: pitch model preload skipped: %s", exc)
+    warm_seconds = 1.0
+    t = np.linspace(0, warm_seconds, int(SR * warm_seconds), endpoint=False)
+    warm_audio = (0.1 * np.sin(2 * np.pi * 220.0 * t)).astype(np.float32)
+    configured_provider = configured_pitch_provider()
+    preload_providers = (
+        ("rmvpe", "swiftf0", "pyin") if configured_provider == "auto" else (configured_provider,)
+    )
+    for provider in preload_providers:
+        try:
+            detect_pitch(
+                warm_audio,
+                DetectorConfig(
+                    provider=provider,
+                    sample_rate=SR,
+                    fmin=FMIN,
+                    fmax=FMAX,
+                    frame_length=FRAME_LEN,
+                    hop_length=HOP_LEN,
+                ),
+            )
+            logger.info("audio engine: %s pitch model preloaded at startup", provider)
+        except Exception as exc:  # noqa: BLE001 - best-effort warm, never fatal
+            logger.warning("audio engine: %s pitch model preload skipped: %s", provider, exc)
+
+    if configured_provider == "auto":
+        try:
+            # Exercise the actual fallback wrapper once so startup logs show
+            # whether the configured auto stack has at least one usable path.
+            detect_pitch(
+                warm_audio,
+                DetectorConfig(
+                    provider="auto",
+                    sample_rate=SR,
+                    fmin=FMIN,
+                    fmax=FMAX,
+                    frame_length=FRAME_LEN,
+                    hop_length=HOP_LEN,
+                ),
+            )
+        except Exception as exc:  # noqa: BLE001 - best-effort warm, never fatal
+            logger.warning("audio engine: auto pitch preload check skipped: %s", exc)
 
 # ── Hum capture ───────────────────────────────────────────────────────
 # Every hum that reaches the worker is a real input someone sang. Saving
@@ -175,6 +198,13 @@ PYIN_RESCUE_HYPOTHESIS = {
     "pitch_change_confirm_frames": 2,
     "min_confidence": 0.01,
 }
+RMVPE_RESCUE_HYPOTHESIS = {
+    "id": "rmvpe_rescue",
+    "min_note_duration": 0.07,
+    "onset_confirm_frames": 1,
+    "pitch_change_confirm_frames": 2,
+    "min_confidence": 0.05,
+}
 REPAIR_NOTE_HYPOTHESES = (
     {
         "id": "repair_split",
@@ -195,6 +225,13 @@ PYIN_REPAIR_RESCUE_HYPOTHESIS = {
     "onset_confirm_frames": 1,
     "pitch_change_confirm_frames": 1,
     "min_confidence": 0.01,
+}
+RMVPE_REPAIR_RESCUE_HYPOTHESIS = {
+    "id": "rmvpe_repair_rescue",
+    "min_note_duration": 0.05,
+    "onset_confirm_frames": 1,
+    "pitch_change_confirm_frames": 1,
+    "min_confidence": 0.05,
 }
 PROPOSAL_NOTE_HYPOTHESES = {
     "glide": (
@@ -918,6 +955,8 @@ def build_note_hypotheses(
     hypotheses = list(NOTE_HYPOTHESES) if include_base_hypotheses else []
     if include_base_hypotheses and detection.provider == "pyin":
         hypotheses.append(PYIN_RESCUE_HYPOTHESIS)
+    if include_base_hypotheses and detection.provider == "rmvpe":
+        hypotheses.append(RMVPE_RESCUE_HYPOTHESIS)
     if extra_hypotheses:
         hypotheses.extend(extra_hypotheses)
     proposal_motion = summarize_contour_motion(detection)
@@ -932,7 +971,7 @@ def build_note_hypotheses(
         if hypothesis_id in seen_ids:
             continue
         seen_ids.add(hypothesis_id)
-        notes = pyin_to_notes(
+        notes = f0_to_notes(
             detection.f0,
             detection.voiced,
             detection.confidence,
@@ -1081,6 +1120,8 @@ def collect_note_candidates(
     repair_hypotheses = list(REPAIR_NOTE_HYPOTHESES)
     if detection.provider == "pyin":
         repair_hypotheses.append(PYIN_REPAIR_RESCUE_HYPOTHESIS)
+    if detection.provider == "rmvpe":
+        repair_hypotheses.append(RMVPE_REPAIR_RESCUE_HYPOTHESIS)
     if repair_reason == "urgent_coherence":
         repair_hypotheses = [*PROPOSAL_NOTE_HYPOTHESES["urgent"], *repair_hypotheses]
     repair_candidates = build_note_hypotheses(
@@ -1243,8 +1284,29 @@ def choose_ensemble_candidate(
 ]:
     ranked = sorted(candidates, key=lambda item: item[4], reverse=True)
     best = ranked[0]
+    best_rmvpe = next((item for item in ranked if item[0].provider == "rmvpe"), None)
     best_swift = next((item for item in ranked if item[0].provider == "swiftf0"), None)
     best_pyin = next((item for item in ranked if item[0].provider == "pyin"), None)
+
+    if best_rmvpe and best[0].provider != "rmvpe":
+        best_acceptance = float(best[3]["score"])
+        rmvpe_acceptance = float(best_rmvpe[3]["score"])
+        best_music_feel = float(best[3]["musicFeelScore"])
+        rmvpe_music_feel = float(best_rmvpe[3]["musicFeelScore"])
+        best_first_onset = float(best[3]["firstOnsetLag"])
+        rmvpe_first_onset = float(best_rmvpe[3]["firstOnsetLag"])
+        best_note_count = len(best[2])
+        rmvpe_note_count = len(best_rmvpe[2])
+        score_gap = best[4] - best_rmvpe[4]
+
+        if (
+            score_gap <= 0.28
+            and rmvpe_acceptance >= best_acceptance - 0.05
+            and rmvpe_music_feel >= best_music_feel - 0.06
+            and rmvpe_first_onset <= best_first_onset + 0.08
+            and rmvpe_note_count >= max(1, int(best_note_count * 0.72))
+        ):
+            return best_rmvpe, ranked, "rmvpe_primary_tiebreak"
 
     if not best_swift or not best_pyin:
         return best, ranked, "highest_score"
@@ -1307,12 +1369,74 @@ def should_use_swiftf0_fast_path(
     )
 
 
+def should_use_rmvpe_fast_path(
+    detection,
+    acceptance: dict[str, float | int | str],
+    candidate_score: float,
+) -> bool:
+    if detection.provider != "rmvpe":
+        return False
+
+    acceptance_score = float(acceptance["score"])
+    music_feel = float(acceptance["musicFeelScore"])
+    first_onset_lag = float(acceptance["firstOnsetLag"])
+    onset_fragmentation = float(acceptance["onsetFragmentation"])
+    interior_hold = float(acceptance.get("interiorHoldRatio", 0.0))
+
+    return (
+        candidate_score >= 3.32
+        and acceptance_score >= 0.82
+        and music_feel >= 0.74
+        and first_onset_lag <= 0.12
+        and onset_fragmentation <= 0.32
+        and interior_hold <= 0.24
+    )
+
+
 def should_use_swiftf0_long_take_fast_path(
     detection,
     acceptance: dict[str, float | int | str],
     candidate_score: float,
 ) -> bool:
     if detection.provider != "swiftf0":
+        return False
+
+    contour_duration = (
+        (len(detection.f0) * detection.hop_length) / detection.sample_rate
+        if len(detection.f0)
+        else 0.0
+    )
+    voiced_ratio = (
+        float(np.count_nonzero(detection.voiced)) / len(detection.voiced)
+        if len(detection.voiced)
+        else float(detection.diagnostics.get("voicedRatio", 0.0) or 0.0)
+    )
+    acceptance_score = float(acceptance["score"])
+    music_feel = float(acceptance["musicFeelScore"])
+    first_onset_lag = float(acceptance["firstOnsetLag"])
+    onset_fragmentation = float(acceptance["onsetFragmentation"])
+    interior_hold = float(acceptance.get("interiorHoldRatio", 0.0))
+    excessive_hold = float(acceptance.get("excessiveHoldRatio", 0.0))
+
+    return (
+        contour_duration >= 8.0
+        and candidate_score >= 3.45
+        and acceptance_score >= 0.78
+        and music_feel >= 0.68
+        and first_onset_lag <= 0.04
+        and onset_fragmentation <= 0.24
+        and interior_hold <= 0.14
+        and excessive_hold <= 0.08
+        and voiced_ratio >= 0.64
+    )
+
+
+def should_use_rmvpe_long_take_fast_path(
+    detection,
+    acceptance: dict[str, float | int | str],
+    candidate_score: float,
+) -> bool:
+    if detection.provider != "rmvpe":
         return False
 
     contour_duration = (
@@ -1466,7 +1590,7 @@ def alternate_base_hypothesis_ids(mode: str | None, provider: str) -> set[str] |
 
 
 def detect_with_optional_ensemble(y: np.ndarray, configured_provider: str):
-    """Run the detector path, optionally comparing SwiftF0 and pYIN in auto mode."""
+    """Run the detector path, optionally comparing RMVPE, SwiftF0, and pYIN in auto mode."""
     if configured_provider != "auto":
         detection = detect_pitch(
             y,
@@ -1505,94 +1629,14 @@ def detect_with_optional_ensemble(y: np.ndarray, configured_provider: str):
             )
             return detection, notes
 
-        if configured_provider not in ("swiftf0", "pyin"):
-            detection.diagnostics["providerRerouted"] = False
-            detection.diagnostics["ensembleDecision"] = "configured_lab_provider"
-            detection.diagnostics["ensembleCandidates"] = ",".join(
-                f"{configured_provider}/{candidate_id}:{candidate_score:.3f}"
-                for candidate_id, _candidate_notes, _candidate_acceptance, candidate_score in note_candidates
-            )
-            detection.diagnostics["ensembleSelected"] = f"{configured_provider}/{selected_hypothesis}"
-            detection.diagnostics["providerPitchMs"] = detection.diagnostics.get("pitchMs")
-            apply_candidate_selection_diagnostics(
-                detection,
-                selected_hypothesis,
-                note_candidates,
-                acceptance,
-                repair_reason=repair_reason,
-            )
-            return detection, notes
-
-        alternate_provider = "pyin" if configured_provider == "swiftf0" else "swiftf0"
-        reroute_decision = "configured_provider"
-        alternate_mode = (
-            alternate_review_mode(detection, acceptance, score)
-            if alternate_provider == "pyin"
-            else None
+        detection.diagnostics["providerRerouted"] = False
+        detection.diagnostics["ensembleDecision"] = "configured_provider"
+        detection.diagnostics["ensembleCandidates"] = ",".join(
+            f"{configured_provider}/{candidate_id}:{candidate_score:.3f}"
+            for candidate_id, _candidate_notes, _candidate_acceptance, candidate_score in note_candidates
         )
-        light_alternate_review = alternate_mode is not None
-        alternate_hypothesis_ids = alternate_base_hypothesis_ids(
-            alternate_mode,
-            alternate_provider,
-        )
-        if alternate_hypothesis_ids is not None:
-            detection.diagnostics["alternateReviewHypotheses"] = ",".join(
-                sorted(alternate_hypothesis_ids)
-            )
-        try:
-            alt_detection = detect_pitch(
-                y,
-                DetectorConfig(
-                    provider=alternate_provider,
-                    sample_rate=SR,
-                    fmin=FMIN,
-                    fmax=FMAX,
-                    frame_length=FRAME_LEN,
-                    hop_length=HOP_LEN,
-                ),
-            )
-            alt_candidates, alt_repair_reason = collect_note_candidates(
-                alt_detection,
-                allow_repair_rerun=not light_alternate_review,
-                allowed_base_hypothesis_ids=alternate_hypothesis_ids,
-            )
-            if alt_candidates:
-                pool = [
-                    (detection, candidate_id, candidate_notes, candidate_acceptance, candidate_score)
-                    for candidate_id, candidate_notes, candidate_acceptance, candidate_score in note_candidates
-                ]
-                pool.extend(
-                    (alt_detection, candidate_id, candidate_notes, candidate_acceptance, candidate_score)
-                    for candidate_id, candidate_notes, candidate_acceptance, candidate_score in alt_candidates
-                )
-                selected, ranked_candidates, reroute_decision = choose_ensemble_candidate(pool)
-                detection, selected_hypothesis, notes, acceptance, score = selected
-                repair_reason = (
-                    repair_reason if detection.provider == configured_provider else alt_repair_reason
-                )
-                note_candidates = [
-                    (candidate_id, candidate_notes, candidate_acceptance, candidate_score)
-                    for candidate, candidate_id, candidate_notes, candidate_acceptance, candidate_score in ranked_candidates
-                    if candidate.provider == detection.provider
-                ]
-                detection.diagnostics["ensembleScore"] = round(score, 3)
-                detection.diagnostics["ensembleDecision"] = f"explicit_{reroute_decision}"
-                detection.diagnostics["ensembleCandidates"] = ",".join(
-                    f"{candidate.provider}/{candidate_id}:{candidate_score:.3f}"
-                    for candidate, candidate_id, _notes, _acceptance, candidate_score in ranked_candidates
-                )
-                detection.diagnostics["ensembleSelected"] = f"{detection.provider}/{selected_hypothesis}"
-                detection.diagnostics["providerRerouted"] = detection.provider != configured_provider
-                if alternate_mode is not None:
-                    detection.diagnostics["alternateReviewMode"] = alternate_mode
-                if detection.provider != configured_provider:
-                    detection.warnings.insert(
-                        0,
-                        f"provider_reroute:{configured_provider}->{detection.provider}:{reroute_decision}",
-                    )
-        except DetectorUnavailable:
-            pass
-
+        detection.diagnostics["ensembleSelected"] = f"{configured_provider}/{selected_hypothesis}"
+        detection.diagnostics["providerPitchMs"] = detection.diagnostics.get("pitchMs")
         apply_candidate_selection_diagnostics(
             detection,
             selected_hypothesis,
@@ -1604,8 +1648,9 @@ def detect_with_optional_ensemble(y: np.ndarray, configured_provider: str):
 
     total_started = time.perf_counter()
     candidates: list[tuple[object, str, list[dict[str, float | int]], dict[str, float | int | str], float]] = []
+    unavailable_warnings: list[str] = []
     alternate_mode: str | None = None
-    for provider in ("swiftf0", "pyin"):
+    for provider in ("rmvpe", "swiftf0", "pyin"):
         try:
             detection = detect_pitch(
                 y,
@@ -1618,7 +1663,8 @@ def detect_with_optional_ensemble(y: np.ndarray, configured_provider: str):
                     hop_length=HOP_LEN,
                 ),
             )
-        except DetectorUnavailable:
+        except DetectorUnavailable as exc:
+            unavailable_warnings.append(f"{provider}_unavailable:{exc}")
             continue
 
         note_candidates, repair_reason = collect_note_candidates(
@@ -1632,18 +1678,74 @@ def detect_with_optional_ensemble(y: np.ndarray, configured_provider: str):
         detection.diagnostics["repairTriggered"] = repair_reason is not None
         if repair_reason is not None:
             detection.diagnostics["repairTriggerReason"] = repair_reason
+        if provider == "rmvpe" and note_candidates:
+            selected_hypothesis, notes, acceptance, score = note_candidates[0]
+            if should_use_rmvpe_fast_path(detection, acceptance, score):
+                detection.diagnostics["providerRerouted"] = False
+                detection.diagnostics["ensembleDecision"] = "rmvpe_fast_path"
+                detection.diagnostics["ensembleCandidates"] = ",".join(
+                    f"rmvpe/{candidate_id}:{candidate_score:.3f}"
+                    for candidate_id, _candidate_notes, _candidate_acceptance, candidate_score in note_candidates
+                )
+                detection.diagnostics["ensembleSelected"] = f"rmvpe/{selected_hypothesis}"
+                detection.diagnostics["providerPitchMs"] = detection.diagnostics.get("pitchMs")
+                detection.diagnostics["pitchMs"] = round((time.perf_counter() - total_started) * 1000)
+                apply_candidate_selection_diagnostics(
+                    detection,
+                    selected_hypothesis,
+                    note_candidates,
+                    acceptance,
+                    repair_reason=detection.diagnostics.get("repairTriggerReason"),
+                )
+                detection.warnings[:0] = unavailable_warnings
+                return detection, notes
+            if should_use_rmvpe_long_take_fast_path(detection, acceptance, score):
+                detection.diagnostics["providerRerouted"] = False
+                detection.diagnostics["ensembleDecision"] = "rmvpe_long_take_fast_path"
+                detection.diagnostics["ensembleCandidates"] = ",".join(
+                    f"rmvpe/{candidate_id}:{candidate_score:.3f}"
+                    for candidate_id, _candidate_notes, _candidate_acceptance, candidate_score in note_candidates
+                )
+                detection.diagnostics["ensembleSelected"] = f"rmvpe/{selected_hypothesis}"
+                detection.diagnostics["providerPitchMs"] = detection.diagnostics.get("pitchMs")
+                detection.diagnostics["pitchMs"] = round((time.perf_counter() - total_started) * 1000)
+                apply_candidate_selection_diagnostics(
+                    detection,
+                    selected_hypothesis,
+                    note_candidates,
+                    acceptance,
+                    repair_reason=detection.diagnostics.get("repairTriggerReason"),
+                )
+                detection.warnings[:0] = unavailable_warnings
+                return detection, notes
         if provider == "swiftf0" and note_candidates:
             selected_hypothesis, notes, acceptance, score = note_candidates[0]
             if should_use_swiftf0_fast_path(detection, acceptance, score):
-                detection.diagnostics["providerRerouted"] = False
+                comparison_candidates = sorted(
+                    [
+                        *candidates,
+                        *(
+                            (detection, candidate_id, candidate_notes, candidate_acceptance, candidate_score)
+                            for candidate_id, candidate_notes, candidate_acceptance, candidate_score in note_candidates
+                        ),
+                    ],
+                    key=lambda item: item[4],
+                    reverse=True,
+                )
+                detection.diagnostics["providerRerouted"] = True
                 detection.diagnostics["ensembleDecision"] = "swift_fast_path"
                 detection.diagnostics["ensembleCandidates"] = ",".join(
-                    f"swiftf0/{candidate_id}:{candidate_score:.3f}"
-                    for candidate_id, _candidate_notes, _candidate_acceptance, candidate_score in note_candidates
+                    f"{candidate.provider}/{candidate_id}:{candidate_score:.3f}"
+                    for candidate, candidate_id, _candidate_notes, _candidate_acceptance, candidate_score in comparison_candidates
                 )
                 detection.diagnostics["ensembleSelected"] = f"swiftf0/{selected_hypothesis}"
                 detection.diagnostics["providerPitchMs"] = detection.diagnostics.get("pitchMs")
                 detection.diagnostics["pitchMs"] = round((time.perf_counter() - total_started) * 1000)
+                if candidates:
+                    detection.warnings.insert(
+                        0,
+                        f"ensemble_pick:swiftf0/{selected_hypothesis}:{score:.3f}:swift_fast_path",
+                    )
                 apply_candidate_selection_diagnostics(
                     detection,
                     selected_hypothesis,
@@ -1651,17 +1753,34 @@ def detect_with_optional_ensemble(y: np.ndarray, configured_provider: str):
                     acceptance,
                     repair_reason=detection.diagnostics.get("repairTriggerReason"),
                 )
+                detection.warnings[:0] = unavailable_warnings
                 return detection, notes
             if should_use_swiftf0_long_take_fast_path(detection, acceptance, score):
-                detection.diagnostics["providerRerouted"] = False
+                comparison_candidates = sorted(
+                    [
+                        *candidates,
+                        *(
+                            (detection, candidate_id, candidate_notes, candidate_acceptance, candidate_score)
+                            for candidate_id, candidate_notes, candidate_acceptance, candidate_score in note_candidates
+                        ),
+                    ],
+                    key=lambda item: item[4],
+                    reverse=True,
+                )
+                detection.diagnostics["providerRerouted"] = True
                 detection.diagnostics["ensembleDecision"] = "swift_long_take_fast_path"
                 detection.diagnostics["ensembleCandidates"] = ",".join(
-                    f"swiftf0/{candidate_id}:{candidate_score:.3f}"
-                    for candidate_id, _candidate_notes, _candidate_acceptance, candidate_score in note_candidates
+                    f"{candidate.provider}/{candidate_id}:{candidate_score:.3f}"
+                    for candidate, candidate_id, _candidate_notes, _candidate_acceptance, candidate_score in comparison_candidates
                 )
                 detection.diagnostics["ensembleSelected"] = f"swiftf0/{selected_hypothesis}"
                 detection.diagnostics["providerPitchMs"] = detection.diagnostics.get("pitchMs")
                 detection.diagnostics["pitchMs"] = round((time.perf_counter() - total_started) * 1000)
+                if candidates:
+                    detection.warnings.insert(
+                        0,
+                        f"ensemble_pick:swiftf0/{selected_hypothesis}:{score:.3f}:swift_long_take_fast_path",
+                    )
                 apply_candidate_selection_diagnostics(
                     detection,
                     selected_hypothesis,
@@ -1669,6 +1788,7 @@ def detect_with_optional_ensemble(y: np.ndarray, configured_provider: str):
                     acceptance,
                     repair_reason=detection.diagnostics.get("repairTriggerReason"),
                 )
+                detection.warnings[:0] = unavailable_warnings
                 return detection, notes
             alternate_mode = alternate_review_mode(
                 detection,
@@ -1687,7 +1807,10 @@ def detect_with_optional_ensemble(y: np.ndarray, configured_provider: str):
             candidates.append((detection, hypothesis_id, notes, acceptance, note_score))
 
     if not candidates:
-        raise DetectorUnavailable("No pitch detector is available")
+        detail = "; ".join(unavailable_warnings)
+        raise DetectorUnavailable(
+            "No pitch detector is available" + (f": {detail}" if detail else "")
+        )
 
     selected, ranked_candidates, decision = choose_ensemble_candidate(candidates)
     detection, selected_hypothesis, notes, acceptance, score = selected
@@ -1701,6 +1824,7 @@ def detect_with_optional_ensemble(y: np.ndarray, configured_provider: str):
     detection.diagnostics["ensembleDecision"] = decision
     detection.diagnostics["ensembleCandidates"] = ",".join(comparison)
     detection.diagnostics["ensembleSelected"] = f"{detection.provider}/{selected_hypothesis}"
+    detection.diagnostics["providerRerouted"] = detection.provider != "rmvpe"
     if alternate_mode is not None:
         detection.diagnostics["alternateReviewMode"] = alternate_mode
     if len(candidates) > 1:
@@ -1719,6 +1843,7 @@ def detect_with_optional_ensemble(y: np.ndarray, configured_provider: str):
         acceptance,
         repair_reason=detection.diagnostics.get("repairTriggerReason"),
     )
+    detection.warnings[:0] = unavailable_warnings
     return detection, notes
 
 
@@ -1896,11 +2021,17 @@ def resolve_requested_pitch_provider(requested: str) -> str:
     value = (requested or "").strip().lower()
     if not value:
         return configured_pitch_provider()
-    if value in ("auto", "pyin", "swiftf0", "yin", "parselmouth"):
+    if value in ("auto", "rmvpe", "pyin", "swiftf0", "yin", "parselmouth"):
         return value
     raise HTTPException(
         status_code=400,
-        detail={"error": "invalid_pitch_provider", "message": f"Unsupported pitch provider: {requested}"},
+        detail={
+            "error": "invalid_pitch_provider",
+            "message": (
+                "pitchProvider must be auto, rmvpe, swiftf0, pyin, yin, or "
+                f"parselmouth; got {requested}"
+            ),
+        },
     )
 
 

@@ -5,4 +5,5 @@ numpy
 soundfile
 librosa
 pydub
+rmvpe-onnx==0.2.3
 swift-f0
