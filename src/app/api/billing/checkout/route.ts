@@ -197,6 +197,26 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // CNY + zpay configured -> use zpay (Alipay / WeChat Pay). Other checkout
+  // paths depend on Waffo, so report missing payment configuration before auth
+  // work can mask the deployment issue.
+  const payMethod = typeof body.payMethod === "string" ? body.payMethod : "";
+  const useZpay =
+    product.currency === "CNY" &&
+    isZpayConfigured() &&
+    (payMethod === "alipay" || payMethod === "wxpay");
+
+  if (!useZpay && !isWaffoConfigured()) {
+    return NextResponse.json(
+      {
+        error: "waffo_not_configured",
+        message: "Waffo payments are not configured on this deployment.",
+        requestId,
+      },
+      { status: 503, headers: { "X-Request-Id": requestId } },
+    );
+  }
+
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
@@ -224,26 +244,8 @@ export async function POST(request: NextRequest) {
     return rateLimitedResponse(rateLimit, requestId);
   }
 
-  // CNY + zpay configured → use zpay (Alipay / WeChat Pay)
-  const payMethod = typeof body.payMethod === "string" ? body.payMethod : "";
-  const useZpay =
-    product.currency === "CNY" &&
-    isZpayConfigured() &&
-    (payMethod === "alipay" || payMethod === "wxpay");
-
   if (useZpay) {
     return handleZpayCheckout(request, userId, product, payMethod as ZpayPaymentType, requestId, auth.sessionId);
-  }
-
-  if (!isWaffoConfigured()) {
-    return NextResponse.json(
-      {
-        error: "waffo_not_configured",
-        message: "Waffo payments are not configured on this deployment.",
-        requestId,
-      },
-      { status: 503, headers: { "X-Request-Id": requestId } },
-    );
   }
 
   const client = getWaffoClient()!;

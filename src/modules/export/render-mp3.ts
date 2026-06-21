@@ -19,6 +19,8 @@ import { assembleSong } from "@/lib/music/assemble-song";
 import type { VersionGeneration, VibeVersion } from "@/modules/shared/types";
 import { audioBufferToWav, blobToDataUrl } from "./render-wav";
 
+type ToneModule = typeof import("tone");
+
 const MP3_BITRATE = 128;
 const SAMPLE_RATE = 44100;
 
@@ -127,8 +129,9 @@ async function transcodeGeneratedClip(
 
 async function renderToBuffer(version: VibeVersion): Promise<AudioBuffer> {
   const ToneMod = await import("tone");
-  const Tone = ("default" in ToneMod && ToneMod.default && typeof (ToneMod.default as any).Offline === "function")
-    ? (ToneMod.default as typeof ToneMod)
+  const defaultTone = "default" in ToneMod ? ToneMod.default as ToneModule | undefined : undefined;
+  const Tone = defaultTone && typeof defaultTone.Offline === "function"
+    ? defaultTone
     : ToneMod;
   if (typeof Tone.Offline !== "function") {
     throw new Error("Tone.Offline unavailable after dynamic import");

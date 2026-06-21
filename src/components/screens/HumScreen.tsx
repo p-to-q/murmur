@@ -202,7 +202,10 @@ export function HumScreen() {
   const [showLoginWall, setShowLoginWall] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
   // Onboarding: frosted glass reveal on first visit
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !window.localStorage.getItem("murmur:onboarding-seen");
+  });
   const [onboardingRippling, setOnboardingRippling] = useState(false);
   const orbButtonRef = useRef<HTMLButtonElement>(null);
   const [orbCenter, setOrbCenter] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -309,12 +312,6 @@ export function HumScreen() {
 
   useEffect(() => {
     prefetchMusicEngineStatus();
-  }, []);
-
-  // Onboarding: show frosted glass on first browser visit
-  useEffect(() => {
-    const seen = window.localStorage.getItem("murmur:onboarding-seen");
-    if (!seen) setShowOnboarding(true);
   }, []);
 
   // Measure orb center for the reveal mask

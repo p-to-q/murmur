@@ -45,6 +45,12 @@ const songPayloadSchema = z.object({
 type SongPayload = z.infer<typeof songPayloadSchema>;
 type SongInput = typeof songs.$inferInsert;
 
+function objectFieldAsString(value: unknown, key: string): string | undefined {
+  if (!isObject(value) || !(key in value)) return undefined;
+  const field = value[key];
+  return typeof field === "string" ? field : String(field);
+}
+
 export async function GET(req: NextRequest) {
   const auth = await resolveRequestAuth(req);
   if (!auth.ok) return auth.response;
@@ -256,8 +262,8 @@ export async function POST(req: NextRequest) {
     const cause = err instanceof Error && "cause" in err ? err.cause : undefined;
     log("song.create_failed", {
       error: err instanceof Error ? err.message : String(err),
-      code: isObject(err) && "code" in err ? (err as any).code : undefined,
-      detail: isObject(cause) && "message" in cause ? String((cause as any).message) : undefined,
+      code: objectFieldAsString(err, "code"),
+      detail: objectFieldAsString(cause, "message"),
       databaseUnavailable: isDatabaseUnavailable(err),
     }, {
       route: ROUTE,
