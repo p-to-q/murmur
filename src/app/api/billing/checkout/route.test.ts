@@ -76,7 +76,10 @@ describe("POST /api/billing/checkout", () => {
         notesGranted: "130",
         purchaseKind: "sku",
       },
-      successUrl: "http://test.local/topup/checkout?sku=topup_120_notes&status=success",
+      orderMerchantExternalId: expect.stringMatching(
+        /^usr_checkout:topup_120_notes:/,
+      ),
+      successUrl: "http://test.local/topup/checkout?sku=topup_120_notes&currency=USD&status=success",
       priceSnapshot: { amount: "5.99", taxCategory: "digital_goods" },
     });
   });

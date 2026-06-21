@@ -85,18 +85,31 @@ export function TopupScreen() {
   const sliderMin = customConfig.minAmount;
   const sliderMax = isCny ? Math.min(SLIDER_MAX_CNY, customConfig.maxAmount) : SLIDER_MAX_USD;
   const notesPerUnit = customConfig.notesPerUnit;
+  const defaultCustomAmount = Math.min(
+    customConfig.maxAmount,
+    Math.max(sliderMin, isCny ? 50 : 10),
+  );
 
   const [selectedId, setSelectedId] = useState<string>(
     TOPUP_SKUS.find((s) => s.highlight === "popular")?.id ?? TOPUP_SKUS[0]!.id,
   );
-  const [customAmount, setCustomAmount] = useState(isCny ? 50 : 10);
+  const [customAmountByCurrency, setCustomAmountByCurrency] = useState<Record<string, number>>({});
   const [isRestoring, setIsRestoring] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Reset custom amount default when currency changes
-  useEffect(() => {
-    setCustomAmount(isCny ? 50 : 10);
-  }, [isCny]);
+  const customAmount = Math.min(
+    customConfig.maxAmount,
+    Math.max(sliderMin, customAmountByCurrency[currency] ?? defaultCustomAmount),
+  );
+  const sliderAmount = Math.min(customAmount, sliderMax);
+  const setCustomAmount = useCallback(
+    (amount: number) => {
+      setCustomAmountByCurrency((current) => ({
+        ...current,
+        [currency]: amount,
+      }));
+    },
+    [currency],
+  );
 
   const notesSpring = useSpring(0, { stiffness: 100, damping: 20 });
   const balanceUSDSpring = useSpring(0, { stiffness: 100, damping: 20 });
@@ -424,7 +437,7 @@ export function TopupScreen() {
                       <div
                         className="absolute h-1 rounded-full bg-[#8C8780] transition-all duration-150"
                         style={{
-                          width: `${((customAmount - sliderMin) / sliderSpan) * 100}%`,
+                          width: `${((sliderAmount - sliderMin) / sliderSpan) * 100}%`,
                         }}
                       />
                     </div>
@@ -433,7 +446,7 @@ export function TopupScreen() {
                       type="range"
                       min={String(sliderMin)}
                       max={String(sliderMax)}
-                      value={Math.min(customAmount, sliderMax)}
+                      value={sliderAmount}
                       onChange={(e) => setCustomAmount(Number(e.target.value))}
                       aria-label={t("topup.slider.label")}
                       className="absolute z-10 h-8 w-full cursor-grab opacity-0 active:cursor-grabbing"
@@ -443,7 +456,7 @@ export function TopupScreen() {
                     <div
                       className="pointer-events-none absolute -top-3 z-20 h-7 w-7 rounded-full border-[3px] border-white shadow-[0_2px_12px_rgba(0,0,0,0.25)] transition-all duration-150"
                       style={{
-                        left: `calc(${((Math.min(customAmount, sliderMax) - sliderMin) / sliderSpan) * 100}% - 14px)`,
+                        left: `calc(${((sliderAmount - sliderMin) / sliderSpan) * 100}% - 14px)`,
                         ...paperTextureStyle,
                       }}
                     />
