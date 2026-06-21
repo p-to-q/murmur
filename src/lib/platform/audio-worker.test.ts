@@ -235,7 +235,7 @@ describe("audio worker adapter", () => {
     );
   });
 
-  it("keeps corrected when acceptance diagnostics are poor but not tail-bad", () => {
+  it("uses musical when acceptance diagnostics reveal a recoverable dragging phrase", () => {
     const result = normalizeWorkerResponse(
       {
         source: "swiftf0",
@@ -261,8 +261,8 @@ describe("audio worker adapter", () => {
       },
     );
 
-    expect(result.selectedMelodyKind).toBe("corrected");
-    expect(result.diagnostics?.selectedMelodyKind).toBe("corrected");
+    expect(result.selectedMelodyKind).toBe("musical");
+    expect(result.diagnostics?.selectedMelodyKind).toBe("musical");
     expect(result.melodies.musical.notes[1]?.duration).toBeLessThan(0.84);
   });
 
