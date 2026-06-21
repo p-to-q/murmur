@@ -352,7 +352,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
               onClick={onShareClick}
               className="group flex w-full items-center gap-3 rounded-[15px] border border-[#E5DDD0] bg-white/50 px-4 py-3.5 text-left transition-colors hover:border-[#FF5924]/40 hover:bg-white/70"
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F1EB] text-[#8C8780] transition-colors group-hover:text-[#FF5924]">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#F5F1EB] text-[#8C8780] transition-colors group-hover:text-[#1A1A1A]">
                 <LogIn className="h-3.5 w-3.5" />
               </span>
               <div className="min-w-0 flex-1">
