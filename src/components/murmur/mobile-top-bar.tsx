@@ -1,10 +1,10 @@
 "use client";
 
-import { useI18nStore, useTranslator } from "@/lib/i18n";
+import { useCurrentLang, useI18nStore } from "@/lib/i18n";
 import { MurmurMark } from "./murmur-mark";
 
 export function MobileTopBar() {
-  const lang = useI18nStore((s) => s.lang);
+  const lang = useCurrentLang();
   const setLang = useI18nStore((s) => s.setLang);
 
   return (

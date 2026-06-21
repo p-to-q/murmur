@@ -47,7 +47,8 @@
 - [x] SideNav (desktop) — 252px column with brand + nav; Vibe hidden via `desktopNav: false`
 - [x] Layout padding fixed: `md:pl-[252px]` matches sidebar width; desktop bottom padding via `--main-pb` CSS var (0 on md+)
 - [x] Safe-area insets honored top + bottom
-- [x] i18n zh / en switcher in Me screen, device.locale auto-detected
+- [x] i18n zh / en switcher in Me screen, first-paint language negotiated from
+  `murmur.lang` + `Accept-Language` before client browser-language fallback
 - [x] Murmur SVG mark + favicon
 - [x] Guest mode (`userId="guest"`) preserved for hackathon demo
 

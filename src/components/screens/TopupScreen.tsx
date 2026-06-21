@@ -21,7 +21,7 @@ import {
   type Currency,
 } from "@murmur/core";
 
-import { useI18nStore, useTranslator } from "@/lib/i18n";
+import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import {
   useRegionalSkus,
   getSavedCurrency,
@@ -79,7 +79,7 @@ function formatRefillTime(iso: string, locale: string): string {
 export function TopupScreen() {
   const router = useRouter();
   const t = useTranslator();
-  const lang = useI18nStore((s) => s.lang);
+  const lang = useCurrentLang();
   const { balance, isLoading, refresh } = useUserBalance();
   const { data: topupSurface, refresh: refreshTopupSurface } = useTopupSurface();
 

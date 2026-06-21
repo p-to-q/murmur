@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { cookies, headers } from "next/headers";
 // Keep the original Traditional Chinese WenKai as the visual lead, with the
 // Simplified Chinese face available only as missing-glyph fallback.
 import "@fontsource/lxgw-wenkai-tc/300.css";
@@ -11,7 +12,12 @@ import { Toaster } from "@/components/ui/sonner";
 import { BottomNav } from "@/components/murmur/bottom-nav";
 import { SideNavWithModal as SideNav } from "@/components/murmur/side-nav";
 import { AudioUnlock } from "@/components/murmur/audio-unlock";
-import { I18nHydrator } from "@/lib/i18n";
+import { I18nHydrator, I18nProvider } from "@/lib/i18n";
+import {
+  LANGUAGE_COOKIE,
+  langToHtmlLang,
+  resolveInitialLangWithSource,
+} from "@/lib/i18n/language";
 import { cn } from "@/utils/utils";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { FontHydrator } from "@/components/murmur/font-hydrator";
@@ -97,13 +103,21 @@ export const viewport: Viewport = {
   themeColor: "#F5F1EB",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
+  const initialLangResolution = resolveInitialLangWithSource({
+    storedLang: cookieStore.get(LANGUAGE_COOKIE)?.value,
+    acceptLanguage: headerStore.get("accept-language"),
+  });
+  const initialLang = initialLangResolution.lang;
+
   return (
     <html
-      lang="zh-CN"
-      data-lang="zh"
+      lang={langToHtmlLang(initialLang)}
+      data-lang={initialLang}
+      data-lang-source={initialLangResolution.source}
       data-fonts="loading"
       suppressHydrationWarning
       className={cn(
@@ -116,33 +130,35 @@ export default function RootLayout({
         suppressHydrationWarning
         className="min-h-svh flex flex-col bg-[#F5F1EB]"
       >
-        <AuthProvider>
-          <I18nHydrator />
-          <FontHydrator />
-          <ShareReferralTracker />
-          {/* Desktop sidebar (md+) — mobile hides via internal media query */}
-          <SideNav />
-          {/* Mobile top bar — logo + language toggle */}
-          <MobileTopBar />
-          {/* Main content area:
-              - mobile  → reserves bottom for nav (with safe-area)
-              - desktop → reserves left 232px for sidebar */}
-          <main
-            className="flex-1"
-            style={{
-              paddingTop: "var(--mobile-top-bar-h)",
-              paddingLeft: "var(--side-nav-w)",
-              paddingBottom: "var(--main-pb)",
-              transition: "padding-left 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
-            }}
-          >
-            {children}
-          </main>
-          {/* Mobile bottom nav */}
-          <BottomNav />
-          <AudioUnlock />
-          <Toaster />
-        </AuthProvider>
+        <I18nProvider initialLang={initialLang}>
+          <AuthProvider>
+            <I18nHydrator />
+            <FontHydrator />
+            <ShareReferralTracker />
+            {/* Desktop sidebar (md+) — mobile hides via internal media query */}
+            <SideNav />
+            {/* Mobile top bar — logo + language toggle */}
+            <MobileTopBar />
+            {/* Main content area:
+                - mobile  → reserves bottom for nav (with safe-area)
+                - desktop → reserves left 232px for sidebar */}
+            <main
+              className="flex-1"
+              style={{
+                paddingTop: "var(--mobile-top-bar-h)",
+                paddingLeft: "var(--side-nav-w)",
+                paddingBottom: "var(--main-pb)",
+                transition: "padding-left 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
+              }}
+            >
+              {children}
+            </main>
+            {/* Mobile bottom nav */}
+            <BottomNav />
+            <AudioUnlock />
+            <Toaster />
+          </AuthProvider>
+        </I18nProvider>
       </body>
     </html>
   );

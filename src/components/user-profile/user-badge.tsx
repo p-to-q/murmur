@@ -9,7 +9,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useAuthProviders } from "@/lib/hooks/use-auth-providers";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
 import { Spinner } from "@/components/ui/spinner";
-import { useI18nStore, useTranslator } from "@/lib/i18n";
+import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { formatMemberSince } from "@/lib/user/member-since";
 
 export function UserBadge() {
@@ -188,7 +188,7 @@ function DropdownPanel({
   children?: React.ReactNode;
 }) {
   const t = useTranslator();
-  const lang = useI18nStore((s) => s.lang);
+  const lang = useCurrentLang();
   const [songCount, setSongCount] = useState<number | null>(null);
   const joinedDate = useMemo(
     () => formatMemberSince(user.id, lang),

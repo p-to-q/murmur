@@ -29,7 +29,7 @@ import { memory } from "@/lib/platform/memory";
 import Image from "next/image";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
-import { useTranslator, useI18nStore } from "@/lib/i18n";
+import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
 import {
   createMagentaVersions,
@@ -425,7 +425,7 @@ function VibeCard({
   onPlayToggle: (v: VibeVersion) => void;
   pickLabel: string;
 }) {
-  const lang = useI18nStore((state) => state.lang);
+  const lang = useCurrentLang();
   const t = useTranslator();
   const vibePreset = VIBE_PRESETS.find((p) => p.id === version.vibe);
   const vibeLabel =
@@ -594,4 +594,3 @@ function VibeCard({
     </motion.div>
   );
 }
-

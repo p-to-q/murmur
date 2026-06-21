@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import Image from "next/image";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
-import { useTranslator, useI18nStore } from "@/lib/i18n";
+import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
 import { generateStrummerCode } from "@/modules/strummer/generate-code";
 import {
@@ -104,7 +104,7 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
 function StudioContent({ version }: { version: VibeVersion }) {
   const router = useRouter();
   const t = useTranslator();
-  const lang = useI18nStore((s) => s.lang);
+  const lang = useCurrentLang();
   const setCurrentVersion = useMurmurStore((state) => state.setCurrentVersion);
 
   const [isPlaying, setIsPlaying] = useState(false);
