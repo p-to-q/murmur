@@ -10,7 +10,13 @@ import type {
   TranscriptionMelodies,
 } from "@/modules/shared/types";
 import { detectBpm, detectPhrases } from "@/lib/music/rhythm-engine";
-import { estimateKey, polishMelody } from "./melody-polisher";
+import {
+  estimateKey,
+  polishMelody,
+  openingAnchorWeight,
+  closingAnchorWeight,
+  shouldPreserveExpressiveNonScaleTone,
+} from "./melody-polisher";
 
 const KEY_NAMES = [
   "C",
@@ -44,10 +50,11 @@ export function buildTranscriptionMelodies(
   } = {},
 ): TranscriptionMelodies {
   const intent = buildIntentMelody(rawNotes);
-  const corrected = anchorCorrectedDraftToIntent(
+  const anchoredCorrected = anchorCorrectedDraftToIntent(
     correctedMelody ?? polishMelody(rawNotes),
     intent,
   );
+  const corrected = applyPhraseFamilyRepair(anchoredCorrected, intent);
   const melodyIntent =
     options.melodyIntent ??
     buildMelodyIntentProfile(rawNotes, corrected, {
@@ -273,6 +280,19 @@ export function chooseGenerationMelodyKind(input: {
     unclearTonality,
   ].filter(Boolean).length;
 
+  if (
+    !strongRescueSignal &&
+    shouldSelectIntentDirectly({
+      melodies,
+      melodyIntent,
+      diagnostics,
+      contour,
+      repairBias: input.repairBias,
+    })
+  ) {
+    return "intent";
+  }
+
   if (strongRescueSignal || moderateSignalCount >= 2) {
     return shouldAutoSelectMusical({
       corrected,
@@ -299,6 +319,84 @@ export function chooseGenerationMelodyKind(input: {
   }
 
   return "corrected";
+}
+
+function shouldSelectIntentDirectly(input: {
+  melodies: TranscriptionMelodies;
+  melodyIntent?: MelodyIntentProfile;
+  diagnostics?: Partial<TranscriptionDiagnostics>;
+  contour?: TranscriptionContour;
+  repairBias?: number;
+}): boolean {
+  const bias = clampRepairBias(input.repairBias ?? 0);
+  if (bias >= 0.55) return false;
+
+  const intent = input.melodies.intent;
+  if (intent.notes.length < 3) return false;
+
+  const diagnostics = input.diagnostics;
+  const contourStats = summarizeContour(input.contour);
+  const avgConfidence = averageNoteConfidence(intent.notes);
+  const shortRatio = shortNoteRatio(intent.notes);
+  const quality = input.melodyIntent;
+  const tonalCandidates = quality?.tonalCandidates;
+  const tonalGap = tonalCandidateGap(tonalCandidates);
+
+  const audioStable =
+    (typeof diagnostics?.voicedRatio !== "number" || diagnostics.voicedRatio >= 0.74) &&
+    (typeof diagnostics?.snr !== "number" || diagnostics.snr >= 12) &&
+    contourStats.voicedConfidence >= 0.76 &&
+    contourStats.lowConfidenceVoicedRatio <= 0.24 &&
+    contourStats.unstableVoicedJumpRatio <= 0.18 &&
+    contourStats.voicedGapRatio <= 0.16;
+  const workerAccepted =
+    (typeof diagnostics?.acceptanceScore !== "number" || diagnostics.acceptanceScore >= 0.68) &&
+    (typeof diagnostics?.musicFeelScore !== "number" || diagnostics.musicFeelScore >= 0.64) &&
+    (typeof diagnostics?.firstOnsetLag !== "number" || diagnostics.firstOnsetLag <= 0.12) &&
+    (typeof diagnostics?.onsetFragmentation !== "number" || diagnostics.onsetFragmentation <= 0.34) &&
+    (typeof diagnostics?.interiorHoldRatio !== "number" || diagnostics.interiorHoldRatio <= 0.14);
+  const intentStrong =
+    avgConfidence >= 0.78 &&
+    shortRatio <= 0.32 &&
+    (quality?.confidence ?? 0) >= 0.72 &&
+    (quality?.intentMatch ?? 0) >= 0.7 &&
+    (quality?.musicalityBias ?? 1) <= 0.38;
+  const metadataStable =
+    tonalGap >= 0.02 &&
+    !hasCloseModeConflict(tonalCandidates) &&
+    Boolean(quality?.lockedTonalCandidate) &&
+    (quality?.lockedTonalCandidate.confidence ?? 0) >= 0.64;
+
+  return audioStable && workerAccepted && intentStrong && metadataStable;
+}
+
+function averageNoteConfidence(notes: MelodyNote[]): number {
+  if (notes.length === 0) return 0;
+  return notes.reduce((sum, note) => sum + note.confidence, 0) / notes.length;
+}
+
+function shortNoteRatio(notes: MelodyNote[]): number {
+  if (notes.length === 0) return 0;
+  return notes.filter((note) => note.duration <= 0.18).length / notes.length;
+}
+
+function tonalCandidateGap(candidates?: TonalCandidate[]): number {
+  if (!candidates || candidates.length === 0) return 0;
+  if (candidates.length === 1) return candidates[0]!.confidence;
+  return candidates[0]!.confidence - candidates[1]!.confidence;
+}
+
+function hasCloseModeConflict(candidates?: TonalCandidate[]): boolean {
+  if (!candidates || candidates.length < 2) return false;
+  const top = candidates[0]!;
+  return candidates
+    .slice(1, 4)
+    .some(
+      (candidate) =>
+        candidate.key === top.key &&
+        candidate.family !== top.family &&
+        top.confidence - candidate.confidence < 0.055,
+    );
 }
 
 function shouldAutoSelectMusical(input: {
@@ -520,6 +618,427 @@ function draftAlreadyTracksIntent(
   return closeAnchors / anchors.length >= 0.72;
 }
 
+type PhraseSpan = {
+  phraseIndex: number;
+  noteIndices: number[];
+  notes: MelodyNote[];
+  start: number;
+  end: number;
+  duration: number;
+  quality: number;
+};
+
+function applyPhraseFamilyRepair(
+  corrected: CleanMelody,
+  intent: CleanMelody,
+): CleanMelody {
+  if (corrected.notes.length < 6 || intent.notes.length < 6) return corrected;
+
+  const correctedSpans = buildIndexedPhraseSpans(corrected.notes, corrected.bpm);
+  const intentSpans = buildIndexedPhraseSpans(intent.notes, intent.bpm);
+  const phraseCount = Math.min(correctedSpans.length, intentSpans.length);
+  if (phraseCount < 2) return corrected;
+
+  const root = KEY_NAMES.indexOf(corrected.key as (typeof KEY_NAMES)[number]);
+  if (root < 0) return corrected;
+
+  const scalePcs = getScalePitchClasses(root, corrected.scale);
+  const beat = 60 / corrected.bpm;
+  const matches = findPhraseFamilyRepairMatches(
+    intentSpans.slice(0, phraseCount),
+    correctedSpans.slice(0, phraseCount),
+  );
+  if (matches.length === 0) return corrected;
+
+  let repaired = corrected.notes.map((note) => ({ ...note }));
+  const claimedWeakPhrases = new Set<number>();
+
+  for (const match of matches) {
+    if (claimedWeakPhrases.has(match.weakPhraseIndex)) continue;
+    const weak = correctedSpans[match.weakPhraseIndex];
+    const strong = correctedSpans[match.strongPhraseIndex];
+    if (!weak || !strong) continue;
+    repaired = repairWeakPhraseFromFamilyTemplate(
+      repaired,
+      weak,
+      strong,
+      scalePcs,
+      beat,
+      match.strength,
+    );
+    claimedWeakPhrases.add(match.weakPhraseIndex);
+  }
+
+  const finalNotes = preventTraceOverlaps(repaired, beat);
+
+  return {
+    ...corrected,
+    notes: finalNotes,
+    duration: melodyDuration(finalNotes),
+    contour: estimateContour(finalNotes),
+  };
+}
+
+function buildIndexedPhraseSpans(notes: MelodyNote[], bpm: number): PhraseSpan[] {
+  if (notes.length === 0) return [];
+
+  const beat = 60 / bpm;
+  const sorted = notes
+    .map((note, index) => ({ note, index }))
+    .sort((a, b) => a.note.start - b.note.start);
+  const spans: PhraseSpan[] = [];
+  let current: Array<{ note: MelodyNote; index: number }> = [sorted[0]!];
+
+  for (let index = 1; index < sorted.length; index++) {
+    const previous = sorted[index - 1]!.note;
+    const currentItem = sorted[index]!;
+    const gap = currentItem.note.start - (previous.start + previous.duration);
+    const stepDown =
+      currentItem.note.pitch < previous.pitch - 2 && previous.duration > beat * 0.6;
+    if (gap >= beat * 0.9 || stepDown) {
+      spans.push(makeIndexedPhraseSpan(spans.length, current));
+      current = [currentItem];
+      continue;
+    }
+    current.push(currentItem);
+  }
+
+  if (current.length > 0) {
+    spans.push(makeIndexedPhraseSpan(spans.length, current));
+  }
+  return spans;
+}
+
+function makeIndexedPhraseSpan(
+  phraseIndex: number,
+  items: Array<{ note: MelodyNote; index: number }>,
+): PhraseSpan {
+  const sorted = [...items].sort((a, b) => a.note.start - b.note.start);
+  const notes = sorted.map((item) => item.note);
+  const first = notes[0]!;
+  const last = notes.at(-1)!;
+  const start = first.start;
+  const end = last.start + last.duration;
+
+  return {
+    phraseIndex,
+    noteIndices: sorted.map((item) => item.index),
+    notes,
+    start,
+    end,
+    duration: Math.max(0.001, end - start),
+    quality: scorePhraseRepairQuality(notes),
+  };
+}
+
+function findPhraseFamilyRepairMatches(
+  intentSpans: PhraseSpan[],
+  correctedSpans: PhraseSpan[],
+): Array<{
+  weakPhraseIndex: number;
+  strongPhraseIndex: number;
+  similarity: number;
+  strength: number;
+}> {
+  const matches: Array<{
+    weakPhraseIndex: number;
+    strongPhraseIndex: number;
+    similarity: number;
+    strength: number;
+  }> = [];
+
+  for (let left = 0; left < intentSpans.length - 1; left++) {
+    for (let right = left + 1; right < intentSpans.length; right++) {
+      const leftIntent = intentSpans[left]!;
+      const rightIntent = intentSpans[right]!;
+      if (leftIntent.notes.length < 3 || rightIntent.notes.length < 3) continue;
+
+      const similarity = scorePhraseFamilySimilarity(leftIntent, rightIntent);
+      if (similarity < 0.76) continue;
+
+      const leftCorrected = correctedSpans[left];
+      const rightCorrected = correctedSpans[right];
+      if (!leftCorrected || !rightCorrected) continue;
+
+      const leftQuality = leftCorrected.quality;
+      const rightQuality = rightCorrected.quality;
+      const qualityGap = Math.abs(leftQuality - rightQuality);
+      const weakEnough = Math.min(leftQuality, rightQuality) < 0.78 || qualityGap >= 0.11;
+      const strongEnough = Math.max(leftQuality, rightQuality) >= 0.72;
+      if (!weakEnough || !strongEnough || qualityGap < 0.055) continue;
+
+      const weakPhraseIndex = leftQuality <= rightQuality ? left : right;
+      const strongPhraseIndex = weakPhraseIndex === left ? right : left;
+      const strength = clamp(
+        0.22 + (similarity - 0.76) * 0.72 + qualityGap * 0.58,
+        0.22,
+        0.56,
+      );
+
+      matches.push({
+        weakPhraseIndex,
+        strongPhraseIndex,
+        similarity,
+        strength,
+      });
+    }
+  }
+
+  return matches.sort((a, b) => {
+    const leftScore = a.similarity + a.strength * 0.4;
+    const rightScore = b.similarity + b.strength * 0.4;
+    return rightScore - leftScore;
+  });
+}
+
+function scorePhraseFamilySimilarity(left: PhraseSpan, right: PhraseSpan): number {
+  const lengthScore =
+    1 -
+    clamp(
+      Math.abs(left.notes.length - right.notes.length) /
+        Math.max(left.notes.length, right.notes.length),
+      0,
+      1,
+    );
+  const contourScore = compareNumericSeries(
+    relativePitchSeries(left.notes),
+    relativePitchSeries(right.notes),
+    7,
+    { octaveEquivalent: true },
+  );
+  const intervalScore = compareNumericSeries(
+    intervalSeries(left.notes),
+    intervalSeries(right.notes),
+    5,
+    { octaveEquivalent: true },
+  );
+  const rhythmScore =
+    compareNumericSeries(relativeCenterSeries(left), relativeCenterSeries(right), 0.24) *
+      0.58 +
+    compareNumericSeries(relativeDurationSeries(left), relativeDurationSeries(right), 0.24) *
+      0.42;
+  const openingScore = compareNumericSeries(
+    intervalSeries(left.notes).slice(0, 2),
+    intervalSeries(right.notes).slice(0, 2),
+    5,
+    { octaveEquivalent: true },
+  );
+  const cadenceScore = 1 - clamp(
+    octaveAwareDistance(
+      (left.notes.at(-1)?.pitch ?? left.notes[0]!.pitch) - left.notes[0]!.pitch,
+      (right.notes.at(-1)?.pitch ?? right.notes[0]!.pitch) - right.notes[0]!.pitch,
+    ) / 8,
+    0,
+    1,
+  );
+
+  return clamp(
+    contourScore * 0.3 +
+      intervalScore * 0.22 +
+      rhythmScore * 0.2 +
+      lengthScore * 0.12 +
+      openingScore * 0.09 +
+      cadenceScore * 0.07,
+    0,
+    1,
+  );
+}
+
+function scorePhraseRepairQuality(notes: MelodyNote[]): number {
+  if (notes.length === 0) return 0;
+  const avgConfidence =
+    notes.reduce((sum, note) => sum + note.confidence, 0) / notes.length;
+  const durations = notes.map((note) => note.duration);
+  const medianDuration = Math.max(0.001, median(durations));
+  const durationDeviation =
+    durations.reduce(
+      (sum, duration) => sum + Math.abs(duration - medianDuration) / medianDuration,
+      0,
+    ) / durations.length;
+  const rhythmScore = 1 - clamp(durationDeviation / 1.2, 0, 1);
+  const awkwardRatio =
+    notes.length > 1 ? countAwkwardIntervals(notes) / (notes.length - 1) : 0;
+  const structuralScore = clamp(notes.length / 4, 0, 1);
+
+  return clamp(
+    avgConfidence * 0.62 +
+      rhythmScore * 0.18 +
+      (1 - awkwardRatio) * 0.14 +
+      structuralScore * 0.06,
+    0,
+    1,
+  );
+}
+
+function repairWeakPhraseFromFamilyTemplate(
+  notes: MelodyNote[],
+  weak: PhraseSpan,
+  strong: PhraseSpan,
+  scalePcs: Set<number>,
+  beat: number,
+  strength: number,
+): MelodyNote[] {
+  const repaired = notes.map((note) => ({ ...note }));
+  const weakFirst = weak.notes[0];
+  const strongFirst = strong.notes[0];
+  if (!weakFirst || !strongFirst) return repaired;
+
+  for (let position = 0; position < weak.noteIndices.length; position++) {
+    const noteIndex = weak.noteIndices[position]!;
+    const note = repaired[noteIndex];
+    if (!note) continue;
+
+    const template = phraseTemplateNoteAt(
+      strong,
+      phraseNoteProgress(weak.notes[position] ?? note, weak),
+      position,
+    );
+    if (!template) continue;
+
+    const isEdge = position === 0 || position === weak.noteIndices.length - 1;
+    const lowConfidence = note.confidence < 0.78;
+    const relativeTargetPitch = template.pitch - strongFirst.pitch;
+    const targetPitch = nearestScalePitch(weakFirst.pitch + relativeTargetPitch, scalePcs);
+    const pitchDistance = Math.abs(targetPitch - note.pitch);
+    const shouldPitchRepair =
+      !isEdge
+        ? lowConfidence || pitchDistance >= 2
+        : lowConfidence && pitchDistance <= 2;
+
+    if (shouldPitchRepair && pitchDistance <= (isEdge ? 2 : 6)) {
+      const pitchStrength = clamp(
+        strength + (lowConfidence ? 0.16 : 0) + (pitchDistance >= 3 ? 0.08 : 0),
+        0.18,
+        isEdge ? 0.38 : 0.68,
+      );
+      const blendedPitch = nearestScalePitch(
+        Math.round(note.pitch + (targetPitch - note.pitch) * pitchStrength),
+        scalePcs,
+      );
+      if (Math.abs(blendedPitch - note.pitch) <= (isEdge ? 2 : 5)) {
+        note.pitch = blendedPitch;
+        note.confidence = clamp(Math.max(note.confidence, 0.82), 0, 1);
+      }
+    }
+
+    const relativeStart = (template.start - strong.start) / strong.duration;
+    const relativeDuration = template.duration / strong.duration;
+    const targetStart = weak.start + relativeStart * weak.duration;
+    const targetDuration = clamp(
+      relativeDuration * weak.duration,
+      Math.max(0.05, beat * 0.16),
+      Math.max(0.06, weak.duration),
+    );
+    const timingOff =
+      Math.abs(targetStart - note.start) >= beat * 0.16 ||
+      Math.abs(targetDuration - note.duration) >= beat * 0.18;
+
+    if ((lowConfidence || timingOff) && !isEdge) {
+      const timingStrength = clamp(strength * 0.5 + (lowConfidence ? 0.08 : 0), 0.12, 0.34);
+      note.start = roundTo(
+        Math.max(0, note.start + (targetStart - note.start) * timingStrength),
+        3,
+      );
+      note.duration = roundTo(
+        Math.max(
+          0.05,
+          note.duration + (targetDuration - note.duration) * timingStrength,
+        ),
+        3,
+      );
+    }
+  }
+
+  return preventTraceOverlaps(repaired, beat);
+}
+
+function phraseTemplateNoteAt(
+  phrase: PhraseSpan,
+  progress: number,
+  ordinal: number,
+): MelodyNote | null {
+  if (phrase.notes.length === 0) return null;
+  if (phrase.notes.length > ordinal) return phrase.notes[ordinal]!;
+
+  let best = phrase.notes[0]!;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const note of phrase.notes) {
+    const distance = Math.abs(phraseNoteProgress(note, phrase) - progress);
+    if (distance < bestDistance) {
+      best = note;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+function phraseNoteProgress(note: MelodyNote, phrase: PhraseSpan): number {
+  const center = note.start + note.duration * 0.5;
+  return clamp((center - phrase.start) / phrase.duration, 0, 1);
+}
+
+function relativePitchSeries(notes: MelodyNote[]): number[] {
+  const first = notes[0];
+  if (!first) return [];
+  return notes.map((note) => note.pitch - first.pitch);
+}
+
+function intervalSeries(notes: MelodyNote[]): number[] {
+  const intervals: number[] = [];
+  for (let index = 1; index < notes.length; index++) {
+    intervals.push(notes[index]!.pitch - notes[index - 1]!.pitch);
+  }
+  return intervals;
+}
+
+function relativeCenterSeries(phrase: PhraseSpan): number[] {
+  return phrase.notes.map((note) => phraseNoteProgress(note, phrase));
+}
+
+function relativeDurationSeries(phrase: PhraseSpan): number[] {
+  return phrase.notes.map((note) => note.duration / phrase.duration);
+}
+
+function compareNumericSeries(
+  left: number[],
+  right: number[],
+  tolerance: number,
+  options: { octaveEquivalent?: boolean } = {},
+): number {
+  if (left.length === 0 || right.length === 0) return left.length === right.length ? 1 : 0;
+  const count = Math.max(2, Math.min(8, Math.max(left.length, right.length)));
+  const leftResampled = resampleSeries(left, count);
+  const rightResampled = resampleSeries(right, count);
+  let normalizedDistance = 0;
+
+  for (let index = 0; index < count; index++) {
+    const distance = options.octaveEquivalent
+      ? octaveAwareDistance(leftResampled[index]!, rightResampled[index]!)
+      : Math.abs(leftResampled[index]! - rightResampled[index]!);
+    normalizedDistance += clamp(distance / tolerance, 0, 1);
+  }
+
+  return 1 - normalizedDistance / count;
+}
+
+function resampleSeries(values: number[], count: number): number[] {
+  if (values.length === 0) return Array.from({ length: count }, () => 0);
+  if (values.length === 1) return Array.from({ length: count }, () => values[0]!);
+  return Array.from({ length: count }, (_, index) => {
+    const position = (index / Math.max(1, count - 1)) * (values.length - 1);
+    const leftIndex = Math.floor(position);
+    const rightIndex = Math.min(values.length - 1, leftIndex + 1);
+    const amount = position - leftIndex;
+    return interpolate(values[leftIndex]!, values[rightIndex]!, amount);
+  });
+}
+
+function octaveAwareDistance(left: number, right: number): number {
+  const direct = Math.abs(left - right);
+  const octaveFolded = Math.abs(direct - 12 * Math.round(direct / 12));
+  return Math.min(direct, octaveFolded);
+}
+
 function rankTonalCandidates(
   notes: MelodyNote[],
   corrected: CleanMelody,
@@ -615,8 +1134,7 @@ function buildPitchClassWeights(notes: MelodyNote[]): number[] {
   const sorted = [...notes].sort((a, b) => a.start - b.start);
 
   sorted.forEach((note, index) => {
-    const isEdge = index === 0 || index === sorted.length - 1;
-    const anchorWeight = isEdge ? 1.8 : note.duration >= 0.42 ? 1.3 : 1;
+    const anchorWeight = intentTonalAnchorWeight(sorted, index);
     weights[mod12(note.pitch)] +=
       Math.max(0.05, note.duration) *
       Math.max(0.1, note.velocity) *
@@ -625,6 +1143,14 @@ function buildPitchClassWeights(notes: MelodyNote[]): number[] {
   });
 
   return weights;
+}
+
+function intentTonalAnchorWeight(notes: MelodyNote[], index: number): number {
+  const note = notes[index];
+  if (!note) return 1;
+  if (index === 0) return openingAnchorWeight(notes, { stableConfidence: 0.86 });
+  if (index === notes.length - 1) return closingAnchorWeight(notes);
+  return note.duration >= 0.42 || note.confidence >= 0.82 ? 1.3 : 1;
 }
 
 function scoreTonalCandidate(
@@ -1092,6 +1618,13 @@ function alignMelodyToOwnTonalCenter(melody: CleanMelody): CleanMelody {
   const scalePcs = getScalePitchClasses(root, melody.scale);
   const cadencePcs = getCadenceTargets(root, melody.scale);
   const notes = melody.notes.map((note, index) => {
+    const notePc = mod12(note.pitch);
+    if (
+      !scalePcs.has(notePc) &&
+      shouldPreserveExpressiveNonScaleTone(melody.notes, index, scalePcs, cadencePcs)
+    ) {
+      return { ...note };
+    }
     const snapped = nearestScalePitch(note.pitch, scalePcs);
     const isFinal = index === melody.notes.length - 1;
     const targetPitch =

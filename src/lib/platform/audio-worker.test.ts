@@ -154,6 +154,42 @@ describe("audio worker adapter", () => {
     expect(result.diagnostics?.frameCount).toBe(3);
   });
 
+  it("normalizes RMVPE worker responses and preserves RMVPE diagnostics", () => {
+    const result = normalizeWorkerResponse(
+      {
+        provider: "rmvpe",
+        rawNotes: [
+          { pitch: 60, start: 0, duration: 0.4, velocity: 0.82, confidence: 0.92 },
+          { pitch: 64, start: 0.5, duration: 0.4, velocity: 0.84, confidence: 0.94 },
+        ],
+        diagnostics: {
+          duration: 0.9,
+          rmvpeFrames: 90,
+          rmvpeVoicedFrames: 76,
+          rmvpeHopMs: 10,
+          rmvpeConfidenceThreshold: 0.03,
+          rmvpeDevice: "cpu",
+          rmvpeModel: "/models/rmvpe.onnx",
+          rmvpeExecutionProvider: "CPUExecutionProvider",
+        },
+      },
+      {
+        targetInstrument: "piano",
+        workerMs: 24,
+      },
+    );
+
+    expect(result.provider).toBe("rmvpe");
+    expect(result.rawNotes).toHaveLength(2);
+    expect(result.diagnostics?.rmvpeFrames).toBe(90);
+    expect(result.diagnostics?.rmvpeVoicedFrames).toBe(76);
+    expect(result.diagnostics?.rmvpeHopMs).toBe(10);
+    expect(result.diagnostics?.rmvpeConfidenceThreshold).toBe(0.03);
+    expect(result.diagnostics?.rmvpeDevice).toBe("cpu");
+    expect(result.diagnostics?.rmvpeModel).toBe("/models/rmvpe.onnx");
+    expect(result.diagnostics?.rmvpeExecutionProvider).toBe("CPUExecutionProvider");
+  });
+
   it("rejects worker responses with no voiced notes", () => {
     expect(() =>
       normalizeWorkerResponse(
@@ -263,7 +299,7 @@ describe("audio worker adapter", () => {
     expect(result.diagnostics?.selectedMelodyKind).toBe("corrected");
   });
 
-  it("keeps corrected for recoverable takes when musical does not improve quality", () => {
+  it("uses musical for recoverable fragmented takes", () => {
     const result = normalizeWorkerResponse(
       {
         source: "swiftf0",
@@ -290,8 +326,8 @@ describe("audio worker adapter", () => {
       },
     );
 
-    expect(result.selectedMelodyKind).toBe("corrected");
-    expect(result.diagnostics?.selectedMelodyKind).toBe("corrected");
+    expect(result.selectedMelodyKind).toBe("musical");
+    expect(result.diagnostics?.selectedMelodyKind).toBe("musical");
   });
 
   it("preserves no_voiced_frames from worker 422 responses", async () => {
@@ -389,6 +425,32 @@ describe("audio worker retry", () => {
     }
   });
 
+  it("passes optional pitch provider hints through the shared adapter", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalUrl = process.env.AUDIO_WORKER_URL;
+    process.env.AUDIO_WORKER_URL = "http://audio-worker.test";
+    let receivedProvider: FormDataEntryValue | null = null;
+    globalThis.fetch = (async (_url, init) => {
+      const body = init?.body as FormData;
+      receivedProvider = body.get("pitchProvider");
+      return new Response(validBody, { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      await transcribeWithAudioWorker({
+        audio: new File(["audio"], "hum.webm", { type: "audio/webm" }),
+        targetInstrument: "piano",
+        requestId: "req_pitch_provider",
+        pitchProvider: "auto",
+      });
+      expect(receivedProvider).toBe("auto");
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalUrl === undefined) delete process.env.AUDIO_WORKER_URL;
+      else process.env.AUDIO_WORKER_URL = originalUrl;
+    }
+  });
+
   it("does not retry a non-retryable 4xx", async () => {
     const worker = withWorker(() => new Response("bad request", { status: 400 }));
     try {
@@ -401,6 +463,38 @@ describe("audio worker retry", () => {
     } catch (error) {
       expect(error).toBeInstanceOf(AudioWorkerError);
       expect((error as AudioWorkerError).code).toBe("worker_http_error");
+      expect(worker.calls()).toBe(1);
+    } finally {
+      worker.restore();
+    }
+  });
+
+  it("surfaces structured worker detail messages", async () => {
+    const worker = withWorker(
+      () =>
+        new Response(
+          JSON.stringify({
+            detail: {
+              error: "detector_unavailable",
+              message: "RMVPE model is missing; set AUDIO_ENGINE_RMVPE_MODEL_PATH",
+            },
+          }),
+          { status: 422 },
+        ),
+    );
+    try {
+      await transcribeWithAudioWorker({
+        audio: new File(["audio"], "hum.webm", { type: "audio/webm" }),
+        targetInstrument: "piano",
+        requestId: "req_worker_detail",
+      });
+      throw new Error("expected transcribeWithAudioWorker to reject");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AudioWorkerError);
+      expect((error as AudioWorkerError).code).toBe("worker_http_error");
+      expect((error as AudioWorkerError).message).toContain(
+        "AUDIO_ENGINE_RMVPE_MODEL_PATH",
+      );
       expect(worker.calls()).toBe(1);
     } finally {
       worker.restore();

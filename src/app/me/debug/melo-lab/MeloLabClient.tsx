@@ -28,58 +28,42 @@ import {
   compactMeloLabDiagnostics,
   MELO_LAB_MAX_MUSIC_DURATION_SECONDS,
   MELO_LAB_MAX_RECORDING_MS,
-  MELO_LAB_PITCH_PROVIDERS,
   MELO_LAB_STAGES,
-  type MeloLabPitchProviderId,
   type MeloLabStageId,
   type MeloLabTranscribeResponse,
 } from "@/lib/test/melo-lab-contract";
 import {
   generateMeloLabMusic,
-  transcribeMeloLabProvider,
+  transcribeMeloLabAuto,
+  type MeloLabTranscriptionRun,
 } from "@/lib/test/melo-lab-client";
 
-type PitchProviderId = MeloLabPitchProviderId;
 type StageId = MeloLabStageId;
 type RenderMode = "piano" | "voice";
 
 type MeloLabResponse = MeloLabTranscribeResponse;
 
-type LoadingProviderRun = {
-  provider: PitchProviderId;
+type LoadingTranscriptionRun = {
   status: "loading";
 };
 
-type ReadyProviderRun = {
-  provider: PitchProviderId;
-  status: "ready";
-  response: MeloLabResponse;
-  elapsedMs: number;
-};
-
-type ErrorProviderRun = {
-  provider: PitchProviderId;
-  status: "error";
-  error: string;
-  elapsedMs: number;
-};
-
-type ProviderRun = LoadingProviderRun | ReadyProviderRun | ErrorProviderRun;
+type ReadyTranscriptionRun = Extract<MeloLabTranscriptionRun, { status: "ready" }>;
+type TranscriptionRun = LoadingTranscriptionRun | MeloLabTranscriptionRun;
 
 type MusicOutput = {
   url: string;
-  provider: PitchProviderId;
   stage: StageId;
   melodySource: string;
   prompt: string;
   styleMix: number;
+  requestedProvider: string;
+  actualProvider: string;
   model: string | null;
   generationMs: string | null;
   melodyConditioned: string | null;
   cfgNotes: string | null;
 };
 
-const PROVIDERS = MELO_LAB_PITCH_PROVIDERS;
 const STAGES = MELO_LAB_STAGES;
 
 export default function MeloLabClient() {
@@ -100,8 +84,7 @@ function MeloLabContent() {
   const [error, setError] = useState<string | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [providerRuns, setProviderRuns] = useState<ProviderRun[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<PitchProviderId>("auto");
+  const [transcriptionRun, setTranscriptionRun] = useState<TranscriptionRun | null>(null);
   const [selectedStage, setSelectedStage] = useState<StageId>("corrected");
   const [renderMode, setRenderMode] = useState<RenderMode>("piano");
   const [playingKey, setPlayingKey] = useState<string | null>(null);
@@ -125,12 +108,8 @@ function MeloLabContent() {
   const transcribeRunIdRef = useRef(0);
 
   const selectedRun = useMemo(
-    () =>
-      providerRuns.find(
-        (run): run is ReadyProviderRun =>
-          run.provider === selectedProvider && run.status === "ready",
-      ) ?? null,
-    [providerRuns, selectedProvider],
+    () => (transcriptionRun?.status === "ready" ? transcriptionRun : null),
+    [transcriptionRun],
   );
 
   const selectedNotes = useMemo(
@@ -145,10 +124,8 @@ function MeloLabContent() {
   );
   const selectedMelody = selectedMusicProbe?.melody ?? null;
 
-  const selectedOutputKey = candidateKey(selectedProvider, selectedStage);
+  const selectedOutputKey = candidateKey(selectedStage);
   const selectedOutput = musicOutputs[selectedOutputKey] ?? null;
-  const readyRuns = providerRuns.filter(isReadyRun);
-  const selectedProviderRun = providerRuns.find((run) => run.provider === selectedProvider) ?? null;
   const systemSelectedStage = selectedRun?.response.result.selectedMelodyKind ?? null;
 
   const stopStream = useCallback(() => {
@@ -216,35 +193,25 @@ function MeloLabContent() {
     setStatus("transcribing");
     setError(null);
     resetFeedback();
-    setProviderRuns(PROVIDERS.map((provider) => ({ provider: provider.id, status: "loading" })));
+    setTranscriptionRun({ status: "loading" });
     setMusicOutputs((previous) => {
       revokeMusicOutputs(previous);
       return {};
     });
 
-    const outcomes = await Promise.all(
-      PROVIDERS.map((provider) => transcribeMeloLabProvider(blob, provider.id)),
-    );
+    const outcome = await transcribeMeloLabAuto(blob);
     if (!mountedRef.current || transcribeRunIdRef.current !== runId) return;
-    setProviderRuns(outcomes);
+    setTranscriptionRun(outcome);
 
-    const firstReady = outcomes.find(isReadyRun);
-    if (!firstReady) {
-      setError("No provider returned a usable melody.");
+    if (outcome.status === "error") {
+      setError(outcome.error);
       setStatus("error");
       return;
     }
 
-    setSelectedProvider(firstReady.provider);
-    setSelectedStage(firstReady.response.result.selectedMelodyKind);
-    setClosestStage(firstReady.response.result.selectedMelodyKind);
+    setSelectedStage(outcome.response.result.selectedMelodyKind);
+    setClosestStage(outcome.response.result.selectedMelodyKind);
     setStatus("ready");
-    const failed = outcomes.filter((run) => run.status === "error");
-    setError(
-      failed.length > 0
-        ? `${failed.length} provider${failed.length === 1 ? "" : "s"} failed; usable candidates are still shown.`
-        : null,
-    );
   }, [resetFeedback]);
 
   const startRecording = useCallback(async () => {
@@ -297,20 +264,16 @@ function MeloLabContent() {
   );
 
   const playStage = useCallback(
-    async (provider: PitchProviderId, stage: StageId, mode: RenderMode) => {
-      const run = providerRuns.find(
-        (candidate): candidate is ReadyProviderRun =>
-          candidate.provider === provider && candidate.status === "ready",
-      );
-      if (!run) return;
+    async (stage: StageId, mode: RenderMode) => {
+      if (!selectedRun) return;
 
       stopSynth(activeNodesRef.current);
       activeNodesRef.current = [];
-      const key = candidateKey(provider, stage);
+      const key = candidateKey(stage);
       setPlayingKey(key);
       try {
         const ctx = await getAudioContext(audioContextRef);
-        const notes = notesForStage(run.response, stage);
+        const notes = notesForStage(selectedRun.response, stage);
         const duration = renderNotes(ctx, notes, mode, activeNodesRef.current);
         if (playbackTimerRef.current !== null) {
           window.clearTimeout(playbackTimerRef.current);
@@ -324,7 +287,7 @@ function MeloLabContent() {
         setError(err instanceof Error ? err.message : String(err));
       }
     },
-    [providerRuns],
+    [selectedRun],
   );
 
   const stopPlayback = useCallback(() => {
@@ -338,7 +301,7 @@ function MeloLabContent() {
   }, []);
 
   const generateMusic = useCallback(async () => {
-    if (!selectedMelody || !selectedMusicProbe) return;
+    if (!selectedRun || !selectedMelody || !selectedMusicProbe) return;
     setStatus("generating_music");
     setError(null);
     const melodySource = selectedMusicProbe.source;
@@ -360,11 +323,12 @@ function MeloLabContent() {
           ...previous,
           [selectedOutputKey]: {
             url: URL.createObjectURL(music.blob),
-            provider: selectedProvider,
             stage: selectedStage,
             prompt,
             styleMix,
             melodySource,
+            requestedProvider: selectedRun.response.requestedProvider,
+            actualProvider: selectedRun.response.result.provider,
             model: music.model,
             generationMs: music.generationMs,
             melodyConditioned: music.melodyConditioned,
@@ -382,7 +346,7 @@ function MeloLabContent() {
     prompt,
     selectedMelody,
     selectedOutputKey,
-    selectedProvider,
+    selectedRun,
     selectedStage,
     selectedMusicProbe,
     styleMix,
@@ -447,9 +411,8 @@ function MeloLabContent() {
               MeLo Lab
             </h1>
             <p className="mt-3 max-w-3xl text-[14px] leading-[1.65] text-[#6F6A63]">
-              Local pitch-provider bench for the Murmur worker path plus small
-              external reference packages. Heavy neural baselines stay out of this
-              light lab profile.
+              Local view of Murmur&apos;s product transcription route, with the same
+              automatic pitch path used by the app.
             </p>
             <div className="mt-4 flex max-w-4xl flex-wrap gap-2 text-[11px] text-[#6F6A63]">
               <span className="border border-[#1A1A1A]/10 bg-white px-2 py-1">
@@ -540,26 +503,6 @@ function MeloLabContent() {
           </section>
 
           <section className="border border-[#1A1A1A]/10 bg-white p-4">
-            <h2 className="text-[13px] font-semibold uppercase tracking-[0.16em]">
-              Providers
-            </h2>
-            <ProviderStatusGroup
-              title="Murmur engine"
-              providers={PROVIDERS.filter((provider) => provider.group === "murmur")}
-              providerRuns={providerRuns}
-              selectedProvider={selectedProvider}
-              onSelect={(provider) => setSelectedProvider(provider)}
-            />
-            <ProviderStatusGroup
-              title="External test packages"
-              providers={PROVIDERS.filter((provider) => provider.group === "external")}
-              providerRuns={providerRuns}
-              selectedProvider={selectedProvider}
-              onSelect={(provider) => setSelectedProvider(provider)}
-            />
-          </section>
-
-          <section className="border border-[#1A1A1A]/10 bg-white p-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-[13px] font-semibold uppercase tracking-[0.16em]">
                 Music worker
@@ -583,7 +526,6 @@ function MeloLabContent() {
               0 when testing melody following.
             </p>
             <SelectedLayerSummary
-              selectedProvider={selectedProvider}
               selectedStage={selectedStage}
               systemSelectedStage={systemSelectedStage}
               target="music worker"
@@ -612,7 +554,7 @@ function MeloLabContent() {
               <div className="mt-4 border border-[#1A1A1A]/10 bg-[#FAF7F0] p-3">
                 <div className="mb-2 flex items-center gap-2 text-[12px] font-medium">
                   <Music2 className="h-3.5 w-3.5" />
-                  {selectedOutput.provider} / {stageTitle(selectedOutput.stage)}
+                  {stageTitle(selectedOutput.stage)}
                 </div>
                 <audio src={selectedOutput.url} controls className="w-full" />
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#6F6A63]">
@@ -631,28 +573,22 @@ function MeloLabContent() {
           <section className="border border-[#1A1A1A]/10 bg-white">
             <div className="border-b border-[#1A1A1A]/10 px-4 py-3">
               <h2 className="text-[13px] font-semibold uppercase tracking-[0.16em]">
-                Candidate matrix
+                Melody layers
               </h2>
             </div>
-            {providerRuns.length === 0 ? (
+            {transcriptionRun === null ? (
               <EmptyMatrix />
-            ) : selectedProviderRun ? (
-              <ProviderPanel
-                run={selectedProviderRun}
-                selectedProvider={selectedProvider}
+            ) : (
+              <StagePanel
+                run={transcriptionRun}
                 selectedStage={selectedStage}
                 renderMode={renderMode}
                 playingKey={playingKey}
-                onSelect={(provider, stage) => {
-                  setSelectedProvider(provider);
-                  setSelectedStage(stage);
-                }}
-                onPlay={(provider, stage) => void playStage(provider, stage, renderMode)}
+                onSelect={setSelectedStage}
+                onPlay={(stage) => void playStage(stage, renderMode)}
                 onDownloadJson={downloadStageJson}
                 onDownloadCsv={downloadStageCsv}
               />
-            ) : (
-              <ProviderMissing provider={selectedProvider} />
             )}
           </section>
 
@@ -663,7 +599,6 @@ function MeloLabContent() {
                   Pitch path
                 </h2>
                 <SelectedLayerSummary
-                  selectedProvider={selectedProvider}
                   selectedStage={selectedStage}
                   systemSelectedStage={systemSelectedStage}
                   compact
@@ -692,6 +627,7 @@ function MeloLabContent() {
                 )}
               </div>
             </div>
+            <ProviderPathSummary run={selectedRun} />
             <PitchPath notes={selectedNotes} />
           </section>
 
@@ -733,10 +669,9 @@ function MeloLabContent() {
             <IntentProfilePanel profile={selectedRun.response.result.melodyIntent} />
           )}
 
-          {readyRuns.length > 0 && (
+          {selectedRun && (
             <section className="grid gap-5 xl:grid-cols-[1fr_380px]">
               <FeedbackPanel
-                selectedProvider={selectedProvider}
                 selectedStage={selectedStage}
                 closestStage={closestStage}
                 score={stageScore}
@@ -746,8 +681,7 @@ function MeloLabContent() {
                 onNoteChange={setFeedbackNote}
                 onDownload={() =>
                   downloadFeedbackBundle({
-                    runs: readyRuns,
-                    selectedProvider,
+                    run: selectedRun,
                     selectedStage,
                     closestStage,
                     score: stageScore,
@@ -758,20 +692,17 @@ function MeloLabContent() {
               />
               <section className="border border-[#1A1A1A]/10 bg-white p-4">
                 <h2 className="text-[13px] font-semibold uppercase tracking-[0.16em]">
-                  Export provider
+                  Export run
                 </h2>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {readyRuns.map((run) => (
-                    <button
-                      key={run.provider}
-                      type="button"
-                      onClick={() => downloadProviderBundle(run.response)}
-                      className="inline-flex items-center gap-2 border border-[#1A1A1A]/15 bg-white px-3 py-2 text-[12px]"
-                    >
-                      <FileJson className="h-3.5 w-3.5" />
-                      {run.provider} bundle
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => downloadRunBundle(selectedRun.response)}
+                    className="inline-flex items-center gap-2 border border-[#1A1A1A]/15 bg-white px-3 py-2 text-[12px]"
+                  >
+                    <FileJson className="h-3.5 w-3.5" />
+                    Auto bundle
+                  </button>
                 </div>
               </section>
             </section>
@@ -800,101 +731,13 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function ProviderStatusGroup({
-  title,
-  providers,
-  providerRuns,
-  selectedProvider,
-  onSelect,
-}: {
-  title: string;
-  providers: ReadonlyArray<(typeof PROVIDERS)[number]>;
-  providerRuns: ProviderRun[];
-  selectedProvider: PitchProviderId;
-  onSelect: (provider: PitchProviderId) => void;
-}) {
-  return (
-    <div className="mt-4">
-      <p className="text-[10px] uppercase tracking-[0.18em] text-[#8C8780]">{title}</p>
-      <div className="mt-2 space-y-2">
-        {providers.map((provider) => {
-          const run = providerRuns.find((item) => item.provider === provider.id);
-          return (
-            <ProviderStatus
-              key={provider.id}
-              provider={provider}
-              run={run}
-              selected={selectedProvider === provider.id}
-              onSelect={() => onSelect(provider.id)}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function ProviderStatus({
-  provider,
-  run,
-  selected,
-  onSelect,
-}: {
-  provider: (typeof PROVIDERS)[number];
-  run: ProviderRun | undefined;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const statusText =
-    run?.status === "ready"
-      ? `${run.response.result.provider} · ${run.elapsedMs}ms`
-      : run?.status === "error"
-        ? "failed"
-        : run?.status === "loading"
-          ? "running"
-          : "load audio";
-
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={
-        selected
-          ? "w-full border border-[#1A1A1A] bg-[#FFF9F2] px-3 py-2 text-left"
-          : "w-full border border-[#1A1A1A]/10 bg-white px-3 py-2 text-left hover:bg-[#FAF7F0]"
-      }
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[12px] font-medium">{provider.title}</p>
-          <p className="mt-0.5 text-[11px] text-[#8C8780]">{provider.subtitle}</p>
-        </div>
-        <span className="font-mono text-[11px] text-[#6F6A63]">{statusText}</span>
-      </div>
-    </button>
-  );
-}
-
 function EmptyMatrix() {
   return (
     <div className="flex min-h-[360px] items-center justify-center px-6 py-10 text-center">
       <div>
         <p className="text-[13px] font-medium">No hum loaded</p>
         <p className="mt-2 max-w-md text-[12px] leading-[1.6] text-[#6F6A63]">
-          Record or upload audio to produce local provider candidates.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function ProviderMissing({ provider }: { provider: PitchProviderId }) {
-  return (
-    <div className="flex min-h-48 items-center justify-center px-6 py-10 text-center">
-      <div>
-        <p className="text-[13px] font-medium">{providerInfo(provider).title}</p>
-        <p className="mt-2 max-w-md text-[12px] leading-[1.6] text-[#6F6A63]">
-          This provider has not returned a candidate for the current hum.
+          Record or upload audio to produce local melody layers.
         </p>
       </div>
     </div>
@@ -902,13 +745,11 @@ function ProviderMissing({ provider }: { provider: PitchProviderId }) {
 }
 
 function SelectedLayerSummary({
-  selectedProvider,
   selectedStage,
   systemSelectedStage,
   target = "preview",
   compact = false,
 }: {
-  selectedProvider: PitchProviderId;
   selectedStage: StageId;
   systemSelectedStage: StageId | null;
   target?: string;
@@ -927,9 +768,6 @@ function SelectedLayerSummary({
       <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="font-serif text-[22px] leading-none text-[#1A1A1A]">
           {selectedTitle}
-        </span>
-        <span className="font-mono text-[11px] text-[#6F6A63]">
-          {selectedProvider}
         </span>
         {isManualOverride ? (
           <span className="border border-[#FF5924]/25 bg-[#FFF1EA] px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] text-[#A83B16]">
@@ -958,9 +796,8 @@ function SelectedLayerSummary({
   );
 }
 
-function ProviderPanel({
+function StagePanel({
   run,
-  selectedProvider,
   selectedStage,
   renderMode,
   playingKey,
@@ -969,31 +806,24 @@ function ProviderPanel({
   onDownloadJson,
   onDownloadCsv,
 }: {
-  run: ProviderRun;
-  selectedProvider: PitchProviderId;
+  run: TranscriptionRun;
   selectedStage: StageId;
   renderMode: RenderMode;
   playingKey: string | null;
-  onSelect: (provider: PitchProviderId, stage: StageId) => void;
-  onPlay: (provider: PitchProviderId, stage: StageId) => void;
+  onSelect: (stage: StageId) => void;
+  onPlay: (stage: StageId) => void;
   onDownloadJson: (response: MeloLabResponse, stage: StageId) => void;
   onDownloadCsv: (response: MeloLabResponse, stage: StageId) => void;
 }) {
-  const providerMeta = providerInfo(run.provider);
-  const requestLabel = providerMeta.kind === "route" ? "route" : "detector";
-  const originLabel = providerMeta.group === "murmur" ? "Murmur" : "external";
   return (
     <div className="px-4 py-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <p className="text-[16px] font-semibold">{providerMeta.title}</p>
+          <p className="text-[16px] font-semibold">Auto transcription</p>
           <p className="mt-1 text-[12px] leading-[1.5] text-[#6F6A63]">
-            {originLabel} ·{" "}
-            {requestLabel}: <span className="font-mono">{run.provider}</span>
+            Product route layer output for the current hum.
             {run.status === "ready" && (
               <>
-                {" "}
-                · detector used: <span className="font-mono">{run.response.result.provider}</span>
                 {" "}
                 · selected: <span className="font-mono">{run.response.result.selectedMelodyKind}</span>
               </>
@@ -1002,7 +832,7 @@ function ProviderPanel({
         </div>
         {run.status === "ready" && (
           <div className="flex flex-wrap gap-2 text-[11px] text-[#6F6A63]">
-            {providerFacts(run.response, run.elapsedMs).map(([key, value]) => (
+            {transcriptionFacts(run.response, run.elapsedMs).map(([key, value]) => (
               <span key={key} className="border border-[#1A1A1A]/10 bg-[#FAF7F0] px-2 py-1">
                 {key}: {value}
               </span>
@@ -1027,15 +857,15 @@ function ProviderPanel({
         <div className="mt-4 grid gap-3 xl:grid-cols-4 md:grid-cols-2">
           {STAGES.map((stage) => (
             <StageCard
-              key={`${run.provider}-${stage.id}`}
+              key={stage.id}
               response={run.response}
               stage={stage}
               finalSelected={run.response.result.selectedMelodyKind === stage.id}
-              usingNow={selectedProvider === run.provider && selectedStage === stage.id}
-              playing={playingKey === candidateKey(run.provider, stage.id)}
+              usingNow={selectedStage === stage.id}
+              playing={playingKey === candidateKey(stage.id)}
               renderMode={renderMode}
-              onSelect={() => onSelect(run.provider, stage.id)}
-              onPlay={() => onPlay(run.provider, stage.id)}
+              onSelect={() => onSelect(stage.id)}
+              onPlay={() => onPlay(stage.id)}
               onDownloadJson={() => onDownloadJson(run.response, stage.id)}
               onDownloadCsv={() => onDownloadCsv(run.response, stage.id)}
             />
@@ -1281,6 +1111,52 @@ function PitchPath({ notes }: { notes: MelodyNote[] }) {
   );
 }
 
+function ProviderPathSummary({ run }: { run: ReadyTranscriptionRun | null }) {
+  if (!run) {
+    return (
+      <div className="mt-4 grid gap-2 md:grid-cols-4">
+        {["requested", "actual", "decision", "rerouted"].map((label) => (
+          <div key={label} className="border border-[#1A1A1A]/10 bg-[#FAF7F0] px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-[#8C8780]">
+              {label}
+            </p>
+            <p className="mt-1 font-mono text-[12px] text-[#6F6A63]">n/a</p>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const diagnostics = run.response.result.diagnostics;
+  return (
+    <div className="mt-4 grid gap-2 md:grid-cols-4">
+      <ProviderPathItem label="requested" value={run.response.requestedProvider} />
+      <ProviderPathItem label="actual" value={run.response.result.provider} />
+      <ProviderPathItem
+        label="decision"
+        value={diagnostics?.ensembleDecision ?? diagnostics?.ensembleSelected ?? "n/a"}
+      />
+      <ProviderPathItem
+        label="rerouted"
+        value={diagnostics?.providerRerouted === undefined ? "n/a" : String(diagnostics.providerRerouted)}
+      />
+    </div>
+  );
+}
+
+function ProviderPathItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border border-[#1A1A1A]/10 bg-[#FAF7F0] px-3 py-2">
+      <p className="text-[10px] uppercase tracking-[0.16em] text-[#8C8780]">
+        {label}
+      </p>
+      <p className="mt-1 truncate font-mono text-[12px] text-[#1A1A1A]" title={value}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function NotesTable({ notes }: { notes: MelodyNote[] }) {
   if (notes.length === 0) {
     return (
@@ -1425,7 +1301,6 @@ function IntentProfilePanel({ profile }: { profile?: MelodyIntentProfile }) {
 }
 
 function FeedbackPanel({
-  selectedProvider,
   selectedStage,
   closestStage,
   score,
@@ -1435,7 +1310,6 @@ function FeedbackPanel({
   onNoteChange,
   onDownload,
 }: {
-  selectedProvider: PitchProviderId;
   selectedStage: StageId;
   closestStage: StageId;
   score: number;
@@ -1453,7 +1327,7 @@ function FeedbackPanel({
             Feedback packet
           </h2>
           <p className="mt-1 text-[12px] leading-[1.55] text-[#6F6A63]">
-            Using now: {selectedProvider} / {stageTitle(selectedStage)}
+            Using now: {stageTitle(selectedStage)}
           </p>
         </div>
         <button
@@ -1528,16 +1402,8 @@ function NoteChips({ pitches }: { pitches: number[] }) {
   );
 }
 
-function isReadyRun(run: ProviderRun): run is ReadyProviderRun {
-  return run.status === "ready";
-}
-
-function providerInfo(provider: PitchProviderId): (typeof PROVIDERS)[number] {
-  return PROVIDERS.find((item) => item.id === provider) ?? PROVIDERS[0];
-}
-
-function candidateKey(provider: PitchProviderId, stage: StageId): string {
-  return `${provider}:${stage}`;
+function candidateKey(stage: StageId): string {
+  return `auto:${stage}`;
 }
 
 function notesForStage(response: MeloLabResponse, stage: StageId): MelodyNote[] {
@@ -1593,13 +1459,13 @@ function stageFacts(
   ];
 }
 
-function providerFacts(response: MeloLabResponse, elapsedMs: number): Array<[string, string]> {
+function transcriptionFacts(response: MeloLabResponse, elapsedMs: number): Array<[string, string]> {
   const diagnostics = response.result.diagnostics;
   const facts: Array<[string, string]> = [
     ["elapsed", `${elapsedMs}ms`],
     ["worker", msFact(diagnostics?.workerMs)],
     ["total", msFact(diagnostics?.totalMs)],
-    ["provider pitch", msFact(diagnostics?.providerPitchMs)],
+    ["f0 step", msFact(diagnostics?.providerPitchMs)],
     ["pitch", msFact(diagnostics?.pitchMs)],
     ["decision", diagnostics?.ensembleDecision ?? "n/a"],
     ["score", numberFact(diagnostics?.ensembleScore)],
@@ -1638,7 +1504,7 @@ function stagePayload(response: MeloLabResponse, stage: StageId) {
   };
 }
 
-function downloadProviderBundle(response: MeloLabResponse) {
+function downloadRunBundle(response: MeloLabResponse) {
   const payload = {
     tool: "melo-lab",
     testOnly: true,
@@ -1663,23 +1529,21 @@ function downloadProviderBundle(response: MeloLabResponse) {
     warnings: response.result.warnings,
   };
   downloadText(
-    `melo-lab-${response.pitchProvider}-${response.requestId.slice(0, 8)}-bundle.json`,
+    `melo-lab-auto-${response.requestId.slice(0, 8)}-bundle.json`,
     JSON.stringify(payload, null, 2),
     "application/json",
   );
 }
 
 function downloadFeedbackBundle({
-  runs,
-  selectedProvider,
+  run,
   selectedStage,
   closestStage,
   score,
   note,
   musicOutputs,
 }: {
-  runs: ReadyProviderRun[];
-  selectedProvider: PitchProviderId;
+  run: ReadyTranscriptionRun;
   selectedStage: StageId;
   closestStage: StageId;
   score: number;
@@ -1692,53 +1556,48 @@ function downloadFeedbackBundle({
     contractVersion: MELO_LAB_CONTRACT_VERSION,
     exportedAt: new Date().toISOString(),
     contract: {
-      providers: PROVIDERS.map((provider) => provider.id),
+      route: "auto",
       stages: STAGES.map((stage) => stage.id),
     },
     judgment: {
-      selectedProvider,
       selectedStage,
       closestStage,
       selectedLayerMatchScore: score,
       divergenceNote: note.trim(),
     },
-    providers: Object.fromEntries(
-      runs.map((run) => [
-        run.provider,
-        {
-          elapsedMs: run.elapsedMs,
-          requestId: run.response.requestId,
-          requestedProvider: run.response.requestedProvider,
-          actualProvider: run.response.result.provider,
-          selectedBySystem: run.response.result.selectedMelodyKind,
-          stages: Object.fromEntries(
-            STAGES.map((stage) => [
-              stage.id,
-              {
-                summary: summaryForStage(run.response, stage.id),
-                notes: notesForStage(run.response, stage.id),
-                melody: stage.id === "raw" ? null : run.response.stages[stage.id].melody,
-              },
-            ]),
-          ),
-          contour: run.response.result.contour ?? null,
-          melodyIntent: run.response.result.melodyIntent ?? null,
-          diagnostics: compactMeloLabDiagnostics(run.response.result.diagnostics),
-          warnings: run.response.result.warnings,
-        },
-      ]),
-    ),
+    transcription: {
+      elapsedMs: run.elapsedMs,
+      requestId: run.response.requestId,
+      requestedProvider: run.response.requestedProvider,
+      actualProvider: run.response.result.provider,
+      selectedBySystem: run.response.result.selectedMelodyKind,
+      stages: Object.fromEntries(
+        STAGES.map((stage) => [
+          stage.id,
+          {
+            summary: summaryForStage(run.response, stage.id),
+            notes: notesForStage(run.response, stage.id),
+            melody: stage.id === "raw" ? null : run.response.stages[stage.id].melody,
+          },
+        ]),
+      ),
+      contour: run.response.result.contour ?? null,
+      melodyIntent: run.response.result.melodyIntent ?? null,
+      diagnostics: compactMeloLabDiagnostics(run.response.result.diagnostics),
+      warnings: run.response.result.warnings,
+    },
     musicOutputs: Object.fromEntries(
       Object.entries(musicOutputs)
         .filter(([, output]) => output !== null)
         .map(([key, output]) => [
           key,
           {
-            provider: output?.provider,
             stage: output?.stage,
             melodySource: output?.melodySource,
             prompt: output?.prompt,
             styleMix: output?.styleMix,
+            requestedProvider: output?.requestedProvider,
+            actualProvider: output?.actualProvider,
             model: output?.model,
             generationMs: output?.generationMs,
             melodyConditioned: output?.melodyConditioned,
@@ -1748,7 +1607,7 @@ function downloadFeedbackBundle({
     ),
   };
   downloadText(
-    `melo-lab-feedback-${selectedProvider}-${Date.now()}.json`,
+    `melo-lab-feedback-auto-${Date.now()}.json`,
     JSON.stringify(payload, null, 2),
     "application/json",
   );
@@ -1957,6 +1816,8 @@ function revokeMusicOutputs(outputs: Record<string, MusicOutput | null>) {
 
 function metadataEntries(output: MusicOutput): Array<[string, string | null]> {
   return [
+    ["requestedProvider", output.requestedProvider],
+    ["actualProvider", output.actualProvider],
     ["melodySource", output.melodySource],
     ["model", output.model],
     ["generationMs", output.generationMs],

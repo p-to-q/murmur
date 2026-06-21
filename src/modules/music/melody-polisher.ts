@@ -92,6 +92,7 @@ function compactNoiseBursts(notes: MelodyNote[]): MelodyNote[] {
   return notes.filter((note, index) => {
     const prev = index > 0 ? notes[index - 1] : null;
     const next = index < notes.length - 1 ? notes[index + 1] : null;
+    if (isUsefulShortTone(notes, index)) return true;
     const isolated =
       Boolean(prev && next) &&
       note.duration < 0.11 &&
@@ -151,6 +152,7 @@ function removePitchOutliers(notes: MelodyNote[]): MelodyNote[] {
   return notes.filter((note, index) => {
     const prev = index > 0 ? notes[index - 1] : null;
     const next = index < notes.length - 1 ? notes[index + 1] : null;
+    if (isUsefulShortTone(notes, index)) return true;
     const localAnchor =
       prev && next ? Math.round((prev.pitch + next.pitch) / 2) : medianPitch;
     const drift = Math.abs(note.pitch - localAnchor);
@@ -166,6 +168,32 @@ function removePitchOutliers(notes: MelodyNote[]): MelodyNote[] {
 
     return true;
   });
+}
+
+function isUsefulShortTone(notes: MelodyNote[], index: number): boolean {
+  const note = notes[index];
+  const prev = index > 0 ? notes[index - 1] : null;
+  const next = index < notes.length - 1 ? notes[index + 1] : null;
+  if (!note || !prev || !next) return false;
+  if (note.duration < 0.06 || note.confidence < 0.54) return false;
+
+  const directionInto = Math.sign(note.pitch - prev.pitch);
+  const directionOut = Math.sign(next.pitch - note.pitch);
+  const passingTone =
+    directionInto !== 0 &&
+    directionInto === directionOut &&
+    Math.abs(note.pitch - prev.pitch) <= 5 &&
+    Math.abs(next.pitch - note.pitch) <= 5 &&
+    Math.abs(next.pitch - prev.pitch) >= 2;
+  const turnTone =
+    directionInto !== 0 &&
+    directionOut !== 0 &&
+    directionInto !== directionOut &&
+    Math.abs(note.pitch - prev.pitch) <= 4 &&
+    Math.abs(next.pitch - note.pitch) <= 4 &&
+    note.confidence >= 0.6;
+
+  return passingTone || turnTone;
 }
 
 function smoothPitchContour(notes: MelodyNote[]): MelodyNote[] {
@@ -243,8 +271,6 @@ function inferTonalProfile(notes: MelodyNote[]): TonalProfile {
   }
 
   const pcWeights = buildPitchClassWeights(notes);
-  const firstPc = mod12(notes[0]!.pitch);
-  const lastPc = mod12(notes[notes.length - 1]!.pitch);
   const meanPitch = average(notes.map((note) => note.pitch));
 
   let best: TonalProfile = {
@@ -264,7 +290,7 @@ function inferTonalProfile(notes: MelodyNote[]): TonalProfile {
     const minorPentScore =
       scoreScale(pcWeights, root, PENTATONIC_MINOR_INTERVALS) * 0.92;
 
-    const anchorBoost = anchorBonus(root, firstPc, lastPc);
+    const anchorBoost = anchorBonus(root, notes);
     const phraseBrightnessBoost = meanPitch >= 66 ? 0.06 : 0;
 
     const candidates: TonalProfile[] = [
@@ -330,12 +356,7 @@ function buildPitchClassWeights(notes: MelodyNote[]): number[] {
   const sorted = [...notes].sort((a, b) => a.start - b.start);
 
   sorted.forEach((note, index) => {
-    const anchorWeight =
-      index === 0 || index === sorted.length - 1
-        ? 1.9
-        : note.duration >= 0.5
-          ? 1.3
-          : 1;
+    const anchorWeight = tonalAnchorWeight(sorted, index);
     weights[mod12(note.pitch)] +=
       note.duration *
       Math.max(0.1, note.velocity) *
@@ -344,6 +365,14 @@ function buildPitchClassWeights(notes: MelodyNote[]): number[] {
   });
 
   return weights;
+}
+
+function tonalAnchorWeight(notes: MelodyNote[], index: number): number {
+  const note = notes[index];
+  if (!note) return 1;
+  if (index === 0) return openingAnchorWeight(notes);
+  if (index === notes.length - 1) return closingAnchorWeight(notes);
+  return note.duration >= 0.5 || note.confidence >= 0.86 ? 1.3 : 1;
 }
 
 function scoreScale(
@@ -366,12 +395,64 @@ function scoreScale(
   return score;
 }
 
-function anchorBonus(root: number, firstPc: number, lastPc: number): number {
+function anchorBonus(root: number, notes: MelodyNote[]): number {
+  const first = notes[0];
+  const last = notes.at(-1);
   let boost = 0;
-  if (firstPc === root) boost += 0.2;
-  if (lastPc === root) boost += 0.35;
-  if (mod12(lastPc - root) === 7) boost += 0.08;
+  if (first && openingAnchorWeight(notes) >= 1.18 && mod12(first.pitch) === root) {
+    boost += 0.06;
+  }
+  if (last) {
+    const closingWeight = closingAnchorWeight(notes);
+    if (mod12(last.pitch) === root) boost += closingWeight >= 1.28 ? 0.2 : 0.08;
+    if (mod12(last.pitch - root) === 7) boost += closingWeight >= 1.28 ? 0.05 : 0.02;
+  }
   return boost;
+}
+
+export function openingAnchorWeight(
+  notes: MelodyNote[],
+  opts?: { stableConfidence?: number },
+): number {
+  const first = notes[0];
+  if (!first) return 1;
+  const next = notes[1];
+  const firstEnd = first.start + first.duration;
+  const gapToNext = next ? Math.max(0, next.start - firstEnd) : 0;
+  const pickupLike =
+    Boolean(next) &&
+    first.duration <= 0.24 &&
+    gapToNext <= 0.16 &&
+    Math.abs(next!.pitch - first.pitch) >= 2;
+  const repeatedLater = notes
+    .slice(1)
+    .some(
+      (note) =>
+        mod12(note.pitch) === mod12(first.pitch) &&
+        note.duration >= 0.18 &&
+        note.confidence >= 0.7,
+    );
+  const stable =
+    first.duration >= 0.34 || first.confidence >= (opts?.stableConfidence ?? 0.88);
+
+  if (pickupLike && !repeatedLater) return 0.9;
+  if (stable || repeatedLater) return 1.25;
+  return 1.05;
+}
+
+export function closingAnchorWeight(notes: MelodyNote[]): number {
+  const last = notes.at(-1);
+  if (!last) return 1;
+  const previous = notes.at(-2);
+  const tailLike =
+    Boolean(previous) &&
+    last.duration <= 0.18 &&
+    last.confidence < 0.72 &&
+    Math.abs(last.pitch - previous!.pitch) <= 2;
+
+  if (tailLike) return 0.95;
+  if (last.duration >= 0.38 || last.confidence >= 0.84) return 1.38;
+  return 1.12;
 }
 
 function shouldFlipMinorToMajor(notes: MelodyNote[], profile: TonalProfile): boolean {
@@ -390,7 +471,9 @@ function shouldFlipMinorToMajor(notes: MelodyNote[], profile: TonalProfile): boo
     if (pc === minorThird) minorThirdWeight += weight;
   }
 
-  return majorThirdWeight >= minorThirdWeight * 0.82;
+  const totalThirdWeight = majorThirdWeight + minorThirdWeight;
+  if (totalThirdWeight <= 0) return false;
+  return majorThirdWeight >= minorThirdWeight * 1.15 && majorThirdWeight / totalThirdWeight >= 0.54;
 }
 
 function fitNotesToTonalProfile(
@@ -409,6 +492,13 @@ function fitNotesToTonalProfile(
   return notes.map((note, index) => {
     const prev = index > 0 ? notes[index - 1] : null;
     const next = index < notes.length - 1 ? notes[index + 1] : null;
+    const notePc = mod12(note.pitch);
+    if (
+      !scalePcs.has(notePc) &&
+      shouldPreserveExpressiveNonScaleTone(notes, index, scalePcs, anchorPcs)
+    ) {
+      return { ...note };
+    }
     const isAnchor = note.duration >= 0.45 || index === notes.length - 1;
     const correctionStrength = isAnchor ? 1 : 0.78;
 
@@ -442,6 +532,47 @@ function fitNotesToTonalProfile(
       pitch: bestPitch,
     };
   });
+}
+
+export function shouldPreserveExpressiveNonScaleTone(
+  notes: MelodyNote[],
+  index: number,
+  scalePcs: Set<number>,
+  resolutionPcs: ReadonlySet<number> | readonly number[],
+): boolean {
+  const note = notes[index];
+  const prev = index > 0 ? notes[index - 1] : null;
+  const next = index < notes.length - 1 ? notes[index + 1] : null;
+  if (!note || !prev || !next) return false;
+  if (note.confidence < 0.68) return false;
+
+  const prevInScale = scalePcs.has(mod12(prev.pitch));
+  const nextInScale = scalePcs.has(mod12(next.pitch));
+  const directionInto = Math.sign(note.pitch - prev.pitch);
+  const directionOut = Math.sign(next.pitch - note.pitch);
+  const passingTone =
+    directionInto !== 0 &&
+    directionInto === directionOut &&
+    Math.abs(note.pitch - prev.pitch) <= 5 &&
+    Math.abs(next.pitch - note.pitch) <= 5 &&
+    Math.abs(next.pitch - prev.pitch) >= 2 &&
+    (prevInScale || nextInScale);
+  const neighborTone =
+    Math.abs(prev.pitch - next.pitch) <= 1 &&
+    Math.abs(note.pitch - prev.pitch) <= 3 &&
+    (prevInScale || nextInScale);
+  const nextPc = mod12(next.pitch);
+  const resolutionMatch = Array.isArray(resolutionPcs)
+    ? resolutionPcs.includes(nextPc)
+    : (resolutionPcs as ReadonlySet<number>).has(nextPc);
+  const impliedHarmonyColor =
+    note.duration >= 0.16 &&
+    note.confidence >= 0.72 &&
+    nextInScale &&
+    Math.abs(next.pitch - note.pitch) <= 2 &&
+    (resolutionMatch || Math.abs(note.pitch - prev.pitch) <= 5);
+
+  return passingTone || neighborTone || impliedHarmonyColor;
 }
 
 function intervalsForProfile(profile: TonalProfile): readonly number[] {
@@ -488,8 +619,8 @@ function stabilizeCadence(
       : [mod12(root), mod12(root + 7), mod12(root + 3)];
 
   return notes.map((note, index) => {
-    const isCadenceZone = index >= notes.length - 2;
-    if (!isCadenceZone) return note;
+    const isFinal = index === notes.length - 1;
+    if (!isFinal) return note;
 
     const currentPc = mod12(note.pitch);
     if (cadenceTargets.includes(currentPc)) return note;

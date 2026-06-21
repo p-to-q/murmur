@@ -234,6 +234,7 @@ export type TranscriptionInput = {
 };
 
 export type TranscriptionProvider =
+  | "rmvpe"
   | "swiftf0"
   | "pyin"
   | "yin"
@@ -267,6 +268,13 @@ export type TranscriptionDiagnostics = {
   pitchMs?: number;
   polishMs?: number;
   totalMs?: number;
+  rmvpeFrames?: number;
+  rmvpeVoicedFrames?: number;
+  rmvpeHopMs?: number;
+  rmvpeConfidenceThreshold?: number;
+  rmvpeDevice?: string;
+  rmvpeModel?: string;
+  rmvpeExecutionProvider?: string | null;
   workerMs?: number;
   targetInstrument?: string;
   rangeClampApplied?: boolean;
