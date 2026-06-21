@@ -279,6 +279,12 @@ export function chooseGenerationMelodyKind(input: {
     weakIntent,
     unclearTonality,
   ].filter(Boolean).length;
+  const softMusicalCandidateSignal =
+    weakAcceptanceFromDiagnostics(diagnostics) ||
+    fragmentedTiming ||
+    weakConfidence ||
+    contourLooksShaky ||
+    (input.repairBias ?? 0) >= 0.45;
 
   if (
     !strongRescueSignal &&
@@ -293,7 +299,7 @@ export function chooseGenerationMelodyKind(input: {
     return "intent";
   }
 
-  if (strongRescueSignal || moderateSignalCount >= 2) {
+  if (strongRescueSignal || moderateSignalCount >= 2 || softMusicalCandidateSignal) {
     return shouldAutoSelectMusical({
       corrected,
       musical: melodies.musical,
@@ -450,10 +456,11 @@ function shouldAutoSelectMusical(input: {
     (typeof input.melodyIntent?.confidence === "number" && input.melodyIntent.confidence < 0.5) ||
     (typeof input.melodyIntent?.intentMatch === "number" && input.melodyIntent.intentMatch < 0.5) ||
     (typeof input.melodyIntent?.musicalityBias === "number" && input.melodyIntent.musicalityBias >= 0.68);
+  const weakAcceptanceSignal = weakAcceptanceFromDiagnostics(diagnostics);
 
   const failedRecoverableGates = [
     audioNotGreat,
-    acceptanceBad,
+    acceptanceBad || weakAcceptanceSignal,
     timingBad,
     shapeUncomfortable,
     intentBad,
@@ -461,22 +468,64 @@ function shouldAutoSelectMusical(input: {
   const requiredGateCount = bias >= 0.65 ? 2 : 3;
   const correctedQuality = scoreMelodyAcceptance(input.corrected);
   const musicalQuality = scoreMelodyAcceptance(input.musical);
+  const identity = scoreMelodyIdentitySimilarity(
+    input.corrected,
+    input.musical,
+    input.melodyIntent,
+  );
+  const identityThreshold = bias >= 0.55 ? 0.56 : 0.62;
+  const keepsHumIdentity =
+    identity.score >= identityThreshold &&
+    identity.contourScore >= 0.46 &&
+    identity.rhythmScore >= 0.42;
+  if (!keepsHumIdentity) return false;
+
+  const improvement = scoreMusicalImprovement(input.corrected, input.musical);
+  const musicFeelDoesNotRegress =
+    musicalQuality.musicFeelScore >= correctedQuality.musicFeelScore - 0.015;
+  const correctedIsOrdinary =
+    correctedQuality.score < 0.68 ||
+    correctedQuality.musicFeelScore < 0.66 ||
+    weakAcceptanceSignal ||
+    timingBad ||
+    shapeUncomfortable;
   const musicalImprovesCandidate =
     musicalQuality.score >= correctedQuality.score + 0.015 ||
     musicalQuality.musicFeelScore >= correctedQuality.musicFeelScore + 0.025 ||
     musicalQuality.excessiveHoldRatio <= correctedQuality.excessiveHoldRatio - 0.08 ||
-    musicalQuality.onsetFragmentation <= correctedQuality.onsetFragmentation - 0.12;
+    musicalQuality.onsetFragmentation <= correctedQuality.onsetFragmentation - 0.12 ||
+    improvement.score >= 0.045;
   const musicalDoesNotRegress =
     musicalQuality.score >= correctedQuality.score - 0.04 &&
     musicalQuality.musicFeelScore >= correctedQuality.musicFeelScore - 0.05 &&
     musicalQuality.excessiveHoldRatio <= correctedQuality.excessiveHoldRatio + 0.08 &&
     musicalQuality.onsetFragmentation <= correctedQuality.onsetFragmentation + 0.16;
+  const musicalClearlyBetter =
+    correctedIsOrdinary &&
+    failedRecoverableGates >= (bias >= 0.45 || improvement.score >= 0.055 ? 1 : 2) &&
+    improvement.score >= (bias >= 0.55 ? 0.04 : 0.055) &&
+    musicFeelDoesNotRegress;
+
+  if (musicalClearlyBetter) return true;
 
   return (
     acceptanceBad &&
     timingBad &&
     failedRecoverableGates >= requiredGateCount &&
     (musicalImprovesCandidate || musicalDoesNotRegress)
+  );
+}
+
+function weakAcceptanceFromDiagnostics(
+  diagnostics?: Partial<TranscriptionDiagnostics>,
+): boolean {
+  return (
+    (typeof diagnostics?.acceptanceScore === "number" && diagnostics.acceptanceScore < 0.62) ||
+    (typeof diagnostics?.musicFeelScore === "number" && diagnostics.musicFeelScore < 0.62) ||
+    (typeof diagnostics?.excessiveHoldRatio === "number" && diagnostics.excessiveHoldRatio >= 0.3) ||
+    (typeof diagnostics?.interiorHoldRatio === "number" && diagnostics.interiorHoldRatio >= 0.16) ||
+    (typeof diagnostics?.onsetFragmentation === "number" && diagnostics.onsetFragmentation >= 0.46) ||
+    (typeof diagnostics?.firstOnsetLag === "number" && diagnostics.firstOnsetLag >= 0.16)
   );
 }
 
@@ -3375,6 +3424,204 @@ function scoreMelodyAcceptance(melody: CleanMelody): {
     musicFeelScore,
     excessiveHoldRatio,
     onsetFragmentation,
+  };
+}
+
+function scoreMusicalImprovement(
+  corrected: CleanMelody,
+  musical: CleanMelody,
+): {
+  score: number;
+  timingGain: number;
+  intervalGain: number;
+  cadenceGain: number;
+  feelGain: number;
+} {
+  const correctedQuality = scoreMelodyAcceptance(corrected);
+  const musicalQuality = scoreMelodyAcceptance(musical);
+  const correctedAwkwardRatio =
+    corrected.notes.length > 1
+      ? countAwkwardIntervals(corrected.notes) / (corrected.notes.length - 1)
+      : 0;
+  const musicalAwkwardRatio =
+    musical.notes.length > 1
+      ? countAwkwardIntervals(musical.notes) / (musical.notes.length - 1)
+      : 0;
+  const timingGain = clamp(
+    (correctedQuality.onsetFragmentation - musicalQuality.onsetFragmentation) * 0.6 +
+      (correctedQuality.excessiveHoldRatio - musicalQuality.excessiveHoldRatio) * 0.4,
+    -1,
+    1,
+  );
+  const intervalGain = clamp(correctedAwkwardRatio - musicalAwkwardRatio, -1, 1);
+  const cadenceGain = scoreCadenceStrength(musical) - scoreCadenceStrength(corrected);
+  const feelGain = musicalQuality.musicFeelScore - correctedQuality.musicFeelScore;
+
+  return {
+    score: clamp(
+      feelGain * 0.42 +
+        timingGain * 0.26 +
+        intervalGain * 0.2 +
+        cadenceGain * 0.12,
+      -1,
+      1,
+    ),
+    timingGain,
+    intervalGain,
+    cadenceGain,
+    feelGain,
+  };
+}
+
+function scoreMelodyIdentitySimilarity(
+  corrected: CleanMelody,
+  musical: CleanMelody,
+  melodyIntent?: MelodyIntentProfile,
+): {
+  score: number;
+  contourScore: number;
+  rhythmScore: number;
+  intervalScore: number;
+  structureScore: number;
+  rangeScore: number;
+} {
+  if (corrected.notes.length === 0 || musical.notes.length === 0) {
+    return {
+      score: 0,
+      contourScore: 0,
+      rhythmScore: 0,
+      intervalScore: 0,
+      structureScore: 0,
+      rangeScore: 0,
+    };
+  }
+
+  const source = melodyIntent?.skeleton.notes.length ? melodyIntent.skeleton : corrected;
+  const contourScore =
+    compareNumericSeries(
+      relativePitchSeries(source.notes),
+      relativePitchSeries(musical.notes),
+      8,
+      { octaveEquivalent: true },
+    ) * 0.58 +
+    compareDirectionSeries(source.notes, musical.notes) * 0.42;
+  const sourceRhythm = phraseLikeSpan(source.notes);
+  const musicalRhythm = phraseLikeSpan(musical.notes);
+  const rhythmScore =
+    compareNumericSeries(relativeCenterSeries(sourceRhythm), relativeCenterSeries(musicalRhythm), 0.24) *
+      0.56 +
+    compareNumericSeries(relativeDurationSeries(sourceRhythm), relativeDurationSeries(musicalRhythm), 0.26) *
+      0.44;
+  const intervalScore = compareNumericSeries(
+    intervalSeries(source.notes),
+    intervalSeries(musical.notes),
+    6,
+    { octaveEquivalent: true },
+  );
+  const structureScore = scoreStructuralNoteSimilarity(source, musical, melodyIntent);
+  const rangeScore = scoreRangeSimilarity(source.notes, musical.notes);
+
+  return {
+    score: clamp(
+      contourScore * 0.3 +
+        rhythmScore * 0.25 +
+        intervalScore * 0.18 +
+        structureScore * 0.17 +
+        rangeScore * 0.1,
+      0,
+      1,
+    ),
+    contourScore,
+    rhythmScore,
+    intervalScore,
+    structureScore,
+    rangeScore,
+  };
+}
+
+function scoreCadenceStrength(melody: CleanMelody): number {
+  const last = melody.notes.at(-1);
+  if (!last) return 0;
+  const root = KEY_NAMES.indexOf(melody.key as (typeof KEY_NAMES)[number]);
+  if (root < 0) return 0.4;
+  const cadencePcs = getCadenceTargets(root, melody.scale);
+  const cadenceDistance = Math.min(
+    ...cadencePcs.map((pc) => Math.min(mod12(last.pitch - pc), mod12(pc - last.pitch))),
+  );
+  const pitchScore = 1 - clamp(cadenceDistance / 3, 0, 1);
+  const medianDuration = Math.max(0.001, median(melody.notes.map((note) => note.duration)));
+  const durationScore = clamp(last.duration / (medianDuration * 1.35), 0, 1);
+  return pitchScore * 0.62 + durationScore * 0.38;
+}
+
+function compareDirectionSeries(left: MelodyNote[], right: MelodyNote[]): number {
+  return compareNumericSeries(directionSeries(left), directionSeries(right), 1);
+}
+
+function directionSeries(notes: MelodyNote[]): number[] {
+  const directions: number[] = [];
+  for (let index = 1; index < notes.length; index++) {
+    directions.push(Math.sign(notes[index]!.pitch - notes[index - 1]!.pitch));
+  }
+  return directions;
+}
+
+function phraseLikeSpan(notes: MelodyNote[]): PhraseSpan {
+  const sorted = notes.map((note, index) => ({ note, index })).sort((a, b) => a.note.start - b.note.start);
+  return makeIndexedPhraseSpan(0, sorted);
+}
+
+function scoreStructuralNoteSimilarity(
+  source: CleanMelody,
+  musical: CleanMelody,
+  melodyIntent?: MelodyIntentProfile,
+): number {
+  const beat = 60 / Math.max(1, source.bpm || musical.bpm || 120);
+  const anchors = collectIntentTraceAnchors(
+    melodyIntent?.skeleton.notes.length ? melodyIntent.skeleton : source,
+    source,
+    beat,
+    melodyIntent,
+  );
+  if (anchors.length === 0) return 0.72;
+
+  let totalWeight = 0;
+  let matchedWeight = 0;
+  const claimed = new Set<number>();
+  for (const anchor of anchors) {
+    totalWeight += anchor.weight;
+    const match = findNearestIntentTraceNote(musical.notes, anchor, beat, claimed);
+    if (match === null) continue;
+    claimed.add(match);
+    const note = musical.notes[match]!;
+    const pitchDistance = octaveAwareDistance(note.pitch, anchor.pitch);
+    const startDistance = Math.abs(note.start - anchor.start);
+    const pitchScore = 1 - clamp(pitchDistance / (anchor.kind === "edge" ? 7 : 5), 0, 1);
+    const timingScore = 1 - clamp(startDistance / Math.max(beat * 1.35, 0.001), 0, 1);
+    const durationScore =
+      1 - clamp(Math.abs(note.duration - anchor.duration) / Math.max(anchor.duration, beat * 0.5), 0, 1);
+    matchedWeight += anchor.weight * (pitchScore * 0.45 + timingScore * 0.38 + durationScore * 0.17);
+  }
+
+  return totalWeight > 0 ? clamp(matchedWeight / totalWeight, 0, 1) : 0.72;
+}
+
+function scoreRangeSimilarity(left: MelodyNote[], right: MelodyNote[]): number {
+  const leftRange = pitchRange(left);
+  const rightRange = pitchRange(right);
+  const rangeScore = 1 - clamp(Math.abs(leftRange.width - rightRange.width) / 12, 0, 1);
+  const centerScore = 1 - clamp(Math.abs(leftRange.center - rightRange.center) / 10, 0, 1);
+  return rangeScore * 0.55 + centerScore * 0.45;
+}
+
+function pitchRange(notes: MelodyNote[]): { center: number; width: number } {
+  if (notes.length === 0) return { center: 60, width: 0 };
+  const pitches = notes.map((note) => note.pitch);
+  const min = Math.min(...pitches);
+  const max = Math.max(...pitches);
+  return {
+    center: (min + max) / 2,
+    width: max - min,
   };
 }
 

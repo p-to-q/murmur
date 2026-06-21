@@ -985,6 +985,84 @@ describe("humming-engine musical layer", () => {
     expect(melodies.musical.notes[2]?.duration).toBeLessThanOrEqual(0.36);
   });
 
+  it("selects musical when a same-identity phrase becomes clearly more songlike", () => {
+    const corrected = melody(
+      [
+        { pitch: 60, start: 0, duration: 0.34, velocity: 0.74, confidence: 0.88 },
+        { pitch: 62, start: 0.42, duration: 0.88, velocity: 0.7, confidence: 0.69 },
+        { pitch: 64, start: 1.38, duration: 0.34, velocity: 0.72, confidence: 0.84 },
+        { pitch: 67, start: 1.82, duration: 0.28, velocity: 0.73, confidence: 0.86 },
+      ],
+      {
+        bpm: 120,
+        contour: "rising",
+      },
+    );
+    const diagnostics = {
+      duration: 2.1,
+      snr: 15,
+      voicedRatio: 0.82,
+      acceptanceScore: 0.52,
+      musicFeelScore: 0.54,
+      excessiveHoldRatio: 0.31,
+      onsetFragmentation: 0.46,
+      firstOnsetLag: 0.04,
+    };
+    const melodies = buildTranscriptionMelodies(corrected.notes, corrected, {
+      diagnostics,
+    });
+
+    expect(chooseGenerationMelodyKind({ melodies, diagnostics })).toBe("musical");
+    expect(melodies.musical.notes[0]?.pitch).toBe(corrected.notes[0]?.pitch);
+    expect(melodies.musical.contour).toBe(corrected.contour);
+    expect(melodies.musical.notes[1]?.duration).toBeLessThan(
+      melodies.corrected.notes[1]?.duration ?? 0,
+    );
+  });
+
+  it("keeps corrected when the prettier candidate no longer feels like the same hum", () => {
+    const corrected = melody(
+      [
+        { pitch: 60, start: 0, duration: 0.34, velocity: 0.74, confidence: 0.88 },
+        { pitch: 62, start: 0.42, duration: 0.88, velocity: 0.7, confidence: 0.69 },
+        { pitch: 64, start: 1.38, duration: 0.34, velocity: 0.72, confidence: 0.84 },
+        { pitch: 67, start: 1.82, duration: 0.28, velocity: 0.73, confidence: 0.86 },
+      ],
+      {
+        bpm: 120,
+        contour: "rising",
+      },
+    );
+    const musical = melody(
+      [
+        { pitch: 72, start: 0, duration: 0.5, velocity: 0.76, confidence: 0.9 },
+        { pitch: 69, start: 0.5, duration: 0.5, velocity: 0.75, confidence: 0.9 },
+        { pitch: 65, start: 1, duration: 0.5, velocity: 0.74, confidence: 0.9 },
+        { pitch: 60, start: 1.5, duration: 0.7, velocity: 0.76, confidence: 0.92 },
+      ],
+      {
+        bpm: 120,
+        contour: "falling",
+      },
+    );
+    const melodies = {
+      intent: corrected,
+      corrected,
+      musical,
+    };
+    const diagnostics = {
+      duration: 2.2,
+      snr: 15,
+      voicedRatio: 0.82,
+      acceptanceScore: 0.52,
+      musicFeelScore: 0.54,
+      excessiveHoldRatio: 0.31,
+      onsetFragmentation: 0.46,
+    };
+
+    expect(chooseGenerationMelodyKind({ melodies, diagnostics })).toBe("corrected");
+  });
+
   it("keeps corrected on weak familiar-song timing shapes unless they are tail-bad", () => {
     const corrected = melody(
       [
@@ -1093,19 +1171,19 @@ describe("humming-engine musical layer", () => {
     expect(selectGenerationMelody({ melodies }, { repairBias: 0.8 }).kind).toBe("corrected");
   });
 
-  it("requires musical to improve quality before auto-selecting it", () => {
+  it("requires musical to clearly improve quality before auto-selecting it", () => {
     const melodies = buildTranscriptionMelodies([
-      { pitch: 60, start: 0, duration: 0.32, velocity: 0.72, confidence: 0.84 },
-      { pitch: 62, start: 0.4, duration: 0.28, velocity: 0.7, confidence: 0.8 },
-      { pitch: 64, start: 0.78, duration: 0.36, velocity: 0.72, confidence: 0.82 },
-      { pitch: 67, start: 1.2, duration: 0.44, velocity: 0.74, confidence: 0.86 },
+      { pitch: 60, start: 0, duration: 0.4, velocity: 0.72, confidence: 0.84 },
+      { pitch: 62, start: 0.5, duration: 0.4, velocity: 0.7, confidence: 0.84 },
+      { pitch: 64, start: 1, duration: 0.4, velocity: 0.72, confidence: 0.84 },
+      { pitch: 67, start: 1.5, duration: 0.5, velocity: 0.74, confidence: 0.86 },
     ]);
 
     expect(
       selectGenerationMelody({
         melodies,
         diagnostics: {
-          duration: 1.64,
+          duration: 2,
           snr: 14.8,
           voicedRatio: 0.8,
           acceptanceScore: 0.52,
