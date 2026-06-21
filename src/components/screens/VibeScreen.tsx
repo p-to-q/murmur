@@ -22,9 +22,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Pause, Loader2, RotateCw } from "lucide-react";
+import { Play, Pause, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
+import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 
 import Image from "next/image";
 
@@ -558,7 +559,7 @@ function VibeCard({
           ].join(" ")}
         >
           {isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <MurmurLoadingNote size="xs" tone={isAuditioning ? "ink" : "light"} />
           ) : isError ? (
             <RotateCw className="h-3.5 w-3.5" />
           ) : isAuditioning ? (

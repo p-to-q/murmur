@@ -166,9 +166,12 @@ display rules (App Store tiers, ¥-rounded WeChat tiers).
 
 ### 5.2 支付页 (PaymentScreen) — `/topup/checkout`
 
-This is the **provider-handoff** screen, not a checkout itself.
+This is the **receipt review + provider-handoff** screen, not a place where
+Murmur collects card numbers or payment account details.
 
-- Web shell: opens a Waffo checkout URL (or WeChat Pay JSAPI flow in CN).
+- Web shell: first shows a Murmur receipt review (notes, price, billing email,
+  payment route, Terms / Privacy / Refund policy agreement), then opens a
+  Waffo checkout URL or the China payment route.
 - iOS / Android shell: triggers native sheet via RevenueCat, never
   navigates away.
 - 微信 MP shell: invokes `wx.requestPayment` directly.
@@ -176,10 +179,14 @@ This is the **provider-handoff** screen, not a checkout itself.
 The unified UI element is a single state machine:
 
 ```
-idle → requesting → succeeded   ← happy path
-                 ↘ canceled    ← user dismissed
-                 ↘ failed      ← provider error, show retry
+review → requesting → awaiting_payment → confirming → succeeded
+       ↘ failed                  ↘ canceled
 ```
+
+The review state does not start checkout until the user confirms the receipt
+email and accepts the purchase terms. Invalid route combinations, such as
+WeChat Pay with a non-CNY order, are blocked before the provider call and offer
+a clear recovery path.
 
 On success, the client polls `GET /api/user/balance` once and reflects
 the new balance. The actual ledger write happens via the **provider

@@ -9,6 +9,8 @@ describe("createVibePromptBatch", () => {
       expect(spec.prompt.length).toBeGreaterThan(10);
       expect(spec.label.zh.length).toBeGreaterThan(0);
       expect(spec.label.en.length).toBeGreaterThan(0);
+      expect(Array.from(spec.label.zh).length).toBeGreaterThanOrEqual(3);
+      expect(Array.from(spec.label.zh).length).toBeLessThanOrEqual(4);
       expect(spec.gradient).toContain("linear-gradient");
       expect(spec.energy).toBeGreaterThanOrEqual(0.25);
       expect(spec.energy).toBeLessThanOrEqual(0.9);

@@ -1,10 +1,13 @@
 import dynamic from "next/dynamic";
 import type { Metadata } from "next";
+import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 
-const SongDetailScreen = dynamic(() =>
-  import("@/components/screens/SongDetailScreen").then(
-    (m) => m.SongDetailScreen,
-  ),
+const SongDetailScreen = dynamic(
+  () =>
+    import("@/components/screens/SongDetailScreen").then(
+      (m) => m.SongDetailScreen,
+    ),
+  { loading: () => <GlobalLoadingIndicator /> },
 );
 
 interface Props { params: Promise<{ id: string }> }

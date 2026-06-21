@@ -8,7 +8,7 @@ import type { AppUser } from "@/lib/platform/types";
 import { useSession, signOut } from "next-auth/react";
 import { useAuthProviders } from "@/lib/hooks/use-auth-providers";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
-import { Spinner } from "@/components/ui/spinner";
+import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { formatMemberSince } from "@/lib/user/member-since";
 
@@ -48,7 +48,7 @@ export function UserBadge() {
   if (loading) {
     return (
       <div className="flex h-9 items-center rounded-full border border-border bg-background px-3 shadow-sm">
-        <Spinner size="sm" variant="muted" />
+        <MurmurLoadingNote size="sm" tone="muted" />
       </div>
     );
   }

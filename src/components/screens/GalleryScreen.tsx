@@ -7,13 +7,15 @@ import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 
-import { useTranslator } from "@/lib/i18n";
+import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import type { SongCard as SongCardType } from "@/modules/shared/types";
+import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { FloatingMusicNotes } from "@/components/murmur/floating-music-notes";
+import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { SongCard } from "@/components/gallery/SongCard";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
-import { Spinner } from "@/components/ui/spinner";
 import { ARTWORK_CATALOG } from "@/presets/artworks/catalog";
 
 // The gallery only renders light metadata; the heavy SongCard fields
@@ -81,8 +83,8 @@ const DEMO_SONGS: SongWithMeta[] = [
   },
 ];
 
-function displayVibe(song: SongWithMeta): string {
-  return displayVibeLabel(song.vibe, song.tags);
+function displayVibe(song: SongWithMeta, lang: "zh" | "en"): string {
+  return displayVibeLabel(song.vibe, song.tags, lang);
 }
 
 async function withSoftTimeout<T>(
@@ -106,6 +108,7 @@ async function withSoftTimeout<T>(
 export function GalleryScreen() {
   const router = useRouter();
   const t = useTranslator();
+  const lang = useCurrentLang();
   const [songs, setSongs] = useState<SongWithMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sort, setSort] = useState<SortMode>("newest");
@@ -214,7 +217,7 @@ export function GalleryScreen() {
               recentSongs={sorted.slice(0, 3).map((s) => ({
                 id: s.id,
                 title: s.title,
-                vibe: displayVibe(s),
+                vibe: displayVibe(s, lang),
                 gradient: s.visualConfig?.gradient,
                 artwork: s.visualConfig?.artwork,
                 bpm: s.bpm,
@@ -238,42 +241,7 @@ export function GalleryScreen() {
           transition={{ delay: 0.35, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="relative z-10 flex flex-col items-center px-5 md:px-12 py-8 md:py-12 max-w-2xl mx-auto text-center"
         >
-          <svg
-            width="160"
-            height="160"
-            viewBox="0 0 120 120"
-            fill="none"
-            className="opacity-20"
-          >
-            <motion.circle
-              initial={{ scale: 0.75, opacity: 0.15 }}
-              animate={{ scale: 1, opacity: 0.5 }}
-              transition={{
-                duration: 1.6,
-                repeat: Infinity,
-                repeatType: "reverse",
-                ease: "easeInOut",
-              }}
-              cx="60"
-              cy="80"
-              r="12"
-              fill="#FF5924"
-            />
-            <motion.path
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{
-                duration: 1.6,
-                repeat: Infinity,
-                repeatType: "reverse",
-                ease: "easeInOut",
-              }}
-              d="M 72 80 L 72 30 Q 72 20 82 22 L 100 26"
-              stroke="#FF5924"
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-          </svg>
+          <FloatingMusicNotes size={160} className="opacity-20" />
         </motion.div>
       )}
 
@@ -293,14 +261,7 @@ export function GalleryScreen() {
       {/* Spacer when no sort toggle shown */}
       {!isLoading && displaySongs.length <= 1 && <div className="pb-4" />}
 
-      {/* Loading — general spinner, centered in the full viewport like the
-          app's other loaders (the empty heatmap padding above would otherwise
-          push an in-flow spinner into the upper half) */}
-      {isLoading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center">
-          <Spinner size="lg" aria-label={t("loading.aria")} />
-        </div>
-      )}
+      {isLoading && <GlobalLoadingIndicator />}
 
       {/* Song grid — 2-col mobile / 3-col tablet / 4-col desktop */}
       {!isLoading && displaySongs.length > 0 && (
@@ -325,7 +286,7 @@ export function GalleryScreen() {
                 key={song.id}
                 id={song.id}
                 title={song.title}
-                vibe={displayVibe(song)}
+                vibe={displayVibe(song, lang)}
                 gradient={song.visualConfig?.gradient}
                 artwork={song.visualConfig?.artwork}
                 bpm={song.bpm}
@@ -396,7 +357,11 @@ export function GalleryScreen() {
                   disabled={isDeleting}
                   className="flex-1 h-11 rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors disabled:opacity-60"
                 >
-                  {isDeleting ? "…" : t("song.delete.confirm") || "Delete"}
+                  {isDeleting ? (
+                    <MurmurLoadingNote size="sm" tone="light" />
+                  ) : (
+                    t("song.delete.confirm") || "Delete"
+                  )}
                 </button>
               </div>
             </motion.div>
@@ -429,7 +394,7 @@ export function GalleryScreen() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                 <div className="relative z-10">
                   <p className="text-[10px] uppercase tracking-[0.3em] text-white/55 mb-1">
-                    {displayVibe(demoPreview)} · {demoPreview.bpm} BPM
+                    {displayVibe(demoPreview, lang)} · {demoPreview.bpm} BPM
                   </p>
                   <h3 className="hero-serif text-white text-[28px] leading-tight">
                     {demoPreview.title}

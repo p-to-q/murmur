@@ -693,23 +693,30 @@ What this is: a friendly purchase page that doesn't feel like a paywall.
 
 ---
 
-## 10. Checkout `/topup/checkout` — *renew (handoff)*
+## 10. Checkout `/topup/checkout` — *renew (receipt review)*
 
-**New screen.** Specced in `docs/page-contracts.md` §9. Always brief:
-the user is being handed off to a provider.
+**New screen.** Specced in `docs/page-contracts.md` §9. `/topup` owns
+package, currency, and payment-route selection; checkout confirms the receipt
+shape before handing the user to a provider.
 
 ```
 ┌────────────────────────────────────────┐
 │   eyebrow: CHECKOUT                    │
-│   hero-serif: "Almost there."          │
+│   hero-serif: "Review your top up."    │
 │                                        │
-│   selected SKU summary:                 │
-│     120 notes  ·  $5.99                 │
+│   receipt card:                         │
+│     Murmur / date                       │
+│     Description       Subtotal          │
+│     Murmur Notes      $5.99             │
+│     Notes granted     130 notes         │
+│     Payment route     Card              │
+│     Billing email     user@example      │
+│     Total             $5.99             │
 │                                        │
-│   provider transition:                 │
-│     "Opening Stripe Checkout…"         │
-│   spinner + the rotating editorial      │
-│   copy idiom                           │
+│   required agreement: Terms / Privacy / │
+│   Refund policy                         │
+│                                        │
+│   CTA: "Pay securely"                  │
 │                                        │
 │   on success → toast + redirect /       │
 │   on cancel → "No worries. Try again?"  │
@@ -717,10 +724,20 @@ the user is being handed off to a provider.
 └────────────────────────────────────────┘
 ```
 
-This screen does not have its own design surface beyond the rotating
-copy + spinner. It exists to host the state machine
-`idle → requesting → succeeded | canceled | failed`. On most shells
-the user blinks past it.
+The review state should look like a modern receipt: a dark Murmur header,
+quiet line items, billing email, total, and a lightweight barcode-like visual
+footer. It does not collect card numbers, billing addresses, or payment
+account details. Those stay in the provider-hosted checkout.
+
+The state machine is:
+
+`review → requesting → awaiting_payment → confirming → succeeded`
+
+with `canceled` and `failed` branches. `review` requires a signed-in account
+with a receipt email and explicit agreement to Terms, Privacy, and Refund
+policy before opening provider checkout. If the route is invalid (for example
+WeChat Pay on a non-CNY order), the page blocks the action and offers Card or
+return-to-topup recovery.
 
 On `succeeded`: toast `+120 notes added.` + redirect to wherever the
 user came from (referrer query param). If unset → `/me`.
@@ -756,8 +773,8 @@ Studio / Name / Topup all have a sticky bottom CTA. Discipline:
 - The CTA is **coral** capsule for "Begin / Open" semantics (Top up,
   Sign in).
 - The CTA never has more than three words.
-- The CTA never shows a spinner inside its label — the loading state
-  uses the rotating copy slot above it.
+- The CTA uses the compact Murmur loading note only when the action itself is
+  busy; longer page-level waits use the rotating copy slot above it.
 - The CTA respects safe-area-inset-bottom.
 
 ---

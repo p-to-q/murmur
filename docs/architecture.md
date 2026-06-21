@@ -104,6 +104,12 @@ flowchart TB
 - When a new user signs in from an unbound Local Creator session, Murmur
   promotes that existing user row instead of copying songs. The `userId` stays
   stable, which keeps saved songs, ledger rows, and future exports attached.
+- Invite links carry a registered referrer id in `?ref=`. The browser stores
+  that ref in local storage plus a short-lived cookie, but rewards settle only
+  in the server-side registration callbacks for brand-new users or Local
+  Creator promotions. The `share_referrals` table records attribution and the
+  paired `notes_ledger` grant rows, so an existing registered user cannot later
+  claim invite credit by opening someone else's link.
 - Local-header identity is local/demo only.
 - Notifications are intentionally stubbed until a real push backend is chosen.
 - Memory events are stored locally for now, which keeps user flows non-blocking.

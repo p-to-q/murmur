@@ -41,6 +41,7 @@ The 8 anchor rules hold. **No change needed** — this is the spine; protect it.
 | Component | Status | Note |
 |---|---|---|
 | `PageBackdrop` | 🟢 | aurora blobs, every screen. Good. |
+| `GlobalLoadingIndicator` / `MurmurLoadingNote` | 🟢 | all product-facing route, page, and compact busy states use the Gallery note animation; skeletons/spinners are retired outside debug or semantic recording/refresh motion. |
 | `MurmurWave` (canvas particles+sine) | 🟢 | in Vibe + Topup. **Underused** — belongs on SongDetail cover, Hum orb base, save-loading. |
 | `SongCoverArt` (deterministic fingerprint) | 🟢 | Gallery tiles. Could also back SongDetail hero. |
 | `MurmurMark` (bubbly wordmark) | 🟢 | locked by owner, keep. |
@@ -153,7 +154,8 @@ resolves.
 selected pack to a wave-intensity bump. Priority: low (works, looks fine).
 
 ### B11. Checkout `/topup/checkout` — *handoff* 🟢
-**Now:** state machine (requesting→succeeded), rotating copy, spinner.
+**Now:** state machine (requesting→succeeded), rotating copy, centered Murmur
+loading note.
 **Plan:** keep minimal; tune copy + success moment. Priority: low.
 
 ### B12. VersionCardsOverlay.tsx — 🔴 ORPHAN

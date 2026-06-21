@@ -1,7 +1,9 @@
 import dynamic from "next/dynamic";
+import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 
-const VibeScreen = dynamic(() =>
-  import("@/components/screens/VibeScreen").then((m) => m.VibeScreen),
+const VibeScreen = dynamic(
+  () => import("@/components/screens/VibeScreen").then((m) => m.VibeScreen),
+  { loading: () => <GlobalLoadingIndicator /> },
 );
 
 /**

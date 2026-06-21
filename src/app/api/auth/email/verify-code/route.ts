@@ -10,6 +10,11 @@ import {
   resolveRequestAuth,
 } from "@/lib/platform/server-auth";
 import { log } from "@/lib/observability/log";
+import {
+  clearShareReferralCookie,
+  readShareReferrerFromRequest,
+} from "@/lib/api/share-referral-server";
+import { settleRegistrationShareReferral } from "@/lib/auth/share-referral-settlement";
 
 export const runtime = "nodejs";
 
@@ -53,7 +58,7 @@ export async function POST(request: NextRequest) {
         : null;
 
     const normalized = normalizeEmail(email);
-    const { userId, created } = await upsertOAuthUser({
+    const { userId, created, registrationKind } = await upsertOAuthUser({
       provider: "email",
       externalId: normalized,
       email: normalized,
@@ -82,6 +87,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const referrerId = readShareReferrerFromRequest(request);
+    await settleRegistrationShareReferral({
+      referrerId,
+      inviteeId: userId,
+      registrationKind,
+      source: "email",
+      route: ROUTE,
+      sessionId: session.sessionId,
+      metadata: {
+        provider: "email",
+      },
+    });
+
     const response = NextResponse.json({
       ok: true,
       user: { id: userId, email: normalized, accountKind: "registered" },
@@ -94,7 +112,7 @@ export async function POST(request: NextRequest) {
       expires: session.expiresAt,
       maxAge: 30 * 24 * 60 * 60,
     });
-    return response;
+    return referrerId ? clearShareReferralCookie(response) : response;
   } catch (error) {
     log(
       "auth.email_verify_failed",

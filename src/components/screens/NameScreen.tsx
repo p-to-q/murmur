@@ -23,32 +23,24 @@ import { memory } from "@/lib/platform/memory";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
-import { useTranslator } from "@/lib/i18n";
+import { useCurrentLang, useTranslator } from "@/lib/i18n";
+import {
+  buildFallbackTitleSuggestions,
+  buildVersionTitleSuggestions,
+} from "@/lib/music/title-suggestions";
 import { synth } from "@/lib/music/simple-synth";
 import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import { renderAudio } from "@/modules/export/render-mp3";
 import { canSaveHeardVersion, getSaveBlockReason } from "@/modules/music/version-contract";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 
 const PROCESSING_INTERVAL_MS = 900;
-
-// Suggestion seeds keyed by vibe id. Three editorial options per vibe so the
-// suggestion row never feels random; a small wordlist beats generative text
-// at v2 scale and ships zero LLM cost. Codex can swap for a server-side
-// generator later (see docs/page-redesign.md §5 open question 1).
-const VIBE_NAME_SUGGESTIONS: Record<string, string[]> = {
-  sunset:    ["Soft Evening", "Lemon Light", "Gold Hour"],
-  bedroom:   ["Room Light", "Dust", "Late Hours"],
-  cinematic: ["End Credits", "Tiny Movie", "Quiet Drift"],
-  party:     ["Confetti", "Small Party", "Pulse"],
-  rain:      ["Window Song", "Drizzle", "Glass"],
-  synth:     ["Little Signal", "Neon", "Modular"],
-};
-const FALLBACK_SUGGESTIONS = ["Soft Evening", "Window Song", "Tiny Movie"];
 
 export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const router = useRouter();
   const t = useTranslator();
+  const lang = useCurrentLang();
   const currentVersion = useMurmurStore((s) => s.currentVersion);
   const setCurrentVersion = useMurmurStore((s) => s.setCurrentVersion);
   const setVibeVersions = useMurmurStore((s) => s.setVibeVersions);
@@ -86,16 +78,9 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
   /* ── Suggestions ──────────────────────────────────────────────── */
   const suggestions = useMemo(() => {
-    if (!currentVersion) return FALLBACK_SUGGESTIONS;
-    const vibeKey = currentVersion.vibe.toLowerCase();
-    // Match by english or chinese label — generate-versions stamps vibe as
-    // the label ("黄昏" / "Sunset" depending on locale). We match either by
-    // the english-leaning key (the vibe.id) when available, else fall back.
-    for (const [key, list] of Object.entries(VIBE_NAME_SUGGESTIONS)) {
-      if (vibeKey.includes(key)) return list;
-    }
-    return FALLBACK_SUGGESTIONS;
-  }, [currentVersion]);
+    if (!currentVersion) return buildFallbackTitleSuggestions(lang);
+    return buildVersionTitleSuggestions(currentVersion, lang);
+  }, [currentVersion, lang]);
 
   /* ── Rotating processing copy ─────────────────────────────────── */
   const PROCESSING_COPY = useMemo(
@@ -381,9 +366,14 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
               disabled={isSaving || !title.trim() || !canSaveHeardVersion(currentVersion)}
               className="h-14 w-full rounded-[22px] bg-[#1A1A1A] text-base font-medium text-white transition-opacity disabled:opacity-45"
             >
-              {isSaving
-                ? (t("studio.saving") || "Saving…")
-                : (t("name.save") || "Save")}
+              {isSaving ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <MurmurLoadingNote size="sm" tone="light" />
+                  {t("studio.saving") || "Saving…"}
+                </span>
+              ) : (
+                t("name.save") || "Save"
+              )}
             </motion.button>
           </div>
         </div>

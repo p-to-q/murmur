@@ -14,23 +14,12 @@ let nextAuth: ResolvedRequestAuth = {
   source: "session",
   sessionId: "sess_invitee",
 };
-const claimShareReferralMock = mock(async () => ({
+const getSettledShareReferralForInviteeMock = mock(async () => ({
   ok: true as const,
-  referrer: {
-    ok: true as const,
-    ledgerId: "nle_referrer",
-    balanceBefore: 10,
-    balanceAfter: 110,
-    duplicate: false,
-  },
-  invitee: {
-    ok: true as const,
-    ledgerId: "nle_invitee",
-    balanceBefore: 15,
-    balanceAfter: 115,
-    duplicate: false,
-  },
-  duplicate: false,
+  referralId: "srf_existing",
+  referrer: null,
+  invitee: null,
+  duplicate: true,
 }));
 
 mock.module("@/lib/auth", () => ({
@@ -38,18 +27,13 @@ mock.module("@/lib/auth", () => ({
 }));
 
 mock.module("@/lib/db/queries/share-referrals", () => ({
-  SHARE_REFERRAL_REWARD_NOTES: 100,
   normalizeReferralUserId: (value: string | null | undefined) => {
     const trimmed = value?.trim();
     return trimmed && /^[A-Za-z0-9_-]{6,128}$/.test(trimmed) ? trimmed : null;
   },
   canUseShareReferral: (user: { id?: string | null; accountKind?: string | null }) =>
     Boolean(user?.id && user.id !== "guest" && user.accountKind === "registered"),
-  claimShareReferral: claimShareReferralMock,
-}));
-
-mock.module("@/lib/observability/log", () => ({
-  log: mock(() => {}),
+  getSettledShareReferralForInvitee: getSettledShareReferralForInviteeMock,
 }));
 
 const { POST } = await import("./route");
@@ -67,7 +51,7 @@ beforeEach(() => {
     source: "session",
     sessionId: "sess_invitee",
   };
-  claimShareReferralMock.mockClear();
+  getSettledShareReferralForInviteeMock.mockClear();
 });
 
 function request(body: Record<string, unknown>, cookie?: string): NextRequest {
@@ -82,16 +66,18 @@ function request(body: Record<string, unknown>, cookie?: string): NextRequest {
 }
 
 describe("POST /api/share/claim", () => {
-  it("grants referral notes to the referrer and invitee", async () => {
+  it("confirms an already-settled registration referral", async () => {
     const response = await POST(request({ referrerId: "usr_referrer" }));
 
     expect(response.status).toBe(200);
-    expect(claimShareReferralMock).toHaveBeenCalledWith({
+    expect(getSettledShareReferralForInviteeMock).toHaveBeenCalledWith({
       referrerId: "usr_referrer",
       inviteeId: "usr_invitee",
     });
-    const body = await response.json() as { notesGranted?: unknown };
-    expect(body.notesGranted).toBe(100);
+    const body = await response.json() as { notesGranted?: unknown; duplicate?: unknown };
+    expect(body.notesGranted).toBe(0);
+    expect(body.duplicate).toBe(true);
+    expect(response.headers.get("set-cookie")).toContain("murmur_ref=");
   });
 
   it("prefers the referral cookie over the body", async () => {
@@ -101,35 +87,24 @@ describe("POST /api/share/claim", () => {
     ));
 
     expect(response.status).toBe(200);
-    expect(claimShareReferralMock).toHaveBeenCalledWith({
+    expect(getSettledShareReferralForInviteeMock).toHaveBeenCalledWith({
       referrerId: "usr_cookie",
       inviteeId: "usr_invitee",
     });
   });
 
-  it("reports duplicate claims without claiming fresh granted notes", async () => {
-    claimShareReferralMock.mockResolvedValueOnce({
-      ok: true as const,
-      referrer: null,
-      invitee: {
-        ok: true as const,
-        ledgerId: "nle_invitee",
-        balanceBefore: 115,
-        balanceAfter: 115,
-        duplicate: true,
-      },
-      duplicate: true,
+  it("rejects unsettled refs so existing users cannot claim invite credit", async () => {
+    getSettledShareReferralForInviteeMock.mockResolvedValueOnce({
+      ok: false as const,
+      reason: "registration_required" as const,
     });
 
     const response = await POST(request({ referrerId: "usr_referrer" }));
 
-    expect(response.status).toBe(200);
-    const body = await response.json() as {
-      notesGranted?: unknown;
-      duplicate?: unknown;
-    };
-    expect(body.notesGranted).toBe(0);
-    expect(body.duplicate).toBe(true);
+    expect(response.status).toBe(409);
+    const body = await response.json() as { error?: unknown };
+    expect(body.error).toBe("registration_required");
+    expect(response.headers.get("set-cookie")).toContain("murmur_ref=");
   });
 
   it("rejects guest claims", async () => {
@@ -148,7 +123,7 @@ describe("POST /api/share/claim", () => {
     const response = await POST(request({ referrerId: "usr_referrer" }));
 
     expect(response.status).toBe(403);
-    expect(claimShareReferralMock).toHaveBeenCalledTimes(0);
+    expect(getSettledShareReferralForInviteeMock).toHaveBeenCalledTimes(0);
   });
 
   it("rejects Local Creator claims", async () => {
@@ -168,6 +143,6 @@ describe("POST /api/share/claim", () => {
     const response = await POST(request({ referrerId: "usr_referrer" }));
 
     expect(response.status).toBe(403);
-    expect(claimShareReferralMock).toHaveBeenCalledTimes(0);
+    expect(getSettledShareReferralForInviteeMock).toHaveBeenCalledTimes(0);
   });
 });

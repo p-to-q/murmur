@@ -51,15 +51,20 @@ describe("share referral helpers", () => {
     const result = await claimShareReferralWithLockedUsers({
       referrerId: "usr_referrer",
       inviteeId: "usr_invitee",
+      registrationKind: "new_user",
+      source: "email",
       referrerExternalRef: referralExternalRef("usr_referrer", "usr_invitee"),
       inviteeExternalRef: inviteeReferralExternalRef("usr_invitee"),
       referrerRow: referralUser("usr_referrer"),
       inviteeRow: referralUser("usr_invitee"),
+      existingReferral: null,
       grantNotes,
+      recordReferral: mock(async () => "srf_unused"),
     });
 
     expect(result).toEqual({
       ok: true,
+      referralId: null,
       referrer: null,
       invitee: inviteeGrant,
       duplicate: true,
@@ -75,6 +80,152 @@ describe("share referral helpers", () => {
         referrerId: "usr_referrer",
       },
     });
+  });
+
+  it("records the settled referral after both ledger grants succeed", async () => {
+    const inviteeGrant: GrantNotesResult & { ok: true } = {
+      ok: true,
+      ledgerId: "nle_invitee",
+      balanceBefore: 15,
+      balanceAfter: 115,
+      duplicate: false,
+    };
+    const referrerGrant: GrantNotesResult & { ok: true } = {
+      ok: true,
+      ledgerId: "nle_referrer",
+      balanceBefore: 10,
+      balanceAfter: 110,
+      duplicate: false,
+    };
+    const grants = [inviteeGrant, referrerGrant];
+    const grantNotes = mock(async () => grants.shift()!);
+    const recordReferral = mock(async () => "srf_recorded");
+
+    const result = await claimShareReferralWithLockedUsers({
+      referrerId: "usr_referrer",
+      inviteeId: "usr_invitee",
+      registrationKind: "local_creator_promotion",
+      source: "oauth",
+      referrerExternalRef: referralExternalRef("usr_referrer", "usr_invitee"),
+      inviteeExternalRef: inviteeReferralExternalRef("usr_invitee"),
+      referrerRow: referralUser("usr_referrer"),
+      inviteeRow: referralUser("usr_invitee"),
+      existingReferral: null,
+      grantNotes,
+      recordReferral,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      referralId: "srf_recorded",
+      referrer: referrerGrant,
+      invitee: inviteeGrant,
+      duplicate: false,
+    });
+    expect(recordReferral).toHaveBeenCalledTimes(1);
+    expect(recordReferral).toHaveBeenCalledWith(expect.objectContaining({
+      referrerUserId: "usr_referrer",
+      inviteeUserId: "usr_invitee",
+      source: "oauth",
+      registrationKind: "local_creator_promotion",
+      rewardNotes: 100,
+      referrerLedgerId: "nle_referrer",
+      inviteeLedgerId: "nle_invitee",
+    }));
+  });
+
+  it("fails the transaction when the referral record cannot be written", async () => {
+    const inviteeGrant: GrantNotesResult & { ok: true } = {
+      ok: true,
+      ledgerId: "nle_invitee",
+      balanceBefore: 15,
+      balanceAfter: 115,
+      duplicate: false,
+    };
+    const referrerGrant: GrantNotesResult & { ok: true } = {
+      ok: true,
+      ledgerId: "nle_referrer",
+      balanceBefore: 10,
+      balanceAfter: 110,
+      duplicate: false,
+    };
+    const grants = [inviteeGrant, referrerGrant];
+
+    await expect(claimShareReferralWithLockedUsers({
+      referrerId: "usr_referrer",
+      inviteeId: "usr_invitee",
+      registrationKind: "new_user",
+      source: "email",
+      referrerExternalRef: referralExternalRef("usr_referrer", "usr_invitee"),
+      inviteeExternalRef: inviteeReferralExternalRef("usr_invitee"),
+      referrerRow: referralUser("usr_referrer"),
+      inviteeRow: referralUser("usr_invitee"),
+      existingReferral: null,
+      grantNotes: mock(async () => grants.shift()!),
+      recordReferral: mock(async () => null),
+    })).rejects.toThrow("grant_failed");
+  });
+
+  it("does not settle referrals for existing registered users", async () => {
+    const grantNotes = mock(async () => ({
+      ok: false as const,
+      reason: "user_not_found" as const,
+    }));
+
+    const result = await claimShareReferralWithLockedUsers({
+      referrerId: "usr_referrer",
+      inviteeId: "usr_invitee",
+      registrationKind: "existing_user",
+      source: "email",
+      referrerExternalRef: referralExternalRef("usr_referrer", "usr_invitee"),
+      inviteeExternalRef: inviteeReferralExternalRef("usr_invitee"),
+      referrerRow: referralUser("usr_referrer"),
+      inviteeRow: referralUser("usr_invitee"),
+      existingReferral: null,
+      grantNotes,
+      recordReferral: mock(async () => "srf_unused"),
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      reason: "registration_required",
+    });
+    expect(grantNotes).toHaveBeenCalledTimes(0);
+  });
+
+  it("reports already-settled invitees without writing new grants", async () => {
+    const grantNotes = mock(async () => ({
+      ok: false as const,
+      reason: "user_not_found" as const,
+    }));
+
+    const result = await claimShareReferralWithLockedUsers({
+      referrerId: "usr_referrer",
+      inviteeId: "usr_invitee",
+      registrationKind: "new_user",
+      source: "email",
+      referrerExternalRef: referralExternalRef("usr_referrer", "usr_invitee"),
+      inviteeExternalRef: inviteeReferralExternalRef("usr_invitee"),
+      referrerRow: referralUser("usr_referrer"),
+      inviteeRow: referralUser("usr_invitee"),
+      existingReferral: {
+        id: "srf_existing",
+        referrerUserId: "usr_referrer",
+        inviteeUserId: "usr_invitee",
+        status: "settled",
+      },
+      grantNotes,
+      recordReferral: mock(async () => "srf_unused"),
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      referralId: "srf_existing",
+      referrer: null,
+      invitee: null,
+      duplicate: true,
+    });
+    expect(grantNotes).toHaveBeenCalledTimes(0);
   });
 
 });

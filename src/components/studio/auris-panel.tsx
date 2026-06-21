@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { useTranslator } from "@/lib/i18n";
 import type { TKey } from "@/lib/i18n/dict";
 
@@ -104,7 +105,13 @@ export function AurisPanel({
               : "min-w-[60px] rounded-full bg-[#1A1A1A] px-4 py-2.5 text-[13px] font-medium text-white transition-opacity disabled:opacity-40"
           }
         >
-          {busy ? "…" : t("studio.prompt.cta")}
+          {busy ? (
+            <span className="inline-flex w-full items-center justify-center">
+              <MurmurLoadingNote size="sm" tone={dark ? "light" : "default"} />
+            </span>
+          ) : (
+            t("studio.prompt.cta")
+          )}
         </button>
       </div>
 

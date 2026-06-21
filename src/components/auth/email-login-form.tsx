@@ -3,8 +3,9 @@
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/platform/auth-client";
-import { Spinner } from "@/components/ui/spinner";
+import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { useTranslator } from "@/lib/i18n";
+import { clearRememberedShareReferrer } from "@/lib/api/share-referral";
 
 type Stage = "email" | "code";
 
@@ -74,6 +75,7 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
           accountKind: data.user.accountKind,
         });
       }
+      clearRememberedShareReferrer();
       if (onSuccess) {
         onSuccess();
       } else {
@@ -103,7 +105,7 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
           disabled={loading || !email.trim()}
           className="flex w-full items-center justify-center rounded-full bg-[#1A1A1A] px-5 py-2.5 text-[14px] font-medium text-white transition-all hover:bg-[#333] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {loading ? <Spinner size="sm" variant="light" /> : t("auth.send_code")}
+          {loading ? <MurmurLoadingNote size="sm" tone="light" /> : t("auth.send_code")}
         </button>
       </div>
     );
@@ -132,7 +134,7 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
         disabled={loading || code.length < 6}
         className="flex w-full items-center justify-center rounded-full bg-[#1A1A1A] px-5 py-2.5 text-[14px] font-medium text-white transition-all hover:bg-[#333] disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? <Spinner size="sm" variant="light" /> : t("auth.verify")}
+        {loading ? <MurmurLoadingNote size="sm" tone="light" /> : t("auth.verify")}
       </button>
       <button
         onClick={() => {
@@ -146,4 +148,3 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
     </div>
   );
 }
-

@@ -55,6 +55,7 @@ export type LogEvent =
   | "billing.reconcile_ok"
   | "billing.webhook_received"
   | "billing.webhook_failed"
+  | "share.referral_failed"
   | "storage.local_serve_failed";
 
 export interface LogContext {
