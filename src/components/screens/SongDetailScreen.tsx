@@ -34,9 +34,10 @@ import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { useTranslator } from "@/lib/i18n";
 import { getPlayer, startAudioContext } from "@/lib/music/tone-player";
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
+import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
-import { Spinner } from "@/components/ui/spinner";
 import { ShareTicketCard } from "@/components/song-detail/ShareTicketCard";
 import { exportSongAsVideo } from "@/modules/export/export-video";
 import {
@@ -307,14 +308,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   /* ── Render guards ────────────────────────────────────────────────── */
 
   if (isLoading) {
-    return (
-      <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
-        <PageBackdrop variant="soft" />
-        <div className="relative z-10 flex min-h-svh items-center justify-center">
-          <Spinner size="lg" />
-        </div>
-      </div>
-    );
+    return <GlobalLoadingIndicator />;
   }
 
   if (!song) {
@@ -815,7 +809,7 @@ function ExportRow({
           {cost}
         </span>
         {busy ? (
-          <Spinner size="xs" variant="ink" />
+          <MurmurLoadingNote size="xs" tone="ink" />
         ) : (
           <span
             className="text-[#1A1A1A] text-[18px] transition-transform group-hover:translate-x-0.5"

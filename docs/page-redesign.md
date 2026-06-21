@@ -756,8 +756,8 @@ Studio / Name / Topup all have a sticky bottom CTA. Discipline:
 - The CTA is **coral** capsule for "Begin / Open" semantics (Top up,
   Sign in).
 - The CTA never has more than three words.
-- The CTA never shows a spinner inside its label — the loading state
-  uses the rotating copy slot above it.
+- The CTA never shows rings or ellipses for loading; compact busy states use
+  the canonical Murmur loading note and may keep rotating copy above it.
 - The CTA respects safe-area-inset-bottom.
 
 ---

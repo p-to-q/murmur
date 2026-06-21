@@ -10,10 +10,12 @@ import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { useTranslator } from "@/lib/i18n";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import type { SongCard as SongCardType } from "@/modules/shared/types";
+import { FloatingMusicNotes } from "@/components/murmur/floating-music-notes";
+import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
+import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
-import { Spinner } from "@/components/ui/spinner";
 import { ARTWORK_CATALOG } from "@/presets/artworks/catalog";
 
 // The gallery only renders light metadata; the heavy SongCard fields
@@ -155,6 +157,10 @@ export function GalleryScreen() {
     );
   }, [displaySongs, sort]);
 
+  if (isLoading) {
+    return <GlobalLoadingIndicator />;
+  }
+
   const handleSongClick = (song: SongWithMeta) => {
     memory
       .reportAction({
@@ -238,42 +244,7 @@ export function GalleryScreen() {
           transition={{ delay: 0.35, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="relative z-10 flex flex-col items-center px-5 md:px-12 py-8 md:py-12 max-w-2xl mx-auto text-center"
         >
-          <svg
-            width="160"
-            height="160"
-            viewBox="0 0 120 120"
-            fill="none"
-            className="opacity-20"
-          >
-            <motion.circle
-              initial={{ scale: 0.75, opacity: 0.15 }}
-              animate={{ scale: 1, opacity: 0.5 }}
-              transition={{
-                duration: 1.6,
-                repeat: Infinity,
-                repeatType: "reverse",
-                ease: "easeInOut",
-              }}
-              cx="60"
-              cy="80"
-              r="12"
-              fill="#FF5924"
-            />
-            <motion.path
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{
-                duration: 1.6,
-                repeat: Infinity,
-                repeatType: "reverse",
-                ease: "easeInOut",
-              }}
-              d="M 72 80 L 72 30 Q 72 20 82 22 L 100 26"
-              stroke="#FF5924"
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-          </svg>
+          <FloatingMusicNotes size={160} className="opacity-20" />
         </motion.div>
       )}
 
@@ -292,15 +263,6 @@ export function GalleryScreen() {
 
       {/* Spacer when no sort toggle shown */}
       {!isLoading && displaySongs.length <= 1 && <div className="pb-4" />}
-
-      {/* Loading — general spinner, centered in the full viewport like the
-          app's other loaders (the empty heatmap padding above would otherwise
-          push an in-flow spinner into the upper half) */}
-      {isLoading && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center">
-          <Spinner size="lg" aria-label={t("loading.aria")} />
-        </div>
-      )}
 
       {/* Song grid — 2-col mobile / 3-col tablet / 4-col desktop */}
       {!isLoading && displaySongs.length > 0 && (
@@ -394,9 +356,13 @@ export function GalleryScreen() {
                 <button
                   onClick={handleConfirmDelete}
                   disabled={isDeleting}
-                  className="flex-1 h-11 rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors disabled:opacity-60"
+                  className="inline-flex h-11 flex-1 items-center justify-center rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors disabled:opacity-60"
                 >
-                  {isDeleting ? "…" : t("song.delete.confirm") || "Delete"}
+                  {isDeleting ? (
+                    <MurmurLoadingNote size="sm" tone="light" />
+                  ) : (
+                    t("song.delete.confirm") || "Delete"
+                  )}
                 </button>
               </div>
             </motion.div>

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { RotateCcw, Play, Pause, Loader2, Sparkles } from "lucide-react";
+import { RotateCcw, Play, Pause, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import Image from "next/image";
@@ -32,6 +32,7 @@ import type {
 } from "@/modules/shared/types";
 
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { buildMeshGradient } from "@/components/song-detail/mesh-gradient";
 import {
   coverArtworkImageStyle,
@@ -453,7 +454,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
                 <p className="mt-3 text-[11px] leading-relaxed text-white/40">
                   {magenta.status === "pending" ? (
                     <span className="inline-flex items-center gap-1.5">
-                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <MurmurLoadingNote size="xs" tone="light" />
                       {t("studio.magenta.pending")}
                     </span>
                   ) : (

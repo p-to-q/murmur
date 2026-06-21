@@ -1,7 +1,9 @@
 import dynamic from "next/dynamic";
+import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 
-const HumScreen = dynamic(() =>
-  import("@/components/screens/HumScreen").then((m) => m.HumScreen),
+const HumScreen = dynamic(
+  () => import("@/components/screens/HumScreen").then((m) => m.HumScreen),
+  { loading: () => <GlobalLoadingIndicator /> },
 );
 
 /**
