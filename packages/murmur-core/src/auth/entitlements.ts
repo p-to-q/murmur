@@ -84,7 +84,7 @@ export function resolveEntitlement(
     canHum: balance >= COST.hum,
     canSave,
     canLlmEdit: balance >= COST.llm_edit,
-    canExportWebm: isAuthed && !isLocalCreator && balance >= COST.export_webm,
+    canExportWebm: isAuthed && !isLocalCreator,
     canTopUp: isAuthed && !isLocalCreator,
     canDeleteAccount: isAuthed && !isLocalCreator,
     remainingNotes: balance,

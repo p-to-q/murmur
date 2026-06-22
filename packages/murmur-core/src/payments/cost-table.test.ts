@@ -23,7 +23,7 @@ describe("cost-table", () => {
     expect(COST.hum).toBe(1);
     expect(COST.llm_edit).toBe(1);
     expect(COST.save).toBe(0);
-    expect(COST.export_webm).toBe(2);
+    expect(COST.export_webm).toBe(0);
   });
 
   it("exposes the expected refill invariants", () => {

@@ -105,3 +105,93 @@ export function decideRefund(input: {
 export function refundReferenceFor(originalLedgerId: string): string {
   return `refund:${originalLedgerId}`;
 }
+
+/** Split a spend across daily-free notes first, then the account pool. */
+export function decideSpendPoolsForCost(
+  user: { notesBalance: number; dailyFreeNotesBalance: number },
+  cost: number,
+) {
+  const dailyFreeBefore = Math.min(
+    clampNonNegative(user.dailyFreeNotesBalance),
+    clampNonNegative(user.notesBalance),
+  );
+  const dailyFreeSpent = Math.min(dailyFreeBefore, cost);
+  const accountSpent = cost - dailyFreeSpent;
+  return {
+    dailyFreeBefore,
+    accountBefore: accountNotesFromTotal(user.notesBalance, dailyFreeBefore),
+    dailyFreeSpent,
+    accountSpent,
+    dailyFreeAfter: dailyFreeBefore - dailyFreeSpent,
+    accountAfter: accountNotesFromTotal(
+      user.notesBalance - cost,
+      dailyFreeBefore - dailyFreeSpent,
+    ),
+  };
+}
+
+/** Derive the account pool from total notes and the daily-free sub-balance. */
+export function accountNotesFromTotal(total: number, dailyFree: number): number {
+  return Math.max(
+    0,
+    clampNonNegative(total) - Math.min(clampNonNegative(total), clampNonNegative(dailyFree)),
+  );
+}
+
+/** Keep the daily-free pool valid after total balance shrinks. */
+export function trimDailyFreeAfterTopupReversal(
+  dailyFreeNotes: number,
+  balanceAfter: number,
+): number {
+  return Math.min(clampNonNegative(dailyFreeNotes), clampNonNegative(balanceAfter));
+}
+
+/** Restore the daily-free portion of a refunded spend when metadata allows it. */
+export function decideRefundPoolsForOriginalSpend(
+  metadata: Record<string, unknown>,
+  currentDailyFree: number,
+  balanceAfter: number,
+  maxDailyFreeBalance: number,
+) {
+  const spendPools = objectField(metadata, "spendPools");
+  const dailyFreeSpent = numberField(spendPools, "dailyFreeSpent");
+  const accountSpent = numberField(spendPools, "accountSpent");
+  const dailyFreeRestore = Math.min(
+    clampNonNegative(dailyFreeSpent ?? 0),
+    clampNonNegative(balanceAfter),
+  );
+  const dailyFreeAfter = Math.min(
+    clampNonNegative(currentDailyFree) + dailyFreeRestore,
+    clampNonNegative(balanceAfter),
+    clampNonNegative(maxDailyFreeBalance),
+  );
+
+  return {
+    dailyFreeRestore,
+    accountRestore: clampNonNegative(accountSpent ?? 0),
+    dailyFreeAfter,
+    accountAfter: accountNotesFromTotal(balanceAfter, dailyFreeAfter),
+  };
+}
+
+function objectField(
+  value: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> | null {
+  const field = value[key];
+  return field && typeof field === "object" && !Array.isArray(field)
+    ? (field as Record<string, unknown>)
+    : null;
+}
+
+function numberField(
+  value: Record<string, unknown> | null,
+  key: string,
+): number | null {
+  const field = value?.[key];
+  return typeof field === "number" && Number.isFinite(field) ? field : null;
+}
+
+function clampNonNegative(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}

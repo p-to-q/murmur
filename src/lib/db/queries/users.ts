@@ -4,7 +4,8 @@ import { db } from "../client";
 import { users, type User } from "../schema/users";
 import { externalIdentities } from "../schema/external-identities";
 import { notesLedger } from "../schema/notes-ledger";
-import { GRANTS, LOCAL_CREATOR_FREE_NOTES } from "@murmur/core";
+import { DAILY_REFILL, GRANTS, LOCAL_CREATOR_FREE_NOTES } from "@murmur/core";
+import { currentNotesRefillWindowStart, notesRefillWindowKey } from "@/lib/billing/notes-clock";
 import type { UserRegistrationKind } from "@/lib/auth/registration-kind";
 
 export async function getUserById(id: string): Promise<User | undefined> {
@@ -202,6 +203,8 @@ export async function upsertOAuthUser(
         userId = ulid();
         created = true;
         registrationKind = "new_user";
+        const signupNotes = GRANTS.signup_bonus;
+        const dailyNotes = DAILY_REFILL;
         await tx.insert(users).values({
           id: userId,
           email,
@@ -209,8 +212,35 @@ export async function upsertOAuthUser(
           avatarUrl,
           regionId: "intl",
           accountKind: "registered",
+          notesBalance: signupNotes + dailyNotes,
+          dailyFreeNotesBalance: dailyNotes,
+          freeNotesGrantedAt: currentNotesRefillWindowStart(),
           planTier: "free",
         });
+        await tx.insert(notesLedger).values([
+          {
+            id: `nle_${ulid()}`,
+            userId,
+            delta: signupNotes,
+            reason: "grant:signup_bonus",
+            externalRef: "signup_bonus",
+            metadata: {
+              source: "new_user_signup",
+            },
+          },
+          {
+            id: `nle_${ulid()}`,
+            userId,
+            delta: dailyNotes,
+            reason: "grant:daily_free",
+            externalRef: `daily_free:${notesRefillWindowKey()}`,
+            metadata: {
+              source: "new_user_signup",
+              dailyFreeBefore: 0,
+              dailyFreeAfter: dailyNotes,
+            },
+          },
+        ]);
       }
     }
 
@@ -294,12 +324,17 @@ async function promoteLocalCreatorToRegistered(
 ): Promise<void> {
   const targetBalance = GRANTS.signup_bonus;
   const [current] = await tx
-    .select({ notesBalance: users.notesBalance })
+    .select({
+      notesBalance: users.notesBalance,
+      dailyFreeNotesBalance: users.dailyFreeNotesBalance,
+    })
     .from(users)
     .where(eq(users.id, input.userId))
     .limit(1);
 
   const notesBalance = current?.notesBalance ?? 0;
+  const dailyFreeNotesBalance = current?.dailyFreeNotesBalance ?? 0;
+  let dailyGrantAmount = Math.max(0, DAILY_REFILL - dailyFreeNotesBalance);
   const [existingLedger] = await tx
     .select({ id: notesLedger.id })
     .from(notesLedger)
@@ -310,7 +345,6 @@ async function promoteLocalCreatorToRegistered(
   const grantAmount = existingLedger
     ? Math.max(0, nextBalance - notesBalance)
     : nextBalance;
-
   if (grantAmount > 0) {
     await tx
       .insert(notesLedger)
@@ -328,6 +362,28 @@ async function promoteLocalCreatorToRegistered(
       })
       .onConflictDoNothing();
   }
+  if (dailyGrantAmount > 0) {
+    const insertedDailyGrant = await tx
+      .insert(notesLedger)
+      .values({
+        id: `nle_${ulid()}`,
+        userId: input.userId,
+        delta: dailyGrantAmount,
+        reason: "grant:daily_free",
+        externalRef: `daily_free:${notesRefillWindowKey()}`,
+        metadata: {
+          source: "local_creator_promotion",
+          dailyFreeBefore: dailyFreeNotesBalance,
+          dailyFreeAfter: dailyFreeNotesBalance + dailyGrantAmount,
+        },
+      })
+      .onConflictDoNothing()
+      .returning({ id: notesLedger.id });
+
+    if (!insertedDailyGrant[0]) {
+      dailyGrantAmount = 0;
+    }
+  }
 
   await tx
     .update(users)
@@ -336,7 +392,9 @@ async function promoteLocalCreatorToRegistered(
       name: input.name,
       avatarUrl: input.avatarUrl,
       accountKind: "registered",
-      notesBalance: nextBalance,
+      notesBalance: nextBalance + dailyGrantAmount,
+      dailyFreeNotesBalance: dailyFreeNotesBalance + dailyGrantAmount,
+      freeNotesGrantedAt: currentNotesRefillWindowStart(),
       promotedAt: new Date(),
       updatedAt: new Date(),
     })

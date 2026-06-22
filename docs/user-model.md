@@ -188,7 +188,7 @@ type Entitlement = {
   canHum: boolean;            // hum→transcribe path
   canSave: boolean;           // /api/songs POST
   canLlmEdit: boolean;        // /api/strummer/edit
-  canExportWebm: boolean;     // server-side WebM render
+  canExportWebm: boolean;     // client video export, MP4 or WebM
   canTopUp: boolean;          // /topup path visible
   canDeleteAccount: boolean;  // settings sheet
   remainingNotes: number;
@@ -200,7 +200,7 @@ function resolveEntitlement(user: User, balance: number): Entitlement {
     canHum:           balance >= COST.hum,
     canSave:          isAuthed && balance >= COST.save,
     canLlmEdit:       balance >= COST.llm_edit,
-    canExportWebm:    isAuthed && balance >= COST.export_webm,
+    canExportWebm:    isAuthed && COST.export_webm === 0,
     canTopUp:         isAuthed,
     canDeleteAccount: isAuthed,
     remainingNotes:   balance,
@@ -426,7 +426,7 @@ surface for these events.
 A downstream agent has shipped this when:
 
 - [ ] `users` table extended with `regionId`, `planTier`, `notesBalance`,
-      `freeNotesGrantedAt`, `deletedAt`, `consents`.
+      `dailyFreeNotesBalance`, `freeNotesGrantedAt`, `deletedAt`, `consents`.
 - [x] `external_identities` table exists; `sessions` table exists.
 - [ ] `getRequestUser` + `requireAuth` reject spoofed headers; only
       session cookies / bearer tokens authenticate.

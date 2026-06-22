@@ -3,12 +3,20 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../client";
 import { notesLedger } from "../schema/notes-ledger";
 import { users } from "../schema/users";
-import type { NotesReason } from "@murmur/core";
+import { DAILY_REFILL, MAX_FREE_BALANCE, type NotesReason } from "@murmur/core";
+import {
+  currentNotesRefillWindowStart,
+  notesRefillWindowKey,
+} from "@/lib/billing/notes-clock";
 import {
   decideGrant,
+  decideRefundPoolsForOriginalSpend,
   decideRefund,
   decideSpend,
+  decideSpendPoolsForCost,
   refundReferenceFor,
+  trimDailyFreeAfterTopupReversal,
+  accountNotesFromTotal,
   type ExistingLedgerRow,
 } from "@/lib/billing/notes-ledger-decisions";
 
@@ -17,9 +25,13 @@ import {
 // shadow the pure decisions, which live in their own module.
 export {
   decideGrant,
+  decideRefundPoolsForOriginalSpend,
   decideRefund,
   decideSpend,
+  decideSpendPoolsForCost,
   refundReferenceFor,
+  trimDailyFreeAfterTopupReversal,
+  accountNotesFromTotal,
   type ExistingLedgerRow,
 } from "@/lib/billing/notes-ledger-decisions";
 
@@ -31,6 +43,8 @@ export type BalanceResult =
       ok: true;
       userId: string;
       notes: number;
+      accountNotes: number;
+      dailyFreeNotes: number;
       planTier: "free" | "premium";
       freeNotesGrantedAt: Date;
     }
@@ -149,6 +163,7 @@ export async function getNotesBalance(userId: string): Promise<BalanceResult> {
     .select({
       id: users.id,
       notesBalance: users.notesBalance,
+      dailyFreeNotesBalance: users.dailyFreeNotesBalance,
       planTier: users.planTier,
       freeNotesGrantedAt: users.freeNotesGrantedAt,
     })
@@ -160,10 +175,17 @@ export async function getNotesBalance(userId: string): Promise<BalanceResult> {
     return { ok: false, reason: "user_not_found", notes: 0 };
   }
 
+  const dailyFreeNotes = trimDailyFreeAfterTopupReversal(
+    row.dailyFreeNotesBalance,
+    row.notesBalance,
+  );
+
   return {
     ok: true,
     userId: row.id,
     notes: row.notesBalance,
+    dailyFreeNotes,
+    accountNotes: accountNotesFromTotal(row.notesBalance, dailyFreeNotes),
     planTier: normalizePlanTier(row.planTier),
     freeNotesGrantedAt: row.freeNotesGrantedAt,
   };
@@ -230,17 +252,25 @@ export async function spendNotesInTransaction(
   }
 
   const ledgerId = createLedgerId();
+  const spendPools = decideSpendPoolsForCost(user, cost);
   await tx.insert(notesLedger).values({
     id: ledgerId,
     userId: input.userId,
     delta: -cost,
     reason: input.reason,
     externalRef: input.externalRef,
-    metadata: input.metadata ?? {},
+    metadata: {
+      ...(input.metadata ?? {}),
+      spendPools,
+    },
   });
   await tx
     .update(users)
-    .set({ notesBalance: decision.balanceAfter, updatedAt: new Date() })
+    .set({
+      notesBalance: decision.balanceAfter,
+      dailyFreeNotesBalance: spendPools.dailyFreeAfter,
+      updatedAt: new Date(),
+    })
     .where(eq(users.id, input.userId));
 
   return {
@@ -327,6 +357,7 @@ export async function refundNotes(input: RefundNotesInput): Promise<RefundNotesR
         id: notesLedger.id,
         userId: notesLedger.userId,
         delta: notesLedger.delta,
+        metadata: notesLedger.metadata,
       })
       .from(notesLedger)
       .where(eq(notesLedger.id, input.originalLedgerId))
@@ -370,17 +401,31 @@ export async function refundNotes(input: RefundNotesInput): Promise<RefundNotesR
     }
 
     const refundLedgerId = createLedgerId();
+    const refundPools = decideRefundPoolsForOriginalSpend(
+      original.metadata,
+      user.dailyFreeNotesBalance,
+      decision.balanceAfter,
+      MAX_FREE_BALANCE,
+    );
     await tx.insert(notesLedger).values({
       id: refundLedgerId,
       userId: original.userId,
       delta: decision.amount,
       reason: refundReason,
       externalRef: refundExternalRef,
-      metadata: { ...(input.metadata ?? {}), refunds: original.id },
+      metadata: {
+        ...(input.metadata ?? {}),
+        refunds: original.id,
+        refundPools,
+      },
     });
     await tx
       .update(users)
-      .set({ notesBalance: decision.balanceAfter, updatedAt: new Date() })
+      .set({
+        notesBalance: decision.balanceAfter,
+        dailyFreeNotesBalance: refundPools.dailyFreeAfter,
+        updatedAt: new Date(),
+      })
       .where(eq(users.id, original.userId));
 
     return {
@@ -464,7 +509,14 @@ export async function reverseTopupGrant(
     });
     await tx
       .update(users)
-      .set({ notesBalance: balanceAfter, updatedAt: new Date() })
+      .set({
+        notesBalance: balanceAfter,
+        dailyFreeNotesBalance: trimDailyFreeAfterTopupReversal(
+          user.dailyFreeNotesBalance,
+          balanceAfter,
+        ),
+        updatedAt: new Date(),
+      })
       .where(eq(users.id, input.userId));
 
     return {
@@ -482,6 +534,7 @@ export async function reverseTopupGrant(
 export async function ensureBillingAccount(userId: string): Promise<void> {
   await ensureGuestBillingUser(userId);
   await ensureInitialLedgerForUser(userId);
+  await ensureDailyFreeRefillForUser(userId);
 }
 
 async function ensureGuestBillingUser(userId: string): Promise<void> {
@@ -517,14 +570,104 @@ async function ensureInitialLedgerForUser(userId: string): Promise<void> {
   });
 }
 
+export async function ensureDailyFreeRefillForUser(userId: string): Promise<void> {
+  if (userId === "guest") return;
+
+  await db.transaction(async (tx) => {
+    const user = await lockUserRow(tx, userId);
+    if (!user || user.accountKind !== "registered") return;
+    await grantDailyFreeRefillInTransaction(tx, user);
+  });
+}
+
+async function grantDailyFreeRefillInTransaction(
+  tx: DbTransaction,
+  user: LockedUserRow,
+): Promise<void> {
+  const windowStart = currentNotesRefillWindowStart();
+  const currentDaily = trimDailyFreeAfterTopupReversal(
+    user.dailyFreeNotesBalance,
+    user.notesBalance,
+  );
+  const externalRef = `daily_free:${notesRefillWindowKey()}`;
+  const existingGrant = await findIdempotentLedger(
+    tx,
+    user.id,
+    "grant:daily_free",
+    externalRef,
+  );
+
+  if (existingGrant) {
+    if (user.freeNotesGrantedAt < windowStart) {
+      await tx
+        .update(users)
+        .set({ freeNotesGrantedAt: windowStart, updatedAt: new Date() })
+        .where(eq(users.id, user.id));
+    }
+    return;
+  }
+
+  if (user.freeNotesGrantedAt >= windowStart) return;
+
+  const dailyRoom = Math.max(0, MAX_FREE_BALANCE - currentDaily);
+  const grantAmount = Math.min(DAILY_REFILL, dailyRoom);
+
+  if (grantAmount > 0) {
+    const inserted = await tx
+      .insert(notesLedger)
+      .values({
+        id: createLedgerId(),
+        userId: user.id,
+        delta: grantAmount,
+        reason: "grant:daily_free",
+        externalRef,
+        metadata: {
+          source: "ensure_daily_free_refill",
+          dailyFreeBefore: currentDaily,
+          dailyFreeAfter: currentDaily + grantAmount,
+        },
+      })
+      .onConflictDoNothing()
+      .returning({ id: notesLedger.id });
+
+    if (!inserted[0]) {
+      await tx
+        .update(users)
+        .set({ freeNotesGrantedAt: windowStart, updatedAt: new Date() })
+        .where(eq(users.id, user.id));
+      return;
+    }
+  }
+
+  await tx
+    .update(users)
+    .set({
+      notesBalance: user.notesBalance + grantAmount,
+      dailyFreeNotesBalance: currentDaily + grantAmount,
+      freeNotesGrantedAt: windowStart,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, user.id));
+}
+
+type LockedUserRow = {
+  id: string;
+  notesBalance: number;
+  dailyFreeNotesBalance: number;
+  freeNotesGrantedAt: Date;
+  accountKind: string;
+};
+
 async function lockUserRow(
   tx: DbTransaction,
   userId: string,
-): Promise<{ id: string; notesBalance: number; accountKind: string } | null> {
+): Promise<LockedUserRow | null> {
   const [user] = await tx
     .select({
       id: users.id,
       notesBalance: users.notesBalance,
+      dailyFreeNotesBalance: users.dailyFreeNotesBalance,
+      freeNotesGrantedAt: users.freeNotesGrantedAt,
       accountKind: users.accountKind,
     })
     .from(users)

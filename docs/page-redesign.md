@@ -439,7 +439,7 @@ arrangement track-list breakdown.
 │   ◯ Audio (mp3)         (free)         │
 │   ◯ Share card (HTML)   (free)         │
 │   ◯ Poster (PNG)        (free)         │
-│   ◯ Audio video (WebM)  (2 notes)      │
+│   ◯ Audio video (MP4/WebM) (free)      │
 │                                        │
 │                                        │
 │   tertiary footer:                     │

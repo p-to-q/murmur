@@ -39,6 +39,8 @@ export async function GET(request: NextRequest) {
         identityProviders,
         balance: {
           notes: balance.notes,
+          accountNotes: balance.accountNotes,
+          dailyFreeNotes: balance.dailyFreeNotes,
           planTier: balance.planTier,
         },
       }),

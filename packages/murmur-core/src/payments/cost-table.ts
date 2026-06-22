@@ -45,14 +45,14 @@ export type NotesReason =
  *
  * If a new action is added: update this table, update
  * docs/payment-topup-feature.md §3, and update the matching gate in the UI.
- * Do not introduce a "free for now" cost; either it costs something or it
- * does not need to be in this table.
+ * Keep legacy keys here when another surface already reads the entitlement;
+ * a zero value means the action is deliberately free in the current product.
  */
 export const COST: Readonly<Record<CostKey, number>> = Object.freeze({
   hum:          1,
   llm_edit:     1,
   save:         0,
-  export_webm:  2,
+  export_webm:  0,
 });
 
 /**
@@ -67,8 +67,8 @@ export const LOCAL_CREATOR_FREE_NOTES = 5;
 /**
  * Daily signed-in free-tier refill quota.
  *
- * Logic in the cron job (docs/payment-topup-feature.md §8):
- *   grant(min(DAILY_REFILL, MAX_FREE_BALANCE - currentBalance))
+ * Logic in the server refill helper (docs/payment-topup-feature.md §8):
+ *   grant(min(DAILY_REFILL, MAX_FREE_BALANCE - dailyFreeNotesBalance))
  */
 export const DAILY_REFILL = 5;
 export const MAX_FREE_BALANCE = 10;

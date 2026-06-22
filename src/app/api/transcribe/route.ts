@@ -118,6 +118,8 @@ export async function POST(request: NextRequest) {
         ok: true,
         userId,
         notes: Number.POSITIVE_INFINITY,
+        accountNotes: Number.POSITIVE_INFINITY,
+        dailyFreeNotes: 0,
         planTier: "free",
         freeNotesGrantedAt: new Date(),
       };
@@ -142,6 +144,8 @@ export async function POST(request: NextRequest) {
             ok: true,
             userId,
             notes: Number.POSITIVE_INFINITY,
+            accountNotes: Number.POSITIVE_INFINITY,
+            dailyFreeNotes: 0,
             planTier: "free",
             freeNotesGrantedAt: new Date(),
           };
@@ -174,6 +178,8 @@ export async function POST(request: NextRequest) {
             ok: true,
             userId,
             notes: Number.POSITIVE_INFINITY,
+            accountNotes: Number.POSITIVE_INFINITY,
+            dailyFreeNotes: 0,
             planTier: "free",
             freeNotesGrantedAt: new Date(),
           };
@@ -196,6 +202,8 @@ export async function POST(request: NextRequest) {
           ok: true,
           userId,
           notes: Number.POSITIVE_INFINITY,
+          accountNotes: Number.POSITIVE_INFINITY,
+          dailyFreeNotes: 0,
           planTier: "free",
           freeNotesGrantedAt: new Date(),
         };

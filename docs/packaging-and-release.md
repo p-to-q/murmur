@@ -76,7 +76,7 @@ Current artifact surfaces:
 - WAV fallback
 - poster PNG
 - share HTML
-- WebM
+- video export (MP4 or WebM, browser-dependent)
 
 Required signals:
 
@@ -125,7 +125,7 @@ For artifact-oriented milestones, also preserve:
 - sample exported MP3
 - sample poster PNG
 - sample share HTML
-- sample WebM where browser support permits
+- sample video export where browser support permits
 
 ## Stage 3. Deployable app output
 
@@ -201,7 +201,7 @@ Package:
   - MP3
   - PNG poster
   - share HTML
-  - WebM
+  - video export (MP4 or WebM)
 
 Do not expose internal engineering docs as if they were end-user deliverables.
 

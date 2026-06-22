@@ -50,12 +50,13 @@ export async function POST(request: NextRequest) {
 
   const outTradeNo = verified.out_trade_no;
 
+  const providerEventId = `zpay:${verified.trade_no}`;
   const insertedRows = await db
     .insert(eventsWebhook)
     .values({
       id: newId("evw"),
       provider: PROVIDER,
-      providerEventId: `zpay:${verified.trade_no}`,
+      providerEventId,
       routeId: "billing.webhook.zpay",
       status: "received",
       signatureOk: true,
@@ -66,11 +67,12 @@ export async function POST(request: NextRequest) {
     })
     .returning({ id: eventsWebhook.id });
 
-  if (insertedRows.length === 0) {
+  const eventRow = insertedRows[0] ?? (await reclaimUnprocessedEvent(providerEventId));
+  if (!eventRow) {
     return new NextResponse("success");
   }
 
-  const eventRowId = insertedRows[0]!.id;
+  const eventRowId = eventRow.id;
 
   // Parse our out_trade_no format: {userId}:{skuId}:{uuid}
   const parts = outTradeNo.split(":");
@@ -89,6 +91,7 @@ export async function POST(request: NextRequest) {
     .select({
       id: purchases.id,
       notesGranted: purchases.notesGranted,
+      amountCents: purchases.amountCents,
       status: purchases.status,
     })
     .from(purchases)
@@ -112,6 +115,28 @@ export async function POST(request: NextRequest) {
   }
 
   const notesGranted = pendingPurchase.notesGranted;
+  const moneyCents = Math.round(Number(verified.money) * 100);
+  if (!Number.isFinite(moneyCents) || moneyCents !== pendingPurchase.amountCents) {
+    log(
+      "billing.zpay_notify_failed",
+      {
+        stage: "amount_mismatch",
+        outTradeNo,
+        expectedCents: pendingPurchase.amountCents,
+        actualCents: Number.isFinite(moneyCents) ? moneyCents : null,
+      },
+      { route: ROUTE, requestId, level: "error" },
+    );
+    await db
+      .update(eventsWebhook)
+      .set({
+        status: "failed",
+        processedAt: new Date(),
+        error: "amount mismatch",
+      })
+      .where(eq(eventsWebhook.id, eventRowId));
+    return new NextResponse("fail", { status: 400 });
+  }
 
   // Grant notes
   const grant = await grantNotes({
@@ -161,4 +186,21 @@ export async function POST(request: NextRequest) {
 
   // zpay requires plain text "success" response
   return new NextResponse("success");
+}
+
+async function reclaimUnprocessedEvent(
+  providerEventId: string,
+): Promise<{ id: string } | null> {
+  const [existing] = await db
+    .select({ id: eventsWebhook.id, status: eventsWebhook.status })
+    .from(eventsWebhook)
+    .where(
+      and(
+        eq(eventsWebhook.provider, PROVIDER),
+        eq(eventsWebhook.providerEventId, providerEventId),
+      ),
+    )
+    .limit(1);
+  if (!existing || existing.status === "processed") return null;
+  return { id: existing.id };
 }

@@ -11,6 +11,7 @@ export const users = pgTable(
     regionId: varchar("region_id", { length: 8 }).notNull().default("intl"),
     accountKind: varchar("account_kind", { length: 32 }).notNull().default("registered"),
     notesBalance: integer("notes_balance").notNull().default(15),
+    dailyFreeNotesBalance: integer("daily_free_notes_balance").notNull().default(0),
     freeNotesGrantedAt: timestamp("free_notes_granted_at").notNull().defaultNow(),
     planTier: varchar("plan_tier", { length: 32 }).notNull().default("free"),
     promotedAt: timestamp("promoted_at"),

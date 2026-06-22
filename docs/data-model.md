@@ -62,6 +62,7 @@ v2 additions:
 
 ```ts
 notesBalance:       integer("notes_balance").notNull().default(15),
+dailyFreeNotesBalance: integer("daily_free_notes_balance").notNull().default(0),
 freeNotesGrantedAt: timestamp("free_notes_granted_at").notNull().defaultNow(),
 planTier:           varchar("plan_tier", { length: 16 }).notNull().default("free"),
 regionId:           varchar("region_id", { length: 8 }).notNull().default("intl"),
@@ -77,6 +78,8 @@ Constraints:
 - `regionId IN ("intl", "cn")`.
 - `accountKind IN ("local_creator", "registered")`.
 - `notesBalance >= 0` (enforced in app; DB check optional).
+- `dailyFreeNotesBalance >= 0` and `dailyFreeNotesBalance <= notesBalance`
+  (enforced in app).
 
 Indexes (in addition to existing email + createdAt):
 
@@ -181,11 +184,17 @@ Invariants:
 
 - The sum of `delta` over a user's rows == `users.notesBalance`. Always.
   A nightly reconciliation job fails loud if they diverge.
+- `dailyFreeNotesBalance` is the unspent daily-free portion of
+  `notesBalance`; account-pool display derives as
+  `notesBalance - dailyFreeNotesBalance`.
 - No row is ever updated or deleted. Provider top-up refunds insert a
   negative `refund:topup` row keyed by the provider refund event; failed-spend
   refunds insert a positive `refund:spend` row keyed by the original spend.
 - Every business action that consumes or grants notes inserts exactly
   one ledger row inside the same SQL transaction as the action itself.
+- `spendNotes` consumes daily-free notes first, then account notes. Spend
+  metadata records the pool split so failed-spend refunds can restore the
+  daily-free portion.
 
 Helper in `src/lib/db/queries/notes-ledger.ts`:
 
@@ -535,8 +544,8 @@ A downstream agent has shipped the v2 data model when:
 - [ ] All composite invariants (§4) hold after a seed-data run + a
       smoke test of the audio + payment flows.
 - [ ] No reads happen without going through a `queries/*.ts` helper.
-- [ ] `spendNotes` is the only place `users.notesBalance` is mutated
-      in app code.
+- [ ] `spendNotes`, `grantNotes`, top-up reversal, and daily-free refill
+      are the only app helpers that mutate note balances.
 - [ ] The legacy `mp3DataUrl` column is read-only (no new writes); a
       lint rule flags `INSERT … mp3_data_url` in code review.
 - [ ] `scripts/db-invariants.ts` runs nightly and pages on failure.

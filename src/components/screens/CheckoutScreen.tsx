@@ -77,6 +77,8 @@ type CheckoutPurchase =
 
 const DEFAULT_SKU_ID = "topup_120_notes";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CHECKOUT_BASELINE_STORAGE_KEY = "murmur.checkout.baseline.v1";
+const CHECKOUT_BASELINE_MAX_AGE_MS = 30 * 60 * 1000;
 
 export function CheckoutScreen() {
   const router = useRouter();
@@ -194,7 +196,7 @@ export function CheckoutScreen() {
   const confirmGrant = useCallback(
     async (signal?: { cancelled: boolean }) => {
       const baseline = await fetchUserBalance({ force: true }).catch(() => null);
-      const baselineNotes = baseline?.balance?.notes ?? null;
+      const baselineNotes = readCheckoutBaselineNotes() ?? baseline?.balance?.notes ?? null;
       for (let attempt = 0; attempt < 8; attempt++) {
         if (signal?.cancelled) return;
         await new Promise((resolve) => window.setTimeout(resolve, 1200));
@@ -206,14 +208,20 @@ export function CheckoutScreen() {
           nextNotes > baselineNotes
         ) {
           if (signal?.cancelled) return;
+          clearCheckoutBaselineNotes();
           finishSucceeded(nextNotes - baselineNotes);
           return;
         }
       }
       if (signal?.cancelled) return;
-      finishSucceeded(purchase.notesGranted);
+      setFailureMessage(
+        t("checkout.grant_pending") ||
+          "Payment is still being confirmed. Refresh your balance in a moment.",
+      );
+      setFailureKind("generic");
+      setPhase("failed");
     },
-    [finishSucceeded, purchase.notesGranted],
+    [finishSucceeded, t],
   );
 
   const beginCheckout = useCallback(async () => {
@@ -249,6 +257,9 @@ export function CheckoutScreen() {
           ? { ...baseBody, payMethod, billingEmail: billingEmail.trim() }
           : { ...baseBody, billingEmail: billingEmail.trim() };
 
+      const startingBalance = await fetchUserBalance({ force: true }).catch(() => null);
+      writeCheckoutBaselineNotes(startingBalance?.balance?.notes);
+
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -273,9 +284,12 @@ export function CheckoutScreen() {
       };
 
       if (errorBody.error === "waffo_not_configured") {
-        setPhase("confirming");
-        tearReceiptIfCurrentPage();
-        window.setTimeout(() => finishSucceeded(purchase.notesGranted), 1400);
+        setFailureMessage(
+          t("checkout.provider_unavailable") ||
+            "Payment is not configured for this deployment yet.",
+        );
+        setFailureKind("generic");
+        setPhase("failed");
         return;
       }
 
@@ -297,7 +311,7 @@ export function CheckoutScreen() {
       setFailureKind("generic");
       setPhase("failed");
     }
-  }, [billingEmail, finishSucceeded, payMethod, purchase, t, tearReceiptIfCurrentPage]);
+  }, [billingEmail, payMethod, purchase, t, tearReceiptIfCurrentPage]);
 
   const handleSignIn = () => {
     const currentUrl = window.location.pathname + window.location.search;
@@ -803,6 +817,41 @@ function packageLabel(purchase: CheckoutPurchase, t: (key: string) => string): s
     return t("checkout.custom_topup") || "Custom top-up";
   }
   return t("checkout.murmur_notes") || "Murmur Notes";
+}
+
+function readCheckoutBaselineNotes(): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(CHECKOUT_BASELINE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { notes?: unknown; createdAt?: unknown };
+    if (typeof parsed.createdAt !== "number") return null;
+    if (Date.now() - parsed.createdAt > CHECKOUT_BASELINE_MAX_AGE_MS) return null;
+    return typeof parsed.notes === "number" && Number.isFinite(parsed.notes)
+      ? parsed.notes
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCheckoutBaselineNotes(notes: number | undefined): void {
+  if (typeof window === "undefined" || typeof notes !== "number" || !Number.isFinite(notes)) {
+    return;
+  }
+  try {
+    window.sessionStorage.setItem(
+      CHECKOUT_BASELINE_STORAGE_KEY,
+      JSON.stringify({ notes, createdAt: Date.now() }),
+    );
+  } catch {}
+}
+
+function clearCheckoutBaselineNotes(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(CHECKOUT_BASELINE_STORAGE_KEY);
+  } catch {}
 }
 
 function paymentMethodLabel(method: PayMethod, t: (key: string) => string): string {

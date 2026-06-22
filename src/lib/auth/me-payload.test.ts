@@ -14,6 +14,8 @@ describe("auth me payload", () => {
     expect(payload.authenticated).toBe(false);
     expect(payload.entitlement.canHum).toBe(true);
     expect(payload.entitlement.canSave).toBe(false);
+    expect(payload.balance.accountNotes).toBe(50);
+    expect(payload.balance.dailyFreeNotes).toBe(0);
     expect(payload.balance.nextRefillAt).toBe("2026-06-03T16:00:00.000Z");
   });
 
@@ -64,10 +66,12 @@ describe("auth me payload", () => {
       source: "session",
       sessionId: "ses_registered",
       identityProviders: ["email", "google", "github"],
-      balance: { notes: 15, planTier: "free" },
+      balance: { notes: 15, accountNotes: 10, dailyFreeNotes: 5, planTier: "free" },
     });
 
     expect(payload.authenticated).toBe(true);
     expect(payload.identityProviders).toEqual(["email", "google", "github"]);
+    expect(payload.balance.accountNotes).toBe(10);
+    expect(payload.balance.dailyFreeNotes).toBe(5);
   });
 });

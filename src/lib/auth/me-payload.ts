@@ -10,6 +10,8 @@ export interface AuthMePayloadInput {
   identityProviders?: string[];
   balance: {
     notes: number;
+    accountNotes?: number;
+    dailyFreeNotes?: number;
     planTier: "free" | "premium";
   };
   now?: Date;
@@ -34,6 +36,8 @@ export function buildAuthMePayload(input: AuthMePayloadInput) {
     identityProviders: input.identityProviders ?? [],
     balance: {
       notes: input.balance.notes,
+      accountNotes: input.balance.accountNotes ?? input.balance.notes,
+      dailyFreeNotes: input.balance.dailyFreeNotes ?? 0,
       planTier: input.balance.planTier,
       nextRefillAt: nextNotesRefillAt(input.now).toISOString(),
     },
