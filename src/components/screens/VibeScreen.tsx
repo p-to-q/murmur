@@ -251,8 +251,9 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     versionPreview.stop();
     setAuditioning(null);
     resetFlow();
-    if (fromSavedSong && sourceVersion?.draftId) {
-      router.push(`/song/${sourceVersion.draftId}`);
+    const sourceSongId = sourceVersion?.parentSongId ?? sourceVersion?.draftId;
+    if (fromSavedSong && sourceSongId) {
+      router.push(`/song/${sourceSongId}`);
       return;
     }
     router.push("/");

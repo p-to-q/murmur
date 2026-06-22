@@ -235,7 +235,7 @@ describe("hydrateSavedSongToVersion", () => {
       expect(version.rootSongId).toBe("song_root");
       expect(version.lineageDepth).toBe(3);
       expect(version.sourceMelodyKind).toBe("intent");
-      expect(version.draftId).toBe("song_seed");
+      expect(version.draftId).not.toBe("song_seed");
       expect(version.originFlowId).toBe("saved-song_seed");
     }
   });

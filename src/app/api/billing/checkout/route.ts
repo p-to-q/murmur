@@ -250,6 +250,17 @@ export async function POST(request: NextRequest) {
     isZpayConfigured() &&
     payMethod === "wxpay";
 
+  if (product.currency === "CNY" && payMethod === "wxpay" && !isZpayConfigured()) {
+    return NextResponse.json(
+      {
+        error: "zpay_not_configured",
+        message: "WeChat Pay is not configured on this deployment.",
+        requestId,
+      },
+      { status: 503, headers: { "X-Request-Id": requestId } },
+    );
+  }
+
   if (!useZpay && !isWaffoConfigured()) {
     return NextResponse.json(
       {

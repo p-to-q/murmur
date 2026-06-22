@@ -4,7 +4,12 @@ import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
-import { getSongSummariesByUser, createSong, createSongWithSpend } from "@/lib/db/queries/songs";
+import {
+  getSongByIdForCreateConflict,
+  getSongSummariesByUser,
+  createSong,
+  createSongWithSpend,
+} from "@/lib/db/queries/songs";
 import {
   createLocalSongFallback,
   getLocalSongSummariesByUserFallback,
@@ -147,8 +152,8 @@ export async function POST(req: NextRequest) {
           headers: { "X-Request-Id": requestId },
         });
       } catch (dbError) {
-        if (isUniqueConstraintViolation(dbError)) {
-          return songIdConflictResponse(requestId);
+        if (isSongIdUniqueConstraintViolation(dbError)) {
+          return handleSongIdConflict(songInput.id, userId, requestId);
         }
         if (isDatabaseUnavailable(dbError)) {
           const fallbackSong = createLocalSongFallback(songInput);
@@ -276,8 +281,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (isUniqueConstraintViolation(err)) {
-      return songIdConflictResponse(requestId);
+    if (isSongIdUniqueConstraintViolation(err)) {
+      return handleSongIdConflict(songInput.id, userId, requestId);
     }
 
     return NextResponse.json(
@@ -346,24 +351,48 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isUniqueConstraintViolation(error: unknown): boolean {
+function isSongIdUniqueConstraintViolation(error: unknown): boolean {
   if (!isObject(error)) return false;
 
   const code = "code" in error ? String(error.code) : "";
-  if (code === "23505") return true;
+  if (code && code !== "23505") return false;
+
+  const constraint = objectFieldAsString(error, "constraint")?.toLowerCase() ?? "";
+  if (constraint === "songs_pkey") return true;
 
   const message = "message" in error ? String(error.message).toLowerCase() : "";
-  if (message.includes("duplicate key")) return true;
+  const detail = objectFieldAsString(error, "detail")?.toLowerCase() ?? "";
+  const table = objectFieldAsString(error, "table")?.toLowerCase() ?? "";
+  if (
+    message.includes("duplicate key") &&
+    (message.includes("songs_pkey") || (table === "songs" && detail.includes("key (id)=")))
+  ) {
+    return true;
+  }
 
   const cause = "cause" in error ? error.cause : null;
-  if (cause && isUniqueConstraintViolation(cause)) return true;
+  if (cause && isSongIdUniqueConstraintViolation(cause)) return true;
 
   const nestedErrors = "errors" in error ? error.errors : null;
   if (Array.isArray(nestedErrors)) {
-    return nestedErrors.some((nestedError) => isUniqueConstraintViolation(nestedError));
+    return nestedErrors.some((nestedError) => isSongIdUniqueConstraintViolation(nestedError));
   }
 
   return false;
+}
+
+async function handleSongIdConflict(songId: string, userId: string, requestId: string) {
+  const existing = await getSongByIdForCreateConflict(songId);
+  if (existing?.userId === userId) {
+    return NextResponse.json(existing, {
+      headers: {
+        "X-Request-Id": requestId,
+        "X-Murmur-Idempotent-Replay": "song",
+      },
+    });
+  }
+
+  return songIdConflictResponse(requestId);
 }
 
 function songIdConflictResponse(requestId: string) {

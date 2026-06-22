@@ -52,6 +52,11 @@ export async function getSongById(songId: string) {
   return rows[0] ?? null;
 }
 
+export async function getSongByIdForCreateConflict(songId: string) {
+  const rows = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function getSongByShareCode(shareCode: string) {
   const rows = await db
     .select()

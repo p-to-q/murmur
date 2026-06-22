@@ -127,6 +127,9 @@ async function probeHealthOnce(): Promise<MusicEngineStatus | null> {
 export interface MagentaVersionOptions {
   draftId: string;
   originFlowId: string;
+  parentSongId?: string | null;
+  rootSongId?: string | null;
+  lineageDepth?: number;
   sourceType: VibeVersion["sourceType"];
   sourceMelodyKind: VibeVersion["sourceMelodyKind"];
   /** 0 for the first three vibes; reroll passes previous + 1. */
@@ -145,6 +148,9 @@ export function createMagentaVersions(
   const scaffold = generateVibeVersions(melody, {
     draftId: options.draftId,
     originFlowId: options.originFlowId,
+    parentSongId: options.parentSongId,
+    rootSongId: options.rootSongId,
+    lineageDepth: options.lineageDepth,
     sourceType: options.sourceType,
     sourceMelodyKind: options.sourceMelodyKind,
   });

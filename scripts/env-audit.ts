@@ -5,16 +5,26 @@ const REQUIRED_IN_PRODUCTION = [
     anyOf: true,
   },
   {
+    keys: ["AUTH_URL", "NEXTAUTH_URL", "MURMUR_APP_URL", "VERCEL_URL"],
+    label: "AUTH_URL, NEXTAUTH_URL, MURMUR_APP_URL, or VERCEL_URL",
+    anyOf: true,
+  },
+  {
     keys: ["MURMUR_STORAGE_DRIVER"],
     label: "MURMUR_STORAGE_DRIVER",
   },
   {
-    keys: ["MURMUR_APP_URL"],
-    label: "MURMUR_APP_URL",
+    keys: ["WAFFO_MERCHANT_ID"],
+    label: "WAFFO_MERCHANT_ID",
   },
   {
-    keys: ["AUTH_URL"],
-    label: "AUTH_URL",
+    keys: ["WAFFO_PRIVATE_KEY", "WAFFO_PRIVATE_KEY_BASE64"],
+    label: "WAFFO_PRIVATE_KEY or WAFFO_PRIVATE_KEY_BASE64",
+    anyOf: true,
+  },
+  {
+    keys: ["WAFFO_TOPUP_PRODUCT_ID"],
+    label: "WAFFO_TOPUP_PRODUCT_ID",
   },
   {
     keys: ["AUDIO_WORKER_URL"],
@@ -62,12 +72,13 @@ function isPlaceholderSecret(key: string): boolean {
 function main() {
   const onVercel = process.env.VERCEL === "1";
   const inCi = process.env.CI === "true";
-  const production =
-    process.env.NODE_ENV === "production" ||
-    process.env.VERCEL_ENV === "production";
+  const vercelEnv = process.env.VERCEL_ENV?.trim().toLowerCase();
+  const productionDeployment =
+    vercelEnv === "production" ||
+    (!onVercel && process.env.NODE_ENV === "production");
 
-  if (!production || (!onVercel && !inCi)) {
-    console.log("env audit skipped (not production CI/Vercel).");
+  if (!productionDeployment || (!onVercel && !inCi)) {
+    console.log("env audit skipped (not production deployment CI/Vercel).");
     return;
   }
 
@@ -117,7 +128,12 @@ function main() {
     missing.push("CRON_SECRET must be a non-placeholder secret");
   }
 
-  if (process.env.MURMUR_STORAGE_DRIVER?.trim() === "s3-compatible") {
+  const storageDriver = process.env.MURMUR_STORAGE_DRIVER?.trim();
+  if (onVercel && storageDriver !== "s3-compatible") {
+    missing.push("MURMUR_STORAGE_DRIVER must be s3-compatible on Vercel production");
+  }
+
+  if (storageDriver === "s3-compatible") {
     for (const key of REQUIRED_S3_ENV) {
       if (!process.env[key]?.trim()) missing.push(key);
     }

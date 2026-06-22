@@ -41,6 +41,8 @@ const createSongWithSpendMock = mock(async (data: Record<string, unknown>) => {
     },
   };
 });
+let existingConflictSong: Record<string, unknown> | null = null;
+const getSongByIdForCreateConflictMock = mock(async () => existingConflictSong);
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
@@ -51,6 +53,7 @@ mock.module("@/lib/db/queries/songs", () => ({
   getSongSummariesByUser: mock(async () => []),
   getSongByShareCode: mock(async () => null),
   getPublicSongSummaries: mock(async () => []),
+  getSongByIdForCreateConflict: getSongByIdForCreateConflictMock,
   getSongByIdForUser: mock(async () => null),
   createSong: createSongMock,
   createSongWithSpend: createSongWithSpendMock,
@@ -90,8 +93,10 @@ beforeEach(() => {
   createdSongs.length = 0;
   createSongMock.mockClear();
   createSongWithSpendMock.mockClear();
+  getSongByIdForCreateConflictMock.mockClear();
   createSongError = null;
   createSongWithSpendError = null;
+  existingConflictSong = null;
   resetLocalSongFallbackForTests();
 });
 
@@ -287,6 +292,7 @@ describe("POST /api/songs", () => {
   it("returns a conflict instead of overwriting an existing song id", async () => {
     createSongError = Object.assign(new Error("duplicate key value violates unique constraint"), {
       code: "23505",
+      constraint: "songs_pkey",
     });
 
     const response = await POST(buildRequest({
@@ -319,6 +325,130 @@ describe("POST /api/songs", () => {
     const body = await response.json() as { error: string };
     expect(body.error).toBe("song_id_conflict");
     expect(response.headers.get("X-Request-Id")).toBe("req_song");
+    expect(getSongByIdForCreateConflictMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("replays the existing song when a same-user create is retried", async () => {
+    createSongError = Object.assign(new Error("duplicate key value violates unique constraint"), {
+      code: "23505",
+      constraint: "songs_pkey",
+    });
+    existingConflictSong = {
+      id: "song_retry",
+      userId: "usr_song",
+      title: "Already Saved",
+    };
+
+    const response = await POST(buildRequest({
+      id: "song_retry",
+      title: "Already Saved",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Murmur-Idempotent-Replay")).toBe("song");
+    const body = await response.json() as { id: string; userId: string };
+    expect(body.id).toBe("song_retry");
+    expect(body.userId).toBe("usr_song");
+  });
+
+  it("does not report unrelated unique violations as song id conflicts", async () => {
+    createSongError = Object.assign(new Error("duplicate key value violates unique constraint"), {
+      code: "23505",
+      constraint: "notes_ledger_idempotency_key_idx",
+      detail: "Key (idempotency_key)=(req_song) already exists.",
+    });
+
+    const response = await POST(buildRequest({
+      id: "song_unique_elsewhere",
+      title: "Ledger Collision",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    }));
+
+    expect(response.status).toBe(500);
+    const body = await response.json() as { error: string };
+    expect(body.error).toBe("Failed to save song");
+    expect(getSongByIdForCreateConflictMock).toHaveBeenCalledTimes(0);
+  });
+
+  it("does not report another table primary-key collision as a song id conflict", async () => {
+    createSongError = Object.assign(new Error("duplicate key value violates unique constraint"), {
+      code: "23505",
+      constraint: "notes_ledger_pkey",
+      table: "notes_ledger",
+      detail: "Key (id)=(ledger_existing) already exists.",
+    });
+
+    const response = await POST(buildRequest({
+      id: "song_unique_primary_elsewhere",
+      title: "Ledger Primary Collision",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    }));
+
+    expect(response.status).toBe(500);
+    const body = await response.json() as { error: string };
+    expect(body.error).toBe("Failed to save song");
+    expect(getSongByIdForCreateConflictMock).toHaveBeenCalledTimes(0);
   });
 
   it("uses a local guest song fallback when the dev database is unavailable", async () => {

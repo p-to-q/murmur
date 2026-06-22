@@ -33,8 +33,8 @@ let cached: ObjectStore | null = null;
  * - Otherwise default to `local-fs` so dev "just works" without
  *   provisioning an S3 bucket.
  * - Production deployments must set `MURMUR_STORAGE_DRIVER=s3-compatible`
- *   (adapter to land in a follow-up PR) plus the bucket / endpoint
- *   env. Until then, production with no env raises `driver_unconfigured`.
+ *   plus the bucket / endpoint env. Production with no driver raises
+ *   `driver_unconfigured`.
  */
 export function getObjectStore(): ObjectStore {
   if (cached) return cached;

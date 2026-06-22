@@ -36,5 +36,5 @@ COPY . .
 
 EXPOSE 8001
 
-# Capture-to-disk defaults on but is disabled via fly.toml env (ephemeral FS).
+# Raw hum capture is opt-in via MURMUR_CAPTURE_HUMS=1; production keeps it off.
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
