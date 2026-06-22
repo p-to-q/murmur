@@ -17,8 +17,15 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, Check, CreditCard, Mail, ShieldCheck } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  CreditCard,
+  Mail,
+  ShieldCheck,
+} from "lucide-react";
 import { signIn } from "next-auth/react";
 import { toast } from "sonner";
 import {
@@ -68,7 +75,6 @@ type CheckoutPurchase =
       customAmountCny?: number;
     };
 
-const PROCESSING_INTERVAL_MS = 900;
 const DEFAULT_SKU_ID = "topup_120_notes";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -106,7 +112,7 @@ export function CheckoutScreen() {
   );
   const [failureMessage, setFailureMessage] = useState<string | null>(null);
   const [failureKind, setFailureKind] = useState<"sign_in_required" | "generic" | null>(null);
-  const [copyIdx, setCopyIdx] = useState(0);
+  const [receiptTorn, setReceiptTorn] = useState(returnStatus === "success");
   const checkoutStartedRef = useRef(false);
   const billingEmailEditedRef = useRef(false);
 
@@ -158,15 +164,13 @@ export function CheckoutScreen() {
   const hasSignedInUser = isRegistered;
   const routeBlocked = payMethod === "wxpay" && purchase.currency !== "CNY";
   const receiptDate = useMemo(() => formatReceiptDate(lang), [lang]);
-  const PROCESSING_COPY = useMemo(
-    () => [
-      t("checkout.proc.opening") || "opening secure checkout",
-      t("checkout.proc.connecting") || "connecting to provider",
-      t("checkout.proc.confirming") || "confirming purchase",
-      t("checkout.proc.almost") || "almost there",
-    ],
-    [t],
-  );
+  const tearReceiptIfCurrentPage = useCallback(() => {
+    window.setTimeout(() => {
+      if (document.visibilityState === "visible") setReceiptTorn(true);
+    }, 80);
+  }, []);
+  const isReceiptTorn = returnStatus === "success" || receiptTorn;
+  const isCheckoutBusy = phase === "requesting" || phase === "confirming";
 
   useEffect(() => {
     if (!user?.email || billingEmailEditedRef.current) return;
@@ -216,6 +220,7 @@ export function CheckoutScreen() {
     setFailureMessage(null);
     setFailureKind(null);
     setCheckoutUrl(null);
+    setReceiptTorn(false);
 
     if (payMethod === "wxpay" && purchase.currency !== "CNY") {
       setFailureMessage(
@@ -256,6 +261,7 @@ export function CheckoutScreen() {
           setCheckoutUrl(data.checkoutUrl);
           window.open(data.checkoutUrl, "_blank", "noopener,noreferrer");
           setPhase("awaiting_payment");
+          tearReceiptIfCurrentPage();
           return;
         }
         throw new Error("missing checkoutUrl");
@@ -268,6 +274,7 @@ export function CheckoutScreen() {
 
       if (errorBody.error === "waffo_not_configured") {
         setPhase("confirming");
+        tearReceiptIfCurrentPage();
         window.setTimeout(() => finishSucceeded(purchase.notesGranted), 1400);
         return;
       }
@@ -290,7 +297,7 @@ export function CheckoutScreen() {
       setFailureKind("generic");
       setPhase("failed");
     }
-  }, [billingEmail, finishSucceeded, payMethod, purchase, t]);
+  }, [billingEmail, finishSucceeded, payMethod, purchase, t, tearReceiptIfCurrentPage]);
 
   const handleSignIn = () => {
     const currentUrl = window.location.pathname + window.location.search;
@@ -307,6 +314,27 @@ export function CheckoutScreen() {
 
   const handlePrimaryAction = () => {
     if (accountLoading) return;
+    if (phase === "requesting" || phase === "confirming" || phase === "succeeded") {
+      return;
+    }
+    if (phase === "awaiting_payment") {
+      if (checkoutUrl) {
+        window.open(checkoutUrl, "_blank", "noopener,noreferrer");
+      }
+      return;
+    }
+    if (phase === "canceled") {
+      router.push("/topup");
+      return;
+    }
+    if (phase === "failed") {
+      if (failureKind === "sign_in_required") {
+        handleSignIn();
+      } else {
+        retryCheckout();
+      }
+      return;
+    }
     if (routeBlocked) {
       toast.info(
         t("checkout.method_blocked") ||
@@ -315,6 +343,10 @@ export function CheckoutScreen() {
       return;
     }
     if (!hasSignedInUser) {
+      toast.info(
+        t("checkout.sign_in_required") ||
+          "Sign in first, then top up your notes.",
+      );
       handleSignIn();
       return;
     }
@@ -361,16 +393,8 @@ export function CheckoutScreen() {
     }
   }, [confirmGrant, returnStatus]);
 
-  useEffect(() => {
-    if (phase !== "requesting" && phase !== "confirming") return;
-    const id = window.setInterval(() => {
-      setCopyIdx((i) => (i + 1) % PROCESSING_COPY.length);
-    }, PROCESSING_INTERVAL_MS);
-    return () => window.clearInterval(id);
-  }, [phase, PROCESSING_COPY.length]);
-
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div className="relative min-h-svh overflow-x-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
 
       <div className="relative z-10 flex min-h-svh flex-col">
@@ -388,56 +412,35 @@ export function CheckoutScreen() {
           <div className="h-9 w-9" />
         </header>
 
-        <main className="min-w-0 flex-1 overflow-x-hidden px-4 pb-10 md:px-8 md:pb-16">
+        <main className={`min-w-0 flex-1 overflow-x-hidden px-4 md:px-8 ${isReceiptTorn ? "pb-24 md:pb-28" : "pb-10 md:pb-16"}`}>
           <div className="mx-auto flex min-h-[calc(100svh-120px)] w-full min-w-0 max-w-[500px] items-start justify-center py-1 sm:items-center sm:py-6">
-            <AnimatePresence mode="wait">
-              <ReceiptCard
-                key={phase}
+            <ReceiptCard
+              billingEmail={billingEmail}
+              dateLabel={receiptDate}
+              isTorn={isReceiptTorn}
+              payMethod={payMethod}
+              purchase={purchase}
+              t={t}
+              onBillingEmailChange={handleBillingEmailChange}
+            >
+              <ReviewControls
+                acceptedPolicy={acceptedPolicy}
                 billingEmail={billingEmail}
-                dateLabel={receiptDate}
+                checkoutUrl={checkoutUrl}
+                failureKind={failureKind}
+                failureMessage={failureMessage}
+                hasSignedInUser={hasSignedInUser}
+                isAuthLoading={accountLoading}
+                isBusy={isCheckoutBusy}
                 payMethod={payMethod}
-                purchase={purchase}
+                phase={phase}
+                routeBlocked={routeBlocked}
                 t={t}
-                onBillingEmailChange={handleBillingEmailChange}
-              >
-                {phase === "review" ? (
-                  <ReviewControls
-                    acceptedPolicy={acceptedPolicy}
-                    billingEmail={billingEmail}
-                    hasSignedInUser={hasSignedInUser}
-                    isAuthLoading={accountLoading}
-                    payMethod={payMethod}
-                    routeBlocked={routeBlocked}
-                    t={t}
-                    onAcceptPolicy={setAcceptedPolicy}
-                    onBack={() => router.push("/topup")}
-                    onPrimaryAction={handlePrimaryAction}
-                    onUseCard={() => setPayMethod("card")}
-                  />
-                ) : (
-                  <StatusControls
-                    checkoutUrl={checkoutUrl}
-                    copy={PROCESSING_COPY[copyIdx]}
-                    failureKind={failureKind}
-                    failureMessage={failureMessage}
-                    payMethod={payMethod}
-                    phase={phase}
-                    t={t}
-                    onAlreadyPaid={() => {
-                      router.push(
-                        `/topup/checkout?${successQueryFor(
-                          purchase,
-                          payMethod,
-                        )}&status=success`,
-                      );
-                    }}
-                    onBack={() => router.push("/topup")}
-                    onRetry={retryCheckout}
-                    onSignIn={handleSignIn}
-                  />
-                )}
-              </ReceiptCard>
-            </AnimatePresence>
+                onAcceptPolicy={setAcceptedPolicy}
+                onPrimaryAction={handlePrimaryAction}
+                onUseCard={() => setPayMethod("card")}
+              />
+            </ReceiptCard>
           </div>
         </main>
       </div>
@@ -449,6 +452,7 @@ function ReceiptCard({
   billingEmail,
   children,
   dateLabel,
+  isTorn,
   payMethod,
   purchase,
   t,
@@ -457,72 +461,105 @@ function ReceiptCard({
   billingEmail: string;
   children: ReactNode;
   dateLabel: string;
+  isTorn: boolean;
   payMethod: PayMethod;
   purchase: CheckoutPurchase;
   t: (key: string) => string;
   onBillingEmailChange: (value: string) => void;
 }) {
+  const reduceMotion = useReducedMotion();
+  const lowerTicketAnimate = isTorn
+    ? reduceMotion
+      ? { x: 8, y: 18, rotate: 0 }
+      : { x: 14, y: 34, rotate: -2.2 }
+    : { x: 0, y: 0, rotate: 0 };
+
   return (
     <motion.article
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      className="mx-auto w-full max-w-[456px] overflow-hidden rounded-[8px] border border-white/75 bg-[#FFFEFB] shadow-[0_26px_90px_rgba(74,55,31,0.15)] sm:max-w-[470px]"
+      className={`mx-auto w-full max-w-[428px] overflow-visible sm:max-w-[444px] ${
+        isTorn
+          ? ""
+          : "rounded-[8px] shadow-[0_34px_110px_rgba(74,55,31,0.18)]"
+      }`}
     >
-      <div className="flex min-h-[76px] items-center justify-between gap-4 bg-[#1A1A1A] px-5 text-[#FFFEFB] sm:min-h-[82px] sm:px-8">
-        <MurmurMark
-          size={32}
-          yOffset={-1}
-          className="shrink-0"
-          imageClassName="brightness-0 invert drop-shadow-none"
-        />
-        <p className="shrink-0 font-mono text-[10px] tracking-[0.16em] text-[#F5F1EB]/58 sm:text-[12px]">
-          {dateLabel}
-        </p>
-      </div>
-
-      <div className="relative bg-[#FFFEFB] px-5 py-5 sm:px-8 sm:py-7">
-        <div className="grid grid-cols-[1fr_auto] border-b border-[#E7DCCB] pb-3 text-[10px] uppercase tracking-[0.24em] text-[#B6B0A4] sm:text-[11px]">
-          <span>{t("checkout.description") || "Description"}</span>
-          <span>{t("checkout.subtotal") || "Subtotal"}</span>
-        </div>
-
-        <div className="mt-4 space-y-2.5">
-          <ReceiptLine
-            label={packageLabel(purchase, t)}
-            value={purchase.display}
-            emphasis
+      <motion.div
+        animate={isTorn && !reduceMotion ? { y: -1 } : { y: 0 }}
+        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+        className={`relative z-10 overflow-visible rounded-t-[8px] border border-b-0 border-white/80 bg-[#FFFEFB] ${
+          isTorn ? "shadow-[0_28px_80px_rgba(74,55,31,0.15)]" : ""
+        }`}
+      >
+        <div className="flex min-h-[94px] items-center justify-between gap-5 rounded-t-[8px] bg-[#141414] px-6 text-[#FFFEFB] sm:min-h-[102px] sm:px-7">
+          <MurmurMark
+            size={40}
+            yOffset={-1}
+            className="shrink-0"
+            imageClassName="brightness-0 invert drop-shadow-none"
           />
-          <ReceiptLine
-            label={t("checkout.notes_granted") || "Notes granted"}
-            value={`${purchase.notesGranted} ${t("checkout.notes") || "notes"}`}
-          />
-          <ReceiptLine
-            label={t("checkout.payment_route") || "Payment route"}
-            value={paymentMethodLabel(payMethod, t)}
-            valueClassName={payMethod === "wxpay" ? "text-[#07A653]" : undefined}
-          />
-          <BillingEmailLine
-            t={t}
-            value={billingEmail}
-            onChange={onBillingEmailChange}
-          />
-        </div>
-
-        <div className="mt-7 flex items-end justify-between gap-4">
-          <p className="pb-1 font-mono text-[13px] uppercase tracking-[0.18em] text-[#6F6A63] sm:text-[14px]">
-            {t("checkout.total") || "Total"}
-          </p>
-          <p className="min-w-0 max-w-[70%] truncate text-right font-serif text-[40px] leading-none text-[#1A1A1A] tabular-nums sm:text-[48px]">
-            {purchase.display}
+          <p className="shrink-0 self-end pb-[25px] font-mono text-[10px] tracking-[0.18em] text-[#F5F1EB]/52 sm:text-[11px]">
+            {dateLabel}
           </p>
         </div>
 
-        <ReceiptTearLine />
+        <div className="relative bg-[linear-gradient(180deg,#FFFEFB_0%,#FFFDF8_100%)] px-5 pb-7 pt-5 sm:px-7 sm:pb-8 sm:pt-6">
+          <div className="grid grid-cols-[1fr_auto] border-b border-[#E7DCCB] pb-2.5 font-mono text-[10px] uppercase tracking-[0.22em] text-[#B6B0A4] sm:text-[11px]">
+            <span>{t("checkout.description") || "Description"}</span>
+            <span>{t("checkout.subtotal") || "Subtotal"}</span>
+          </div>
 
+          <div className="mt-3 space-y-0.5">
+            <ReceiptLine
+              label={packageLabel(purchase, t)}
+              value={purchase.display}
+              emphasis
+            />
+            <ReceiptLine
+              label={t("checkout.notes_granted") || "Notes granted"}
+              value={`${purchase.notesGranted} ${t("checkout.notes") || "notes"}`}
+            />
+            <ReceiptLine
+              label={t("checkout.payment_route") || "Payment route"}
+              value={paymentMethodLabel(payMethod, t)}
+              valueClassName={payMethod === "wxpay" ? "text-[#07A653]" : undefined}
+            />
+            <BillingEmailLine
+              t={t}
+              value={billingEmail}
+              onChange={onBillingEmailChange}
+            />
+          </div>
+
+          <div className="mt-[22px] flex items-end justify-between gap-5">
+            <p className="pb-1.5 font-mono text-[12px] uppercase tracking-[0.22em] text-[#6F6A63] sm:text-[13px]">
+              {t("checkout.total") || "Total"}
+            </p>
+            <p className="min-w-0 max-w-[74%] truncate text-right font-serif text-[42px] leading-none text-[#1A1A1A] tabular-nums sm:text-[50px]">
+              {purchase.display}
+            </p>
+          </div>
+
+          <ReceiptCutEdge position="bottom" />
+        </div>
+      </motion.div>
+
+      <motion.div
+        animate={lowerTicketAnimate}
+        transition={{
+          duration: reduceMotion ? 0.35 : 0.85,
+          ease: [0.22, 1, 0.36, 1],
+        }}
+        className={`relative z-0 -mt-px overflow-visible rounded-b-[8px] border border-t-0 border-white/80 bg-[linear-gradient(180deg,#FFFDF8_0%,#FFFEFB_100%)] px-5 pb-5 pt-6 sm:px-7 sm:pb-6 ${
+          isTorn ? "shadow-[0_24px_60px_rgba(74,55,31,0.16)]" : ""
+        }`}
+        style={{ transformOrigin: "16% 0%" }}
+      >
+        {isTorn && <ReceiptCutEdge position="top" />}
         {children}
-      </div>
+      </motion.div>
     </motion.article>
   );
 }
@@ -530,70 +567,81 @@ function ReceiptCard({
 function ReviewControls({
   acceptedPolicy,
   billingEmail,
+  checkoutUrl,
+  failureKind,
+  failureMessage,
   hasSignedInUser,
   isAuthLoading,
+  isBusy,
   payMethod,
+  phase,
   routeBlocked,
   t,
   onAcceptPolicy,
-  onBack,
   onPrimaryAction,
   onUseCard,
 }: {
   acceptedPolicy: boolean;
   billingEmail: string;
+  checkoutUrl: string | null;
+  failureKind: "sign_in_required" | "generic" | null;
+  failureMessage: string | null;
   hasSignedInUser: boolean;
   isAuthLoading: boolean;
+  isBusy: boolean;
   payMethod: PayMethod;
+  phase: Phase;
   routeBlocked: boolean;
   t: (key: string) => string;
   onAcceptPolicy: (accepted: boolean) => void;
-  onBack: () => void;
   onPrimaryAction: () => void;
   onUseCard: () => void;
 }) {
-  const primaryDisabled =
-    isAuthLoading ||
+  const isResultButton =
     routeBlocked ||
-    (hasSignedInUser && (!acceptedPolicy || !billingEmail.trim()));
-  const primaryLabel = !hasSignedInUser
-    ? t("checkout.sign_in_btn") || "Sign in"
-    : t("checkout.continue") || "Pay securely";
+    phase === "awaiting_payment" ||
+    phase === "succeeded" ||
+    phase === "canceled" ||
+    phase === "failed";
+  const primaryDisabled =
+    isBusy ||
+    phase === "succeeded" ||
+    (!isResultButton &&
+      (isAuthLoading ||
+        (hasSignedInUser && (!acceptedPolicy || !billingEmail.trim()))));
+  const primaryLabel = routeBlocked
+    ? t("checkout.use_card") || "Use card instead"
+    : phase === "awaiting_payment"
+      ? checkoutUrl
+        ? t("checkout.open_again") || "Open secure checkout"
+        : t("checkout.awaiting_payment") || "Complete payment in the other tab."
+      : phase === "succeeded"
+        ? t("checkout.ok") || "All set."
+        : phase === "canceled"
+          ? t("checkout.retry") || "Pick a top up"
+          : phase === "failed"
+            ? failureKind === "sign_in_required"
+              ? t("checkout.sign_in_btn") || "Sign in"
+              : t("checkout.try_again") || "Try again"
+            : t("checkout.continue") || "Pay securely";
+  const buttonTitle =
+    phase === "failed"
+      ? failureMessage || t("checkout.failed") || "Something tripped on our end."
+      : undefined;
+  const buttonClick = routeBlocked ? onUseCard : onPrimaryAction;
+  const showSpinner = isAuthLoading || isBusy;
 
   return (
     <div className="space-y-3.5">
-      {routeBlocked && (
-        <div className="rounded-[8px] border border-[#F0C7B6] bg-[#FFF1EC] p-3 text-left">
-          <p className="text-[13px] leading-[1.55] text-[#7A3B27]">
-            {t("checkout.method_blocked") ||
-              "WeChat Pay is only available for CNY orders."}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-3 text-[12px]">
-            <button
-              type="button"
-              onClick={onUseCard}
-              className="font-medium text-[#1A1A1A] underline-mm"
-            >
-              {t("checkout.use_card") || "Use card instead"}
-            </button>
-            <button
-              type="button"
-              onClick={onBack}
-              className="text-[#6F6A63] underline-mm"
-            >
-              {t("checkout.change_topup") || "Change top up"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-[20px_minmax(0,1fr)] gap-3 border-b border-[#E7DCCB] pb-3.5 text-left">
-        <CreditCard className="mt-0.5 h-4 w-4 text-[#8C8780]" />
+      <div className="grid grid-cols-[22px_minmax(0,1fr)] gap-3 border-b border-[#E7DCCB] py-3 text-left">
+        <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#F1E9DC] text-[#6F6A63]">
+          <CreditCard className="h-3.5 w-3.5" />
+        </span>
         <div className="min-w-0">
-          <p className="text-[12px] font-medium leading-none text-[#1A1A1A]">
+          <p className="font-mono text-[12px] font-medium leading-none text-[#1A1A1A]">
             {paymentMethodLabel(payMethod, t)}
           </p>
-          <p className="mt-1.5 text-[11px] leading-[1.45] text-[#8C8780]">
+          <p className="mt-1 text-[11px] leading-[1.45] text-[#8C8780]">
             {payMethod === "wxpay"
               ? t("checkout.wechat_route_note") ||
                 "WeChat Pay opens through the China payment route."
@@ -603,9 +651,9 @@ function ReviewControls({
         </div>
       </div>
 
-      <label className="grid cursor-pointer grid-cols-[20px_minmax(0,1fr)] gap-3 text-left">
+      <label className="grid cursor-pointer grid-cols-[22px_minmax(0,1fr)] items-start gap-2.5 text-left">
         <span
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[6px] border transition-colors ${
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] border transition-colors ${
             acceptedPolicy
               ? "border-[#FF5924] bg-[#FF5924] text-white"
               : "border-[#CFC5B7] bg-white text-transparent"
@@ -653,149 +701,23 @@ function ReviewControls({
 
       <button
         type="button"
-        onClick={onPrimaryAction}
+        onClick={buttonClick}
         disabled={primaryDisabled}
-        className="mm-btn-primary h-11 w-full justify-center disabled:pointer-events-none disabled:opacity-45 sm:h-12"
+        aria-busy={showSpinner || undefined}
+        title={buttonTitle}
+        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#1A1A1A] px-5 text-[13px] font-medium tracking-[0.01em] text-[#FFFEFB] transition duration-200 hover:-translate-y-0.5 hover:bg-[#2A2A2A] hover:shadow-[0_12px_26px_rgba(26,26,26,0.18)] disabled:pointer-events-none disabled:opacity-45 sm:h-12"
       >
-        <ShieldCheck className="h-4 w-4" />
+        {showSpinner ? (
+          <Spinner size="sm" variant="light" />
+        ) : phase === "succeeded" ? (
+          <Check className="h-4 w-4" />
+        ) : phase === "failed" || routeBlocked ? (
+          <AlertCircle className="h-4 w-4" />
+        ) : (
+          <ShieldCheck className="h-4 w-4" />
+        )}
         {primaryLabel}
       </button>
-    </div>
-  );
-}
-
-function StatusControls({
-  checkoutUrl,
-  copy,
-  failureKind,
-  failureMessage,
-  payMethod,
-  phase,
-  t,
-  onAlreadyPaid,
-  onBack,
-  onRetry,
-  onSignIn,
-}: {
-  checkoutUrl: string | null;
-  copy: string;
-  failureKind: "sign_in_required" | "generic" | null;
-  failureMessage: string | null;
-  payMethod: PayMethod;
-  phase: Exclude<Phase, "review">;
-  t: (key: string) => string;
-  onAlreadyPaid: () => void;
-  onBack: () => void;
-  onRetry: () => void;
-  onSignIn: () => void;
-}) {
-  const provider = payMethod === "wxpay" ? "WeChat Pay" : "Waffo";
-
-  return (
-    <div className="text-center">
-      {(phase === "requesting" || phase === "confirming") && (
-        <div className="flex min-h-[132px] flex-col items-center justify-center gap-4">
-          <Spinner size="lg" />
-          <AnimatePresence mode="wait">
-            <motion.p
-              key={phase === "confirming" ? "confirming" : copy}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.28 }}
-              className="font-serif-italic text-[15px] text-[#6F6A63]"
-            >
-              {phase === "confirming" ? t("checkout.confirming_grant") : copy}
-            </motion.p>
-          </AnimatePresence>
-        </div>
-      )}
-
-      {phase === "awaiting_payment" && (
-        <div className="flex min-h-[150px] flex-col items-center justify-center gap-4">
-          <p className="font-serif-italic text-[20px] text-[#1A1A1A]">
-            {t("checkout.awaiting_payment") ||
-              "Complete payment in the other tab."}
-          </p>
-          <p className="max-w-sm text-[13px] leading-[1.65] text-[#8C8780]">
-            {(t("checkout.awaiting_payment_hint") ||
-              "When you finish, you'll return here automatically. You can also reopen the {provider} checkout.").replace(
-              "{provider}",
-              provider,
-            )}
-          </p>
-          {checkoutUrl && (
-            <a
-              href={checkoutUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mm-btn-primary mt-1 inline-flex"
-            >
-              {t("checkout.open_again") || "Open secure checkout"}
-            </a>
-          )}
-          <button
-            onClick={onAlreadyPaid}
-            className="text-[13px] tracking-[0.04em] text-[#8C8780] underline-mm transition-colors hover:text-[#1A1A1A]"
-          >
-            {t("checkout.already_paid") || "I already paid"}
-          </button>
-        </div>
-      )}
-
-      {phase === "succeeded" && (
-        <div className="flex min-h-[132px] flex-col items-center justify-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#5F8A6B]/12 text-[#5F8A6B]">
-            <Check className="h-5 w-5" />
-          </span>
-          <p className="font-serif-italic text-[21px] text-[#1A1A1A]">
-            {t("checkout.ok") || "All set."}
-          </p>
-          <p className="text-[12px] text-[#8C8780]">
-            {t("checkout.redirecting") || "taking you back..."}
-          </p>
-        </div>
-      )}
-
-      {phase === "canceled" && (
-        <div className="flex min-h-[132px] flex-col items-center justify-center gap-4">
-          <p className="font-serif-italic text-[18px] text-[#6F6A63]">
-            {t("checkout.canceled") || "No worries. Try again?"}
-          </p>
-          <button onClick={onBack} className="mm-btn-primary">
-            {t("checkout.retry") || "Pick a top up"}
-          </button>
-        </div>
-      )}
-
-      {phase === "failed" && (
-        <div className="flex min-h-[145px] flex-col items-center justify-center gap-4">
-          <p className="max-w-sm font-serif-italic text-[18px] text-[#6F6A63]">
-            {failureMessage ||
-              t("checkout.failed") ||
-              "Something tripped on our end."}
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            {failureKind === "sign_in_required" ? (
-              <button onClick={onSignIn} className="mm-btn-primary">
-                {t("checkout.sign_in_btn") || "Sign in"}
-              </button>
-            ) : (
-              <button onClick={onRetry} className="mm-btn-primary">
-                {t("checkout.try_again") || "Try again"}
-              </button>
-            )}
-            <button
-              onClick={onBack}
-              className="text-[13px] tracking-[0.04em] text-[#8C8780] underline-mm transition-colors hover:text-[#1A1A1A]"
-            >
-              {failureKind === "sign_in_required"
-                ? t("common.back") || "Back"
-                : t("checkout.different") || "use a different method"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -812,7 +734,7 @@ function ReceiptLine({
   valueClassName?: string;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 font-mono text-[12px] leading-[1.5] sm:gap-4 sm:text-[13px]">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 py-1.5 font-mono text-[12px] leading-[1.4] sm:gap-4 sm:text-[13px]">
       <span className={`min-w-0 truncate ${emphasis ? "text-[#1A1A1A]" : "text-[#6F6A63]"}`}>{label}</span>
       <span className={`max-w-[10rem] truncate text-right ${emphasis ? "font-medium text-[#1A1A1A]" : "text-[#1A1A1A]"} sm:max-w-[13rem] ${valueClassName ?? ""}`}>
         {value}
@@ -831,7 +753,7 @@ function BillingEmailLine({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-1.5 pt-1 font-mono text-[12px] leading-[1.5] sm:grid-cols-[minmax(0,1fr)_minmax(9rem,13rem)] sm:items-end sm:gap-4 sm:text-[13px]">
+    <div className="grid grid-cols-1 gap-2 py-2 font-mono text-[12px] leading-[1.4] sm:grid-cols-[minmax(0,1fr)_minmax(9rem,13rem)] sm:items-end sm:gap-4 sm:text-[13px]">
       <label
         htmlFor="checkout-billing-email"
         className="flex min-w-0 items-center gap-2 text-[#6F6A63]"
@@ -848,18 +770,30 @@ function BillingEmailLine({
         onChange={(event) => onChange(event.target.value)}
         placeholder={t("checkout.email_placeholder") || "you@example.com"}
         autoComplete="email"
-        className="min-w-0 rounded-none border-0 border-b border-[#D8CDBB] bg-transparent px-0 pb-1.5 pt-0 text-left text-[#1A1A1A] outline-none transition-colors placeholder:text-[#B6B0A4] focus:border-[#FF5924] sm:text-right"
+        className="min-w-0 rounded-none border-0 border-b border-[#D8CDBB] bg-transparent px-0 pb-1 pt-0 text-left text-[#1A1A1A] outline-none transition-colors placeholder:text-[#B6B0A4] focus:border-[#FF5924] sm:text-right"
       />
     </div>
   );
 }
 
-function ReceiptTearLine() {
+function ReceiptCutEdge({ position }: { position: "top" | "bottom" }) {
+  const verticalClass =
+    position === "bottom"
+      ? "bottom-0 translate-y-1/2"
+      : "top-0 -translate-y-1/2";
+
   return (
-    <div className="relative -mx-5 my-6 h-10 sm:-mx-8" aria-hidden>
+    <div
+      className={`pointer-events-none absolute inset-x-0 z-20 h-12 ${verticalClass}`}
+      aria-hidden
+    >
       <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-[#D8CDBB]" />
-      <span className="absolute left-[-21px] top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#F5F1EB] shadow-[inset_-1px_0_0_rgba(210,201,182,0.65)]" />
-      <span className="absolute right-[-21px] top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#F5F1EB] shadow-[inset_1px_0_0_rgba(210,201,182,0.65)]" />
+      <span className="absolute left-0 top-1/2 h-12 w-6 -translate-y-1/2 overflow-hidden">
+        <span className="absolute left-[-24px] top-0 h-12 w-12 rounded-full bg-[#F5F1EB] shadow-[inset_-1px_0_0_rgba(210,201,182,0.65)]" />
+      </span>
+      <span className="absolute right-0 top-1/2 h-12 w-6 -translate-y-1/2 overflow-hidden">
+        <span className="absolute right-[-24px] top-0 h-12 w-12 rounded-full bg-[#F5F1EB] shadow-[inset_1px_0_0_rgba(210,201,182,0.65)]" />
+      </span>
     </div>
   );
 }
@@ -875,23 +809,6 @@ function paymentMethodLabel(method: PayMethod, t: (key: string) => string): stri
   return method === "wxpay"
     ? t("topup.payment.wechat") || "WeChat Pay"
     : t("topup.payment.card") || "Card";
-}
-
-function successQueryFor(purchase: CheckoutPurchase, payMethod: PayMethod): string {
-  const query = new URLSearchParams();
-  if (purchase.kind === "custom") {
-    if (purchase.customAmountCny != null) {
-      query.set("customAmountCny", String(purchase.customAmountCny));
-      query.set("currency", "CNY");
-    } else if (purchase.customAmountUsd != null) {
-      query.set("customAmountUsd", String(purchase.customAmountUsd));
-    }
-  } else {
-    query.set("sku", purchase.id);
-    query.set("currency", purchase.currency);
-  }
-  if (payMethod === "wxpay") query.set("payMethod", "wxpay");
-  return query.toString();
 }
 
 function formatReceiptDate(lang: "zh" | "en"): string {
