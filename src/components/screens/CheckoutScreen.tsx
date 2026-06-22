@@ -856,7 +856,11 @@ function BillingEmailLine({
 
 function ReceiptTearLine() {
   return (
-    <div className="-mx-5 my-6 border-t border-dashed border-[#D8CDBB] sm:-mx-8" aria-hidden />
+    <div className="relative -mx-5 my-6 h-10 sm:-mx-8" aria-hidden>
+      <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-[#D8CDBB]" />
+      <span className="absolute left-[-21px] top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#F5F1EB] shadow-[inset_-1px_0_0_rgba(210,201,182,0.65)]" />
+      <span className="absolute right-[-21px] top-1/2 h-10 w-10 -translate-y-1/2 rounded-full bg-[#F5F1EB] shadow-[inset_1px_0_0_rgba(210,201,182,0.65)]" />
+    </div>
   );
 }
 
