@@ -163,10 +163,15 @@ export const DICT = {
   },
   "nav.device.title":  { zh: "跨设备同步",        en: "Device sync" },
   "nav.device.desc":   { zh: "手机端体验更佳，所有数据实时同步", en: "Better on mobile, all data syncs in real-time" },
+  "nav.device.toast_title": { zh: "同步准备中", en: "Sync in progress" },
+  "nav.device.toast_body": {
+    zh: "先绑定账号，作品和音磅会更稳妥",
+    en: "Bind an account to keep songs and Notes safer",
+  },
   "nav.notify.title":  { zh: "通知",              en: "Notifications" },
   "nav.notify.desc":   { zh: "查看最新动态和更新", en: "Check latest updates and news" },
   "nav.notify.enabled": { zh: "开着。曲子酿好时，会轻轻叫你。", en: "On. We'll quietly ping you." },
-  "nav.notify.denied": { zh: "浏览器拦住了提醒；需要在设置里放行。", en: "Browser notifications are blocked. Allow them in settings." },
+  "nav.notify.denied": { zh: "提醒被浏览器拦截", en: "Notifications are blocked" },
   "nav.notify.song_saved.title": { zh: "已保存到藏歌", en: "Saved to Gallery" },
   "nav.notify.song_saved.body": { zh: "这首小歌已经收好，可以从藏歌里随时打开。", en: "This song is tucked away and ready to reopen from your Gallery." },
 
