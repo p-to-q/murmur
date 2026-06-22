@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { authClient } from "@/lib/platform/auth-client";
 import { useTranslator } from "@/lib/i18n";
+import { clearRememberedShareReferrer } from "@/lib/api/share-referral";
 
 type Stage = "email" | "code";
 
@@ -74,6 +75,7 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
           accountKind: data.user.accountKind,
         });
       }
+      clearRememberedShareReferrer();
       if (onSuccess) {
         onSuccess();
       } else {

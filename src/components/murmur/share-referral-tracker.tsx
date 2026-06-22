@@ -47,6 +47,8 @@ function isTerminalReferralClaimError(error: string | null): boolean {
   return (
     error === "self_referral"
     || error === "invalid_referrer"
+    || error === "ineligible_invitee"
+    || error === "registration_required"
     || error === "grant_failed"
     || error === "sign_in_required"
   );

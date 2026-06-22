@@ -20,6 +20,8 @@ import { upsertOAuthUser } from "@/lib/db/queries/users";
 import { getSessionByToken } from "@/lib/db/queries/sessions";
 import { getSessionToken } from "@/lib/platform/server-auth";
 import { log } from "@/lib/observability/log";
+import { readShareReferrerFromCookieHeader } from "@/lib/api/share-referral-server";
+import { settleRegistrationShareReferral } from "@/lib/auth/share-referral-settlement";
 
 const googleConfigured = isGoogleOAuthConfigured();
 const githubConfigured = isGitHubOAuthConfigured();
@@ -53,8 +55,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!externalId) return false;
 
       try {
-        const localCreatorUserId = await resolveCurrentLocalCreatorUserId();
-        const { created } = await upsertOAuthUser({
+        const cookieHeader = await resolveCurrentCookieHeader();
+        const localCreatorUserId = await resolveCurrentLocalCreatorUserId(cookieHeader);
+        const { userId, created, registrationKind } = await upsertOAuthUser({
           provider: account.provider,
           externalId,
           email: user.email,
@@ -69,6 +72,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             { route: `/api/auth/callback/${account.provider}`, shell: "web" },
           );
         }
+        await settleRegistrationShareReferral({
+          referrerId: readShareReferrerFromCookieHeader(cookieHeader),
+          inviteeId: userId,
+          registrationKind,
+          source: "oauth",
+          route: `/api/auth/callback/${account.provider}`,
+          metadata: {
+            provider: account.provider,
+          },
+        });
         return true;
       } catch (error) {
         log(
@@ -223,10 +236,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
 });
 
-async function resolveCurrentLocalCreatorUserId(): Promise<string | null> {
+async function resolveCurrentCookieHeader(): Promise<string | null> {
   try {
     const headerStore = await headers();
-    const cookie = headerStore.get("cookie");
+    return headerStore.get("cookie");
+  } catch {
+    return null;
+  }
+}
+
+async function resolveCurrentLocalCreatorUserId(cookieHeader?: string | null): Promise<string | null> {
+  try {
+    const cookie = cookieHeader ?? await resolveCurrentCookieHeader();
     if (!cookie) return null;
     const token = getSessionToken(
       new Request("http://murmur.local", { headers: { cookie } }),
