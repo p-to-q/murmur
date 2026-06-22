@@ -379,9 +379,10 @@ What changes:
   other screen).
 - Add a small **suggestion row** below the input: three serif-italic
   candidates separated by `·`, click to populate. The candidates are
-  generated server-side from the melody (key + scale + vibe + a
-  curated wordlist). For v2 launch, candidates can be a small static
-  list per vibe — same shape, server-side later.
+  generated deterministically from the version seed, language, genre,
+  mood, and scene. English uses multi-part song-title templates; Chinese
+  mixes ci-pai names with guofeng title fragments so the row feels named
+  rather than filled.
 - The processing-copy slot uses the same rotating-copy idiom from Hum:
   *"saving · rendering · polishing · ready"* in serif italic, mute.
 - On save success, the title morphs to the SongDetail hero (the

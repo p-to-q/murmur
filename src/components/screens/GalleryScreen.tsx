@@ -7,7 +7,8 @@ import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 
-import { useTranslator } from "@/lib/i18n";
+import { useI18nStore, useTranslator } from "@/lib/i18n";
+import type { Lang } from "@/lib/i18n/dict";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import type { SongCard as SongCardType } from "@/modules/shared/types";
 import { FloatingMusicNotes } from "@/components/murmur/floating-music-notes";
@@ -83,8 +84,8 @@ const DEMO_SONGS: SongWithMeta[] = [
   },
 ];
 
-function displayVibe(song: SongWithMeta): string {
-  return displayVibeLabel(song.vibe, song.tags);
+function displayVibe(song: SongWithMeta, lang: Lang): string {
+  return displayVibeLabel(song.vibe, song.tags, lang);
 }
 
 async function withSoftTimeout<T>(
@@ -108,6 +109,7 @@ async function withSoftTimeout<T>(
 export function GalleryScreen() {
   const router = useRouter();
   const t = useTranslator();
+  const lang = useI18nStore((s) => s.lang);
   const [songs, setSongs] = useState<SongWithMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [sort, setSort] = useState<SortMode>("newest");
@@ -220,7 +222,7 @@ export function GalleryScreen() {
               recentSongs={sorted.slice(0, 3).map((s) => ({
                 id: s.id,
                 title: s.title,
-                vibe: displayVibe(s),
+                vibe: displayVibe(s, lang),
                 gradient: s.visualConfig?.gradient,
                 artwork: s.visualConfig?.artwork,
                 bpm: s.bpm,
@@ -287,7 +289,7 @@ export function GalleryScreen() {
                 key={song.id}
                 id={song.id}
                 title={song.title}
-                vibe={displayVibe(song)}
+                vibe={displayVibe(song, lang)}
                 gradient={song.visualConfig?.gradient}
                 artwork={song.visualConfig?.artwork}
                 bpm={song.bpm}
@@ -395,7 +397,7 @@ export function GalleryScreen() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                 <div className="relative z-10">
                   <p className="text-[10px] uppercase tracking-[0.3em] text-white/55 mb-1">
-                    {displayVibe(demoPreview)} · {demoPreview.bpm} BPM
+                    {displayVibe(demoPreview, lang)} · {demoPreview.bpm} BPM
                   </p>
                   <h3 className="hero-serif text-white text-[28px] leading-tight">
                     {demoPreview.title}
