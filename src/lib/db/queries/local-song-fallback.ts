@@ -32,6 +32,8 @@ export function createLocalSongFallback(data: SongInsert): SongRow {
     sourceMelodyKind: data.sourceMelodyKind ?? "corrected",
     editCount: data.editCount ?? 0,
     editDepth: data.editDepth ?? "fresh",
+    visibility: data.visibility ?? "private",
+    shareCode: data.shareCode ?? null,
     mp3DataUrl: data.mp3DataUrl ?? null,
     visualConfig: data.visualConfig,
     arrangementState: data.arrangementState,
@@ -71,6 +73,8 @@ export function getLocalSongSummariesByUserFallback(userId: string): SongSummary
     sourceMelodyKind: song.sourceMelodyKind,
     editCount: song.editCount,
     editDepth: song.editDepth,
+    visibility: song.visibility,
+    shareCode: song.shareCode,
     visualConfig: song.visualConfig,
     tags: song.tags,
     createdAt: song.createdAt,
@@ -84,6 +88,18 @@ export function getLocalSongByIdForUserFallback(
 ): SongRow | null {
   const song = localSongs.get(songId);
   return song && song.userId === userId ? song : null;
+}
+
+export function getLocalSongByShareCodeFallback(shareCode: string): SongRow | null {
+  for (const song of localSongs.values()) {
+    if (
+      song.shareCode === shareCode &&
+      (song.visibility === "unlisted" || song.visibility === "public")
+    ) {
+      return song;
+    }
+  }
+  return null;
 }
 
 export function updateLocalSongForUserFallback(
@@ -102,6 +118,20 @@ export function updateLocalSongForUserFallback(
   };
   localSongs.set(songId, updated);
   return updated;
+}
+
+export function publishLocalSongShareForUserFallback(
+  songId: string,
+  userId: string,
+  input: {
+    shareCode: string;
+    visibility?: "unlisted" | "public";
+  },
+): SongRow | null {
+  return updateLocalSongForUserFallback(songId, userId, {
+    shareCode: input.shareCode,
+    visibility: input.visibility ?? "unlisted",
+  });
 }
 
 export function deleteLocalSongForUserFallback(

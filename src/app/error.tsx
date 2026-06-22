@@ -5,7 +5,6 @@ import { Home, RotateCcw } from "lucide-react";
 
 import { useTranslator } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
-import { FloatingMusicNotes } from "@/components/murmur/floating-music-notes";
 import { MurmurMark } from "@/components/murmur/murmur-mark";
 
 export default function GlobalError({
@@ -27,24 +26,16 @@ export default function GlobalError({
 
       <div className="relative z-10 flex min-h-svh items-center justify-center px-5 py-16 text-center md:px-8">
         <section className="relative flex w-full max-w-[560px] flex-col items-center">
-          <div className="mb-1">
-            <MurmurMark size={30} imageClassName="opacity-90" />
+          <div className="mb-7">
+            <MurmurMark size={52} imageClassName="opacity-95" />
           </div>
 
-          <div className="relative mt-5 flex h-32 w-32 items-center justify-center md:h-36 md:w-36">
-            <div className="absolute inset-0 rounded-full border border-white/70 bg-white/40 shadow-[0_18px_70px_rgba(26,26,26,0.08)]" />
-            <FloatingMusicNotes size={132} className="relative opacity-35" />
-          </div>
-
-          <p className="mt-7 text-[11px] uppercase tracking-[0.24em] text-[#9A948B]">
-            {t("error.eyebrow") || "MURMUR"}
-          </p>
-          <h1 className="hero-serif mt-3 text-[38px] leading-[1.04] text-[#1A1A1A] md:text-[58px]">
-            {t("error.title") || "That line slipped off-key."}
+          <h1 className="hero-serif text-[38px] leading-[1.04] text-[#1A1A1A] md:text-[58px]">
+            {t("error.title") || "This page ran into a problem."}
           </h1>
-          <p className="mt-5 max-w-[460px] text-[15px] leading-7 text-[#6F6A63] md:text-[16px]">
+          <p className="mt-5 max-w-[460px] whitespace-pre-line text-[15px] leading-7 text-[#6F6A63] md:text-[16px]">
             {t("error.body")
-              || "This page briefly lost the beat. Your melody and saved songs are still here — retry this page, or head home and hum a new line."}
+              || "Your saved songs are still here.\nIf you were recording or editing, reload first. If it still will not open, head home."}
           </p>
           {error.digest && (
             <p className="mt-4 rounded-full border border-[#E5DDD0]/70 bg-white/40 px-3 py-1.5 text-[11px] tracking-[0.06em] text-[#9A948B]">
@@ -55,7 +46,7 @@ export default function GlobalError({
           <div className="mt-9 flex w-full max-w-[360px] flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center">
             <button type="button" onClick={reset} className="mm-btn-primary justify-center">
               <RotateCcw className="size-4" aria-hidden="true" />
-              {t("error.retry") || "Try again"}
+              {t("error.retry") || "Reload"}
             </button>
             {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a

@@ -213,6 +213,8 @@ export type SongCard = {
   id: string;
   title: string;
   mp3Url?: string;
+  visibility?: "private" | "unlisted" | "public";
+  shareCode?: string | null;
   visualHtmlUrl?: string;
   posterImageUrl?: string;
   visualConfig: VisualConfig;

@@ -43,6 +43,8 @@ export type LogEvent =
   | "song.created"
   | "song.create_failed"
   | "song.get_failed"
+  | "song.share_failed"
+  | "public_song.get_failed"
   | "song.update_failed"
   | "song.delete_failed"
   | "song.payload_invalid"

@@ -23,10 +23,10 @@
  *     gracefully — but the dominant UX is mp3 playback.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, MoreHorizontal, Pause, Play } from "lucide-react";
+import { ArrowLeft, Copy, MoreHorizontal, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
 
 import { memory } from "@/lib/platform/memory";
@@ -48,6 +48,7 @@ import {
 import { buildLineageTrail } from "@/modules/music/lineage";
 import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
+import { copyTextToClipboard } from "@/lib/platform/clipboard";
 import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
@@ -56,9 +57,11 @@ type Song = SongCard & {
   bpm?: number;
   keySignature?: string;
   tags?: string[];
+  visibility?: "private" | "unlisted" | "public";
+  shareCode?: string | null;
 };
 
-type ExportKey = "audio" | "video" | "share";
+type ExportKey = "audio" | "video" | "share" | "link";
 type ShareCardMode = "image" | "video";
 const CJK_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
 
@@ -280,6 +283,64 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     } catch (e) {
       console.error(e);
       toast.error(t("song.export.err"));
+    } finally {
+      setBusy(null);
+    }
+  }, [song, t]);
+
+  const copyShareLink = useCallback(async () => {
+    if (!song) return;
+    setBusy("link");
+    try {
+      const res = await fetch(`/api/songs/${encodeURIComponent(song.id)}/share`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({ visibility: "unlisted" }),
+      });
+      if (!res.ok) throw new Error(`share HTTP ${res.status}`);
+
+      const payload = (await res.json()) as {
+        url?: unknown;
+        shareCode?: unknown;
+        visibility?: unknown;
+      };
+      if (typeof payload.url !== "string" || !payload.url.trim()) {
+        throw new Error("missing share url");
+      }
+
+      const copied = await copyTextToClipboard(payload.url);
+      if (!copied) throw new Error("clipboard unavailable");
+
+      setSong((current) =>
+        current && current.id === song.id
+          ? {
+              ...current,
+              shareCode:
+                typeof payload.shareCode === "string"
+                  ? payload.shareCode
+                  : current.shareCode,
+              visibility:
+                payload.visibility === "public" || payload.visibility === "unlisted"
+                  ? payload.visibility
+                  : current.visibility,
+            }
+          : current,
+      );
+      toast.success(t("song.share.link_copied") || "Share link copied");
+      memory
+        .reportAction({
+          content: `Copied share link for "${song.title}"`,
+          event_type: "update",
+          page: "song-detail",
+          metadata: { type: "copy_song_share_link", song_id: song.id },
+        })
+        .catch(() => {});
+    } catch (error) {
+      console.error(error);
+      toast.error(t("song.share.link_failed") || "Couldn't create a share link.");
     } finally {
       setBusy(null);
     }
@@ -610,6 +671,14 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               className="mt-3 divide-y divide-[#E5DDD0] border-t border-b border-[#E5DDD0]"
             >
               <ExportRow
+                label={t("song.share.link.label") || "Share link"}
+                hint={t("song.share.link.hint") || "Anyone with the link can listen"}
+                cost={t("song.export.free") || "free"}
+                busy={busy === "link"}
+                icon={<Copy className="h-4 w-4" />}
+                onClick={copyShareLink}
+              />
+              <ExportRow
                 label={t("song.export.audio.label") || "Audio"}
                 hint={t("song.export.audio.hint") || "mp3"}
                 cost={t("song.export.free") || "free"}
@@ -779,6 +848,7 @@ function ExportRow({
   disabled,
   disabledHint,
   busy,
+  icon,
   onClick,
 }: {
   label: string;
@@ -787,6 +857,7 @@ function ExportRow({
   disabled?: boolean;
   disabledHint?: string;
   busy: boolean;
+  icon?: ReactNode;
   onClick: () => void;
 }) {
   return (
@@ -813,6 +884,10 @@ function ExportRow({
         </span>
         {busy ? (
           <Spinner size="xs" variant="ink" />
+        ) : icon ? (
+          <span className="text-[#1A1A1A] transition-transform group-hover:translate-x-0.5">
+            {icon}
+          </span>
         ) : (
           <span
             className="text-[#1A1A1A] text-[18px] transition-transform group-hover:translate-x-0.5"
