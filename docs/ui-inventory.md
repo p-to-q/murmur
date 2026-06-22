@@ -41,7 +41,7 @@ The 8 anchor rules hold. **No change needed** — this is the spine; protect it.
 | Component | Status | Note |
 |---|---|---|
 | `PageBackdrop` | 🟢 | aurora blobs, every screen. Good. |
-| `GlobalLoadingIndicator` / `MurmurLoadingNote` | 🟢 | canonical Murmur loading system: page loaders center one animated Gallery note; compact busy states reuse the same note glyph. |
+| `GlobalLoadingIndicator` / `MurmurLoadingNote` | 🟢 | canonical page-loading system: route and full-screen loaders center one animated Gallery note; compact busy states keep contextual spinner / icon / text feedback. |
 | `MurmurWave` (canvas particles+sine) | 🟢 | in Vibe + Topup. **Underused** — belongs on SongDetail cover, Hum orb base, save-loading. |
 | `SongCoverArt` (deterministic fingerprint) | 🟢 | Gallery tiles. Could also back SongDetail hero. |
 | `MurmurMark` (bubbly wordmark) | 🟢 | locked by owner, keep. |
@@ -155,8 +155,8 @@ selected pack to a wave-intensity bump. Priority: low (works, looks fine).
 
 ### B11. Checkout `/topup/checkout` — *handoff* 🟢
 **Now:** receipt review with editable billing email, terms acceptance, polished
-ticket-style receipt, then provider handoff state machine with centered Murmur
-loading note.
+ticket-style receipt, then provider handoff state machine with compact in-receipt
+busy feedback.
 **Plan:** keep minimal; tune copy + success moment. Priority: low.
 
 ### B12. VersionCardsOverlay.tsx — 🔴 ORPHAN

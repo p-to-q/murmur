@@ -35,8 +35,8 @@ import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
 import { MurmurMark } from "@/components/murmur/murmur-mark";
-import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { Spinner } from "@/components/ui/spinner";
 
 type Phase =
   | "review"
@@ -691,7 +691,7 @@ function StatusControls({
     <div className="text-center">
       {(phase === "requesting" || phase === "confirming") && (
         <div className="flex min-h-[132px] flex-col items-center justify-center gap-4">
-          <MurmurLoadingNote size="page" />
+          <Spinner size="lg" />
           <AnimatePresence mode="wait">
             <motion.p
               key={phase === "confirming" ? "confirming" : copy}

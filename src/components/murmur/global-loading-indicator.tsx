@@ -17,7 +17,7 @@ export function GlobalLoadingIndicator() {
         role="status"
         aria-label={t("loading.aria")}
       >
-        <MurmurLoadingNote size="page" decorative={false} />
+        <MurmurLoadingNote decorative={false} />
       </div>
     </div>
   );
