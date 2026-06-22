@@ -60,7 +60,6 @@ import { ShareCardModal } from "./share-card-modal";
 import { Fragment } from "react";
 
 const STORAGE_KEY = "murmur:side-nav-collapsed";
-const ENABLE_NAV_ENTRANCE_MOTION = true;
 
 const collapsedListeners = new Set<() => void>();
 
@@ -624,96 +623,6 @@ function NestedTrail({
         );
       })}
     </motion.div>
-  );
-}
-
-/* ── Expanded destination row — "manuscript style" ─────────────────── */
-
-function ManuscriptRow({
-  label,
-  isActive,
-  showRule,
-  lang,
-  meta,
-}: {
-  label: string;
-  isActive: boolean;
-  showRule: boolean;
-  lang: string;
-  meta?: string;
-}) {
-  return (
-    <div className={`group ${showRule ? "pt-4 mt-4 border-t border-[#E5DDD0]/70" : "pt-2"}`}>
-      {/* Marker anchors against the label row (not the outer container) so
-          padding above doesn't push it off-center. items-center + h-9 marker
-          on the inner flex = coral bar's vertical midpoint lines up exactly
-          with the glyph's. Marker is taller than the active label glyph and
-          one-third thicker so it reads as a real margin tick rather than a
-          hair line. Left side is square (flush with edge), right side is rounded. */}
-      <div className="relative flex h-9 items-center justify-between gap-3">
-        {isActive && (
-          <motion.span
-            layoutId="side-nav-active-marker"
-            className="absolute -left-7 top-1/2 h-9 w-[3px] -translate-y-1/2 overflow-visible"
-            initial={false}
-            transition={{
-              layout: { duration: 0.46, ease: [0.16, 1, 0.3, 1] },
-            }}
-            aria-hidden
-          >
-            <span className="block h-full w-full rounded-r-[2px] bg-[#FF5924]" />
-          </motion.span>
-        )}
-        <span
-          className={`transition-all duration-200 group-hover:translate-x-[3px] ${
-            isActive
-              ? lang === "zh"
-                ? "font-chinese-title-italic text-[24px] text-[#1A1A1A]"
-                : "font-serif-italic text-[25px] text-[#1A1A1A]"
-              : lang === "zh"
-                ? "font-chinese-title text-[18px] text-[#8C8780] group-hover:text-[#1A1A1A]"
-                : "font-serif text-[20px] tracking-[0.005em] text-[#8C8780] group-hover:text-[#1A1A1A]"
-          }`}
-        >
-          {label}
-        </span>
-        {meta && (
-          <span className="text-[11px] tabular-nums text-[#B6B0A4]">{meta}</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ── Collapsed destination — a single dot ──────────────────────────── */
-
-function CollapsedDot({
-  isActive,
-  onPointerDown,
-  onActivate,
-  label,
-}: {
-  isActive: boolean;
-  onPointerDown: () => void;
-  onActivate: (e: React.MouseEvent) => void;
-  label: string;
-}) {
-  return (
-    <button
-      onPointerDown={onPointerDown}
-      onClick={onActivate}
-      aria-label={label}
-      title={label}
-      className="group relative flex h-7 w-7 items-center justify-center"
-    >
-      <span
-        className={`h-[8px] w-[8px] rounded-full transition-all duration-200 ${
-          isActive
-            ? "bg-[#FF5924] scale-100"
-            : "bg-transparent border border-[#B6B0A4] scale-90 group-hover:border-[#1A1A1A] group-hover:scale-100"
-        }`}
-      />
-    </button>
   );
 }
 

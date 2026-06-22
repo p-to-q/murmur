@@ -82,7 +82,6 @@ export async function POST(request: NextRequest) {
 
   const userId = parts[0]!;
   const skuId = parts[1]!;
-  const moneyCents = Math.round(parseFloat(verified.money) * 100);
 
   // Resolve notes from the pending_zpay_orders metadata stored at checkout time
   // We look up the purchase record created during checkout
