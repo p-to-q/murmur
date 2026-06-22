@@ -843,14 +843,14 @@ export function HumScreen() {
       {/* scale and opacity are driven by amplitudeSpring (0→1 RMS).
           CSS drift animations still run; framer-motion adds a reactivity
           layer on top via the `style` prop — seamless composition. */}
-      <div className="fixed inset-0 overflow-hidden" aria-hidden>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
         {/* Pink/magenta blob — left side */}
         <motion.div
           className="aurora-blob-1 absolute rounded-full"
           style={{
             width: "min(65vw, 600px)",
             height: "min(55vw, 500px)",
-            left: "2%",
+            left: "max(24px, 5%)",
             bottom: "10%",
             background:
               "radial-gradient(ellipse at center, rgba(255,105,210,0.38) 0%, rgba(255,80,180,0.12) 50%, transparent 75%)",
