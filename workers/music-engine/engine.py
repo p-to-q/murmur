@@ -20,9 +20,11 @@ Env:
 from __future__ import annotations
 
 import io
+import hashlib
 import logging
 import math
 import os
+import subprocess
 import threading
 import time
 
@@ -51,6 +53,7 @@ CFG_NOTES_MELODY = max(-1.0, min(7.0, float(os.getenv("MAGENTA_CFG_NOTES", "1.5"
 # Sub-perceptual runs (transcription jitter) fold into the prior note so the
 # model isn't machine-gunned with re-onsets. 3 frames ≈ 0.12 s.
 MIN_RUN_FRAMES = 3
+FFMPEG_TIMEOUT_SECONDS = 20
 
 
 # ── Model lifecycle ────────────────────────────────────────────────────
@@ -159,6 +162,49 @@ def blend_style_embeddings(
     return out
 
 
+def decode_hum_waveform(hum_bytes: bytes):
+    """Decode a browser hum upload into a Magenta Waveform.
+
+    Magenta delegates Waveform.from_file to libsndfile, which handles WAV/FLAC
+    well but usually rejects browser WebM/Opus blobs. The production image
+    already ships ffmpeg, so fall back through a short in-memory transcode before
+    dropping hum styling.
+    """
+    from magenta_rt.audio import Waveform
+
+    try:
+        return Waveform.from_file(io.BytesIO(hum_bytes))
+    except Exception as direct_error:  # noqa: BLE001 - try browser formats next
+        try:
+            transcoded = subprocess.run(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-i",
+                    "pipe:0",
+                    "-ac",
+                    "1",
+                    "-ar",
+                    str(SAMPLE_RATE),
+                    "-f",
+                    "wav",
+                    "pipe:1",
+                ],
+                input=hum_bytes,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+                timeout=FFMPEG_TIMEOUT_SECONDS,
+            )
+            return Waveform.from_file(io.BytesIO(transcoded.stdout))
+        except Exception as transcode_error:  # noqa: BLE001 - preserve root clue
+            raise RuntimeError(
+                f"direct decode failed: {direct_error}; ffmpeg decode failed: {transcode_error}"
+            ) from transcode_error
+
+
 def pcm16_wav_bytes(samples: np.ndarray, sample_rate: int = SAMPLE_RATE) -> bytes:
     """Encode float32 [nsamp, nch] samples as a PCM16 WAV blob (stdlib only)."""
     import wave
@@ -178,10 +224,13 @@ def pcm16_wav_bytes(samples: np.ndarray, sample_rate: int = SAMPLE_RATE) -> byte
 
 def mock_clip(prompt: str, duration: float) -> bytes:
     """Deterministic pleasant placeholder so the app is testable without weights."""
-    rng = np.random.default_rng(abs(hash(prompt)) % (2**32))
+    digest = hashlib.sha256(prompt.encode("utf-8")).digest()
+    seed = int.from_bytes(digest[:8], "big")
+    rng = np.random.default_rng(seed % (2**32))
     n = int(duration * SAMPLE_RATE)
     t = np.arange(n) / SAMPLE_RATE
-    root = float(rng.choice([220.0, 246.94, 261.63, 293.66, 329.63]))
+    roots = [220.0, 246.94, 261.63, 293.66, 329.63]
+    root = roots[seed % len(roots)] * (1.0 + (((seed >> 8) % 9) - 4) * 0.001)
     chord = [root, root * 5 / 4, root * 3 / 2]
     left = np.zeros(n, dtype=np.float32)
     right = np.zeros(n, dtype=np.float32)
@@ -308,9 +357,7 @@ def generate_clip(
     mixed = 0.0
     if hum_bytes and style_mix > 0:
         try:
-            from magenta_rt.audio import Waveform
-
-            hum = Waveform.from_file(io.BytesIO(hum_bytes))
+            hum = decode_hum_waveform(hum_bytes)
             hum_emb = mrt.embed_style(hum)
             style = blend_style_embeddings(style, hum_emb, style_mix)
             mixed = style_mix

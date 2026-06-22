@@ -6,7 +6,9 @@
 
 > 与旧的常驻 Pod 方案的区别：不再有固定的 `https://<pod>-8002.proxy.runpod.net`；
 > App 通过 `https://api.runpod.ai/v2/<endpoint-id>/run` 调用，用 `RUNPOD_API_KEY` 鉴权。
-> 冷启动有代价：闲置后的第一次哼唱会等待 ~20–60 s 冷启动，太慢时 App 自动回退 Tone.js。
+> 冷启动有代价：闲置后的第一次哼唱会等待 ~20–60 s 冷启动。生产 live Hum
+> 不再自动生成 Tone.js 低规格替代结果；如果 RunPod 没能在路由预算内完成，
+> App 会显示 music-engine 热机 / 不可用状态，让用户重试。
 
 ## 一键部署
 
@@ -75,8 +77,8 @@ curl -sS https://murmur.ptoq.io/api/music/health
 | `RUNPOD_IDLE_TIMEOUT` | `120` | worker 闲置多少秒后缩容（秒） |
 | `RUNPOD_DATA_CENTER_ID` | `EU-RO-1` | 网络卷所在数据中心（决定可用 GPU） |
 | `RUNPOD_GPU_TYPE_ID` | _(列表)_ | 偏好 GPU，如 `NVIDIA L4` |
-| `MAGENTA_MODEL` | `mrt2_base` | 或 `mrt2_small` |
-| `MAGENTA_CFG_NOTES` | `1.5` | 旋律 CFG 强度（worker 端 [-1.0, 7.0]） |
+| `MAGENTA_MODEL` | `mrt2_base` | 线上最高规格模型；`mrt2_small` 只适合低配本地调试 |
+| `MAGENTA_CFG_NOTES` | `1.5` | 当前实验收敛值；更高会让旋律过度受控，容易 robotic / dissonant |
 | `WARMUP` | `1` | `0` 跳过部署后的预热作业 |
 
 > **想要始终热（无冷启动）？** 在 RunPod 控制台把该端点的 *Active (min) workers* 设为 1，
@@ -99,7 +101,7 @@ Serverless 只在 worker 运行时计费（生成 + 冷启动），闲时为 0�
 | `IMAGE_AUTH_ERROR: unauthorized` | 镜像变回私有了：配 `GHCR_USERNAME`+`GHCR_TOKEN`（PAT，read:packages）或 `RUNPOD_REGISTRY_AUTH_ID`，见 §2 |
 | 部署报 GPU/容量不可用 | 换 `RUNPOD_DATA_CENTER_ID` 或 `RUNPOD_GPU_TYPE_ID`（网络卷会把端点锁在其数据中心） |
 | warm-up 超时 | 正常（首次下载 ~4 GB）；端点已创建，首个真实请求会继续下载。看 RunPod 控制台日志 |
-| 首次哼唱回退 Tone.js | 冷启动超过 110 s 路由预算；再哼一次（worker 已热）即走 Magenta |
+| 首次哼唱显示音乐引擎热机 / 不可用 | 冷启动超过路由预算；再哼一次（worker 已热）即走 Magenta |
 | `/api/music/health` available:false | 核对 Vercel 的 `RUNPOD_API_KEY` 与 `RUNPOD_SERVERLESS_ENDPOINT_ID` |
 
 ## 架构

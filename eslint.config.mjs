@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     "node_modules/**",
     "coverage/**",
     "dist/**",
+    ".claude/**",
     "**/.venv/**",
   ]),
 ]);

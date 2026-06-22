@@ -29,19 +29,23 @@ Apple Silicon.
 - `POST /generate` — multipart `prompt`, `duration` (2–30 s), `style_mix`
   (0–0.8), optional `melody` JSON, optional `hum` audio file → `audio/wav`
   48 kHz stereo.
-- `GET /health` — load state; the Next.js app probes this and falls back to
-  the legacy Tone.js synth engine when the worker is unreachable.
+- `GET /health` — load state; local/dev clients can use this before choosing a
+  worker path.
 
 In production the app instead calls the RunPod endpoint
 (`api.runpod.ai/v2/{id}/run`) with a JSON `{input:{prompt, duration, style_mix,
 melody, hum_b64}}` body and gets back `{output:{audio_b64, …}}`; the proxy
-routes (`src/app/api/music/*`) speak both protocols.
+routes (`src/app/api/music/*`) speak both protocols. Browser hum uploads are
+embedded as style whenever possible; if libsndfile cannot read the incoming
+WebM/Opus blob directly, the worker transcodes it through ffmpeg to a temporary
+48 kHz WAV before asking Magenta for the hum style embedding.
 
 ## Env
 
 | var | default | notes |
 | --- | --- | --- |
-| `MAGENTA_MODEL` | `mrt2_base` | or `mrt2_small` |
+| `MAGENTA_MODEL` | `mrt2_base` | production highest-spec default; use `mrt2_small` only for constrained local tests |
+| `MAGENTA_CFG_NOTES` | `1.5` | melody-conditioning scale; current experiment winner for clear melody without robotic over-control |
 | `MUSIC_WORKER_TOKEN` | _(unset)_ | bearer token, same scheme as audio-engine |
 | `MUSIC_ENGINE_MOCK` | _(unset)_ | `1` → sine-chord placeholder clips, no model |
 | `MUSIC_ENGINE_PRELOAD` | `1` | `0` → lazy-load on first request |

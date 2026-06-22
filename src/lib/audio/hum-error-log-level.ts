@@ -3,6 +3,7 @@ import type { TranscribeRequestErrorCode } from "@/lib/api/transcribe";
 export type HumLogLevel = "warn" | "error";
 
 const HANDLED_WARN_CODES = new Set<TranscribeRequestErrorCode>([
+  "unauthorized",
   "network_error",
   "worker_unavailable",
   "billing_unavailable",

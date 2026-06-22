@@ -51,8 +51,8 @@ export function prefetchMusicEngineStatus(): void {
 /**
  * Should this flow use Magenta instead of the legacy Tone.js engine?
  *
- * Only when the worker is actually reachable — configured-but-down (e.g. local
- * dev without `dev:music`, or RunPod cold start) falls back to Tone.js.
+ * Live Hum treats Magenta as required and surfaces a retryable engine state
+ * when this returns false. Legacy/demo seeds can still use Tone scaffolds.
  */
 export async function shouldUseMagentaEngine(): Promise<boolean> {
   const status = await fetchMusicEngineStatus();

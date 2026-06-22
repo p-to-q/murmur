@@ -134,6 +134,26 @@ describe("transcribeRecording typed error mapping", () => {
     }
   });
 
+  it("maps auth failures separately from worker outages", async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse(
+        {
+          error: "unauthorized",
+          message: "Authentication required",
+        },
+        401,
+      )) as typeof fetch;
+
+    try {
+      await transcribeRecording(blob());
+      throw new Error("expected transcribeRecording to throw");
+    } catch (error) {
+      const typed = error as TranscribeRequestError;
+      expect(typed.code).toBe("unauthorized");
+      expect(typed.status).toBe(401);
+    }
+  });
+
   it("falls back to status-derived codes when the body lacks a typed error", async () => {
     globalThis.fetch = (async () => new Response("nope", { status: 429 })) as typeof fetch;
     try {

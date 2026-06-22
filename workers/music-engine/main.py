@@ -52,6 +52,7 @@ from engine import (  # noqa: F401
     PRELOAD,
     SAMPLE_RATE,
     blend_style_embeddings,
+    decode_hum_waveform,
     mock_clip,
     pcm16_wav_bytes,
 )

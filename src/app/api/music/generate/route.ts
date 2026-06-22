@@ -180,6 +180,7 @@ export async function POST(request: NextRequest) {
         "X-Request-Id": requestId,
         "X-Model": result.model,
         "X-Generation-Ms": result.generationMs,
+        "X-Style-Mix": result.styleMix,
       },
     });
   } catch (error) {

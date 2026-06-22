@@ -9,6 +9,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { AuthButtons } from "@/components/auth/auth-buttons";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
+import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import { HumOnboardingOverlay } from "@/components/screens/hum-onboarding";
 import { useMurmurStore } from "@/lib/store/murmur-store";
@@ -163,6 +164,7 @@ function variantForCode(code: TranscribeRequestErrorCode): HumErrorVariant {
       return "insufficient";
     case "rate_limited":
       return "rate_limited";
+    case "unauthorized":
     case "worker_unavailable":
     case "worker_unconfigured":
     case "billing_unavailable":
@@ -200,11 +202,15 @@ export function HumScreen() {
   const { refresh: refreshBalance } = useUserBalance();
   const { account, isLoading: accountLoading } = useCurrentAccount();
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const hasServerAccount =
+    Boolean(account?.user?.id) &&
+    account?.user?.id !== "guest" &&
+    account?.source !== "guest";
   // During "loading" we do NOT gate, so a returning signed-in user is never
   // briefly walled by a stale guest counter on their device.
   const isGuest =
     !accountLoading &&
-    (!account?.user?.id || account.user.id === "guest" || account.source === "guest");
+    !hasServerAccount;
   const [showLoginWall, setShowLoginWall] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
   // Onboarding: first visit gently focuses the already-visible stage.
@@ -415,8 +421,10 @@ export function HumScreen() {
   // Action-time guest gate. Returns false (and raises the login wall) once a
   // guest has used up their free creations on this device; authed users and
   // guests under the limit pass through untouched.
-  const passGuestGate = (): boolean => {
-    if (!isGuest) return true;
+  const passGuestGate = async (): Promise<boolean> => {
+    if (hasServerAccount) return true;
+    const hasCreatorSession = await ensureLocalCreatorSession();
+    if (hasCreatorSession) return true;
     if (!hasLocalNotes(COST.hum)) {
       setShowLoginWall(true);
       return false;
@@ -776,8 +784,10 @@ export function HumScreen() {
   const beginIdleCapture = () => {
     if (isIdle && !humError && startPhaseRef.current === "idle") {
       cancelPendingStartRef.current = false;
-      if (!passGuestGate()) return;
-      void startRecording();
+      void (async () => {
+        if (!(await passGuestGate())) return;
+        await startRecording();
+      })();
     }
   };
 
@@ -800,10 +810,12 @@ export function HumScreen() {
         void transcribeAndGenerate(undefined);
         return;
       case "record":
-        if (action.requiresGuestGate && !passGuestGate()) return;
         startAudioContext();
         setHumError(null);
-        void startRecording();
+        void (async () => {
+          if (action.requiresGuestGate && !(await passGuestGate())) return;
+          await startRecording();
+        })();
         return;
       case "dismiss":
         setHumError(null);
@@ -1386,6 +1398,14 @@ function copyForState(
       demo: t("hum.cta_demo"),
     };
   }
+  if (error.code === "unauthorized") {
+    return {
+      title: t("hum.err.auth.title"),
+      detail: t("hum.err.auth.detail"),
+      retry: t("hum.err.auth.cta_retry"),
+      demo: t("hum.cta_demo"),
+    };
+  }
 
   switch (error.variant) {
     case "mic":
@@ -1461,6 +1481,20 @@ function recoveryForState(
       secondary: {
         kind: "dismiss",
         label: copy.retry,
+      },
+    };
+  }
+
+  if (error.code === "unauthorized") {
+    return {
+      primary: {
+        kind: "record",
+        label: copy.retry,
+        requiresGuestGate: true,
+      },
+      secondary: {
+        kind: "demo",
+        label: copy.demo,
       },
     };
   }

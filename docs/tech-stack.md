@@ -56,9 +56,10 @@ unreachable.
 | Client audio | Tone.js | 14.x |
 | Validation | Zod | 4.x |
 
-The Tone.js synth path is also the **client-side fallback** for music: when the
-Magenta worker is unreachable, vibe cards degrade to the local arrangement
-engine instead of failing.
+Tone.js remains the browser playback / export fallback for legacy saved songs
+and local demo scaffolds. Live Hum generation in production is Magenta-only:
+when the RunPod music worker is unavailable, the app surfaces a retryable engine
+state instead of creating a lower-spec Tone arrangement.
 
 ## Backend (Next.js API routes)
 
@@ -98,9 +99,10 @@ probe.
 - **Production runs on RunPod Serverless** (scale-to-zero GPU, JAX/CUDA).
   `bun run deploy:music-serverless` creates/updates a network volume + template
   + endpoint and syncs the endpoint id to Vercel. The ~4 GB model lives on the
-  network volume (downloaded once); workers cold-start on demand, so the first
-  hum after idle may fall back to Tone.js. See
-  [DEPLOY_MUSIC_ENGINE_GPU.md](DEPLOY_MUSIC_ENGINE_GPU.md).
+  network volume (downloaded once); workers cold-start on demand. Live Hum
+  generation does not silently downgrade to Tone.js in production: it waits for
+  RunPod within the route budget and otherwise surfaces the music-engine
+  warming / unavailable state. See [DEPLOY_MUSIC_ENGINE_GPU.md](DEPLOY_MUSIC_ENGINE_GPU.md).
 - **Local dev** runs the FastAPI server on `:8002` with the MLX backend on
   Apple Silicon (`bun run dev:music`); the model loads once (~45 s on an
   M4 Max) and stays resident.

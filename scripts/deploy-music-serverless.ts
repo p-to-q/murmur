@@ -387,11 +387,12 @@ function persistEnv(endpointId: string, volumeId: string) {
 }
 
 async function syncVercelEnv(apiKey: string, endpointId: string) {
-  console.log("Syncing Vercel production env (RUNPOD_SERVERLESS_ENDPOINT_ID + RUNPOD_API_KEY)…");
+  console.log("Syncing Vercel production env (RunPod serverless music engine)…");
   const pathEnv = `${process.env.HOME}/.bun/bin:${process.env.PATH ?? ""}`;
   for (const [key, value] of [
     ["RUNPOD_SERVERLESS_ENDPOINT_ID", endpointId],
     ["RUNPOD_API_KEY", apiKey],
+    ["MUSIC_ENGINE_MODE", "serverless"],
   ] as const) {
     await runShell(
       `printf '%s' '${value.replace(/'/g, `'\\''`)}' | vercel env add ${key} production --force`,

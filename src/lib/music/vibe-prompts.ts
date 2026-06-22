@@ -201,7 +201,12 @@ export function createVibePromptBatch(options: {
     const instrument = INSTRUMENTS[pickIndex(rng, INSTRUMENTS.length)]!;
     const scene = rng() < 0.5 ? SCENES[pickIndex(rng, SCENES.length)]! : null;
 
-    const parts = [`${mood.en} ${genre.en}`, `with ${instrument.en}`];
+    const parts = [
+      `${mood.en} ${genre.en}`,
+      `with ${instrument.en}`,
+      "clear instrumental lead melody",
+      "no vocals",
+    ];
     if (scene) parts.push(scene.en);
     const hint = tempoHint(options.melody);
     if (hint) parts.push(hint);

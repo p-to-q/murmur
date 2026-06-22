@@ -30,6 +30,14 @@ describe("createVibePromptBatch", () => {
     }
   });
 
+  test("constrains generated clips to instrumental leads", () => {
+    const batch = createVibePromptBatch({ seed: "draft-a", batchIndex: 0 });
+    for (const spec of batch) {
+      expect(spec.prompt).toContain("clear instrumental lead melody");
+      expect(spec.prompt).toContain("no vocals");
+    }
+  });
+
   test("is deterministic for the same seed and batch", () => {
     const a = createVibePromptBatch({ seed: "draft-a", batchIndex: 2 });
     const b = createVibePromptBatch({ seed: "draft-a", batchIndex: 2 });

@@ -55,6 +55,8 @@ Interaction rules that should remain true:
 - idle hover expands the orb slightly; recording state keeps the smaller held
   scale
 - demo melody is explicit, not a hidden fallback from live capture
+- live recording must ensure a server-backed Local Creator session before
+  upload; production `/api/transcribe` should not see a first-visit guest race
 - billing / note exhaustion should preserve a clear recovery path instead of
   collapsing into generic retry copy
 - browser recording failures should surface as a quiet card with a stable
@@ -73,6 +75,8 @@ Implementation note:
   facade, not in the view tree
 - keep onboarding persistence and completion events in the shared onboarding
   helper so the Hum screen and global audio unlock layer cannot drift
+- keep auth/session readiness separate from worker availability so a 401 does
+  not masquerade as the "service is napping" worker outage state
 
 ## Me personal-center contract notes
 

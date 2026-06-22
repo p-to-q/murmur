@@ -10,11 +10,10 @@
  *    main.py), or the local `bun run dev:music` worker on :8002. A warm pod
  *    answers instantly; stop it when unused to stop paying for the GPU.
  *
- * `MUSIC_ENGINE_MODE` picks between them without unconfiguring either:
- *   "serverless" → force serverless · "http"/"pod" → force the HTTP worker ·
- *   "auto"/unset → serverless wins when configured, else the HTTP worker.
- * Flip the env var (+ redeploy) to switch the live transport. When neither
- * transport is configured the app stays on the legacy Tone.js synth engine.
+ * Production treats serverless as canonical whenever it is configured. This
+ * prevents stale HTTP pod env from moving logged-in users onto a different
+ * worker. `MUSIC_ENGINE_MODE` still chooses a transport for local/dev and for
+ * emergency deployments where serverless is absent.
  */
 
 export type MusicEngineMode = "serverless" | "http";
@@ -52,17 +51,18 @@ function getMusicModePreference(): MusicEngineMode | "auto" {
  * Which transport serves music generation right now?
  *  - "serverless" — RunPod Serverless.
  *  - "http"       — long-lived HTTP worker / GPU pod (or local dev on :8002).
- *  - null         — neither configured; the app stays on the legacy Tone.js engine.
+ *  - null         — neither configured.
  *
- * `MUSIC_ENGINE_MODE` forces a transport; when the forced one isn't configured
- * we fall back to the other rather than going dark. "auto" (the default)
- * prefers serverless when configured.
+ * In production, serverless always wins when configured. Outside production,
+ * `MUSIC_ENGINE_MODE` can force a transport; when the forced one isn't
+ * configured we fall back to the other rather than going dark.
  */
 export function getMusicEngineMode(): MusicEngineMode | null {
   const serverless = getMusicServerlessConfig() ? "serverless" : null;
   const http = getMusicWorkerUrl() ? "http" : null;
   const preference = getMusicModePreference();
 
+  if (process.env.NODE_ENV === "production" && serverless) return "serverless";
   if (preference === "http") return http ?? serverless;
   if (preference === "serverless") return serverless ?? http;
   return serverless ?? http; // auto: serverless wins

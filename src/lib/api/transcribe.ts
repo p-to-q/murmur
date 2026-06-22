@@ -12,6 +12,7 @@ import { request } from "./request";
  * in `docs/page-contracts.md` §1 (`TranscribeErrorCode`).
  */
 export type TranscribeRequestErrorCode =
+  | "unauthorized"
   | "audio_required"
   | "audio_too_large"
   | "validation_error"
@@ -25,6 +26,8 @@ export type TranscribeRequestErrorCode =
   | "network_error";
 
 const SERVER_ERROR_TO_CLIENT: Record<string, TranscribeRequestErrorCode> = {
+  unauthorized: "unauthorized",
+  session_unavailable: "unauthorized",
   audio_required: "audio_required",
   audio_too_large: "audio_too_large",
   validation_error: "validation_error",
@@ -149,6 +152,7 @@ async function buildTranscribeError(
 }
 
 function statusToFallbackCode(status: number): TranscribeRequestErrorCode {
+  if (status === 401 || status === 403) return "unauthorized";
   if (status === 402) return "insufficient_notes";
   if (status === 422) return "no_voiced_frames";
   if (status === 429) return "rate_limited";

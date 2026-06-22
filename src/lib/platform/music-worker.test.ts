@@ -58,9 +58,17 @@ describe("getMusicEngineMode transport selection", () => {
     expect(getMusicEngineMode()).toBe("http");
   });
 
-  it("MUSIC_ENGINE_MODE=http forces the pod even when serverless is configured", () => {
+  it("production keeps serverless canonical even when MUSIC_ENGINE_MODE=http is stale", () => {
     wireServerless();
     wirePod();
+    process.env.MUSIC_ENGINE_MODE = "http";
+    expect(getMusicEngineMode()).toBe("serverless");
+  });
+
+  it("MUSIC_ENGINE_MODE=http can force the pod outside production", () => {
+    wireServerless();
+    wirePod();
+    process.env.NODE_ENV = "development";
     process.env.MUSIC_ENGINE_MODE = "http";
     expect(getMusicEngineMode()).toBe("http");
   });
@@ -68,6 +76,7 @@ describe("getMusicEngineMode transport selection", () => {
   it("treats 'pod' and 'worker' as aliases for the http transport", () => {
     wireServerless();
     wirePod();
+    process.env.NODE_ENV = "development";
     for (const alias of ["pod", "worker", "HTTP", " Pod "]) {
       process.env.MUSIC_ENGINE_MODE = alias;
       expect(getMusicEngineMode()).toBe("http");
