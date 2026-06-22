@@ -11,6 +11,7 @@ import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { AuthButtons } from "@/components/auth/auth-buttons";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate, animate as fmAnimate } from "framer-motion";
+import { HumOnboardingOverlay } from "@/components/screens/hum-onboarding";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import {
@@ -21,7 +22,7 @@ import {
 import { startAudioContext } from "@/lib/music/tone-player";
 import { transcribeWithStainer } from "@/modules/stainer/transcribe";
 import { selectGenerationMelody } from "@/modules/music/humming-engine";
-import { useTranslator } from "@/lib/i18n";
+import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { memory } from "@/lib/platform/memory";
 import { log } from "@/lib/observability/log";
 import { trimRecordingForUpload } from "@/lib/audio/recording-trim";
@@ -48,6 +49,7 @@ import { formatHumSupportCode } from "@/lib/observability/support-code";
 const MAX_DURATION = 15;
 const IDLE_ROTATE_INTERVAL = 9000;
 const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
+const ONBOARDING_SEEN_STORAGE_KEY = "murmur:onboarding-seen";
 const ENABLE_HUM_ENTRANCE_MOTION = true;
 
 // Guest quota stays local and action-time gated. Signed-in users are
@@ -130,6 +132,22 @@ function stopMediaStream(stream: MediaStream | null) {
   stream?.getTracks().forEach((track) => track.stop());
 }
 
+function hasSeenOnboarding() {
+  if (typeof window === "undefined") return false;
+  try {
+    return !!window.localStorage.getItem(ONBOARDING_SEEN_STORAGE_KEY);
+  } catch {
+    return false;
+  }
+}
+
+function writeOnboardingSeen() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ONBOARDING_SEEN_STORAGE_KEY, "1");
+  } catch {}
+}
+
 function mediaRecorderOptions(): MediaRecorderOptions {
   if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
     return { mimeType: "audio/webm;codecs=opus" };
@@ -185,6 +203,7 @@ export function HumScreen() {
   } = useMurmurStore();
   const repairBias = usePreferencesStore((state) => state.repairBias);
   const t = useTranslator();
+  const i18nHydrated = useI18nStore((state) => state.hydrated);
   const router = useRouter();
 
   const [recordingTime, setRecordingTime] = useState(0);
@@ -199,14 +218,16 @@ export function HumScreen() {
   const isGuest = sessionStatus === "unauthenticated";
   const [showLoginWall, setShowLoginWall] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
-  // Onboarding: frosted glass reveal on first visit
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return !window.localStorage.getItem("murmur:onboarding-seen");
-  });
+  // Onboarding: first visit gently focuses the already-visible stage.
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingRippling, setOnboardingRippling] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
   const orbButtonRef = useRef<HTMLButtonElement>(null);
-  const [orbCenter, setOrbCenter] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [orbCenter, setOrbCenter] = useState<{ x: number; y: number; size: number }>({
+    x: 0,
+    y: 0,
+    size: 0,
+  });
   const revealRadius = useMotionValue(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const unmountingRef = useRef(false);
@@ -312,6 +333,15 @@ export function HumScreen() {
     prefetchMusicEngineStatus();
   }, []);
 
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (!hasSeenOnboarding()) {
+        setShowOnboarding(true);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
   // Measure orb center for the reveal mask
   useEffect(() => {
     if (!showOnboarding) return;
@@ -319,7 +349,11 @@ export function HumScreen() {
       const el = orbButtonRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      setOrbCenter({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      setOrbCenter({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        size: rect.width,
+      });
       if (revealRadius.get() === 0) {
         revealRadius.set(rect.width / 2 + 16);
       }
@@ -329,25 +363,33 @@ export function HumScreen() {
     return () => window.removeEventListener("resize", measure);
   }, [showOnboarding, revealRadius]);
 
+  const markOnboardingSeen = useCallback(() => {
+    writeOnboardingSeen();
+  }, []);
+
   const triggerOnboardingReveal = useCallback(() => {
     setOnboardingRippling(true);
     const el = orbButtonRef.current;
     if (el) {
       const rect = el.getBoundingClientRect();
-      setOrbCenter({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      setOrbCenter({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        size: rect.width,
+      });
     }
     const maxDim = Math.max(window.innerWidth, window.innerHeight) * 1.5;
     fmAnimate(revealRadius, maxDim, {
-      duration: 1.4,
+      duration: 1.12,
       ease: [0.22, 1, 0.36, 1],
-      delay: 0.3,
+      delay: 0.08,
     });
     setTimeout(() => {
       setShowOnboarding(false);
       setOnboardingRippling(false);
-      window.localStorage.setItem("murmur:onboarding-seen", "1");
-    }, 1700);
-  }, [revealRadius]);
+      markOnboardingSeen();
+    }, 1220);
+  }, [markOnboardingSeen, revealRadius]);
 
   // Rotate idle headlines only while the landing state is truly quiet.
   useEffect(() => {
@@ -716,14 +758,6 @@ export function HumScreen() {
     }
   };
 
-  const releaseCapture = useCallback(() => {
-    if (startPhaseRef.current === "starting") {
-      cancelPendingStartRef.current = true;
-      return;
-    }
-    stopRecording();
-  }, [stopRecording]);
-
   const updateInputLevel = useCallback((rms: number) => {
     const startedAt = recordingStartedAtRef.current;
     const elapsedMs = startedAt === null ? 0 : performance.now() - startedAt;
@@ -741,10 +775,38 @@ export function HumScreen() {
   const isIdle = recordingState === "idle";
   const isRecording = recordingState === "recording";
   const isProcessing = recordingState === "processing";
+  const onboardingLine = t(`hum.onboarding.line${onboardingStep + 1}`);
+  const onboardingA11yLine = onboardingLine.replace(/\s+/g, " ");
+  const orbAriaLabel =
+    showOnboarding && !onboardingRippling
+      ? onboardingStep < 2
+        ? `${t("hum.onboarding.next")}: ${onboardingA11yLine}`
+        : `${t("hum.start")}: ${onboardingA11yLine}`
+      : isIdle
+        ? t("hum.start")
+        : t("hum.stop");
 
   const errorCopy = humError ? copyForState(humError, t) : null;
   const recoveryPlan =
     humError && errorCopy ? recoveryForState(humError, errorCopy, isGuest, t) : null;
+
+  const beginIdleCapture = () => {
+    if (isIdle && !humError && startPhaseRef.current === "idle") {
+      cancelPendingStartRef.current = false;
+      if (!passGuestGate()) return;
+      void startRecording();
+    }
+  };
+
+  const handleOnboardingPress = () => {
+    if (onboardingStep < 2) {
+      setOnboardingStep((step) => step + 1);
+      return;
+    }
+    triggerOnboardingReveal();
+    beginIdleCapture();
+  };
+
   const handleRecoveryAction = (action: HumRecoveryAction) => {
     switch (action.kind) {
       case "topup":
@@ -852,7 +914,7 @@ export function HumScreen() {
                 locked boxes. The outer max-width controls composition; the inner
                 min-heights protect the orb from headline rotation and async copy. */}
             <div className="hum-mirror-copy min-w-0 w-full text-center pt-[calc(env(safe-area-inset-top,0px)+60px)] md:pt-0">
-              <div className="flex flex-col justify-center min-h-[116px] md:min-h-[240px]">
+              <div className="flex flex-col justify-center min-h-[128px] md:min-h-[240px]">
               <AnimatePresence mode="wait">
               {isIdle && !humError && (
                 <motion.h1
@@ -921,10 +983,10 @@ export function HumScreen() {
             </div>
 
             {/* ── Right column: the orb ─────────────────────────── */}
-            <div className="relative flex min-h-[min(55vw,296px)] flex-col items-center justify-center md:min-h-[360px] xl:min-h-[clamp(340px,26vw,420px)]">
+            <div className="hum-orb-column relative flex flex-col items-center justify-center">
             {/* Orb container — responsive sizing */}
             <div
-              className="relative isolate h-[min(55vw,296px)] w-[min(55vw,296px)] shrink-0 overflow-visible md:h-[360px] md:w-[360px] xl:h-[clamp(340px,26vw,420px)] xl:w-[clamp(340px,26vw,420px)]"
+              className="hum-orb-shell relative isolate shrink-0 overflow-visible"
             >
               {/* Rotating conic glow behind the orb */}
               <motion.div
@@ -987,43 +1049,37 @@ export function HumScreen() {
                 ref={orbButtonRef}
                 onClick={() => {
                   if (showOnboarding && !onboardingRippling) {
-                    triggerOnboardingReveal();
+                    handleOnboardingPress();
                     return;
                   }
                   if (isRecording) {
                     stopRecording();
                     return;
                   }
-                  if (isIdle && !humError && startPhaseRef.current === "idle") {
-                    cancelPendingStartRef.current = false;
-                    if (!passGuestGate()) return;
-                    void startRecording();
-                  }
+                  beginIdleCapture();
                 }}
                 onKeyDown={(e) => {
                   if (e.repeat) return;
                   if (e.key === " " || e.key === "Enter") {
                     e.preventDefault();
+                    if (showOnboarding && !onboardingRippling) {
+                      handleOnboardingPress();
+                      return;
+                    }
                     if (isRecording) {
                       stopRecording();
                       return;
                     }
-                    if (isIdle && !humError && startPhaseRef.current === "idle") {
-                      cancelPendingStartRef.current = false;
-                      if (!passGuestGate()) return;
-                      void startRecording();
-                    }
+                    beginIdleCapture();
                   }
                 }}
                 disabled={isProcessing}
-                // Keep the state-driven scale anchored so recording never
-                // drifts out of the glow/ring; idle hover restores the
-                // tactile "grow while held under the cursor" feel.
-                animate={{ scale: isRecording ? 0.92 : 1 }}
+                // Keep the button, glow, and progress ring on one fixed
+                // geometry; interaction feedback lives in light, not size.
+                animate={{ scale: 1 }}
                 whileHover={
                   isIdle
                     ? {
-                        scale: 1.05,
                         boxShadow:
                           "0 6px 48px rgba(255,255,255,0.78), 0 0 0 1px rgba(255,255,255,0.92)",
                       }
@@ -1043,7 +1099,7 @@ export function HumScreen() {
                   boxShadow:
                     "0 4px 40px rgba(255,255,255,0.6), 0 0 0 1px rgba(255,255,255,0.8)",
                 }}
-                aria-label={isIdle ? t("hum.start") : t("hum.stop")}
+                aria-label={orbAriaLabel}
               >
                 <AnimatePresence mode="wait">
                   {isIdle && !humError && (
@@ -1249,122 +1305,17 @@ export function HumScreen() {
 
       </div>
 
-      {/* ── Onboarding frosted glass overlay ─────────────────────── */}
       {/* Rendered outside the z-10 content container so z-[60] can
           cover the bottom nav (z-50) at the layout level. */}
-      <AnimatePresence>
-        {showOnboarding && (
-          <motion.div
-            key="onboarding-frost"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            className="fixed inset-0 z-[60] pointer-events-none"
-          >
-            <OnboardingFrost
-              orbCenter={orbCenter}
-              revealRadius={revealRadius}
-              rippling={onboardingRippling}
-            />
-            {/* Guidance text — positioned just above the button cutout */}
-            {!onboardingRippling && orbCenter.y > 0 && (
-              <motion.div
-                className="absolute flex flex-col items-center pointer-events-none"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
-                style={{ top: orbCenter.y - 260, left: orbCenter.x, x: '-50%' }}
-              >
-                <p className="hero-serif text-[#1A1A1A]/75 text-[26px] md:text-[34px] leading-[1.2] text-center">
-                  {t("hum.onboarding")}
-                </p>
-                <motion.svg
-                  width="20" height="20" viewBox="0 0 24 24" fill="none"
-                  className="mt-4 text-[#1A1A1A]/25"
-                  animate={{ y: [0, 5, 0] }}
-                  transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-                >
-                  <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </motion.svg>
-              </motion.div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <HumOnboardingOverlay
+        visible={i18nHydrated && showOnboarding}
+        orbCenter={orbCenter}
+        revealRadius={revealRadius}
+        rippling={onboardingRippling}
+        line={onboardingLine}
+        step={onboardingStep}
+      />
     </div>
-  );
-}
-
-function OnboardingFrost({
-  orbCenter,
-  revealRadius,
-  rippling,
-}: {
-  orbCenter: { x: number; y: number };
-  revealRadius: ReturnType<typeof useMotionValue<number>>;
-  rippling: boolean;
-}) {
-  const maskRadius = useTransform(revealRadius, (r) => r || 0);
-  const maskEdge = useTransform(revealRadius, (r) => (r || 0) + 40);
-  const revealMask = useMotionTemplate`radial-gradient(circle at ${orbCenter.x}px ${orbCenter.y}px, transparent ${maskRadius}px, black ${maskEdge}px)`;
-
-  return (
-    <>
-      {/* Frosted glass with button cutout — mask always active */}
-      <motion.div
-        className="absolute inset-0"
-        style={{
-          backdropFilter: "blur(28px) saturate(1.5)",
-          WebkitBackdropFilter: "blur(28px) saturate(1.5)",
-          background: "rgba(245, 241, 235, 0.5)",
-          maskImage: revealMask,
-          WebkitMaskImage: revealMask,
-        }}
-      />
-      {/* Soft luminous edge around the button cutout */}
-      <motion.div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: `radial-gradient(circle at ${orbCenter.x}px ${orbCenter.y}px, transparent 0%, rgba(255,255,255,0.3) 48%, transparent 62%)`,
-          maskImage: revealMask,
-          WebkitMaskImage: revealMask,
-        }}
-      />
-
-      {/* Ripple rings */}
-      <AnimatePresence>
-        {rippling && (
-          <>
-            {[0, 1, 2, 3, 4].map((i) => (
-              <motion.div
-                key={`ripple-${i}`}
-                className="absolute rounded-full pointer-events-none"
-                style={{
-                  left: orbCenter.x,
-                  top: orbCenter.y,
-                  translateX: "-50%",
-                  translateY: "-50%",
-                  border: `${1.5 - i * 0.15}px solid rgba(255, 255, 255, ${0.55 - i * 0.07})`,
-                  boxShadow: `0 0 ${12 - i * 1.5}px rgba(255,255,255,${0.18 - i * 0.02})`,
-                }}
-                initial={{ width: 0, height: 0, opacity: 0.85 }}
-                animate={{
-                  width: [0, Math.max(window.innerWidth, window.innerHeight) * 2.2],
-                  height: [0, Math.max(window.innerWidth, window.innerHeight) * 2.2],
-                  opacity: [0.85, 0],
-                }}
-                transition={{
-                  duration: 2.0,
-                  delay: i * 0.1,
-                  ease: [0.16, 1, 0.3, 1],
-                }}
-              />
-            ))}
-          </>
-        )}
-      </AnimatePresence>
-    </>
   );
 }
 

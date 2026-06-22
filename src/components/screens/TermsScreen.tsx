@@ -18,7 +18,7 @@ import {
   UserCheck,
 } from "lucide-react";
 
-import { useI18nStore } from "@/lib/i18n";
+import { useCurrentLang } from "@/lib/i18n";
 import type { Lang } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
@@ -311,7 +311,7 @@ const SECTIONS: TermsSection[] = [
 ];
 
 export function TermsScreen() {
-  const lang = useI18nStore((state) => state.lang);
+  const lang = useCurrentLang();
 
   const navLabels: Record<string, L> = {
     service: { zh: "服务说明", en: "Service" },
