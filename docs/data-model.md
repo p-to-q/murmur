@@ -287,6 +287,8 @@ melody:     jsonb("melody").$type<CleanMelody>(),  // NEW: durable melody so pla
 arrangementVersion: integer("arrangement_version").notNull().default(2),
 posterUrl:  text("poster_url"),         // NEW: optional rendered PNG; v3 wires it
 shareHtmlUrl: text("share_html_url"),   // NEW: optional rendered HTML
+visibility: text("visibility").notNull().default("private"), // private | unlisted | public
+shareCode:  text("share_code"),         // opaque public playback code for /s/[shareCode]
 ```
 
 Constraints + migration:
@@ -295,6 +297,16 @@ Constraints + migration:
   visualConfig + melody`. v1 rows are `1`; new rows are `2`.
 - Playback code branches on `arrangementVersion`. v1 fallback already
   works (today's code); v2 uses `melody` for high-fidelity replay.
+- `visibility` has three product states:
+  - `private`: owner-only. This is the default for all saved songs.
+  - `unlisted`: link-accessible through `/s/[shareCode]`, excluded from
+    search, community feeds, and crawler indexing.
+  - `public`: link-accessible and eligible for future search/community
+    surfaces. The community UI is not live yet; this state exists so the
+    backend contract does not need to change later.
+- `shareCode` is an opaque, non-sequential 10-character code. It is unique
+  when present and is allocated only through `POST /api/songs/[id]/share`.
+  It is not the primary key and must not be treated as owner identity.
 - Backfill (§v2-0007): for existing rows with `mp3DataUrl`, leave
   `mp3Url` null; the next user open transparently re-uploads the data
   URL to object storage and updates the row. (Background batch job
@@ -322,6 +334,24 @@ Indexes:
 
 - `songs_user_id_idx ON (user_id, created_at DESC)` (already present
   in effect; verify).
+- `songs_share_code_idx ON (share_code) WHERE share_code IS NOT NULL`.
+- `songs_visibility_idx ON (visibility, updated_at)`.
+- `songs_public_search_idx ON (visibility, created_at DESC) WHERE
+  visibility = 'public'` is the minimal future community/search affordance.
+
+Current share-link notes:
+
+- `/s/[shareCode]` is the public playback surface. It should not expose
+  owner-only fields, arrangement internals, billing state, or delete/edit
+  controls.
+- Unlisted responses send `X-Robots-Tag: noindex, nofollow` and avoid shared
+  caches. Public responses can use short shared caching.
+- Demo songs use deterministic share codes (`demo-1`, `demo-2`, `demo-3`) for
+  local QA, but generated user share codes intentionally do not use that shape.
+- Until object storage is fully rolled out, public playback may still return
+  `mp3DataUrl` for legacy rows. That is acceptable for the demo path but should
+  be treated as a temporary compatibility path, not the long-term public-share
+  transport.
 
 ### 3.8 `events_webhook` (NEW)
 

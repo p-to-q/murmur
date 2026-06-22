@@ -37,6 +37,8 @@ const DEMO_SONGS_MAP = new Map<string, DemoSong>([
       sourceMelodyKind: "corrected",
       editCount: 0,
       editDepth: "fresh",
+      visibility: "unlisted",
+      shareCode: "demo-1",
       mp3Url: "/demo/weightless-dnb.mp3",
       visualConfig: {
         preset: "confetti_pulse",
@@ -90,6 +92,8 @@ const DEMO_SONGS_MAP = new Map<string, DemoSong>([
       sourceMelodyKind: "corrected",
       editCount: 0,
       editDepth: "fresh",
+      visibility: "unlisted",
+      shareCode: "demo-2",
       mp3Url: "/demo/dreamy-celtic.mp3",
       visualConfig: {
         preset: "warm_particles",
@@ -143,6 +147,8 @@ const DEMO_SONGS_MAP = new Map<string, DemoSong>([
       sourceMelodyKind: "corrected",
       editCount: 0,
       editDepth: "fresh",
+      visibility: "unlisted",
+      shareCode: "demo-3",
       mp3Url: "/demo/cozy-guzheng.mp3",
       visualConfig: {
         preset: "rain_glass",

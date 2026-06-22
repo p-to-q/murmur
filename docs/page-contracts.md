@@ -99,3 +99,40 @@ Compatibility note:
 
 - `/privacy` remains a public compatibility URL, but it redirects to
   `/me/privacy` so in-app navigation has one canonical personal-center path.
+
+## Public song share contract notes
+
+`/s/[shareCode]` is the listener-facing playback page for a song that the owner
+has shared. It is not the author's editing surface and it is not the community
+feed.
+
+Interaction rules:
+
+- the page must be usable without a Murmur session
+- the primary action is listening to the song
+- the growth CTA is creating a new song from the listener's own hum
+- the page may expose copy-link and future remix/follow affordances, but not
+  edit, delete, billing, debug, or owner-only export controls
+- unlisted links should feel shareable but private-by-default: no community
+  badges, no crawler indexing, no public discovery copy
+- public links may later show creator/community context, but that should be
+  additive and keyed off `visibility = public`
+
+Implementation boundaries:
+
+- `/song/[id]` remains the owner page. It can generate/copy the share link.
+- `/api/songs/[id]/share` owns share-code allocation and visibility changes to
+  `unlisted` or `public`.
+- `/api/public/songs/[shareCode]` returns only the playback payload needed by
+  the public page.
+- future search/community surfaces should query public songs through DB query
+  helpers instead of changing the unlisted playback contract.
+
+Follow-up product plan:
+
+1. Add a small owner-side visibility control once privacy editing exists:
+   private, link-only, public.
+2. Move public playback audio to `mp3Url`/object storage as the default, keeping
+   `mp3DataUrl` only as a legacy fallback.
+3. Introduce community/search on top of `visibility = public`, with moderation
+   and reporting before broad discovery.

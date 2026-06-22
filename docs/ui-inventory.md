@@ -113,6 +113,18 @@ not wired); export rows could feel more like "objects you take" than a list.
 hero title share position with Name's input for the morph transition. Export
 list: each row a small tactile object. Priority: medium.
 
+### B5.1 Public Share `/s/[shareCode]` — *receive* 🟡
+**Now:** public listener page with reused SongVisualCanvas, playback, copy link,
+and "make your own" CTA. It is intentionally separate from the owner-only
+SongDetail page.
+**Problems:** still a first-pass layout; it does not yet render social preview
+metadata from the song, amplitude-reactive cover motion, or creator/community
+context.
+**Plan:** keep the page quiet and playback-first. Add Open Graph image support
+from poster/object storage, then a small creator/remix affordance only after
+public visibility and moderation are real. Priority: medium-high because this
+is the first surface many non-users will see.
+
 ### B6. Gallery `/gallery` — *remember* 🟡
 **Now:** word-card grid, deterministic SongCoverArt tiles, newest/A-Z sort,
 empty state.

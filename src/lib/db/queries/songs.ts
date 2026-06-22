@@ -1,6 +1,6 @@
 import { db } from "../client";
 import { songs } from "../schema/songs";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import {
   ensureBillingAccount,
   spendNotesInTransaction,
@@ -35,6 +35,8 @@ export async function getSongSummariesByUser(userId: string) {
       sourceMelodyKind: songs.sourceMelodyKind,
       editCount: songs.editCount,
       editDepth: songs.editDepth,
+      visibility: songs.visibility,
+      shareCode: songs.shareCode,
       visualConfig: songs.visualConfig,
       tags: songs.tags,
       createdAt: songs.createdAt,
@@ -48,6 +50,62 @@ export async function getSongSummariesByUser(userId: string) {
 export async function getSongById(songId: string) {
   const rows = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
   return rows[0] ?? null;
+}
+
+export async function getSongByShareCode(shareCode: string) {
+  const rows = await db
+    .select()
+    .from(songs)
+    .where(and(
+      eq(songs.shareCode, shareCode),
+      inArray(songs.visibility, ["unlisted", "public"]),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getPublicSongSummaries(input: {
+  query?: string;
+  limit?: number;
+}) {
+  const limit = Math.max(1, Math.min(input.limit ?? 24, 50));
+  const query = input.query?.trim();
+
+  const where = query
+    ? and(
+        eq(songs.visibility, "public"),
+        or(
+          ilike(songs.title, `%${query}%`),
+          ilike(songs.vibe, `%${query}%`),
+          ilike(songs.vibeEn, `%${query}%`),
+        ),
+      )
+    : eq(songs.visibility, "public");
+
+  return db
+    .select({
+      id: songs.id,
+      title: songs.title,
+      vibe: songs.vibe,
+      vibeEn: songs.vibeEn,
+      bpm: songs.bpm,
+      keySignature: songs.keySignature,
+      scaleType: songs.scaleType,
+      duration: songs.duration,
+      sourceMelodyKind: songs.sourceMelodyKind,
+      editCount: songs.editCount,
+      editDepth: songs.editDepth,
+      visibility: songs.visibility,
+      shareCode: songs.shareCode,
+      visualConfig: songs.visualConfig,
+      tags: songs.tags,
+      createdAt: songs.createdAt,
+      updatedAt: songs.updatedAt,
+    })
+    .from(songs)
+    .where(where)
+    .orderBy(desc(songs.createdAt))
+    .limit(limit);
 }
 
 export async function getSongByIdForUser(songId: string, userId: string) {
@@ -73,6 +131,10 @@ export async function createSong(data: typeof songs.$inferInsert) {
         keySignature: data.keySignature,
         scaleType: data.scaleType,
         duration: data.duration,
+        parentSongId: data.parentSongId,
+        rootSongId: data.rootSongId,
+        lineageDepth: data.lineageDepth,
+        sourceMelodyKind: data.sourceMelodyKind,
         editCount: data.editCount,
         editDepth: data.editDepth,
         mp3DataUrl: data.mp3DataUrl,
@@ -150,6 +212,26 @@ export async function updateSongForUser(
   const rows = await db
     .update(songs)
     .set({ ...data, updatedAt: new Date() })
+    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function publishSongShareForUser(
+  songId: string,
+  userId: string,
+  input: {
+    shareCode: string;
+    visibility?: "unlisted" | "public";
+  },
+) {
+  const rows = await db
+    .update(songs)
+    .set({
+      shareCode: input.shareCode,
+      visibility: input.visibility ?? "unlisted",
+      updatedAt: new Date(),
+    })
     .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
     .returning();
   return rows[0] ?? null;

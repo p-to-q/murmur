@@ -499,6 +499,24 @@ export const DICT = {
   "song.export.exporting":    { zh: "导出中…",   en: "Exporting…" },
   "song.export.ok":           { zh: "已下载",     en: "Downloaded" },
   "song.export.err":          { zh: "导出失败，请重试", en: "Export failed — please retry" },
+  "song.share.link.label":    { zh: "分享链接", en: "Share link" },
+  "song.share.link.hint":     { zh: "拿到链接的人都可以收听", en: "Anyone with the link can listen" },
+  "song.share.link_copied":   { zh: "分享链接已复制", en: "Share link copied" },
+  "song.share.link_failed":   { zh: "暂时没能生成分享链接", en: "Couldn't create a share link" },
+
+  // ── Public Song ────────────────────────────────────────────────────
+  "public_song.eyebrow":      { zh: "一首 Murmur 小歌", en: "A MURMUR SONG" },
+  "public_song.body":         { zh: "有人把一句哼唱交给 Murmur，让它长成了这首小歌。先听听，然后也用你的旋律做一首。", en: "Someone hummed this into Murmur. Press play, then make one from your own melody." },
+  "public_song.play":         { zh: "播放", en: "Play" },
+  "public_song.pause":        { zh: "暂停", en: "Pause" },
+  "public_song.copy_link":    { zh: "复制链接", en: "Copy link" },
+  "public_song.link_copied":  { zh: "链接已复制", en: "Link copied" },
+  "public_song.link_copy_failed": { zh: "暂时没能复制链接", en: "Couldn't copy that link" },
+  "public_song.create_cta":   { zh: "做一首自己的", en: "Make your own" },
+  "public_song.no_audio":     { zh: "这首歌的音频还没有准备好", en: "This song is still missing its audio." },
+  "public_song.play_failed":  { zh: "再点一次就能开始播放", en: "Tap once more to start audio." },
+  "public_song.not_found.eyebrow": { zh: "没有找到", en: "MISSING" },
+  "public_song.not_found":    { zh: "这条分享链接已经听不到了。", en: "This shared song is no longer here." },
 
   // ── Me ─────────────────────────────────────────────────────────────
   "me.title":              { zh: "我的", en: "Me!" },
@@ -678,10 +696,10 @@ export const DICT = {
 
   // ── Global error / loading / 404 ───────────────────────────────────
   "error.eyebrow":       { zh: "MURMUR", en: "MURMUR" },
-  "error.title":         { zh: "这一句有点跑调。", en: "That line slipped off-key." },
-  "error.body":          { zh: "页面临时没接上拍子。你刚才的旋律和已保存的小歌都还在，可以重试这一页，或者先回首页重新哼一句。", en: "This page briefly lost the beat. Your melody and saved songs are still here — retry this page, or head home and hum a new line." },
+  "error.title":         { zh: "这个页面出错了。", en: "This page ran into a problem." },
+  "error.body":          { zh: "已保存的小歌还在。\n如果刚才在录音或编辑，先重新加载；如果仍打不开，再回首页。", en: "Your saved songs are still here.\nIf you were recording or editing, reload first. If it still will not open, head home." },
   "error.digest":        { zh: "错误编号 {id}", en: "Error {id}" },
-  "error.retry":         { zh: "再试一次", en: "Try again" },
+  "error.retry":         { zh: "重新加载", en: "Reload" },
   "error.home":          { zh: "回首页", en: "Back home" },
   "loading.aria":        { zh: "加载中", en: "Loading" },
   "not_found.code":      { zh: "404", en: "404" },

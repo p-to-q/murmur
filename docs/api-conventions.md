@@ -31,6 +31,8 @@ GET    /api/songs/sng_01H…              read
 PATCH  /api/songs/sng_01H…              update
 DELETE /api/songs/sng_01H…              delete
 POST   /api/songs/sng_01H…/export       verb on resource
+POST   /api/songs/sng_01H…/share        create/read public playback link
+GET    /api/public/songs/abc234defg     public playback payload
 POST   /api/billing/checkout            non-CRUD action
 POST   /api/billing/webhook/stripe      external callback
 ```
@@ -150,6 +152,9 @@ See `user-model.md` §4. From the API's view:
 
 - Every route except `/api/auth/login/*`, `/api/billing/webhook/*`, and
   `/api/health` requires a session.
+- Public playback read routes under `/api/public/*` are intentionally
+  anonymous. They must validate opaque public identifiers, rate-limit by
+  client IP, and return only share-safe fields.
 - `resolveRequestAuth(request)` is the production identity boundary. Routes
   must not derive `userId` from client-supplied local headers directly.
 - Session resolved in this order:
@@ -225,6 +230,7 @@ Per route + per user (or per IP for guest endpoints).
 | Mutate (`POST` / `PATCH` / `DELETE`) | 20 / min | same |
 | Expensive (`/api/transcribe`, `/api/strummer/edit`, `/api/songs/*/export`) | 10 / min | same |
 | Auth (`/api/auth/login/*`) | 5 / min / IP | same |
+| Public playback (`/api/public/songs/*`) | 120 / min / IP | same |
 
 Exceeded: return `429 rate_limited` with `Retry-After` in seconds.
 
@@ -257,6 +263,30 @@ not idempotent so the confirmation step is meaningful).
 
 Webhook routes are idempotent on their own (we hash the provider event
 id; duplicates are no-ops).
+
+## 9. Song Share Links
+
+Song sharing has two separate route families:
+
+- `POST /api/songs/[id]/share` is owner-authenticated. It creates or reuses an
+  opaque `shareCode`, sets `visibility` to `unlisted` by default, and returns
+  `{ shareCode, visibility, url }`. It rejects `private` as an input because
+  unpublishing is an edit/privacy action, not link creation.
+- `GET /api/public/songs/[shareCode]` is anonymous. It returns the minimal
+  public playback payload for `unlisted` and `public` songs only.
+
+Visibility semantics:
+
+- `private`: owner routes only.
+- `unlisted`: anyone with `/s/[shareCode]` can listen; the response is
+  `noindex, nofollow` and not shared-cacheable.
+- `public`: eligible for future search/community surfaces and short shared
+  caching.
+
+The public payload must not include `userId`, `arrangementState`, raw account
+metadata, billing data, or owner-only controls. Future community/search routes
+should build on `visibility = 'public'` and should not widen the `/api/public`
+playback payload unless the player needs the field.
 
 ---
 
