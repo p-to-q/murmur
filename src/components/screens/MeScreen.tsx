@@ -23,10 +23,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
 import { UserBadge } from "@/components/user-profile/user-badge";
 import { useCurrentLang, useI18nStore, useTranslator } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 
@@ -36,8 +36,7 @@ export function MeScreen() {
   const lang = useCurrentLang();
   const setLang = useI18nStore((s) => s.setLang);
   const { balance, isLoading } = useUserBalance();
-  const { data: session } = useSession();
-  const isSignedIn = !!session?.user;
+  const { isRegistered } = useCurrentAccount();
   const developerMode = usePreferencesStore((state) => state.developerMode);
 
   useEffect(() => {
@@ -114,7 +113,7 @@ export function MeScreen() {
                 : refillCopy}
             </p>
             <div className="flex shrink-0 items-center gap-3">
-              {isSignedIn ? (
+              {isRegistered ? (
                 <span className="text-[13px] text-[#8C8780]">{t("me.notes.signed_in")}</span>
               ) : null}
               <Link href="/topup" className="mm-btn-primary inline-flex shrink-0">

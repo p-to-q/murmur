@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useSession } from "next-auth/react";
 
 import {
   claimShareReferral,
@@ -9,10 +8,11 @@ import {
   readRememberedShareReferrer,
   rememberShareReferrerFromLocation,
 } from "@/lib/api/share-referral";
+import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
 
 export function ShareReferralTracker() {
-  const { data: session, status } = useSession();
+  const { user, isRegistered, isLoading } = useCurrentAccount();
   const claimedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -20,10 +20,10 @@ export function ShareReferralTracker() {
   }, []);
 
   useEffect(() => {
-    if (status !== "authenticated" || !session?.user?.id) return;
+    if (isLoading || !isRegistered || !user?.id) return;
 
     const referrerId = readRememberedShareReferrer();
-    if (!referrerId || referrerId === session.user.id || claimedRef.current === referrerId) {
+    if (!referrerId || referrerId === user.id || claimedRef.current === referrerId) {
       return;
     }
 
@@ -38,7 +38,7 @@ export function ShareReferralTracker() {
       clearRememberedShareReferrer();
       void fetchUserBalance({ force: true });
     });
-  }, [session?.user?.id, status]);
+  }, [isLoading, isRegistered, user?.id]);
 
   return null;
 }

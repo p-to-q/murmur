@@ -29,6 +29,12 @@ export async function ensureLocalCreatorSession(
       });
       if (response.ok) {
         window.sessionStorage.setItem(STORAGE_KEY, "1");
+        const [{ refreshCurrentAccount }, { fetchUserBalance }] = await Promise.all([
+          import("@/lib/hooks/use-current-account"),
+          import("@/lib/hooks/use-user-balance"),
+        ]);
+        await refreshCurrentAccount();
+        await fetchUserBalance({ force: true });
         return true;
       }
       return false;

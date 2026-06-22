@@ -1,7 +1,6 @@
 "use client";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { COST } from "@murmur/core";
 import {
   hasLocalNotes,
@@ -44,6 +43,7 @@ import {
   type TranscribeRequestErrorCode,
 } from "@/lib/api/transcribe";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
+import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 import { formatHumSupportCode } from "@/lib/observability/support-code";
 
 const MAX_DURATION = 15;
@@ -211,11 +211,13 @@ export function HumScreen() {
   const [levelState, setLevelState] = useState<"idle" | "quiet" | "heard">("idle");
   const [showHeardMessage, setShowHeardMessage] = useState(false);
   const { refresh: refreshBalance } = useUserBalance();
-  const { status: sessionStatus } = useSession();
+  const { account, isLoading: accountLoading } = useCurrentAccount();
   const [showEmailForm, setShowEmailForm] = useState(false);
   // During "loading" we do NOT gate, so a returning signed-in user is never
   // briefly walled by a stale guest counter on their device.
-  const isGuest = sessionStatus === "unauthenticated";
+  const isGuest =
+    !accountLoading &&
+    (!account?.user?.id || account.user.id === "guest" || account.source === "guest");
   const [showLoginWall, setShowLoginWall] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
   // Onboarding: first visit gently focuses the already-visible stage.
@@ -1284,7 +1286,13 @@ export function HumScreen() {
                   {t("hum.login_wall.detail")}
                 </p>
                 {showEmailForm ? (
-                  <EmailLoginForm className="mb-3 text-left" />
+                  <EmailLoginForm
+                    className="mb-3 text-left"
+                    onSuccess={() => {
+                      setShowEmailForm(false);
+                      setShowLoginWall(false);
+                    }}
+                  />
                 ) : (
                   <AuthButtons
                     callbackUrl="/"

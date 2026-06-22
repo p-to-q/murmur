@@ -97,6 +97,10 @@ export const DICT = {
     zh: "邮箱",
     en: "Email",
   },
+  "auth.account_registered": {
+    zh: "已注册账号",
+    en: "Registered",
+  },
   "auth.sign_out": {
     zh: "退出登录",
     en: "Sign out",

@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { LogOut, UserRound, X } from "lucide-react";
-import { authClient, usePlatformState } from "@/lib/platform/auth-client";
+import { authClient } from "@/lib/platform/auth-client";
 import type { AppUser } from "@/lib/platform/types";
 import { useSession, signOut } from "next-auth/react";
 import { useAuthProviders } from "@/lib/hooks/use-auth-providers";
@@ -11,31 +11,24 @@ import { EmailLoginForm } from "@/components/auth/email-login-form";
 import { Spinner } from "@/components/ui/spinner";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { formatMemberSince } from "@/lib/user/member-since";
+import {
+  clearCurrentAccountCache,
+  refreshCurrentAccount,
+  useCurrentAccount,
+} from "@/lib/hooks/use-current-account";
+import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
+import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 
 export function UserBadge() {
   const t = useTranslator();
-  const platformUser = usePlatformState((s) => s.auth.user);
-  const loading = usePlatformState((s) => s.auth.loading);
-  const { data: session } = useSession();
+  const { account, user, isLoading, isRegistered, isLocalCreator } = useCurrentAccount();
+  const { status: nextAuthStatus } = useSession();
   const [open, setOpen] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  const user = session?.user
-    ? ({
-        id: (session.user as { id?: string }).id || "google-user",
-        email: session.user.email || null,
-        name: session.user.name || null,
-        avatarUrl: session.user.image || null,
-        accountKind:
-          (session.user as { accountKind?: "local_creator" | "registered" }).accountKind
-          ?? "registered",
-      } as AppUser)
-    : platformUser;
-
-  const isOAuthUser = !!session?.user;
-  const authProvider = (session?.user as { authProvider?: string } | undefined)?.authProvider;
   const { providers, signInWithOAuth } = useAuthProviders();
+  const hasNextAuthSession = nextAuthStatus === "authenticated";
+  const authProvider = preferredIdentityProvider(account?.identityProviders ?? []);
 
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -45,7 +38,7 @@ export function UserBadge() {
     return () => document.removeEventListener("mousedown", handle);
   }, []);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex h-9 items-center rounded-full border border-border bg-background px-3 shadow-sm">
         <Spinner size="sm" variant="muted" />
@@ -83,7 +76,11 @@ export function UserBadge() {
         )}
         <button
           onClick={() => {
-            authClient.login().catch(() => undefined);
+            void (async () => {
+              await ensureLocalCreatorSession();
+              await refreshCurrentAccount();
+              await fetchUserBalance({ force: true });
+            })();
           }}
           className="flex items-center gap-2 rounded-full border border-[#E0DDD5] bg-[#F5F1EB] px-3 py-1.5 text-sm font-medium text-[#8C8780] shadow-sm transition-shadow hover:shadow-md"
         >
@@ -98,8 +95,8 @@ export function UserBadge() {
     <div ref={ref} className="relative z-50">
       <BadgeTrigger user={user} onClick={() => setOpen((v) => !v)} />
       {open && (
-        <DropdownPanel user={user} isOAuthUser={isOAuthUser} authProvider={authProvider} onClose={() => setOpen(false)}>
-          {!isOAuthUser && (
+        <DropdownPanel user={user} authProvider={authProvider} onClose={() => setOpen(false)}>
+          {(isLocalCreator || !isRegistered) && (
             <div className="space-y-1">
               {providers.google !== false && (
                 <button
@@ -135,17 +132,25 @@ export function UserBadge() {
                 </button>
               )}
               {providers.email && showEmailForm && (
-                <EmailLoginForm className="pt-1" />
+                <EmailLoginForm
+                  className="pt-1"
+                  onSuccess={() => {
+                    setShowEmailForm(false);
+                    setOpen(false);
+                  }}
+                />
               )}
             </div>
           )}
           <button
             onClick={async () => {
-              if (isOAuthUser) {
-                await authClient.logout();
+              await authClient.logout();
+              clearCurrentAccountCache();
+              if (hasNextAuthSession) {
                 await signOut({ callbackUrl: "/" });
               } else {
-                await authClient.logout();
+                await refreshCurrentAccount();
+                await fetchUserBalance({ force: true });
               }
               setOpen(false);
             }}
@@ -176,13 +181,11 @@ function BadgeTrigger({ user, onClick }: { user: AppUser; onClick: () => void })
 
 function DropdownPanel({
   user,
-  isOAuthUser,
   authProvider,
   onClose,
   children,
 }: {
   user: AppUser;
-  isOAuthUser?: boolean;
   authProvider?: string;
   onClose: () => void;
   children?: React.ReactNode;
@@ -233,17 +236,7 @@ function DropdownPanel({
         {joinedDate && <Row label={t("auth.joined")} value={joinedDate} />}
         <Row
           label={t("auth.account")}
-          value={
-            isOAuthUser
-              ? t(
-                  authProvider === "github"
-                    ? "auth.account_github"
-                    : authProvider === "email"
-                      ? "auth.account_email"
-                      : "auth.account_google",
-                )
-              : t("auth.account_local")
-          }
+          value={t(accountLabelKey(authProvider, user))}
         />
         <Row label={t("auth.user_id")} value={user.id} mono />
       </div>
@@ -372,4 +365,20 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
       </span>
     </div>
   );
+}
+
+function preferredIdentityProvider(providers: string[]): string | undefined {
+  if (providers.includes("github")) return "github";
+  if (providers.includes("google")) return "google";
+  if (providers.includes("email")) return "email";
+  return providers[0];
+}
+
+function accountLabelKey(provider: string | undefined, user: AppUser): string {
+  if (provider === "github") return "auth.account_github";
+  if (provider === "email") return "auth.account_email";
+  if (provider === "google") return "auth.account_google";
+  return user.accountKind === "registered"
+    ? "auth.account_registered"
+    : "auth.account_local";
 }

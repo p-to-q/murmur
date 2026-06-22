@@ -20,6 +20,8 @@ export type LogEvent =
   | "auth.email_code_sent"
   | "auth.email_send_code_failed"
   | "auth.email_verify_failed"
+  | "auth.oauth_adopt_existing_session_failed"
+  | "auth.oauth_adopt_failed"
   | "capture.failed"
   | "capture.prepared"
   | "transcribe.requested"

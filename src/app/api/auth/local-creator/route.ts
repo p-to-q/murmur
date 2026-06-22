@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { LOCAL_CREATOR_FREE_NOTES } from "@murmur/core";
 import {
   SESSION_COOKIE_NAME,
+  murmurSessionCookieOptions,
   resolveRequestAuth,
 } from "@/lib/platform/server-auth";
 import { createSession } from "@/lib/db/queries/sessions";
@@ -52,14 +53,11 @@ export async function POST(request: NextRequest) {
       sessionId: session.sessionId,
       created: true,
     });
-    response.cookies.set(SESSION_COOKIE_NAME, session.token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      expires: session.expiresAt,
-      maxAge: 30 * 24 * 60 * 60,
-    });
+    response.cookies.set(
+      SESSION_COOKIE_NAME,
+      session.token,
+      murmurSessionCookieOptions(session.expiresAt),
+    );
     return response;
   } catch (error) {
     log(

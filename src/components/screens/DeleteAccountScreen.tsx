@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { useSession } from "next-auth/react";
 
 import { useTranslator } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 
 export function DeleteAccountScreen() {
   const t = useTranslator();
-  const { data: session } = useSession();
-  const signedIn = !!session?.user;
+  const { isRegistered } = useCurrentAccount();
 
   const steps = ["delete.steps.1", "delete.steps.2", "delete.steps.3"] as const;
 
@@ -37,7 +36,7 @@ export function DeleteAccountScreen() {
           {t("delete.intro")}
         </p>
 
-        {!signedIn && (
+        {!isRegistered && (
           <p className="mt-6 rounded-[16px] border border-[#E5DDD0] bg-white/60 px-4 py-3 text-[14px] text-[#6F6A63]">
             {t("delete.sign_in")}
           </p>

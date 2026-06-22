@@ -66,9 +66,9 @@ export async function getCloudBalance(): Promise<BalanceInfo> {
  */
 export async function hasEnoughBalance(
   amount: number,
-  isGoogleUser: boolean,
+  usesServerLedger: boolean,
 ): Promise<boolean> {
-  if (isGoogleUser) return (await getCloudBalance()).notes >= amount;
+  if (usesServerLedger) return (await getCloudBalance()).notes >= amount;
   return getLocalBalance().notes >= amount;
 }
 

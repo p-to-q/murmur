@@ -19,7 +19,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, Check, CreditCard, Mail, ShieldCheck } from "lucide-react";
-import { signIn, useSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { toast } from "sonner";
 import {
   getCustomTopupQuote,
@@ -33,6 +33,7 @@ import {
 
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
+import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
 import { MurmurMark } from "@/components/murmur/murmur-mark";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
@@ -76,7 +77,11 @@ export function CheckoutScreen() {
   const params = useSearchParams();
   const t = useTranslator();
   const lang = useI18nStore((state) => state.lang);
-  const { data: session, status: sessionStatus } = useSession();
+  const {
+    user,
+    isRegistered,
+    isLoading: accountLoading,
+  } = useCurrentAccount();
 
   const skuId = params?.get("sku") ?? DEFAULT_SKU_ID;
   const customAmountParam = params?.get("customAmountUsd");
@@ -150,7 +155,7 @@ export function CheckoutScreen() {
     };
   }, [customAmountCnyParam, customAmountParam, requestedCurrency, skuId]);
 
-  const hasSignedInUser = Boolean(session?.user);
+  const hasSignedInUser = isRegistered;
   const routeBlocked = payMethod === "wxpay" && purchase.currency !== "CNY";
   const receiptDate = useMemo(() => formatReceiptDate(lang), [lang]);
   const PROCESSING_COPY = useMemo(
@@ -164,10 +169,9 @@ export function CheckoutScreen() {
   );
 
   useEffect(() => {
-    const sessionEmail = session?.user?.email;
-    if (!sessionEmail || billingEmailEditedRef.current) return;
-    setBillingEmail(sessionEmail);
-  }, [session?.user?.email]);
+    if (!user?.email || billingEmailEditedRef.current) return;
+    setBillingEmail(user.email);
+  }, [user?.email]);
 
   const finishSucceeded = useCallback(
     (granted: number) => {
@@ -302,7 +306,7 @@ export function CheckoutScreen() {
   };
 
   const handlePrimaryAction = () => {
-    if (sessionStatus === "loading") return;
+    if (accountLoading) return;
     if (routeBlocked) {
       toast.info(
         t("checkout.method_blocked") ||
@@ -401,9 +405,9 @@ export function CheckoutScreen() {
                     acceptedPolicy={acceptedPolicy}
                     billingEmail={billingEmail}
                     hasSignedInUser={hasSignedInUser}
+                    isAuthLoading={accountLoading}
                     payMethod={payMethod}
                     routeBlocked={routeBlocked}
-                    sessionStatus={sessionStatus}
                     t={t}
                     onAcceptPolicy={setAcceptedPolicy}
                     onBack={() => router.push("/topup")}
@@ -527,9 +531,9 @@ function ReviewControls({
   acceptedPolicy,
   billingEmail,
   hasSignedInUser,
+  isAuthLoading,
   payMethod,
   routeBlocked,
-  sessionStatus,
   t,
   onAcceptPolicy,
   onBack,
@@ -539,9 +543,9 @@ function ReviewControls({
   acceptedPolicy: boolean;
   billingEmail: string;
   hasSignedInUser: boolean;
+  isAuthLoading: boolean;
   payMethod: PayMethod;
   routeBlocked: boolean;
-  sessionStatus: "authenticated" | "loading" | "unauthenticated";
   t: (key: string) => string;
   onAcceptPolicy: (accepted: boolean) => void;
   onBack: () => void;
@@ -549,7 +553,7 @@ function ReviewControls({
   onUseCard: () => void;
 }) {
   const primaryDisabled =
-    sessionStatus === "loading" ||
+    isAuthLoading ||
     routeBlocked ||
     (hasSignedInUser && (!acceptedPolicy || !billingEmail.trim()));
   const primaryLabel = !hasSignedInUser

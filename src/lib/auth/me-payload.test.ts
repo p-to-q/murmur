@@ -51,4 +51,23 @@ describe("auth me payload", () => {
     expect(payload.entitlement.canTopUp).toBe(false);
     expect(payload.entitlement.canDeleteAccount).toBe(false);
   });
+
+  it("returns linked identity providers for registered accounts", () => {
+    const payload = buildAuthMePayload({
+      user: {
+        id: "usr_01HY",
+        name: "Registered",
+        email: "registered@example.com",
+        avatarUrl: null,
+        accountKind: "registered",
+      },
+      source: "session",
+      sessionId: "ses_registered",
+      identityProviders: ["email", "google", "github"],
+      balance: { notes: 15, planTier: "free" },
+    });
+
+    expect(payload.authenticated).toBe(true);
+    expect(payload.identityProviders).toEqual(["email", "google", "github"]);
+  });
 });
