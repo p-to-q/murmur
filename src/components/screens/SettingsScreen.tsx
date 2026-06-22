@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Bug, Gauge, Languages, SlidersHorizontal } from "lucide-react";
-import { useI18nStore, useTranslator } from "@/lib/i18n";
+import { useCurrentLang, useI18nStore, useTranslator } from "@/lib/i18n";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
@@ -49,7 +49,7 @@ type RuntimeSnapshot = {
 
 export function SettingsScreen() {
   const t = useTranslator();
-  const lang = useI18nStore((state) => state.lang);
+  const lang = useCurrentLang();
   const setLang = useI18nStore((state) => state.setLang);
   const repairBias = usePreferencesStore((state) => state.repairBias);
   const setRepairBias = usePreferencesStore((state) => state.setRepairBias);

@@ -113,6 +113,14 @@ flowchart TB
 - Local-header identity is local/demo only.
 - Notifications are intentionally stubbed until a real push backend is chosen.
 - Memory events are stored locally for now, which keeps user flows non-blocking.
+- Language is negotiated before first paint from the explicit `murmur.lang`
+  cookie first, then the request `Accept-Language` header, then the product
+  default (`en`). Client hydration re-checks `localStorage`; if the server only
+  had the product default, it can still use `navigator.languages` /
+  `navigator.language` before persisting the result to the same cookie. Manual
+  language switching remains authoritative. IP geography is intentionally not
+  part of language selection; it is only a weak future hint for region/payment
+  routing.
 
 ## Current constraints
 

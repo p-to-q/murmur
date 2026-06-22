@@ -206,8 +206,10 @@ Single column `users.regionId` ∈ `{ "intl", "cn" }` for v2. It controls:
 - Which SKU price card the user sees (USD vs CNY).
 - Which auth providers are surfaced (Apple+Google vs WeChat+phone).
 - Which deploy region the API calls hit (intl Vercel/Fly vs 腾讯云).
-- Which language defaults the i18n picker (`zh` for cn, `en` for intl
-  unless device locale overrides).
+- Which language may seed the i18n picker when no explicit language preference
+  exists. The actual first-paint language is negotiated independently from the
+  `murmur.lang` cookie and browser language hints, so region never overrides a
+  user's chosen locale.
 
 Region is set at first login from a combination of:
 1. Device locale (Capacitor exposes; MP defaults to zh-CN).

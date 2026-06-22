@@ -23,14 +23,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
-import { useI18nStore, useTranslator } from "@/lib/i18n";
+import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { NAV_ITEMS } from "./nav-items";
 
 export function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslator();
-  const lang = useI18nStore((s) => s.lang);
+  const lang = useCurrentLang();
   const { resetFlow } = useMurmurStore();
 
   const goHome = (e: React.MouseEvent) => {

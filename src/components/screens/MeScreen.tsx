@@ -25,7 +25,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { UserBadge } from "@/components/user-profile/user-badge";
-import { useTranslator, useI18nStore } from "@/lib/i18n";
+import { useCurrentLang, useI18nStore, useTranslator } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
@@ -33,7 +33,7 @@ import { usePreferencesStore } from "@/lib/store/preferences-store";
 export function MeScreen() {
   const [songCount, setSongCount] = useState(0);
   const t = useTranslator();
-  const lang = useI18nStore((s) => s.lang);
+  const lang = useCurrentLang();
   const setLang = useI18nStore((s) => s.setLang);
   const { balance, isLoading } = useUserBalance();
   const { data: session } = useSession();

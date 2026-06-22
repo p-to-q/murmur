@@ -16,7 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { useI18nStore, useTranslator } from "@/lib/i18n";
+import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import type { Lang } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
@@ -338,7 +338,7 @@ const TEXT_SECTIONS: TextSection[] = [
 
 export function PrivacyScreen() {
   const t = useTranslator();
-  const lang = useI18nStore((state) => state.lang);
+  const lang = useCurrentLang();
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB] text-[#1A1A1A]">
