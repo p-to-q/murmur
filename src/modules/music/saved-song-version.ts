@@ -46,9 +46,10 @@ export function buildSavedSongVibeVersions(song: SavedSong): VibeVersion[] {
         ? "boost"
         : undefined;
   const remixLineage = buildRemixLineage(song);
+  const remixDraftId = crypto.randomUUID();
 
   return generateVibeVersions(version.melody, {
-    draftId: song.id,
+    draftId: remixDraftId,
     originFlowId: `saved-${song.id}`,
     parentSongId: remixLineage.parentSongId,
     rootSongId: remixLineage.rootSongId,
@@ -73,8 +74,11 @@ export async function buildSavedSongRemixVersions(song: SavedSong): Promise<Vibe
   }
   const version = hydrateSavedSongToVersion(song);
   return createMagentaVersions(version.melody, {
-    draftId: song.id,
+    draftId: crypto.randomUUID(),
     originFlowId: `saved-${song.id}`,
+    parentSongId: resolveParentSongId(song),
+    rootSongId: resolveRootSongId(song),
+    lineageDepth: normalizeLineageDepth(song.lineageDepth) + 1,
     sourceType: "library",
     sourceMelodyKind: version.sourceMelodyKind,
     batchIndex: 0,

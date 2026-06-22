@@ -271,8 +271,11 @@ cp .env.example .env
 | `OPENAI_BASE_URL` | Optional override for an OpenAI-compatible base URL. |
 | `AI_GATEWAY_API_KEY` | Optional alternative to `OPENAI_API_KEY` when routing through a custom gateway. |
 | `AI_GATEWAY_BASE_URL` | Optional base URL for a custom AI gateway. |
+| `AUTH_SECRET` / `NEXTAUTH_SECRET` | Required in production when OAuth providers are configured. |
+| `AUTH_URL` / `NEXTAUTH_URL` / `MURMUR_APP_URL` | Public origin used for Auth.js redirects, share URLs, and payment return links. |
 | `AUDIO_WORKER_URL` | Server-only audio worker base URL used by `/api/transcribe`. |
-| `AUDIO_WORKER_TOKEN` | Optional bearer token for Next.js → audio worker calls. |
+| `AUDIO_WORKER_TOKEN` | Bearer token for Next.js -> audio worker calls; required for production deployments. |
+| `MURMUR_CAPTURE_HUMS` | Audio-worker raw hum capture. Defaults off; keep unset/false in production unless an explicit review program is running. |
 | `AUDIO_ENGINE_PITCH_PROVIDER` | Worker pitch detector provider. `auto` uses RMVPE first, then SwiftF0 and pYIN fallback. |
 | `AUDIO_ENGINE_RMVPE_MODEL_PATH` | Optional path to a baked `rmvpe.onnx` model for the RMVPE provider. |
 | `AUDIO_ENGINE_RMVPE_DEVICE` | RMVPE ONNX Runtime device hint. Defaults to `cpu`; GPU workers can set `cuda` or another supported provider. |
@@ -283,7 +286,13 @@ cp .env.example .env
 | `MELO_LAB_AUDIO_WORKER_URL` | Optional loopback audio worker override for `/api/test/melo-lab/transcribe`. Defaults to `http://127.0.0.1:8001`. |
 | `MELO_LAB_MUSIC_WORKER_URL` | Optional loopback music worker override for `/api/test/melo-lab/music`. Defaults to `http://127.0.0.1:8002`. |
 | `DATABASE_URL` | Postgres connection string for Drizzle. |
-| `CRON_SECRET` | Shared secret for the daily digest cron route. |
+| `POSTGRES_URL` | Vercel Postgres-compatible fallback accepted by DB scripts and production env audit. |
+| `CRON_SECRET` | Shared secret for cron routes; production must use a non-placeholder value. |
+| `MURMUR_STORAGE_DRIVER` | Storage adapter. Production on Vercel must use `s3-compatible`; dev defaults to local storage. |
+| `MURMUR_STORAGE_S3_*` | Bucket, region, access key, and secret for the `s3-compatible` storage adapter. |
+| `WAFFO_MERCHANT_ID` / `WAFFO_PRIVATE_KEY_BASE64` / `WAFFO_TOPUP_PRODUCT_ID` | Waffo checkout and billing reconcile credentials required for production top-ups. |
+| `ZPAY_PID` / `ZPAY_KEY` | Optional WeChat/Alipay route for CNY checkout. If absent, explicit WeChat checkout is unavailable. |
+| `RUNPOD_SERVERLESS_ENDPOINT_ID` / `RUNPOD_API_KEY` | RunPod Serverless music-generation endpoint and bearer key. |
 | `MURMUR_AUTH_MODE` | Auth runtime mode. Defaults to production-like behavior even on localhost: no session means 401. Set `demo` or `local` only for explicit preview fallback work. |
 | `NEXT_PUBLIC_MURMUR_AUTH_MODE` | Browser-side companion for local header auth. Set to `local` only with `MURMUR_AUTH_MODE=local` when intentionally exercising localStorage user headers. |
 | `MURMUR_ALLOW_HEADER_AUTH` | Local/demo-only legacy switch for `x-murmur-user-*` identity headers. Ignored in production auth mode. |

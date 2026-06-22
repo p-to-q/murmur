@@ -143,12 +143,24 @@ for (const adapter of adapters) {
 
 describe("getObjectStore factory", () => {
   const ENV_KEY = "MURMUR_STORAGE_DRIVER";
+  const S3_ENV_KEYS = [
+    "MURMUR_STORAGE_S3_BUCKET",
+    "MURMUR_STORAGE_S3_REGION",
+    "MURMUR_STORAGE_S3_ACCESS_KEY_ID",
+    "MURMUR_STORAGE_S3_SECRET_ACCESS_KEY",
+    "MURMUR_STORAGE_S3_ENDPOINT",
+    "MURMUR_STORAGE_S3_PUBLIC_URL_BASE",
+  ] as const;
   let originalEnv: string | undefined;
   let originalNodeEnv: string | undefined;
+  let originalS3Env: Partial<Record<(typeof S3_ENV_KEYS)[number], string>>;
 
   beforeEach(() => {
     originalEnv = process.env[ENV_KEY];
     originalNodeEnv = process.env.NODE_ENV;
+    originalS3Env = Object.fromEntries(
+      S3_ENV_KEYS.map((key) => [key, process.env[key]]),
+    ) as Partial<Record<(typeof S3_ENV_KEYS)[number], string>>;
     __resetObjectStoreForTesting();
   });
 
@@ -157,6 +169,11 @@ describe("getObjectStore factory", () => {
     else process.env[ENV_KEY] = originalEnv;
     if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = originalNodeEnv;
+    for (const key of S3_ENV_KEYS) {
+      const value = originalS3Env[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
     __resetObjectStoreForTesting();
   });
 
@@ -178,8 +195,9 @@ describe("getObjectStore factory", () => {
     expect(() => getObjectStore()).toThrow(StorageError);
   });
 
-  it("refuses s3-compatible until the adapter ships", () => {
+  it("refuses s3-compatible when required env is missing", () => {
     process.env[ENV_KEY] = "s3-compatible";
+    for (const key of S3_ENV_KEYS) delete process.env[key];
     expect(() => getObjectStore()).toThrow(StorageError);
   });
 

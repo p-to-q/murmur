@@ -175,6 +175,24 @@ describe("POST /api/billing/checkout", () => {
     });
   });
 
+  it("rejects explicit WeChat checkout when Zpay is not configured", async () => {
+    const response = await POST(
+      buildRequest({
+        sku: "topup_120_notes",
+        currency: "CNY",
+        payMethod: "wxpay",
+        billingEmail: "wechat-receipt@test.local",
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe("zpay_not_configured");
+    expect(createdSessions).toHaveLength(0);
+    expect(zpayCreateOrder).toHaveBeenCalledTimes(0);
+    expect(purchaseInserts).toHaveLength(0);
+  });
+
   it("rejects malformed topup requests", async () => {
     const response = await POST(buildRequest({ customAmountUsd: 0 }));
     expect(response.status).toBe(400);

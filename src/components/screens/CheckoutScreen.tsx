@@ -41,7 +41,7 @@ import {
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { useCurrentAccount } from "@/lib/hooks/use-current-account";
-import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
+import { fetchUserBalance, type UserBalance } from "@/lib/hooks/use-user-balance";
 import { MurmurMark } from "@/components/murmur/murmur-mark";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { Spinner } from "@/components/ui/spinner";
@@ -56,6 +56,8 @@ type Phase =
   | "failed";
 
 type PayMethod = "card" | "wxpay";
+type CheckoutBalanceSnapshot = Pick<UserBalance, "notes" | "accountNotes" | "dailyFreeNotes">;
+type StoredCheckoutBalanceSnapshot = CheckoutBalanceSnapshot & { createdAt: number };
 
 type CheckoutPurchase =
   | {
@@ -195,21 +197,24 @@ export function CheckoutScreen() {
 
   const confirmGrant = useCallback(
     async (signal?: { cancelled: boolean }) => {
-      const baseline = await fetchUserBalance({ force: true }).catch(() => null);
-      const baselineNotes = readCheckoutBaselineNotes() ?? baseline?.balance?.notes ?? null;
+      const baseline =
+        readCheckoutBaselineBalance() ??
+        snapshotCheckoutBalance(
+          (await fetchUserBalance({ force: true }).catch(() => null))?.balance,
+        );
       for (let attempt = 0; attempt < 8; attempt++) {
         if (signal?.cancelled) return;
         await new Promise((resolve) => window.setTimeout(resolve, 1200));
         const next = await fetchUserBalance({ force: true }).catch(() => null);
-        const nextNotes = next?.balance?.notes;
+        const nextAccountNotes = next?.balance?.accountNotes;
         if (
-          typeof nextNotes === "number" &&
-          baselineNotes !== null &&
-          nextNotes > baselineNotes
+          typeof nextAccountNotes === "number" &&
+          baseline !== null &&
+          nextAccountNotes >= baseline.accountNotes + purchase.notesGranted
         ) {
           if (signal?.cancelled) return;
-          clearCheckoutBaselineNotes();
-          finishSucceeded(nextNotes - baselineNotes);
+          clearCheckoutBaselineBalance();
+          finishSucceeded(purchase.notesGranted);
           return;
         }
       }
@@ -221,7 +226,7 @@ export function CheckoutScreen() {
       setFailureKind("generic");
       setPhase("failed");
     },
-    [finishSucceeded, t],
+    [finishSucceeded, purchase.notesGranted, t],
   );
 
   const beginCheckout = useCallback(async () => {
@@ -258,7 +263,7 @@ export function CheckoutScreen() {
           : { ...baseBody, billingEmail: billingEmail.trim() };
 
       const startingBalance = await fetchUserBalance({ force: true }).catch(() => null);
-      writeCheckoutBaselineNotes(startingBalance?.balance?.notes);
+      writeCheckoutBaselineBalance(startingBalance?.balance);
 
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
@@ -283,7 +288,10 @@ export function CheckoutScreen() {
         message?: string;
       };
 
-      if (errorBody.error === "waffo_not_configured") {
+      if (
+        errorBody.error === "waffo_not_configured" ||
+        errorBody.error === "zpay_not_configured"
+      ) {
         setFailureMessage(
           t("checkout.provider_unavailable") ||
             "Payment is not configured for this deployment yet.",
@@ -819,35 +827,57 @@ function packageLabel(purchase: CheckoutPurchase, t: (key: string) => string): s
   return t("checkout.murmur_notes") || "Murmur Notes";
 }
 
-function readCheckoutBaselineNotes(): number | null {
+function snapshotCheckoutBalance(
+  balance: UserBalance | null | undefined,
+): CheckoutBalanceSnapshot | null {
+  if (!balance) return null;
+  return {
+    notes: balance.notes,
+    accountNotes: balance.accountNotes,
+    dailyFreeNotes: balance.dailyFreeNotes,
+  };
+}
+
+function readCheckoutBaselineBalance(): CheckoutBalanceSnapshot | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.sessionStorage.getItem(CHECKOUT_BASELINE_STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { notes?: unknown; createdAt?: unknown };
+    const parsed = JSON.parse(raw) as Partial<StoredCheckoutBalanceSnapshot>;
     if (typeof parsed.createdAt !== "number") return null;
     if (Date.now() - parsed.createdAt > CHECKOUT_BASELINE_MAX_AGE_MS) return null;
-    return typeof parsed.notes === "number" && Number.isFinite(parsed.notes)
-      ? parsed.notes
-      : null;
+    if (
+      typeof parsed.notes !== "number" ||
+      typeof parsed.accountNotes !== "number" ||
+      typeof parsed.dailyFreeNotes !== "number" ||
+      !Number.isFinite(parsed.notes) ||
+      !Number.isFinite(parsed.accountNotes) ||
+      !Number.isFinite(parsed.dailyFreeNotes)
+    ) {
+      return null;
+    }
+    return {
+      notes: parsed.notes,
+      accountNotes: parsed.accountNotes,
+      dailyFreeNotes: parsed.dailyFreeNotes,
+    };
   } catch {
     return null;
   }
 }
 
-function writeCheckoutBaselineNotes(notes: number | undefined): void {
-  if (typeof window === "undefined" || typeof notes !== "number" || !Number.isFinite(notes)) {
-    return;
-  }
+function writeCheckoutBaselineBalance(balance: UserBalance | null | undefined): void {
+  const snapshot = snapshotCheckoutBalance(balance);
+  if (typeof window === "undefined" || !snapshot) return;
   try {
     window.sessionStorage.setItem(
       CHECKOUT_BASELINE_STORAGE_KEY,
-      JSON.stringify({ notes, createdAt: Date.now() }),
+      JSON.stringify({ ...snapshot, createdAt: Date.now() }),
     );
   } catch {}
 }
 
-function clearCheckoutBaselineNotes(): void {
+function clearCheckoutBaselineBalance(): void {
   if (typeof window === "undefined") return;
   try {
     window.sessionStorage.removeItem(CHECKOUT_BASELINE_STORAGE_KEY);

@@ -97,6 +97,8 @@
     "zustand": "^5.0.14"
   },
   "overrides": {
+    "esbuild": ">=0.28.1",
+    "hono": ">=4.12.25",
     "postcss": ">=8.5.10"
   },
   "devDependencies": {
