@@ -284,6 +284,43 @@ describe("POST /api/songs", () => {
     expect(body.issues.some((issue) => issue.path === "bpm")).toBe(true);
   });
 
+  it("returns a conflict instead of overwriting an existing song id", async () => {
+    createSongError = Object.assign(new Error("duplicate key value violates unique constraint"), {
+      code: "23505",
+    });
+
+    const response = await POST(buildRequest({
+      id: "song_existing_elsewhere",
+      title: "Collision Draft",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    }));
+
+    expect(response.status).toBe(409);
+    const body = await response.json() as { error: string };
+    expect(body.error).toBe("song_id_conflict");
+    expect(response.headers.get("X-Request-Id")).toBe("req_song");
+  });
+
   it("uses a local guest song fallback when the dev database is unavailable", async () => {
     nextAuth = {
       ok: true,

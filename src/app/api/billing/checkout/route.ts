@@ -218,23 +218,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const payMethod = typeof body.payMethod === "string" ? body.payMethod : "";
-  const useZpay =
-    product.currency === "CNY" &&
-    isZpayConfigured() &&
-    payMethod === "wxpay";
-
-  if (!useZpay && !isWaffoConfigured()) {
-    return NextResponse.json(
-      {
-        error: "waffo_not_configured",
-        message: "Waffo payments are not configured on this deployment.",
-        requestId,
-      },
-      { status: 503, headers: { "X-Request-Id": requestId } },
-    );
-  }
-
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
@@ -258,6 +241,23 @@ export async function POST(request: NextRequest) {
         requestId,
       },
       { status: 403, headers: { "X-Request-Id": requestId } },
+    );
+  }
+
+  const payMethod = typeof body.payMethod === "string" ? body.payMethod : "";
+  const useZpay =
+    product.currency === "CNY" &&
+    isZpayConfigured() &&
+    payMethod === "wxpay";
+
+  if (!useZpay && !isWaffoConfigured()) {
+    return NextResponse.json(
+      {
+        error: "waffo_not_configured",
+        message: "Waffo payments are not configured on this deployment.",
+        requestId,
+      },
+      { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
 
