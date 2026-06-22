@@ -306,8 +306,10 @@ cp .env.example .env
   disabled outside development.
 - `compose.yaml` provides the expected local Postgres at
   `postgresql://postgres:password@localhost:5432/myapp`.
-- The notification publisher is currently a stub so local development and demo
-  flows stay usable without external push infrastructure.
+- The server notification publisher is currently a stub so local development
+  and demo flows stay usable without external push infrastructure. The client
+  still has a local in-app notification inbox and browser alert opt-in for
+  save / generation events.
 - The Strummer edit route expects an OpenAI-compatible chat API.
 
 ## Stack

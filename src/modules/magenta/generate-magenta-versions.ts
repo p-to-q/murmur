@@ -5,6 +5,9 @@ import { useMurmurStore } from "@/lib/store/murmur-store";
 import { log } from "@/lib/observability/log";
 import { pickArtworkSelection, gradientFromPalette } from "@/presets/artworks/artwork-matcher";
 import { sendBrowserNotification } from "@/lib/hooks/use-browser-notification";
+import { addMurmurNotification } from "@/lib/store/notification-store";
+import { useI18nStore } from "@/lib/i18n";
+import { renderTranslationToken } from "@/lib/i18n/translate";
 
 /**
  * Magenta RealTime version flow.
@@ -281,21 +284,38 @@ async function requestClip(
       level: "warn",
       durationMs: Math.round(performance.now() - startedAt),
     });
+    notifyIfBatchComplete();
   }
 }
 
 function notifyIfBatchComplete(): void {
-  const { vibeVersions } = useMurmurStore.getState();
+  const { currentFlowId, currentDraftId, vibeVersions } = useMurmurStore.getState();
   const withGen = vibeVersions.filter((v) => v.generation);
   if (withGen.length === 0) return;
   const allSettled = withGen.every((v) => v.generation!.status !== "pending");
   if (!allSettled) return;
   const readyCount = withGen.filter((v) => v.generation!.status === "ready").length;
   if (readyCount === 0) return;
+  const sourceId = currentFlowId ?? currentDraftId ?? withGen.map((v) => v.id).join(":");
+  const lang = useI18nStore.getState().lang;
+  const title = renderTranslationToken("nav.notify.song_generated.title", lang, "product")
+    || "Vibes ready";
+  const body = readyCount === withGen.length
+    ? (renderTranslationToken("nav.notify.song_generated.body_all", lang, "product")
+      || `All ${readyCount} vibes are ready.`)
+    : (lang === "zh"
+      ? `${withGen.length} 个版本里有 ${readyCount} 个已经酿好，可以去谱室听听。`
+      : `${readyCount} of ${withGen.length} vibes are ready in Studio.`);
+  addMurmurNotification({
+    kind: "song_generated",
+    id: `song_generated:${sourceId}`,
+    title,
+    body,
+    href: "/studio",
+    sourceId,
+  });
   sendBrowserNotification("Murmur", {
-    body: readyCount === withGen.length
-      ? `All ${readyCount} vibes are ready!`
-      : `${readyCount} of ${withGen.length} vibes ready`,
+    body,
     tag: "murmur-generation",
   });
 }

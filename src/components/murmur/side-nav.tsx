@@ -25,7 +25,15 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import { ChevronsLeft, ChevronsRight, LinkIcon, LogIn } from "lucide-react";
+import {
+  BellRing,
+  CheckCheck,
+  ChevronsLeft,
+  ChevronsRight,
+  LinkIcon,
+  LogIn,
+  Trash2,
+} from "lucide-react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
@@ -37,7 +45,15 @@ import { versionPreview } from "@/lib/music/version-preview";
 import { useCurrentLang, useI18nStore, useTranslator } from "@/lib/i18n";
 import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
-import { useBrowserNotification } from "@/lib/hooks/use-browser-notification";
+import {
+  sendBrowserNotification,
+  useBrowserNotification,
+} from "@/lib/hooks/use-browser-notification";
+import { request } from "@/lib/api/request";
+import {
+  useNotificationStore,
+  type MurmurNotification,
+} from "@/lib/store/notification-store";
 import { NAV_ITEMS, computeTrail, type ComputedStep } from "./nav-items";
 import { MurmurMark } from "./murmur-mark";
 import { ShareCardModal } from "./share-card-modal";
@@ -733,16 +749,27 @@ function BellIcon({ className }: { className?: string }) {
 
 function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }) {
   const t = useTranslator();
+  const lang = useCurrentLang();
+  const router = useRouter();
   const {
     permission,
     browserAlertsEnabled,
     setBrowserAlertsEnabled,
   } = useBrowserNotification();
+  const notifications = useNotificationStore((state) => state.items);
+  const addNotification = useNotificationStore((state) => state.addNotification);
+  const markRead = useNotificationStore((state) => state.markRead);
+  const markAllRead = useNotificationStore((state) => state.markAllRead);
+  const clearAll = useNotificationStore((state) => state.clearAll);
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const pointerToggledRef = useRef(false);
   const [position, setPosition] = useState({ left: 0, top: 0, isCollapsed: false, width: 240 });
+  const unreadCount = notifications.filter((item) => !item.readAt).length;
+  const visibleNotifications = notifications.slice(0, 5);
 
   useEffect(() => {
     const timer = setTimeout(() => setMounted(true), 0);
@@ -755,11 +782,20 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
       if (!buttonRef.current) return;
       const button = buttonRef.current.getBoundingClientRect();
       const isCollapsed = document.documentElement.classList.contains("nav-collapsed");
-      const popoverHeight = 70;
+      const popoverHeight = 370;
+      const top = Math.max(
+        16,
+        Math.min(window.innerHeight - popoverHeight - 16, button.top - popoverHeight - 8),
+      );
       if (isCollapsed) {
-        setPosition({ left: button.right + 12, top: button.top - 4, isCollapsed: true, width: 264 });
+        setPosition({
+          left: button.right + 12,
+          top: Math.max(16, Math.min(window.innerHeight - popoverHeight - 16, button.top - 4)),
+          isCollapsed: true,
+          width: 304,
+        });
       } else {
-        setPosition({ left: 28, top: button.top - popoverHeight - 8, isCollapsed: false, width: 264 });
+        setPosition({ left: 28, top, isCollapsed: false, width: 304 });
       }
     };
     updatePosition();
@@ -781,8 +817,21 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
     return () => { document.removeEventListener("mousedown", onMouseDown); document.removeEventListener("keydown", onKeyDown); };
   }, [open]);
 
-  const handleClick = async () => {
+  const toggleOpen = () => {
     setOpen((v) => !v);
+  };
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    pointerToggledRef.current = true;
+    toggleOpen();
+  };
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (pointerToggledRef.current) {
+      pointerToggledRef.current = false;
+      return;
+    }
+    e.stopPropagation();
+    toggleOpen();
   };
 
   const isGranted = permission === "granted";
@@ -792,10 +841,78 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
     ? t("nav.notify.enabled")
     : isDenied
       ? t("nav.notify.denied")
-      : t("nav.notify.desc");
+      : permission === "unsupported"
+        ? (t("nav.notify.unsupported") || "System alerts are not supported here.")
+        : t("nav.notify.desc");
   const handleAlertsToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     void setBrowserAlertsEnabled(!alertsOn);
+  };
+  const handleMarkAllRead = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    markAllRead();
+  };
+  const handleClearAll = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    clearAll();
+  };
+  const handleNotificationClick = (item: MurmurNotification) => {
+    markRead(item.id);
+    if (!item.href) return;
+    setOpen(false);
+    router.push(item.href);
+  };
+  const handleTestNotification = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (isTesting) return;
+
+    setIsTesting(true);
+    const title = t("nav.notify.test.title") || "Test notification";
+    const enabledBody = t("nav.notify.test.body") || "Murmur notifications are working on this device.";
+    const blockedBody = t("nav.notify.test.blocked") || "Browser alerts are blocked, but in-app notifications are working.";
+    const testId = `system:test:${Date.now()}`;
+
+    const notification = addNotification({
+      kind: "system",
+      id: testId,
+      title,
+      body: blockedBody,
+      sourceId: testId,
+    });
+    markRead(notification.id);
+
+    try {
+      const nextPermission = await setBrowserAlertsEnabled(true);
+      void request("/api/notifications/test", {
+        method: "POST",
+        headers: { accept: "application/json" },
+      }).catch(() => {});
+
+      const canShowBrowserAlert = nextPermission === "granted";
+      addNotification({
+        kind: "system",
+        id: testId,
+        title,
+        body: canShowBrowserAlert ? enabledBody : blockedBody,
+        sourceId: testId,
+      });
+      markRead(testId);
+
+      if (canShowBrowserAlert) {
+        sendBrowserNotification(title, {
+          body: enabledBody,
+          tag: "murmur-notification-test",
+          showWhileVisible: true,
+        });
+        toast.success(t("nav.notify.test.sent") || "Test notification sent.");
+      } else if (nextPermission === "unsupported") {
+        toast(t("nav.notify.unsupported") || "System alerts are not supported here.");
+      } else {
+        toast.error(t("nav.notify.denied") || "Notifications are blocked.");
+      }
+    } finally {
+      setIsTesting(false);
+    }
   };
 
   const buttonCls = chromeless
@@ -819,7 +936,7 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
           zIndex: 9999,
           width: `${position.width}px`,
         }}
-        className="min-h-[70px] rounded-[14px] border border-[#E5DDD0] bg-white p-4 shadow-[0_12px_36px_rgba(26,26,26,0.12)]"
+        className="max-h-[min(370px,calc(100svh-32px))] overflow-hidden rounded-[14px] border border-[#E5DDD0] bg-white p-4 shadow-[0_12px_36px_rgba(26,26,26,0.12)]"
       >
         {position.isCollapsed && (
           <>
@@ -827,7 +944,7 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
             <div className="absolute left-0 top-[14px] -translate-x-[5px] w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-r-[5px] border-r-white" aria-hidden />
           </>
         )}
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[13px] font-medium text-[#1A1A1A] leading-snug">
               {t("nav.notify.title")}
@@ -836,24 +953,101 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
               {body}
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={alertsOn}
-            aria-label={t("nav.notify.title")}
-            onClick={handleAlertsToggle}
-            className={`relative h-[22px] w-[40px] shrink-0 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/20 ${
-              alertsOn
-                ? "border-[#1A1A1A] bg-[#1A1A1A]"
-                : "border-[#E5DDD0] bg-[#F8F3EA]"
-            }`}
-          >
-            <span
-              className={`absolute left-[2px] top-[2px] h-4 w-4 rounded-full bg-white shadow-[0_1px_4px_rgba(26,26,26,0.18)] transition-transform ${
-                alertsOn ? "translate-x-[18px]" : "translate-x-0"
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              title={t("nav.notify.test") || "Test notification"}
+              aria-label={t("nav.notify.test") || "Test notification"}
+              onClick={handleTestNotification}
+              disabled={isTesting}
+              className="flex h-7 w-7 items-center justify-center rounded-[9px] border border-[#E5DDD0] bg-[#F8F3EA] text-[#8C8780] transition-colors hover:border-[#C8C0B4] hover:text-[#1A1A1A] disabled:cursor-wait disabled:opacity-60"
+            >
+              <BellRing className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={alertsOn}
+              aria-label={t("nav.notify.title")}
+              onClick={handleAlertsToggle}
+              className={`relative h-[22px] w-[40px] shrink-0 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1A1A1A]/20 ${
+                alertsOn
+                  ? "border-[#1A1A1A] bg-[#1A1A1A]"
+                  : "border-[#E5DDD0] bg-[#F8F3EA]"
               }`}
-            />
-          </button>
+            >
+              <span
+                className={`absolute left-[2px] top-[2px] h-4 w-4 rounded-full bg-white shadow-[0_1px_4px_rgba(26,26,26,0.18)] transition-transform ${
+                  alertsOn ? "translate-x-[18px]" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between border-t border-[#E5DDD0]/70 pt-3">
+          <span className="text-[11px] text-[#8C8780]">
+            {unreadCount > 0
+              ? `${unreadCount} ${t("nav.notify.unread") || "unread"}`
+              : t("nav.notify.all_read") || "All read"}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              title={t("nav.notify.mark_all") || "Mark all read"}
+              aria-label={t("nav.notify.mark_all") || "Mark all read"}
+              onClick={handleMarkAllRead}
+              disabled={notifications.length === 0}
+              className="flex h-7 w-7 items-center justify-center rounded-[9px] text-[#8C8780] transition-colors hover:bg-[#F8F3EA] hover:text-[#1A1A1A] disabled:pointer-events-none disabled:opacity-35"
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              title={t("nav.notify.clear") || "Clear notifications"}
+              aria-label={t("nav.notify.clear") || "Clear notifications"}
+              onClick={handleClearAll}
+              disabled={notifications.length === 0}
+              className="flex h-7 w-7 items-center justify-center rounded-[9px] text-[#8C8780] transition-colors hover:bg-[#F8F3EA] hover:text-[#1A1A1A] disabled:pointer-events-none disabled:opacity-35"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-2 max-h-[214px] space-y-1.5 overflow-y-auto pr-1">
+          {visibleNotifications.length === 0 ? (
+            <div className="flex min-h-[92px] items-center justify-center rounded-[10px] border border-dashed border-[#E5DDD0] bg-[#F8F3EA]/50 px-4 text-center text-[11px] leading-snug text-[#8C8780]">
+              {t("nav.notify.empty") || "No notifications yet."}
+            </div>
+          ) : (
+            visibleNotifications.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleNotificationClick(item)}
+                className="group flex w-full items-start gap-2.5 rounded-[10px] px-2.5 py-2 text-left transition-colors hover:bg-[#F8F3EA]"
+              >
+                <span
+                  className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
+                    item.readAt ? "bg-[#E5DDD0]" : "bg-[#FF5924]"
+                  }`}
+                  aria-hidden
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[12px] font-medium leading-snug text-[#1A1A1A]">
+                    {item.title}
+                  </span>
+                  <span className="mt-0.5 line-clamp-2 block text-[11px] leading-snug text-[#8C8780]">
+                    {item.body}
+                  </span>
+                </span>
+                <span className="shrink-0 text-[10px] leading-snug text-[#B6B0A4]">
+                  {formatNotificationTime(item.createdAt, lang)}
+                </span>
+              </button>
+            ))
+          )}
         </div>
       </motion.div>
     </AnimatePresence>
@@ -864,6 +1058,7 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
       <button
         ref={buttonRef}
         type="button"
+        onPointerDown={handlePointerDown}
         onClick={handleClick}
         aria-label={t("nav.notify.title")}
         title={t("nav.notify.title")}
@@ -873,16 +1068,35 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
         <BellIcon className="h-4 w-4" />
         <span
           className={`absolute -right-1 -top-1 z-10 flex h-2.5 w-2.5 items-center justify-center rounded-full border border-[#E5DDD0] bg-white transition-[opacity,transform] duration-200 ease-out ${
-            alertsOn ? "scale-100 opacity-100" : "pointer-events-none scale-75 opacity-0"
+            unreadCount > 0 ? "scale-100 opacity-100" : "pointer-events-none scale-75 opacity-0"
           }`}
           aria-hidden
         >
-          <span className="h-1 w-1 rounded-full bg-[#E5DDD0]" />
+          <span className="h-1 w-1 rounded-full bg-[#FF5924]" />
         </span>
       </button>
       {mounted && createPortal(popoverContent, document.body)}
     </>
   );
+}
+
+function formatNotificationTime(createdAt: number, lang: string): string {
+  const diffMs = Date.now() - createdAt;
+  const locale = lang === "zh" ? "zh-CN" : "en-US";
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < minute) return lang === "zh" ? "刚刚" : "now";
+  if (diffMs < hour) return formatter.format(-Math.round(diffMs / minute), "minute");
+  if (diffMs < day) return formatter.format(-Math.round(diffMs / hour), "hour");
+  if (diffMs < 7 * day) return formatter.format(-Math.round(diffMs / day), "day");
+
+  return new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(createdAt));
 }
 
 /* ── PopoverButton — icon button that pops a small card upward ─────── */

@@ -23,6 +23,7 @@ import { memory } from "@/lib/platform/memory";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { addMurmurNotification } from "@/lib/store/notification-store";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import {
   buildFallbackTitleSuggestionBatch,
@@ -214,6 +215,8 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
         }),
       });
       if (!response.ok) throw new Error(`Save HTTP ${response.status}`);
+      const savedSong = await response.json().catch(() => null) as { id?: unknown } | null;
+      const savedSongId = typeof savedSong?.id === "string" ? savedSong.id : id;
 
       memory
         .reportAction({
@@ -234,8 +237,16 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
         })
         .catch(() => {});
 
+      addMurmurNotification({
+        kind: "song_saved",
+        title: t("nav.notify.song_saved.title") || "Saved to Gallery",
+        body: t("nav.notify.song_saved.body") || "This song is tucked away and ready to reopen from your Gallery.",
+        href: `/song/${savedSongId}`,
+        sourceId: savedSongId,
+      });
+
       toast.success(t("studio.save_ok"));
-      router.push(`/song/${id}`);
+      router.push(`/song/${savedSongId}`);
     } catch (error) {
       console.error("[Name] save failed:", error);
       toast.error(t("studio.save_err"));

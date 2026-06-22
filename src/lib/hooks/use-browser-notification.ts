@@ -109,17 +109,18 @@ export function useBrowserNotification() {
 
 export function sendBrowserNotification(
   title: string,
-  options?: NotificationOptions,
+  options?: NotificationOptions & { showWhileVisible?: boolean },
 ): void {
   if (typeof window === "undefined" || !("Notification" in window)) return;
   if (!isBrowserAlertPreferenceEnabled()) return;
   if (Notification.permission !== "granted") return;
-  if (document.visibilityState === "visible") return;
+  const { showWhileVisible = false, ...notificationOptions } = options ?? {};
+  if (!showWhileVisible && document.visibilityState === "visible") return;
 
   try {
     new Notification(title, {
       icon: "/icon.png",
-      ...options,
+      ...notificationOptions,
     });
   } catch {
     // Some browsers restrict Notification in embedded or local contexts.

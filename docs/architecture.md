@@ -111,7 +111,9 @@ flowchart TB
   paired `notes_ledger` grant rows, so an existing registered user cannot later
   claim invite credit by opening someone else's link.
 - Local-header identity is local/demo only.
-- Notifications are intentionally stubbed until a real push backend is chosen.
+- Remote notification delivery is intentionally stubbed until a real push
+  backend is chosen. The client owns a local in-app notification inbox plus
+  browser alert opt-in for demo-safe save / generation feedback.
 - Memory events are stored locally for now, which keeps user flows non-blocking.
 - Language is negotiated before first paint from the explicit `murmur.lang`
   cookie first, then the request `Accept-Language` header, then the product
@@ -126,7 +128,9 @@ flowchart TB
 
 - The platform layer is local-first, but production identity is now
   session-backed rather than header-backed.
-- Notifications are a stub, useful for wiring but not for delivery guarantees.
+- Remote push notification delivery is a stub, useful for wiring but not for
+  delivery guarantees. Local in-app notifications are persisted in browser
+  storage and browser alerts depend on the user's Notification permission.
 - AI editing depends on `OPENAI_API_KEY` or an equivalent gateway key.
 - Some UI files are still larger than the final target shape and can be split as
   the product stabilizes.
