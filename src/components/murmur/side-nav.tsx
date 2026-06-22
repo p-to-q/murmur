@@ -27,6 +27,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { ChevronsLeft, ChevronsRight, LinkIcon, LogIn } from "lucide-react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 
 import { getShareInviteUrl } from "@/lib/api/share-links";
 
@@ -453,6 +454,8 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                 label={t("nav.device.title")}
                 title={t("nav.device.title")}
                 body={t("nav.device.desc")}
+                toastTitle={t("nav.device.toast_title")}
+                toastBody={t("nav.device.toast_body")}
               />
               <NotificationBellButton />
             </div>
@@ -894,12 +897,16 @@ function PopoverButton({
   label,
   title,
   body,
+  toastTitle,
+  toastBody,
   chromeless = false,
 }: {
   icon: React.ReactNode;
   label: string;
   title: string;
   body: string;
+  toastTitle?: string;
+  toastBody?: string;
   chromeless?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -1037,7 +1044,15 @@ function PopoverButton({
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((v) => !v);
+          if (toastTitle && toastBody) {
+            toast.info(toastTitle, {
+              description: toastBody,
+              id: "device-sync-status",
+            });
+          }
+        }}
         aria-label={label}
         title={label}
         aria-expanded={open}
