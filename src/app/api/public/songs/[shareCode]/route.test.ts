@@ -6,9 +6,17 @@ let nextSong: Record<string, unknown> | null = null;
 const getSongByShareCodeMock = mock(async () => nextSong);
 
 mock.module("@/lib/db/queries/songs", () => ({
+  createSong: mock(async () => null),
+  createSongWithSpend: mock(async () => null),
+  deleteSongForUser: mock(async () => false),
+  getPublicSongSummaries: mock(async () => []),
+  getSongByIdForCreateConflict: mock(async () => null),
   getSongByIdForUser: mock(async () => null),
   getSongByShareCode: getSongByShareCodeMock,
+  getSongSummariesByUser: mock(async () => []),
   publishSongShareForUser: mock(async () => null),
+  revokeSongShareForUser: mock(async () => null),
+  updateSongForUser: mock(async () => null),
 }));
 
 const { GET } = await import("./route");
@@ -26,9 +34,9 @@ function ctx(shareCode = "abc234defg") {
   return { params: Promise.resolve({ shareCode }) };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   resetCachedRateLimitStore();
-  getRateLimitStore().resetAll();
+  await getRateLimitStore().resetAll();
   nextSong = {
     id: "song_1",
     userId: "usr_owner",
@@ -92,6 +100,17 @@ describe("GET /api/public/songs/[shareCode]", () => {
     expect(getSongByShareCodeMock).not.toHaveBeenCalled();
     const body = await response.json() as Record<string, unknown>;
     expect(body.error).toBe("validation_error");
+  });
+
+  it("returns 404 with noindex after a share code has been revoked", async () => {
+    nextSong = null;
+
+    const response = await GET(request(), ctx("abc234defg"));
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.error).toBe("not_found");
   });
 
   it("serves demo songs through the same public contract", async () => {

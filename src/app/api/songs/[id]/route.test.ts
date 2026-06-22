@@ -34,12 +34,16 @@ mock.module("@/lib/auth", () => ({
 }));
 
 mock.module("@/lib/db/queries/songs", () => ({
-  getSongByShareCode: mock(async () => null),
+  createSong: mock(async () => null),
+  createSongWithSpend: mock(async () => null),
+  deleteSongForUser: deleteSongForUserMock,
   getPublicSongSummaries: mock(async () => []),
   getSongByIdForUser: getSongByIdForUserMock,
+  getSongByShareCode: mock(async () => null),
+  getSongSummariesByUser: mock(async () => []),
   publishSongShareForUser: mock(async () => null),
+  revokeSongShareForUser: mock(async () => null),
   updateSongForUser: updateSongForUserMock,
-  deleteSongForUser: deleteSongForUserMock,
 }));
 
 const { DELETE, GET, PATCH } = await import("./route");

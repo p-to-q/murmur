@@ -219,6 +219,19 @@ export async function publishSongShareForUser(
   return rows[0] ?? null;
 }
 
+export async function revokeSongShareForUser(songId: string, userId: string) {
+  const rows = await db
+    .update(songs)
+    .set({
+      shareCode: null,
+      visibility: "private",
+      updatedAt: new Date(),
+    })
+    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+    .returning();
+  return rows[0] ?? null;
+}
+
 export async function deleteSong(songId: string) {
   const rows = await db.delete(songs).where(eq(songs.id, songId)).returning({ id: songs.id });
   return rows.length > 0;

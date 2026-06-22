@@ -49,17 +49,18 @@ mock.module("@/lib/auth", () => ({
 }));
 
 mock.module("@/lib/db/queries/songs", () => ({
-  getSongsByUser: mock(async () => []),
-  getSongSummariesByUser: mock(async () => []),
-  getSongByShareCode: mock(async () => null),
+  createSong: createSongMock,
+  createSongWithSpend: createSongWithSpendMock,
+  deleteSongForUser: mock(async () => false),
   getPublicSongSummaries: mock(async () => []),
   getSongByIdForCreateConflict: getSongByIdForCreateConflictMock,
   getSongByIdForUser: mock(async () => null),
-  createSong: createSongMock,
-  createSongWithSpend: createSongWithSpendMock,
-  updateSongForUser: mock(async () => null),
+  getSongByShareCode: mock(async () => null),
+  getSongSummariesByUser: mock(async () => []),
+  getSongsByUser: mock(async () => []),
+  revokeSongShareForUser: mock(async () => null),
   publishSongShareForUser: mock(async () => null),
-  deleteSongForUser: mock(async () => false),
+  updateSongForUser: mock(async () => null),
 }));
 
 const { POST } = await import("./route");
@@ -80,10 +81,10 @@ function buildRequest(
   }) as unknown as NextRequest;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   delete process.env.MURMUR_RATE_LIMIT_DRIVER;
   resetCachedRateLimitStore();
-  getRateLimitStore().resetAll();
+  await getRateLimitStore().resetAll();
   nextAuth = {
     ok: true,
     user: { id: "usr_song", email: null, name: "Song Tester", avatarUrl: null },

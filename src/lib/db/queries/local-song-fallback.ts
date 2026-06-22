@@ -134,6 +134,16 @@ export function publishLocalSongShareForUserFallback(
   });
 }
 
+export function revokeLocalSongShareForUserFallback(
+  songId: string,
+  userId: string,
+): SongRow | null {
+  return updateLocalSongForUserFallback(songId, userId, {
+    shareCode: null,
+    visibility: "private",
+  });
+}
+
 export function deleteLocalSongForUserFallback(
   songId: string,
   userId: string,
