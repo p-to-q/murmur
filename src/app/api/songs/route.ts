@@ -147,6 +147,9 @@ export async function POST(req: NextRequest) {
           headers: { "X-Request-Id": requestId },
         });
       } catch (dbError) {
+        if (isUniqueConstraintViolation(dbError)) {
+          return songIdConflictResponse(requestId);
+        }
         if (isDatabaseUnavailable(dbError)) {
           const fallbackSong = createLocalSongFallback(songInput);
           log("song.create_failed", {
@@ -273,6 +276,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (isUniqueConstraintViolation(err)) {
+      return songIdConflictResponse(requestId);
+    }
+
     return NextResponse.json(
       { error: "Failed to save song", requestId },
       { status: 500, headers: { "X-Request-Id": requestId } },
@@ -337,6 +344,37 @@ function isDatabaseUnavailable(error: unknown): boolean {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+  if (!isObject(error)) return false;
+
+  const code = "code" in error ? String(error.code) : "";
+  if (code === "23505") return true;
+
+  const message = "message" in error ? String(error.message).toLowerCase() : "";
+  if (message.includes("duplicate key")) return true;
+
+  const cause = "cause" in error ? error.cause : null;
+  if (cause && isUniqueConstraintViolation(cause)) return true;
+
+  const nestedErrors = "errors" in error ? error.errors : null;
+  if (Array.isArray(nestedErrors)) {
+    return nestedErrors.some((nestedError) => isUniqueConstraintViolation(nestedError));
+  }
+
+  return false;
+}
+
+function songIdConflictResponse(requestId: string) {
+  return NextResponse.json(
+    {
+      error: "song_id_conflict",
+      message: "Could not save this draft because its song id already exists.",
+      requestId,
+    },
+    { status: 409, headers: { "X-Request-Id": requestId } },
+  );
 }
 
 function objectFieldAsString(value: unknown, key: string): string | undefined {

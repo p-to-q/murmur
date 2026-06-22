@@ -8,10 +8,55 @@ const REQUIRED_IN_PRODUCTION = [
     keys: ["MURMUR_STORAGE_DRIVER"],
     label: "MURMUR_STORAGE_DRIVER",
   },
+  {
+    keys: ["MURMUR_APP_URL"],
+    label: "MURMUR_APP_URL",
+  },
+  {
+    keys: ["AUTH_URL"],
+    label: "AUTH_URL",
+  },
+  {
+    keys: ["AUDIO_WORKER_URL"],
+    label: "AUDIO_WORKER_URL",
+  },
+  {
+    keys: ["AUDIO_WORKER_TOKEN"],
+    label: "AUDIO_WORKER_TOKEN",
+  },
+  {
+    keys: ["RUNPOD_SERVERLESS_ENDPOINT_ID"],
+    label: "RUNPOD_SERVERLESS_ENDPOINT_ID",
+  },
+  {
+    keys: ["RUNPOD_API_KEY"],
+    label: "RUNPOD_API_KEY",
+  },
+  {
+    keys: ["CRON_SECRET"],
+    label: "CRON_SECRET",
+  },
+] as const;
+
+const REQUIRED_S3_ENV = [
+  "MURMUR_STORAGE_S3_BUCKET",
+  "MURMUR_STORAGE_S3_REGION",
+  "MURMUR_STORAGE_S3_ACCESS_KEY_ID",
+  "MURMUR_STORAGE_S3_SECRET_ACCESS_KEY",
 ] as const;
 
 function hasAny(keys: readonly string[]): boolean {
   return keys.some((key) => Boolean(process.env[key]?.trim()));
+}
+
+function isTruthyEnv(key: string): boolean {
+  const value = process.env[key]?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+function isPlaceholderSecret(key: string): boolean {
+  const value = process.env[key]?.trim().toLowerCase();
+  return !value || value === "replace_with_a_long_random_string";
 }
 
 function main() {
@@ -46,6 +91,36 @@ function main() {
     !process.env.NEXTAUTH_SECRET?.trim()
   ) {
     missing.push("AUTH_SECRET (required when Google OAuth is configured)");
+  }
+
+  const githubConfigured =
+    Boolean(process.env.GITHUB_CLIENT_ID?.trim()) &&
+    Boolean(process.env.GITHUB_CLIENT_SECRET?.trim());
+
+  if (
+    githubConfigured &&
+    !process.env.AUTH_SECRET?.trim() &&
+    !process.env.NEXTAUTH_SECRET?.trim()
+  ) {
+    missing.push("AUTH_SECRET (required when GitHub OAuth is configured)");
+  }
+
+  if (isTruthyEnv("MURMUR_ALLOW_DEV_BILLING_FALLBACK")) {
+    missing.push("MURMUR_ALLOW_DEV_BILLING_FALLBACK must be unset/false in production");
+  }
+
+  if (isTruthyEnv("MURMUR_CAPTURE_HUMS")) {
+    missing.push("MURMUR_CAPTURE_HUMS must be unset/false in production");
+  }
+
+  if (isPlaceholderSecret("CRON_SECRET")) {
+    missing.push("CRON_SECRET must be a non-placeholder secret");
+  }
+
+  if (process.env.MURMUR_STORAGE_DRIVER?.trim() === "s3-compatible") {
+    for (const key of REQUIRED_S3_ENV) {
+      if (!process.env[key]?.trim()) missing.push(key);
+    }
   }
 
   if (missing.length > 0) {

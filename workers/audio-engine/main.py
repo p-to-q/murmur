@@ -117,11 +117,10 @@ def _preload_pitch_model() -> None:
             logger.warning("audio engine: auto pitch preload check skipped: %s", exc)
 
 # ── Hum capture ───────────────────────────────────────────────────────
-# Every hum that reaches the worker is a real input someone sang. Saving
-# the raw upload to a local folder lets the operator listen back to what
-# people actually hum — including the failures worth debugging. Disable
-# with MURMUR_CAPTURE_HUMS=0; capped so it never fills the disk.
-CAPTURE_HUMS = os.getenv("MURMUR_CAPTURE_HUMS", "1").strip().lower() not in {"0", "false", "no"}
+# Raw hum uploads are personal user input. Keep capture opt-in so production
+# launches do not retain recordings unless an explicit, documented quality
+# program enables it.
+CAPTURE_HUMS = os.getenv("MURMUR_CAPTURE_HUMS", "0").strip().lower() in {"1", "true", "yes"}
 CAPTURE_DIR = os.path.expanduser(os.getenv("MURMUR_CAPTURE_DIR", "~/Documents/murmur-hums"))
 CAPTURE_MAX_FILES = max(1, int(os.getenv("MURMUR_CAPTURE_MAX_FILES", "3000") or 3000))
 
