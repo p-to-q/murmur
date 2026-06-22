@@ -32,7 +32,6 @@ import { synth } from "@/lib/music/simple-synth";
 import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import { renderAudio } from "@/modules/export/render-mp3";
 import { canSaveHeardVersion, getSaveBlockReason } from "@/modules/music/version-contract";
-import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
 const PROCESSING_INTERVAL_MS = 900;
@@ -364,13 +363,11 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
               whileTap={{ scale: 0.97 }}
               onClick={() => void handleSave()}
               disabled={isSaving || !title.trim() || !canSaveHeardVersion(currentVersion)}
-              className="inline-flex h-14 w-full items-center justify-center rounded-[22px] bg-[#1A1A1A] text-base font-medium text-white transition-opacity disabled:opacity-45"
+              className="h-14 w-full rounded-[22px] bg-[#1A1A1A] text-base font-medium text-white transition-opacity disabled:opacity-45"
             >
-              {isSaving ? (
-                <MurmurLoadingNote size="sm" tone="light" />
-              ) : (
-                t("name.save") || "Save"
-              )}
+              {isSaving
+                ? t("studio.saving") || "Saving…"
+                : t("name.save") || "Save"}
             </motion.button>
           </div>
         </div>

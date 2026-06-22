@@ -7,7 +7,7 @@ import {
   hasLocalNotes,
   spendLocalNotes,
 } from "@/lib/balance/balance-manager";
-import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
+import { Spinner } from "@/components/ui/spinner";
 import { AuthButtons } from "@/components/auth/auth-buttons";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate, animate as fmAnimate } from "framer-motion";
@@ -1155,7 +1155,7 @@ export function HumScreen() {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                     >
-                      <MurmurLoadingNote size="md" tone="muted" />
+                      <Spinner size="lg" variant="muted" />
                     </motion.div>
                   )}
                 </AnimatePresence>

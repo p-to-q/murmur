@@ -13,7 +13,6 @@ import { displayVibeLabel } from "@/lib/music/display-vibe";
 import type { SongCard as SongCardType } from "@/modules/shared/types";
 import { FloatingMusicNotes } from "@/components/murmur/floating-music-notes";
 import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
-import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
@@ -358,13 +357,9 @@ export function GalleryScreen() {
                 <button
                   onClick={handleConfirmDelete}
                   disabled={isDeleting}
-                  className="inline-flex h-11 flex-1 items-center justify-center rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors disabled:opacity-60"
+                  className="flex-1 h-11 rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors disabled:opacity-60"
                 >
-                  {isDeleting ? (
-                    <MurmurLoadingNote size="sm" tone="light" />
-                  ) : (
-                    t("song.delete.confirm") || "Delete"
-                  )}
+                  {isDeleting ? "…" : t("song.delete.confirm") || "Delete"}
                 </button>
               </div>
             </motion.div>

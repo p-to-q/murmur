@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
+import { Spinner } from "@/components/ui/spinner";
 import { X, Play, Pause, Image as ImageIcon, Video } from "lucide-react";
 import type { VisualArtwork } from "@/modules/shared/types";
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
@@ -183,7 +183,7 @@ export function ShareTicketCard({
               title="Download image"
             >
               {imageExporting ? (
-                <MurmurLoadingNote size="sm" tone="light" />
+                <Spinner size="sm" variant="light" />
               ) : (
                 <ImageIcon className="h-[18px] w-[18px]" strokeWidth={2.2} />
               )}
@@ -197,7 +197,7 @@ export function ShareTicketCard({
                 title="Download video"
               >
                 {videoExporting ? (
-                  <MurmurLoadingNote size="sm" tone="light" />
+                  <Spinner size="sm" variant="light" />
                 ) : (
                   <Video className="h-[18px] w-[18px]" strokeWidth={2.2} />
                 )}

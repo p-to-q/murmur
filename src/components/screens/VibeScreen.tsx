@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Pause, RotateCw } from "lucide-react";
+import { Play, Pause, Loader2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 
@@ -38,7 +38,6 @@ import {
 } from "@/modules/magenta/generate-magenta-versions";
 import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import type { VibeVersion } from "@/modules/shared/types";
-import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { buildMeshGradient } from "@/components/song-detail/mesh-gradient";
 import {
@@ -559,10 +558,7 @@ function VibeCard({
           ].join(" ")}
         >
           {isPending ? (
-            <MurmurLoadingNote
-              size="xs"
-              tone={isAuditioning ? "ink" : "light"}
-            />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : isError ? (
             <RotateCw className="h-3.5 w-3.5" />
           ) : isAuditioning ? (

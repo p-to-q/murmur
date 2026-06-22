@@ -36,9 +36,9 @@ import type { Lang } from "@/lib/i18n/dict";
 import { getPlayer, startAudioContext } from "@/lib/music/tone-player";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
-import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { Spinner } from "@/components/ui/spinner";
 import { ShareTicketCard } from "@/components/song-detail/ShareTicketCard";
 import { exportSongAsVideo } from "@/modules/export/export-video";
 import {
@@ -812,7 +812,7 @@ function ExportRow({
           {cost}
         </span>
         {busy ? (
-          <MurmurLoadingNote size="xs" tone="ink" />
+          <Spinner size="xs" variant="ink" />
         ) : (
           <span
             className="text-[#1A1A1A] text-[18px] transition-transform group-hover:translate-x-0.5"

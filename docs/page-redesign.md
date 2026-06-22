@@ -717,7 +717,7 @@ before the hosted provider page opens.
 ```
 
 The review state is a real design surface; the provider transition remains
-brief and uses the canonical Murmur loading note. The state machine is
+brief and uses compact in-receipt busy feedback. The state machine is
 `review → requesting → awaiting_payment → confirming → succeeded | canceled | failed`.
 
 On `succeeded`: toast `+120 notes added.` + redirect to wherever the
@@ -754,8 +754,9 @@ Studio / Name / Topup all have a sticky bottom CTA. Discipline:
 - The CTA is **coral** capsule for "Begin / Open" semantics (Top up,
   Sign in).
 - The CTA never has more than three words.
-- The CTA never shows rings or ellipses for loading; compact busy states use
-  the canonical Murmur loading note and may keep rotating copy above it.
+- Compact busy states stay contextual: use spinner / icon / text feedback that
+  fits the control, while the canonical Murmur loading note is reserved for
+  page-level loading.
 - The CTA respects safe-area-inset-bottom.
 
 ---

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ReceiptText, RefreshCw } from "lucide-react";
 
-import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { request } from "@/lib/api/request";
 import { useTranslator } from "@/lib/i18n";
@@ -109,13 +108,7 @@ export function PaymentsScreen() {
 
         <main className="mt-5">
           {state === "loading" ? (
-            <div
-              className="flex min-h-[240px] items-center justify-center"
-              role="status"
-              aria-label={t("loading.aria")}
-            >
-              <MurmurLoadingNote size="page" decorative={false} />
-            </div>
+            <PaymentSkeleton />
           ) : state === "signed_out" ? (
             <EmptyState
               title={t("payments.signed_out.title") || "Sign in to see receipts."}
@@ -218,6 +211,20 @@ function EmptyState({
       <p className="font-serif text-[24px] leading-tight text-[#1A1A1A]">{title}</p>
       <p className="mx-auto mt-3 max-w-sm text-[13px] leading-[1.6] text-[#6F6A63]">{body}</p>
       <div className="mt-5 flex justify-center">{action}</div>
+    </div>
+  );
+}
+
+function PaymentSkeleton() {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-28 animate-pulse rounded-[8px] border border-white/60 bg-white/50"
+          style={{ animationDelay: `${index * 110}ms` }}
+        />
+      ))}
     </div>
   );
 }
