@@ -955,6 +955,33 @@ export function HumScreen() {
                       {MAX_DURATION}s
                     </span>
                   </div>
+                  <div className="mt-3 min-h-[18px] text-center xl:text-left">
+                    <AnimatePresence mode="wait">
+                      {showHeardMessage ? (
+                        <motion.p
+                          key="heard-message"
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.25 }}
+                          className="text-[12px] font-medium leading-[18px] tracking-[0.1em] text-[#8C8780]"
+                        >
+                          {t("hum.level.heard")}
+                        </motion.p>
+                      ) : levelState === "quiet" ? (
+                        <motion.p
+                          key="quiet-message"
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.25 }}
+                          className="text-[12px] font-medium leading-[18px] tracking-[0.1em] text-[#B6B0A4]"
+                        >
+                          {t(inputLevelLabelKey(levelState))}
+                        </motion.p>
+                      ) : null}
+                    </AnimatePresence>
+                  </div>
                 </motion.div>
               )}
 
@@ -1187,46 +1214,6 @@ export function HumScreen() {
                   ))}
               </AnimatePresence>
             </div>
-
-              {/* ── Level pill — below orb, absolute so no layout shift ── */}
-              <AnimatePresence>
-                {showHeardMessage && (
-                  <motion.div
-                    key="heard-pill"
-                    initial={{ opacity: 0, y: 6, scale: 0.92 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -4, scale: 0.95 }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                    className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+12px)] flex items-center gap-2 rounded-full bg-white/60 backdrop-blur-md px-4 py-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
-                  >
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF5924] opacity-50" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-[#FF5924]" />
-                    </span>
-                    <span className="text-[12px] tracking-[0.08em] text-[#1A1A1A]/70 font-medium">
-                      {t("hum.level.heard")}
-                    </span>
-                  </motion.div>
-                )}
-                {!showHeardMessage && isRecording && levelState === "quiet" && (
-                  <motion.div
-                    key="quiet-pill"
-                    initial={{ opacity: 0, y: 6, scale: 0.92 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -4, scale: 0.95 }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                    className="absolute left-1/2 -translate-x-1/2 top-[calc(100%+12px)] flex items-center gap-2 rounded-full bg-white/60 backdrop-blur-md px-4 py-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.06)]"
-                  >
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF5924] opacity-50" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-[#FF5924]" />
-                    </span>
-                    <span className="text-[12px] tracking-[0.08em] text-[#1A1A1A]/70 font-medium">
-                      {t(inputLevelLabelKey(levelState))}
-                    </span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
           </div>
         </div>
