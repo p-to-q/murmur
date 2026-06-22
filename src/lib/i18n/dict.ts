@@ -342,6 +342,7 @@ export const DICT = {
   "name.save":             { zh: "收进藏歌",     en: "Save into Gallery" },
   "name.required":         { zh: "得有个名字才能存哦", en: "Needs a name first" },
   "name.suggestions":      { zh: "试试这些",     en: "Try" },
+  "name.refresh_suggestions": { zh: "换一组名字", en: "Refresh suggestions" },
   "name.proc.rendering":   { zh: "正在渲染",     en: "rendering" },
   "name.proc.polishing":   { zh: "正在打磨",     en: "polishing" },
   "name.proc.encoding":    { zh: "正在编码",     en: "encoding" },

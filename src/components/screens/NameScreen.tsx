@@ -17,16 +17,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
-import { useI18nStore, useTranslator } from "@/lib/i18n";
+import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import {
-  buildFallbackTitleSuggestions,
-  buildVersionTitleSuggestions,
+  buildFallbackTitleSuggestionBatch,
+  buildVersionTitleSuggestionBatch,
 } from "@/lib/music/title-suggestions";
 import { synth } from "@/lib/music/simple-synth";
 import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
@@ -39,7 +39,7 @@ const PROCESSING_INTERVAL_MS = 900;
 export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const router = useRouter();
   const t = useTranslator();
-  const lang = useI18nStore((s) => s.lang);
+  const lang = useCurrentLang();
   const currentVersion = useMurmurStore((s) => s.currentVersion);
   const setCurrentVersion = useMurmurStore((s) => s.setCurrentVersion);
   const setVibeVersions = useMurmurStore((s) => s.setVibeVersions);
@@ -48,7 +48,9 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const demoSeededRef = useRef(false);
   const demoEnabled = initialDemo;
 
-  const [title, setTitle] = useState(currentVersion?.title ?? "");
+  const [title, setTitle] = useState("");
+  const [titleMode, setTitleMode] = useState<"suggested" | "custom">("suggested");
+  const [suggestionBatch, setSuggestionBatch] = useState({ key: "", index: 0 });
   const [isSaving, setIsSaving] = useState(false);
   const [processingIdx, setProcessingIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,7 +65,6 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       setCurrentDraftId(demo.draftId);
       setCurrentFlowId(demo.flowId);
       setCurrentVersion(demo.currentVersion);
-      setTitle(demo.currentVersion.title);
     });
   }, [
     currentVersion,
@@ -71,15 +72,23 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     setCurrentDraftId,
     setCurrentFlowId,
     setCurrentVersion,
-    setTitle,
     setVibeVersions,
   ]);
 
   /* ── Suggestions ──────────────────────────────────────────────── */
+  const suggestionKey = `${currentVersion?.id ?? "fallback"}:${lang}`;
+  const suggestionBatchIndex =
+    suggestionBatch.key === suggestionKey ? suggestionBatch.index : 0;
   const suggestions = useMemo(() => {
-    if (!currentVersion) return buildFallbackTitleSuggestions(lang);
-    return buildVersionTitleSuggestions(currentVersion, lang);
-  }, [currentVersion, lang]);
+    if (!currentVersion) return buildFallbackTitleSuggestionBatch(lang, suggestionBatchIndex);
+    return buildVersionTitleSuggestionBatch(currentVersion, lang, suggestionBatchIndex);
+  }, [currentVersion, lang, suggestionBatchIndex]);
+  const displayTitle =
+    titleMode === "custom"
+      ? title
+      : suggestions.includes(title)
+        ? title
+        : suggestions[0] ?? title;
 
   /* ── Rotating processing copy ─────────────────────────────────── */
   const PROCESSING_COPY = useMemo(
@@ -137,7 +146,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   }
 
   const handleSave = async () => {
-    const trimmed = title.trim();
+    const trimmed = displayTitle.trim();
     if (!trimmed) {
       toast(t("name.required"));
       inputRef.current?.focus();
@@ -283,8 +292,11 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.18, duration: 0.5 }}
               type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              value={displayTitle}
+              onChange={(e) => {
+                setTitleMode("custom");
+                setTitle(e.target.value);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void handleSave();
               }}
@@ -296,7 +308,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
             <div className="mt-3 flex items-center justify-between gap-3">
               <p className="text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1] tabular-nums">
-                {title.length}/80
+                {displayTitle.length}/80
               </p>
             </div>
 
@@ -307,14 +319,32 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
               transition={{ delay: 0.28, duration: 0.5 }}
               className="mt-7"
             >
-              <p className="text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1] mb-2">
-                {t("name.suggestions") || "Try"}
-              </p>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-[10px] uppercase tracking-[0.22em] text-[#B7AEA1]">
+                  {t("name.suggestions") || "Try"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSuggestionBatch({
+                      key: suggestionKey,
+                      index: suggestionBatchIndex + 1,
+                    })
+                  }
+                  disabled={isSaving}
+                  aria-label={t("name.refresh_suggestions") || "Refresh suggestions"}
+                  title={t("name.refresh_suggestions") || "Refresh suggestions"}
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E3DACA] bg-white/55 text-[#8C8780] transition-colors hover:border-[#FFB199] hover:text-[#FF5924] disabled:opacity-50"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </button>
+              </div>
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 {suggestions.map((s, i) => (
                   <span key={s} className="inline-flex items-baseline gap-3">
                     <button
                       onClick={() => {
+                        setTitleMode("suggested");
                         setTitle(s);
                         inputRef.current?.focus();
                       }}
@@ -362,7 +392,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={() => void handleSave()}
-              disabled={isSaving || !title.trim() || !canSaveHeardVersion(currentVersion)}
+              disabled={isSaving || !displayTitle.trim() || !canSaveHeardVersion(currentVersion)}
               className="h-14 w-full rounded-[22px] bg-[#1A1A1A] text-base font-medium text-white transition-opacity disabled:opacity-45"
             >
               {isSaving
