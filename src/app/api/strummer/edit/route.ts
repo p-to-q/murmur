@@ -24,6 +24,7 @@ type RequestBody = { prompt?: string };
 
 export async function POST(req: NextRequest) {
   const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+  const spendRef = createSpendReference("llm_edit");
   const auth = await resolveRequestAuth(req);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
@@ -141,8 +142,9 @@ export async function POST(req: NextRequest) {
         userId,
         cost: COST.llm_edit,
         reason: "spend:llm_edit",
-        externalRef: requestId,
+        externalRef: spendRef,
         metadata: {
+          requestId,
           promptLength: prompt.length,
           route: ROUTE,
           phase: "preflight",
@@ -331,4 +333,8 @@ function extractTokens(text: string): EditToken[] {
     .filter((v): v is string => typeof v === "string")
     .filter((v): v is EditToken => allow.has(v as EditToken))
     .slice(0, 3);
+}
+
+function createSpendReference(kind: "llm_edit"): string {
+  return `${kind}:${crypto.randomUUID()}`;
 }

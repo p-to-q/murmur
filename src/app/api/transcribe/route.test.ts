@@ -299,7 +299,36 @@ describe("POST /api/transcribe", () => {
       expect(lastRefundInputs).toHaveLength(0);
       expect(lastSpendInputs[0]?.reason).toBe("spend:hum");
       expect(lastSpendInputs[0]?.cost).toBe(1);
+      expect(lastSpendInputs[0]?.externalRef).toStartWith("hum:");
+      expect(lastSpendInputs[0]?.externalRef).not.toBe("req_happy");
+      expect(lastSpendInputs[0]?.metadata?.requestId).toBe("req_happy");
       expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+    }
+  });
+
+  it("does not reuse client request ids as spend idempotency keys", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+
+    try {
+      for (let i = 0; i < 2; i += 1) {
+        const form = new FormData();
+        form.append("audio", audioFile());
+        form.append("targetInstrument", "piano");
+        const response = await POST(buildRequest(form, { requestId: "req_replayed" }));
+        expect(response.status).toBe(200);
+      }
+
+      expect(lastSpendInputs).toHaveLength(2);
+      expect(lastSpendInputs[0]?.externalRef).toStartWith("hum:");
+      expect(lastSpendInputs[1]?.externalRef).toStartWith("hum:");
+      expect(lastSpendInputs[0]?.externalRef).not.toBe(lastSpendInputs[1]?.externalRef);
+      expect(lastSpendInputs[0]?.externalRef).not.toBe("req_replayed");
+      expect(lastSpendInputs[1]?.externalRef).not.toBe("req_replayed");
+      expect(lastSpendInputs[0]?.metadata?.requestId).toBe("req_replayed");
+      expect(lastSpendInputs[1]?.metadata?.requestId).toBe("req_replayed");
     } finally {
       process.env.NODE_ENV = prevNodeEnv;
     }
