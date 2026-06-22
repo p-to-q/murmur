@@ -49,7 +49,9 @@ export function hasCookieAuthenticatedSession(headers: Headers): boolean {
 }
 
 function originFromHeaders(headers: Headers): string | null {
-  return parseOrigin(headers.get("origin")) ?? parseOrigin(headers.get("referer"));
+  const origin = headers.get("origin");
+  if (origin !== null) return parseOrigin(origin);
+  return parseOrigin(headers.get("referer"));
 }
 
 function parseOrigin(value: string | null): string | null {

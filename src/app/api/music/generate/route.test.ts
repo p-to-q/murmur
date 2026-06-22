@@ -45,9 +45,9 @@ function buildRequest(requestId: string, headers: HeadersInit = {}): NextRequest
   }) as unknown as NextRequest;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   resetCachedRateLimitStore();
-  getRateLimitStore().resetAll();
+  await getRateLimitStore().resetAll();
   nextAuth = {
     ok: true,
     user: { id: "guest", email: null, name: "Guest", avatarUrl: null },
@@ -99,5 +99,23 @@ describe("POST /api/music/generate", () => {
     expect(response.status).toBe(503);
     const body = await response.json() as { error: string };
     expect(body.error).toBe("worker_unconfigured");
+  });
+
+  it("returns 429 when the daily GPU generation bucket is exhausted", async () => {
+    const headers = { "x-real-ip": "203.0.113.48" };
+    const store = getRateLimitStore();
+
+    await store.hit(
+      "/api/music/generate:user:daily:guest:203.0.113.48",
+      { capacity: 48, refillWindowMs: 24 * 60 * 60 * 1000, cost: 48 },
+    );
+
+    const response = await POST(buildRequest("req_daily_blocked", headers));
+
+    expect(response.status).toBe(429);
+    const body = await response.json() as { error: string; requestId: string };
+    expect(body.error).toBe("rate_limited");
+    expect(body.requestId).toBe("req_daily_blocked");
+    expect(response.headers.get("X-RateLimit-Limit")).toBe("48");
   });
 });

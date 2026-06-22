@@ -50,6 +50,23 @@ describe("validateCookieAuthenticatedSameOrigin", () => {
     expect(result.allowed).toBe(true);
   });
 
+  it("does not trust referer when origin is present but invalid", () => {
+    const result = validateCookieAuthenticatedSameOrigin(
+      request("DELETE", {
+        cookie: "__Secure-authjs.session-token.0=tok_test",
+        origin: "%%%not-a-url",
+        referer: "https://murmur.example/song/song_test",
+      }),
+    );
+
+    expect(result).toEqual({
+      allowed: false,
+      reason: "missing_origin",
+      requestOrigin: null,
+      targetOrigin: "https://murmur.example",
+    });
+  });
+
   it("rejects cookie-authenticated unsafe requests from another origin", () => {
     const result = validateCookieAuthenticatedSameOrigin(
       request("POST", {
