@@ -1,5 +1,4 @@
 import { pgTable, text, varchar, timestamp, integer, index } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 
 export const emailVerificationCodes = pgTable(

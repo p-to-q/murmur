@@ -15,7 +15,6 @@ import {
   CUSTOM_TOPUP_NOTES_PER_USD,
   TOPUP_SKUS,
   getRegionalPrice,
-  topupNotesGranted,
   type Currency,
 } from "@murmur/core";
 
