@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 import CheckoutClient from "./CheckoutClient";
 
 /**
@@ -13,7 +14,7 @@ import CheckoutClient from "./CheckoutClient";
  */
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<GlobalLoadingIndicator />}>
       <CheckoutClient />
     </Suspense>
   );

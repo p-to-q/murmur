@@ -1,18 +1,23 @@
 "use client";
 
+import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
-import { Spinner } from "@/components/ui/spinner";
 import { useTranslator } from "@/lib/i18n";
 
 export function GlobalLoadingIndicator() {
   const t = useTranslator();
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div className="relative overflow-hidden bg-[#F5F1EB]" style={{ minHeight: "var(--content-h)" }}>
       <PageBackdrop variant="soft" />
 
-      <div className="relative z-10 flex min-h-svh items-center justify-center">
-        <Spinner size="lg" aria-label={t("loading.aria")} />
+      <div
+        className="relative z-10 flex items-center justify-center"
+        style={{ minHeight: "var(--content-h)" }}
+        role="status"
+        aria-label={t("loading.aria")}
+      >
+        <MurmurLoadingNote size="page" decorative={false} />
       </div>
     </div>
   );

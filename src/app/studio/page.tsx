@@ -1,7 +1,9 @@
 import dynamic from "next/dynamic";
+import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 
-const StudioScreen = dynamic(() =>
-  import("@/components/screens/StudioScreen").then((m) => m.StudioScreen),
+const StudioScreen = dynamic(
+  () => import("@/components/screens/StudioScreen").then((m) => m.StudioScreen),
+  { loading: () => <GlobalLoadingIndicator /> },
 );
 
 export default async function StudioPage({

@@ -9,6 +9,7 @@
  *   - { sku: string, currency?: "USD"|"CNY" } for canonical fixed tiers
  *   - { customAmountUsd: number } for the USD custom top-up flow
  *   - { customAmountCny: number, currency: "CNY" } for the CNY custom top-up flow
+ *   - optional { billingEmail: string } to prefill the hosted receipt email
  *
  * Errors:
  *   400 invalid_topup_request
@@ -52,6 +53,7 @@ export const runtime = "nodejs";
 
 const ROUTE = "/api/billing/checkout";
 const CHECKOUT_RATE_LIMIT = { capacity: 10, refillWindowMs: 60_000 };
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type CheckoutRequestBody = {
   sku?: unknown;
@@ -59,6 +61,7 @@ type CheckoutRequestBody = {
   customAmountCny?: unknown;
   currency?: unknown;
   payMethod?: unknown;
+  billingEmail?: unknown;
 };
 
 type CheckoutProduct =
@@ -176,6 +179,24 @@ function checkoutMetadata(
   return base;
 }
 
+function parseBillingEmail(
+  body: CheckoutRequestBody,
+  accountEmail: string | null | undefined,
+): string | null | "invalid" {
+  const candidate =
+    typeof body.billingEmail === "string"
+      ? body.billingEmail.trim().toLowerCase()
+      : "";
+
+  if (candidate) {
+    return EMAIL_RE.test(candidate) ? candidate : "invalid";
+  }
+
+  const fallback = accountEmail?.trim().toLowerCase();
+  if (!fallback) return null;
+  return EMAIL_RE.test(fallback) ? fallback : null;
+}
+
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
   let body: CheckoutRequestBody;
@@ -197,7 +218,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // CNY + zpay configured + WeChat Pay -> use zpay.
   const payMethod = typeof body.payMethod === "string" ? body.payMethod : "";
   const useZpay =
     product.currency === "CNY" &&
@@ -218,6 +238,17 @@ export async function POST(request: NextRequest) {
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
+  const billingEmail = parseBillingEmail(body, auth.user.email);
+  if (billingEmail === "invalid") {
+    return NextResponse.json(
+      {
+        error: "invalid_billing_email",
+        message: "Provide a valid billing email address.",
+        requestId,
+      },
+      { status: 400, headers: { "X-Request-Id": requestId } },
+    );
+  }
 
   if (userId === "guest" || auth.user.accountKind === "local_creator") {
     return NextResponse.json(
@@ -243,7 +274,15 @@ export async function POST(request: NextRequest) {
   }
 
   if (useZpay) {
-    return handleZpayCheckout(request, userId, product, payMethod as ZpayPaymentType, requestId, auth.sessionId);
+    return handleZpayCheckout(
+      request,
+      userId,
+      product,
+      payMethod as ZpayPaymentType,
+      billingEmail,
+      requestId,
+      auth.sessionId,
+    );
   }
 
   const client = getWaffoClient()!;
@@ -259,7 +298,7 @@ export async function POST(request: NextRequest) {
     const session = await client.checkout.createSession({
       productId,
       currency: product.currency,
-      ...(auth.user.email ? { buyerEmail: auth.user.email } : {}),
+      ...(billingEmail ? { buyerEmail: billingEmail } : {}),
       successUrl: `${origin}/topup/checkout?${product.successQuery}&status=success`,
       metadata,
       orderMerchantExternalId: `${userId}:${product.skuId}:${crypto.randomUUID()}`,
@@ -316,6 +355,7 @@ async function handleZpayCheckout(
   userId: string,
   product: CheckoutProduct,
   payMethod: ZpayPaymentType,
+  billingEmail: string | null,
   requestId: string,
   sessionId: string | null,
 ) {
@@ -345,6 +385,7 @@ async function handleZpayCheckout(
         payMethod,
         outTradeNo,
         moneyYuan,
+        ...(billingEmail ? { billingEmail } : {}),
       },
     });
 
