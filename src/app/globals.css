@@ -569,7 +569,7 @@
     max-width: calc(var(--hum-copy-w) + var(--hum-stage-gap) + var(--hum-orb-size));
     grid-template-columns: minmax(0, var(--hum-copy-w)) var(--hum-orb-size);
     gap: var(--hum-stage-gap);
-    transform: translateX(-12px);
+    transform: translateX(0);
   }
 
   .hum-mirror-copy {
@@ -581,7 +581,7 @@
     --hum-copy-w: 440px;
     max-width: calc(var(--hum-copy-w) + var(--hum-stage-gap) + var(--hum-orb-size));
     grid-template-columns: minmax(0, var(--hum-copy-w)) var(--hum-orb-size);
-    transform: translateX(-20px);
+    transform: translateX(0);
   }
 
   html.nav-collapsed .hum-mirror-copy {
