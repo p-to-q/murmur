@@ -12,6 +12,7 @@ let nextAuth: ResolvedRequestAuth = {
 
 let nextSong: Record<string, unknown> | null = null;
 let publishError: unknown = null;
+let revokeError: unknown = null;
 const getSongByIdForUserMock = mock(async () => nextSong);
 const publishSongShareForUserMock = mock(
   async (_songId: string, _userId: string, input: { shareCode: string; visibility?: "unlisted" | "public" }) => {
@@ -23,19 +24,34 @@ const publishSongShareForUserMock = mock(
     };
   },
 );
+const revokeSongShareForUserMock = mock(async () => {
+  if (revokeError) throw revokeError;
+  if (!nextSong) return null;
+  return {
+    ...nextSong,
+    shareCode: null,
+    visibility: "private",
+  };
+});
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
 }));
 
 mock.module("@/lib/db/queries/songs", () => ({
+  createSong: mock(async () => null),
+  createSongWithSpend: mock(async () => null),
+  deleteSongForUser: mock(async () => false),
+  getPublicSongSummaries: mock(async () => []),
   getSongByIdForUser: getSongByIdForUserMock,
   getSongByShareCode: mock(async () => null),
-  getPublicSongSummaries: mock(async () => []),
+  getSongSummariesByUser: mock(async () => []),
   publishSongShareForUser: publishSongShareForUserMock,
+  revokeSongShareForUser: revokeSongShareForUserMock,
+  updateSongForUser: mock(async () => null),
 }));
 
-const { POST } = await import("./route");
+const { DELETE, POST } = await import("./route");
 
 let originalAppUrl: string | undefined;
 
@@ -54,11 +70,11 @@ function ctx(id = "song_1") {
   return { params: Promise.resolve({ id }) };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   originalAppUrl = process.env.MURMUR_APP_URL;
   process.env.MURMUR_APP_URL = "https://murmur.example";
   resetCachedRateLimitStore();
-  getRateLimitStore().resetAll();
+  await getRateLimitStore().resetAll();
   nextAuth = {
     ok: true,
     user: { id: "usr_owner", email: null, name: "Owner", avatarUrl: null },
@@ -73,8 +89,10 @@ beforeEach(() => {
     visibility: "private",
   };
   publishError = null;
+  revokeError = null;
   getSongByIdForUserMock.mockClear();
   publishSongShareForUserMock.mockClear();
+  revokeSongShareForUserMock.mockClear();
 });
 
 afterEach(() => {
@@ -157,5 +175,62 @@ describe("POST /api/songs/[id]/share", () => {
       visibility: "unlisted",
       url: "https://murmur.example/s/demo-1",
     });
+  });
+});
+
+describe("DELETE /api/songs/[id]/share", () => {
+  it("revokes an owned share link and clears the old code", async () => {
+    nextSong = {
+      id: "song_1",
+      userId: "usr_owner",
+      title: "Share Me",
+      shareCode: "abc234defg",
+      visibility: "unlisted",
+    };
+
+    const response = await DELETE(
+      new Request("https://murmur.example/api/songs/song_1/share", {
+        method: "DELETE",
+        headers: { "x-request-id": "req_revoke" },
+      }) as unknown as NextRequest,
+      ctx(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(revokeSongShareForUserMock).toHaveBeenCalledWith("song_1", "usr_owner");
+    const body = await response.json() as Record<string, unknown>;
+    expect(body).toEqual({
+      id: "song_1",
+      shareCode: null,
+      visibility: "private",
+    });
+  });
+
+  it("does not revoke songs the user does not own", async () => {
+    nextSong = null;
+
+    const response = await DELETE(
+      new Request("https://murmur.example/api/songs/song_other/share", {
+        method: "DELETE",
+        headers: { "x-request-id": "req_revoke_other" },
+      }) as unknown as NextRequest,
+      ctx("song_other"),
+    );
+
+    expect(response.status).toBe(404);
+    expect(revokeSongShareForUserMock).toHaveBeenCalledWith("song_other", "usr_owner");
+  });
+
+  it("does not revoke deterministic demo shares", async () => {
+    const response = await DELETE(
+      new Request("https://murmur.example/api/songs/demo-1/share", {
+        method: "DELETE",
+        headers: { "x-request-id": "req_revoke_demo" },
+      }) as unknown as NextRequest,
+      ctx("demo-1"),
+    );
+
+    expect(response.status).toBe(404);
+    expect(revokeSongShareForUserMock).not.toHaveBeenCalled();
   });
 });

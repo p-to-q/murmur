@@ -4,10 +4,12 @@ import { resolveRequestAuth } from "@/lib/auth";
 import {
   getSongByIdForUser,
   publishSongShareForUser,
+  revokeSongShareForUser,
 } from "@/lib/db/queries/songs";
 import {
   getLocalSongByIdForUserFallback,
   publishLocalSongShareForUserFallback,
+  revokeLocalSongShareForUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { log } from "@/lib/observability/log";
@@ -22,6 +24,7 @@ import { isDemoSongId } from "@/presets/demo-songs";
 
 const ROUTE = "/api/songs/[id]/share";
 const SHARE_CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
+const SHARE_REVOKE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
 const SHARE_CODE_ATTEMPTS = 5;
 
 export async function POST(
@@ -128,6 +131,83 @@ export async function POST(
         message: "Could not allocate a share code. Please retry.",
       });
     }
+    return errorResponse("server_error", 500, requestId);
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await resolveRequestAuth(req);
+  if (!auth.ok) return auth.response;
+
+  const { id } = await params;
+  const userId = auth.user.id;
+  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "revoke:user",
+    userId,
+    requestId,
+    sessionId: auth.sessionId,
+    options: SHARE_REVOKE_RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
+
+  if (isDemoSongId(id)) {
+    return errorResponse("not_found", 404, requestId);
+  }
+
+  try {
+    const song = await revokeSongShareForUser(id, userId);
+    if (!song) {
+      return errorResponse("not_found", 404, requestId);
+    }
+
+    return NextResponse.json(
+      {
+        id: song.id,
+        shareCode: song.shareCode,
+        visibility: song.visibility,
+      },
+      { headers: { "X-Request-Id": requestId } },
+    );
+  } catch (err) {
+    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+      const song = revokeLocalSongShareForUserFallback(id, userId);
+      if (!song) {
+        return errorResponse("not_found", 404, requestId);
+      }
+      return NextResponse.json(
+        {
+          id: song.id,
+          shareCode: song.shareCode,
+          visibility: song.visibility,
+        },
+        {
+          headers: {
+            "X-Request-Id": requestId,
+            "X-Murmur-Fallback": "local-guest-song",
+          },
+        },
+      );
+    }
+
+    log("song.share_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      songId: id,
+      action: "revoke",
+    }, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+      level: "error",
+    });
     return errorResponse("server_error", 500, requestId);
   }
 }
