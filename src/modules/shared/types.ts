@@ -50,6 +50,8 @@ export type MelodyIntentProfile = {
   };
   correctionPolicy: {
     allowedPitchClasses: number[];
+    pitchClassWeights?: number[];
+    cadencePitchClassWeights?: number[];
     correctionStrength: number;
     retuneSpeed: number;
     timingQuantize: number;
