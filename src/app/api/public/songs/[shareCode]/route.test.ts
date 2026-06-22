@@ -6,7 +6,9 @@ let nextSong: Record<string, unknown> | null = null;
 const getSongByShareCodeMock = mock(async () => nextSong);
 
 mock.module("@/lib/db/queries/songs", () => ({
+  getSongByIdForUser: mock(async () => null),
   getSongByShareCode: getSongByShareCodeMock,
+  publishSongShareForUser: mock(async () => null),
 }));
 
 const { GET } = await import("./route");

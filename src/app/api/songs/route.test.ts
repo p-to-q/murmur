@@ -49,10 +49,13 @@ mock.module("@/lib/auth", () => ({
 mock.module("@/lib/db/queries/songs", () => ({
   getSongsByUser: mock(async () => []),
   getSongSummariesByUser: mock(async () => []),
+  getSongByShareCode: mock(async () => null),
+  getPublicSongSummaries: mock(async () => []),
   getSongByIdForUser: mock(async () => null),
   createSong: createSongMock,
   createSongWithSpend: createSongWithSpendMock,
   updateSongForUser: mock(async () => null),
+  publishSongShareForUser: mock(async () => null),
   deleteSongForUser: mock(async () => false),
 }));
 
