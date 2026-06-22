@@ -19,6 +19,8 @@ let nextBalance: BalanceResult = {
   ok: true,
   userId: "usr_strummer",
   notes: 10,
+  accountNotes: 5,
+  dailyFreeNotes: 5,
   planTier: "free",
   freeNotesGrantedAt: new Date(),
 };
@@ -81,6 +83,22 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
   decideGrant: () => ({ kind: "grant", balanceAfter: 0 }),
   decideSpend: () => ({ kind: "insufficient", currentBalance: 0 }),
   decideRefund: () => ({ kind: "original_missing" }),
+  decideSpendPoolsForCost: () => ({
+    dailyFreeBefore: 0,
+    accountBefore: 0,
+    dailyFreeSpent: 0,
+    accountSpent: 0,
+    dailyFreeAfter: 0,
+    accountAfter: 0,
+  }),
+  decideRefundPoolsForOriginalSpend: () => ({
+    dailyFreeRestore: 0,
+    accountRestore: 0,
+    dailyFreeAfter: 0,
+    accountAfter: 0,
+  }),
+  accountNotesFromTotal: (total: number, dailyFree: number) => Math.max(0, total - dailyFree),
+  trimDailyFreeAfterTopupReversal: (dailyFree: number, total: number) => Math.min(dailyFree, total),
   refundReferenceFor: (id: string) => `refund:${id}`,
 }));
 
@@ -136,6 +154,8 @@ beforeEach(() => {
     ok: true,
     userId: "usr_strummer",
     notes: 10,
+    accountNotes: 5,
+    dailyFreeNotes: 5,
     planTier: "free",
     freeNotesGrantedAt: new Date(),
   };
@@ -196,6 +216,8 @@ describe("POST /api/strummer/edit", () => {
       ok: true,
       userId: "usr_strummer",
       notes: 0,
+      accountNotes: 0,
+      dailyFreeNotes: 0,
       planTier: "free",
       freeNotesGrantedAt: new Date(),
     };

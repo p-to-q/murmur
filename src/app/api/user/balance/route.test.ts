@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
-import { nextNotesRefillAt } from "@/lib/billing/notes-clock";
+import { nextNotesRefillAt, notesRefillWindowKey } from "@/lib/billing/notes-clock";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
 let nextAuth: ResolvedRequestAuth = {
@@ -22,6 +22,8 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
       ok: true as const,
       userId: "guest",
       notes: 5,
+      accountNotes: 3,
+      dailyFreeNotes: 2,
       planTier: "free" as const,
       freeNotesGrantedAt: new Date("2026-06-05T00:00:00.000Z"),
     };
@@ -48,6 +50,22 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
   decideGrant: () => ({ kind: "grant", balanceAfter: 0 }),
   decideSpend: () => ({ kind: "insufficient", currentBalance: 0 }),
   decideRefund: () => ({ kind: "original_missing" }),
+  decideSpendPoolsForCost: () => ({
+    dailyFreeBefore: 0,
+    accountBefore: 0,
+    dailyFreeSpent: 0,
+    accountSpent: 0,
+    dailyFreeAfter: 0,
+    accountAfter: 0,
+  }),
+  decideRefundPoolsForOriginalSpend: () => ({
+    dailyFreeRestore: 0,
+    accountRestore: 0,
+    dailyFreeAfter: 0,
+    accountAfter: 0,
+  }),
+  accountNotesFromTotal: (total: number, dailyFree: number) => Math.max(0, total - dailyFree),
+  trimDailyFreeAfterTopupReversal: (dailyFree: number, total: number) => Math.min(dailyFree, total),
   refundReferenceFor: (id: string) => `refund:${id}`,
 }));
 
@@ -85,6 +103,13 @@ describe("user balance route helpers", () => {
     expect(nextNotesRefillAt(new Date("2026-06-03T16:01:00.000Z")).toISOString())
       .toBe("2026-06-04T16:00:00.000Z");
   });
+
+  it("keys refill windows by the UTC+8 calendar day", () => {
+    expect(notesRefillWindowKey(new Date("2026-06-03T15:30:00.000Z")))
+      .toBe("2026-06-03");
+    expect(notesRefillWindowKey(new Date("2026-06-03T16:01:00.000Z")))
+      .toBe("2026-06-04");
+  });
 });
 
 describe("GET /api/user/balance", () => {
@@ -101,8 +126,15 @@ describe("GET /api/user/balance", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { notes?: unknown; unlimited?: unknown };
+    const body = await response.json() as {
+      notes?: unknown;
+      accountNotes?: unknown;
+      dailyFreeNotes?: unknown;
+      unlimited?: unknown;
+    };
     expect(body.notes).toBe(5);
+    expect(body.accountNotes).toBe(3);
+    expect(body.dailyFreeNotes).toBe(2);
     expect(body.unlimited).toBe(false);
   });
 
@@ -119,8 +151,15 @@ describe("GET /api/user/balance", () => {
       );
 
       expect(response.status).toBe(200);
-      const body = await response.json() as { notes?: unknown; planTier?: unknown };
+      const body = await response.json() as {
+        notes?: unknown;
+        accountNotes?: unknown;
+        dailyFreeNotes?: unknown;
+        planTier?: unknown;
+      };
       expect(body.notes).toBe(9999);
+      expect(body.accountNotes).toBe(9999);
+      expect(body.dailyFreeNotes).toBe(0);
       expect(body.planTier).toBe("free");
     } finally {
       if (prevNode === undefined) delete process.env.NODE_ENV;

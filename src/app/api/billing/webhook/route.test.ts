@@ -108,6 +108,8 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
     ok: true as const,
     userId: "guest",
     notes: 0,
+    accountNotes: 0,
+    dailyFreeNotes: 0,
     planTier: "free" as const,
     freeNotesGrantedAt: new Date("2026-06-05T00:00:00.000Z"),
   }),
@@ -124,6 +126,22 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
     reverseInputs.push(input);
     return reverseResult;
   }),
+  decideSpendPoolsForCost: () => ({
+    dailyFreeBefore: 0,
+    accountBefore: 0,
+    dailyFreeSpent: 0,
+    accountSpent: 0,
+    dailyFreeAfter: 0,
+    accountAfter: 0,
+  }),
+  decideRefundPoolsForOriginalSpend: () => ({
+    dailyFreeRestore: 0,
+    accountRestore: 0,
+    dailyFreeAfter: 0,
+    accountAfter: 0,
+  }),
+  accountNotesFromTotal: (total: number, dailyFree: number) => Math.max(0, total - dailyFree),
+  trimDailyFreeAfterTopupReversal: (dailyFree: number, total: number) => Math.min(dailyFree, total),
 }));
 
 const { POST } = await import("./route");

@@ -1,9 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import {
+  accountNotesFromTotal,
   decideGrant,
   decideRefund,
+  decideRefundPoolsForOriginalSpend,
   decideSpend,
+  decideSpendPoolsForCost,
   refundReferenceFor,
+  trimDailyFreeAfterTopupReversal,
 } from "@/lib/billing/notes-ledger-decisions";
 
 describe("decideSpend", () => {
@@ -135,5 +139,65 @@ describe("refundReferenceFor", () => {
 
   it("is collision-free across distinct ledger ids", () => {
     expect(refundReferenceFor("nle_a")).not.toBe(refundReferenceFor("nle_b"));
+  });
+});
+
+describe("daily-free pool decisions", () => {
+  it("derives account notes from total notes without double counting daily-free notes", () => {
+    expect(accountNotesFromTotal(15, 5)).toBe(10);
+    expect(accountNotesFromTotal(3, 9)).toBe(0);
+  });
+
+  it("spends daily-free notes before account notes", () => {
+    expect(decideSpendPoolsForCost({
+      notesBalance: 15,
+      dailyFreeNotesBalance: 5,
+    }, 3)).toEqual({
+      dailyFreeBefore: 5,
+      accountBefore: 10,
+      dailyFreeSpent: 3,
+      accountSpent: 0,
+      dailyFreeAfter: 2,
+      accountAfter: 10,
+    });
+  });
+
+  it("spends account notes only after the daily-free pool is empty", () => {
+    expect(decideSpendPoolsForCost({
+      notesBalance: 15,
+      dailyFreeNotesBalance: 2,
+    }, 5)).toEqual({
+      dailyFreeBefore: 2,
+      accountBefore: 13,
+      dailyFreeSpent: 2,
+      accountSpent: 3,
+      dailyFreeAfter: 0,
+      accountAfter: 10,
+    });
+  });
+
+  it("restores the daily-free portion of a refunded spend", () => {
+    const result = decideRefundPoolsForOriginalSpend(
+      {
+        spendPools: {
+          dailyFreeSpent: 2,
+          accountSpent: 3,
+        },
+      },
+      1,
+      15,
+      10,
+    );
+
+    expect(result).toEqual({
+      dailyFreeRestore: 2,
+      accountRestore: 3,
+      dailyFreeAfter: 3,
+      accountAfter: 12,
+    });
+  });
+
+  it("trims daily-free notes when a top-up reversal shrinks the total balance", () => {
+    expect(trimDailyFreeAfterTopupReversal(8, 3)).toBe(3);
   });
 });

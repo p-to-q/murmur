@@ -54,7 +54,7 @@ balance; the guest web preview keeps a small one-time local allowance.
 | Generate 3 vibe versions | 0 | runs client / arrangement engine |
 | Studio LLM edit (Auris) | 1 / call | OpenAI cost passthrough |
 | Save song (persistence) | 0 | saving is retention, not the paywall |
-| Export WebM (audio + video) | 2 | longer render |
+| Export video (MP4 or WebM) | 0 | currently free; browser chooses container |
 | Export poster PNG | 0 | client-side render |
 | Export share HTML | 0 | client-side render |
 
@@ -63,8 +63,11 @@ Welcome and guest allowance:
 - **15 notes once on sign-in** (`grant:signup_bonus`). This is half of the
   Starter pack, enough for several full tries without undercutting purchase.
 - Guest web preview: **5 local notes once** per device via localStorage.
-- Future server daily refill can still use `grant:daily_free` for signed-in
-  free-tier accounts, but Local Creator does not refill.
+- Signed-in free-tier accounts receive daily free notes through
+  `grant:daily_free`; Local Creator does not refill. Daily free notes are a
+  sub-pool of the total `notesBalance`, not a second currency.
+- Spend order is daily-free pool first, then the account pool (top-ups,
+  signup, referrals, and operator grants).
 
 This gives a new signed-in user roughly: several hums, a few LLM edits, and
 free saves. Enough to feel the product; not enough to abuse worker or LLM
@@ -79,6 +82,7 @@ Add to [users.ts](../src/lib/db/schema/users.ts):
 ```ts
 // users table additions
 notesBalance:      integer("notes_balance").notNull().default(15),
+dailyFreeNotesBalance: integer("daily_free_notes_balance").notNull().default(0),
 freeNotesGrantedAt: timestamp("free_notes_granted_at").notNull().defaultNow(),
 planTier:          varchar("plan_tier", { length: 32 }).notNull().default("free"),  // free | premium (reserved)
 regionId:          varchar("region_id", { length: 16 }).notNull().default("intl"),  // intl | cn
@@ -122,6 +126,11 @@ The **ledger is the source of truth**. `users.notesBalance` is a
 materialized view kept in sync inside a transaction. Every grant / spend
 writes a ledger row + updates the balance atomically. Refunds insert a
 negative grant rather than mutating prior rows.
+
+`users.dailyFreeNotesBalance` tracks the portion of `notesBalance` that came
+from daily free grants and has not yet been spent. The UI derives
+`accountNotes = notesBalance - dailyFreeNotesBalance`. Expanded sidebar shows
+`accountNotes + dailyFreeNotes`; collapsed sidebar shows total `notesBalance`.
 
 ### 4.2 SKUs (initial)
 
@@ -205,7 +214,7 @@ New routes (all in `src/app/api/`):
 
 | Route | Method | Purpose |
 |---|---|---|
-| `/api/user/balance` | GET | returns `{ notes, planTier, nextRefillAt }` |
+| `/api/user/balance` | GET | returns `{ notes, accountNotes, dailyFreeNotes, planTier, nextRefillAt }` |
 | `/api/billing/skus` | GET | returns SKU table for the requesting region |
 | `/api/billing/checkout` | POST | create Waffo checkout session (web only) — **shipped** |
 | `/api/billing/webhook` | POST | Waffo `order.completed` → ledger write — **shipped** |
@@ -215,7 +224,7 @@ New routes (all in `src/app/api/`):
 | `/api/billing/refund` | POST | manual op-tool entry (internal) |
 
 All chargeable routes (`/api/transcribe`, `/api/strummer/edit`,
-`/api/songs`, `/api/export/webm`) gain a balance-check + ledger-write
+`/api/songs`) gain a balance-check + ledger-write
 transaction:
 
 ```ts
@@ -242,8 +251,10 @@ Current substrate shipped in Phase 4 pre-work:
 
 Carry-forward: Waffo checkout (`/api/billing/checkout`) and the
 `order.completed` webhook (`/api/billing/webhook`) have since shipped — see
-[billing-waffo.md](billing-waffo.md). The top-up page polish, region-aware SKU
-route, WeChat/RevenueCat channels, and the daily refill cron are still pending.
+[billing-waffo.md](billing-waffo.md). CNY ZPay checkout is webhook-backed from
+the same `purchases` + `grantNotes(reason: "purchase:topup")` pipe and rejects
+amount mismatches before granting. The top-up page polish, region-aware SKU
+route, and RevenueCat channels are still pending.
 
 ## 7. Cross-platform integration (recap)
 
@@ -308,17 +319,21 @@ Sources: `github.com/RevenueCat/purchases-capacitor/issues/279`,
 
 ## 8. Daily free refill
 
-Background job (cron or scheduled task):
+Daily refill is server-authoritative and lazy-idempotent:
 
 ```ts
-// runs hourly; idempotent
-for users where freeNotesGrantedAt < startOfToday(user.regionId):
-  grant min(5, 10 - currentBalance)
-  set freeNotesGrantedAt = startOfToday(user.regionId)
+// runs before balance reads and paid spends; idempotent per local-day window
+if registered user and no grant:daily_free row for today's window:
+  grant min(DAILY_REFILL, MAX_FREE_BALANCE - dailyFreeNotesBalance)
+  increment notesBalance and dailyFreeNotesBalance in the same transaction
+  set freeNotesGrantedAt = current window start
 ```
 
-Worth noting: Murmur already has a daily-digest cron stub at
-`/api/notifications/cron/daily-digest` — reuse the same scheduler.
+The grant row uses `externalRef = daily_free:<window-key>` and the
+`notes_ledger` idempotency index prevents duplicate daily grants. A future cron
+may call the same helper proactively, but the user-visible guarantee does not
+depend on a scheduler: opening balance or initiating a chargeable action
+settles the daily pool first.
 
 ## 9. Anti-abuse
 
@@ -345,7 +360,8 @@ A downstream agent has shipped payment + top-up when:
 - [ ] `/api/transcribe`, `/api/strummer/edit`, `/api/songs` POST all
       respect `402` on insufficient balance and never write business
       output without ledger consumption.
-- [ ] Daily free refill cron actually runs and grants notes.
+- [ ] Daily free refill actually lands in both `notesBalance` and
+      `dailyFreeNotesBalance`, with one ledger row per daily window.
 - [ ] MeScreen surfaces balance + "Top up" link.
 - [ ] Studio Save button reflects gating when balance < 1.
 - [ ] Restore purchases works on iOS (via RevenueCat) — checked manually

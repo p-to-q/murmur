@@ -26,6 +26,28 @@ describe("fetchUserBalance", () => {
   it("returns the parsed balance for the happy path", async () => {
     globalThis.fetch = (async () =>
       jsonResponse(
+        {
+          notes: 12,
+          accountNotes: 7,
+          dailyFreeNotes: 5,
+          planTier: "free",
+          nextRefillAt: "2026-06-04T16:00:00.000Z",
+        },
+        200,
+      )) as typeof fetch;
+
+    const result = await fetchUserBalance({ force: true });
+    expect(result.ok).toBe(true);
+    expect(result.balance?.notes).toBe(12);
+    expect(result.balance?.accountNotes).toBe(7);
+    expect(result.balance?.dailyFreeNotes).toBe(5);
+    expect(result.balance?.planTier).toBe("free");
+    expect(result.error).toBeNull();
+  });
+
+  it("derives account notes for older balance payloads without pool fields", async () => {
+    globalThis.fetch = (async () =>
+      jsonResponse(
         { notes: 12, planTier: "free", nextRefillAt: "2026-06-04T16:00:00.000Z" },
         200,
       )) as typeof fetch;
@@ -33,8 +55,8 @@ describe("fetchUserBalance", () => {
     const result = await fetchUserBalance({ force: true });
     expect(result.ok).toBe(true);
     expect(result.balance?.notes).toBe(12);
-    expect(result.balance?.planTier).toBe("free");
-    expect(result.error).toBeNull();
+    expect(result.balance?.accountNotes).toBe(12);
+    expect(result.balance?.dailyFreeNotes).toBe(0);
   });
 
   it("surfaces unauthorized on 401 without throwing", async () => {

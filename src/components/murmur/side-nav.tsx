@@ -24,7 +24,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import { AnimatePresence, LayoutGroup, motion, useSpring, useTransform } from "framer-motion";
 import {
   BellRing,
   CheckCheck,
@@ -107,6 +107,9 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const [optimisticPath, setOptimisticPath] = useState<string | null>(null);
 
   const [collapsed, setCollapsed] = useSideNavCollapsed();
+  const totalNotes = balance?.notes;
+  const accountNotes = balance?.accountNotes;
+  const dailyFreeNotes = balance?.dailyFreeNotes;
 
   useEffect(() => {
     const html = document.documentElement;
@@ -389,13 +392,13 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
           <div className="space-y-1.5">
             <div className="flex items-baseline gap-1">
               <span className="font-serif text-[#1A1A1A] text-[28px] leading-none tabular-nums">
-                {balance?.notes ?? "—"}
+                <RollingNumber value={accountNotes} />
               </span>
               <span className="text-[12px] uppercase tracking-[0.18em] text-[#B6B0A4] leading-none">
                 +
               </span>
               <span className="font-serif text-[#8C8780] text-[18px] leading-none tabular-nums">
-                5
+                <RollingNumber value={dailyFreeNotes} />
               </span>
             </div>
             <div className="flex items-baseline justify-between">
@@ -420,7 +423,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
             suppressHydrationWarning
           >
             <span className="font-serif text-[14px] tabular-nums">
-              {(balance?.notes ?? 0) + 5}
+              <RollingNumber value={totalNotes} fallback="—" />
             </span>
           </Link>
         )}
@@ -491,6 +494,29 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
       </div>
     </aside>
   );
+}
+
+function RollingNumber({
+  value,
+  fallback = "—",
+}: {
+  value: number | null | undefined;
+  fallback?: string;
+}) {
+  const numericValue =
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.max(0, Math.floor(value))
+      : null;
+  const spring = useSpring(numericValue ?? 0, { stiffness: 110, damping: 18 });
+  const display = useTransform(spring, (latest) => String(Math.round(latest)));
+
+  useEffect(() => {
+    if (numericValue === null) return;
+    spring.set(numericValue);
+  }, [numericValue, spring]);
+
+  if (numericValue === null) return <>{fallback}</>;
+  return <motion.span>{display}</motion.span>;
 }
 
 /* ── ShareCardModal portal — must be outside <aside> to cover full viewport ── */

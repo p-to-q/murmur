@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
         {
           error: "user_not_found",
           notes: 0,
+          accountNotes: 0,
+          dailyFreeNotes: 0,
           planTier: "free",
           nextRefillAt: nextNotesRefillAt().toISOString(),
         },
@@ -30,6 +32,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       notes: balance.notes,
+      accountNotes: balance.accountNotes,
+      dailyFreeNotes: balance.dailyFreeNotes,
       planTier: balance.planTier,
       nextRefillAt: nextNotesRefillAt().toISOString(),
       unlimited: false,
@@ -48,6 +52,8 @@ export async function GET(request: NextRequest) {
       const fallback = getDevBalanceFallback();
       return NextResponse.json({
         notes: fallback.notes,
+        accountNotes: fallback.notes,
+        dailyFreeNotes: 0,
         planTier: fallback.planTier,
         nextRefillAt: nextNotesRefillAt().toISOString(),
       });

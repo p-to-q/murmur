@@ -16,6 +16,10 @@ import { useCurrentAccount } from "@/lib/hooks/use-current-account";
  */
 export interface UserBalance {
   notes: number;
+  /** Paid/top-up/referral pool: `notes - dailyFreeNotes`, clamped to zero. */
+  accountNotes: number;
+  /** Signed-in daily free pool. Spend helpers consume this before account notes. */
+  dailyFreeNotes: number;
   planTier: "free" | "premium";
   nextRefillAt: string | null;
   /** Reserved for a future premium tier; current launch pricing returns false. */
@@ -86,8 +90,16 @@ export async function fetchUserBalance(
       if (typeof payload.notes !== "number") {
         return { ok: false, balance: cachedBalance, error: "unavailable" as const };
       }
+      const notes = normalizeNotes(payload.notes);
+      const dailyFreeNotes = Math.min(normalizeNotes(payload.dailyFreeNotes), notes);
+      const accountNotes =
+        typeof payload.accountNotes === "number"
+          ? Math.min(normalizeNotes(payload.accountNotes), notes - dailyFreeNotes)
+          : Math.max(0, notes - dailyFreeNotes);
       const balance: UserBalance = {
-        notes: payload.notes,
+        notes,
+        accountNotes,
+        dailyFreeNotes,
         planTier: payload.planTier === "premium" ? "premium" : "free",
         nextRefillAt: typeof payload.nextRefillAt === "string" ? payload.nextRefillAt : null,
         unlimited: payload.unlimited === true,
@@ -146,6 +158,8 @@ export function useUserBalance(): UseUserBalanceResult {
       const localBalance = getLocalBalance();
       const balance: UserBalance = {
         notes: localBalance.notes,
+        accountNotes: localBalance.notes,
+        dailyFreeNotes: 0,
         planTier: "free",
         nextRefillAt: localBalance.nextRefillAt,
         unlimited: false,
@@ -177,6 +191,8 @@ export function useUserBalance(): UseUserBalanceResult {
         if (cancelled) return;
         setSnapshot({
           notes: localBalance.notes,
+          accountNotes: localBalance.notes,
+          dailyFreeNotes: 0,
           planTier: "free",
           nextRefillAt: localBalance.nextRefillAt,
           unlimited: false,
@@ -208,4 +224,10 @@ export function useUserBalance(): UseUserBalanceResult {
   }, [accountLoading, hasServerAccount]);
 
   return { balance: snapshot, isLoading, error, refresh };
+}
+
+function normalizeNotes(value: number | undefined): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.floor(value))
+    : 0;
 }

@@ -60,7 +60,7 @@ describe("resolveEntitlement", () => {
       canHum: false,
       canSave: true,
       canLlmEdit: false,
-      canExportWebm: false,
+      canExportWebm: true,
       canTopUp: true,
       canDeleteAccount: true,
       remainingNotes: 0,

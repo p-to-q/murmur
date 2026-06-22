@@ -18,6 +18,7 @@ import {
   type EditToken,
 } from "@/modules/strummer/apply-edit";
 import { classifyPromptWithLLM } from "@/lib/api/strummer";
+import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { memory } from "@/lib/platform/memory";
 import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import {
@@ -106,6 +107,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
   const t = useTranslator();
   const lang = useCurrentLang();
   const setCurrentVersion = useMurmurStore((state) => state.setCurrentVersion);
+  const { refresh: refreshBalance } = useUserBalance();
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [promptBusy, setPromptBusy] = useState(false);
@@ -197,6 +199,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
       }
 
       const llmTokens = await classifyPromptWithLLM(prompt);
+      void refreshBalance();
       if (llmTokens.length > 0) {
         const nextVersion = applyTokens(currentVersion, llmTokens);
         setCurrentVersion(nextVersion);
