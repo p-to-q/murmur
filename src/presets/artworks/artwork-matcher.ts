@@ -141,12 +141,17 @@ export function pickArtwork(
   facets: ArtworkMatchFacets | undefined,
   seed: string,
   recentArtworkIds: string[] = [],
+  excludedArtworkIds: string[] = [],
 ): ArtworkCatalogEntry | null {
   if (catalog.length === 0) return null;
   const resolvedFacets = facets ?? {};
   const rng = mulberry32(hashString(seed));
   const recent = new Set(recentArtworkIds);
-  const scored = catalog
+  const excluded = new Set(excludedArtworkIds);
+  const availableCatalog = catalog.filter((entry) => !excluded.has(entry.id));
+  if (availableCatalog.length === 0) return null;
+
+  const scored = availableCatalog
     .map((entry) => {
       const noise = (rng() - 0.5) * 1.15;
       const repeatPenalty = recent.has(entry.id) ? 2.5 : 0;
@@ -171,8 +176,9 @@ export function pickArtworkSelection(
   facets: ArtworkMatchFacets | undefined,
   seed: string,
   recentArtworkIds: string[] = [],
+  excludedArtworkIds: string[] = [],
 ): ArtworkSelection | undefined {
-  const entry = pickArtwork(ARTWORK_CATALOG, facets, seed, recentArtworkIds);
+  const entry = pickArtwork(ARTWORK_CATALOG, facets, seed, recentArtworkIds, excludedArtworkIds);
   return entry ? toArtworkSelection(entry) : undefined;
 }
 

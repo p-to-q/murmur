@@ -63,6 +63,24 @@ describe("artwork catalog", () => {
     expect(selection?.renderTreatment?.recommendedOverlay).toBeGreaterThan(0);
   });
 
+  it("honors hard artwork exclusions", () => {
+    const first = pickArtworkSelection(
+      { genre: "ambient", mood: "serene", energy: 0.25 },
+      "catalog-smoke",
+    );
+
+    const second = pickArtworkSelection(
+      { genre: "ambient", mood: "serene", energy: 0.25 },
+      "catalog-smoke",
+      [],
+      first ? [first.id] : [],
+    );
+
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    expect(second?.id).not.toBe(first?.id);
+  });
+
   it("keeps gallery demo artwork anchors available", () => {
     const ids = new Set(ARTWORK_CATALOG.map((entry) => entry.id));
 
