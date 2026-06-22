@@ -46,6 +46,7 @@ type BillingMode = "ledger" | "dev_fallback";
 export async function POST(request: NextRequest) {
   const startedAt = performance.now();
   const requestId = getRequestId(request);
+  const spendRef = createSpendReference("hum");
   const auth = await resolveRequestAuth(request, {
     allowGuestPreview: shouldAllowGuestTranscribePreview(request),
   });
@@ -257,8 +258,9 @@ export async function POST(request: NextRequest) {
           userId,
           cost: COST.hum,
           reason: "spend:hum",
-          externalRef: requestId,
+          externalRef: spendRef,
           metadata: {
+            requestId,
             route: ROUTE,
             phase: "preflight",
             targetInstrument,
@@ -502,4 +504,8 @@ function fail(
 
 function getRequestId(request: NextRequest): string {
   return request.headers.get("x-request-id") || crypto.randomUUID();
+}
+
+function createSpendReference(kind: "hum"): string {
+  return `${kind}:${crypto.randomUUID()}`;
 }

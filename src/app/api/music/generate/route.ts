@@ -16,9 +16,13 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const ROUTE = "/api/music/generate";
-// One hum fans out into three clips and rerolls fan out again — the budget
-// is per-clip, so keep it well above the transcribe route's.
-const GENERATE_RATE_LIMIT = { capacity: 30, refillWindowMs: 60_000 };
+// One hum fans out into three clips and one immediate reroll can fan out again.
+// Keep a short burst for a normal creative loop, then cap the 24h GPU budget.
+const GENERATE_BURST_RATE_LIMIT = { capacity: 6, refillWindowMs: 60_000 };
+const GENERATE_DAILY_RATE_LIMIT = {
+  capacity: 48,
+  refillWindowMs: 24 * 60 * 60 * 1000,
+};
 // Must stay below maxDuration so our structured error beats the platform 502.
 const WORKER_TIMEOUT_MS = 295_000;
 const MAX_PROMPT_CHARS = 300;
@@ -82,16 +86,28 @@ export async function POST(request: NextRequest) {
     auth.source === "guest"
       ? `${userId}:${clientIpFromHeaders(request.headers)}`
       : userId;
-  const rateLimit = await checkApiRateLimit({
+  const burstRateLimit = await checkApiRateLimit({
     route: ROUTE,
-    bucket: "user",
+    bucket: "user:burst",
     userId: rateLimitId,
     requestId,
     sessionId: auth.sessionId,
-    options: GENERATE_RATE_LIMIT,
+    options: GENERATE_BURST_RATE_LIMIT,
   });
-  if (!rateLimit.allowed) {
-    return rateLimitedResponse(rateLimit, requestId);
+  if (!burstRateLimit.allowed) {
+    return rateLimitedResponse(burstRateLimit, requestId);
+  }
+
+  const dailyRateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "user:daily",
+    userId: rateLimitId,
+    requestId,
+    sessionId: auth.sessionId,
+    options: GENERATE_DAILY_RATE_LIMIT,
+  });
+  if (!dailyRateLimit.allowed) {
+    return rateLimitedResponse(dailyRateLimit, requestId);
   }
 
   const mode = getMusicEngineMode();

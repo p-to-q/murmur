@@ -3,6 +3,7 @@ import { ulid } from "ulid";
 
 import { rateLimitedResponse } from "@/lib/api/rate-limit";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
+import { validateCookieAuthenticatedSameOrigin } from "@/lib/http/origin-guard";
 import { log } from "@/lib/observability/log";
 import { getRateLimitStore } from "@/lib/rate-limit";
 
@@ -30,6 +31,27 @@ function clientIp(request: NextRequest): string {
 
 export default async function proxy(request: NextRequest) {
   const requestId = request.headers.get("x-request-id") || ulid();
+
+  const originGuard = validateCookieAuthenticatedSameOrigin(request);
+  if (!originGuard.allowed) {
+    log("security.cross_origin_unsafe_request_blocked", {
+      reason: originGuard.reason,
+      requestOrigin: originGuard.requestOrigin,
+      targetOrigin: originGuard.targetOrigin,
+    }, {
+      route: request.nextUrl.pathname,
+      requestId,
+      level: "warn",
+    });
+    return NextResponse.json(
+      {
+        error: "cross_origin_request",
+        message: "Unsafe cookie-authenticated API requests must come from this site.",
+        requestId,
+      },
+      { status: 403, headers: { "X-Request-Id": requestId } },
+    );
+  }
 
   const result = await getRateLimitStore().hit(
     `global:ip:${clientIp(request)}`,

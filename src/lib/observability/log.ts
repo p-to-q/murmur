@@ -31,6 +31,7 @@ export type LogEvent =
   | "notes.granted"
   | "notes.refund_failed"
   | "rate_limit.tripped"
+  | "security.cross_origin_unsafe_request_blocked"
   | "user.balance_failed"
   | "arrangement.generated"
   | "magenta.batch_started"

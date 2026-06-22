@@ -196,8 +196,26 @@ describe("POST /api/strummer/edit", () => {
     expect(lastSpendInputs).toHaveLength(1);
     expect(lastSpendInputs[0]?.reason).toBe("spend:llm_edit");
     expect(lastSpendInputs[0]?.cost).toBe(1);
+    expect(lastSpendInputs[0]?.externalRef).toStartWith("llm_edit:");
+    expect(lastSpendInputs[0]?.externalRef).not.toBe("req_strummer");
+    expect(lastSpendInputs[0]?.metadata?.requestId).toBe("req_strummer");
     const body = await response.json() as { tokens: string[] };
     expect(body.tokens).toEqual(["warmer", "less_drums"]);
+  });
+
+  it("does not reuse client request ids as spend idempotency keys", async () => {
+    await POST(buildRequest("make it warmer", "req_replayed"));
+    await POST(buildRequest("make it warmer", "req_replayed"));
+
+    expect(lastSpendInputs).toHaveLength(2);
+    expect(lastSpendInputs[0]?.externalRef).toStartWith("llm_edit:");
+    expect(lastSpendInputs[1]?.externalRef).toStartWith("llm_edit:");
+    expect(lastSpendInputs[0]?.externalRef).not.toBe(lastSpendInputs[1]?.externalRef);
+    expect(lastSpendInputs[0]?.externalRef).not.toBe("req_replayed");
+    expect(lastSpendInputs[1]?.externalRef).not.toBe("req_replayed");
+    expect(lastSpendInputs[0]?.metadata?.requestId).toBe("req_replayed");
+    expect(lastSpendInputs[1]?.metadata?.requestId).toBe("req_replayed");
+    expect(chatCallCount).toBe(2);
   });
 
   it("refunds the note when the model fails for signed-in users", async () => {
