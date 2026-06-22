@@ -7,6 +7,7 @@ import { upsertOAuthUser, normalizeEmail } from "@/lib/db/queries/users";
 import { createSession } from "@/lib/db/queries/sessions";
 import {
   SESSION_COOKIE_NAME,
+  murmurSessionCookieOptions,
   resolveRequestAuth,
 } from "@/lib/platform/server-auth";
 import { log } from "@/lib/observability/log";
@@ -104,14 +105,11 @@ export async function POST(request: NextRequest) {
       ok: true,
       user: { id: userId, email: normalized, accountKind: "registered" },
     });
-    response.cookies.set(SESSION_COOKIE_NAME, session.token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      expires: session.expiresAt,
-      maxAge: 30 * 24 * 60 * 60,
-    });
+    response.cookies.set(
+      SESSION_COOKIE_NAME,
+      session.token,
+      murmurSessionCookieOptions(session.expiresAt),
+    );
     return referrerId ? clearShareReferralCookie(response) : response;
   } catch (error) {
     log(

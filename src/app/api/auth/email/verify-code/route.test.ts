@@ -49,6 +49,14 @@ mock.module("@/lib/db/queries/sessions", () => ({
 
 mock.module("@/lib/platform/server-auth", () => ({
   SESSION_COOKIE_NAME: "__murmur_session",
+  murmurSessionCookieOptions: (expires: Date) => ({
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: false,
+    path: "/",
+    expires,
+    maxAge: 60,
+  }),
   resolveRequestAuth: async () => nextAuth,
 }));
 

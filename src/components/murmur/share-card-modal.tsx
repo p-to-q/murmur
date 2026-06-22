@@ -3,12 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Link as LinkIcon, Check } from "lucide-react";
-import { useSession } from "next-auth/react";
 
 import { useTranslator } from "@/lib/i18n";
 import { AuthButtons } from "@/components/auth/auth-buttons";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
 import { copyShareInviteLink } from "@/lib/platform/share-invite";
+import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 
 interface ShareCardModalProps {
   open: boolean;
@@ -99,8 +99,7 @@ function initialLayer(): CarouselLayer {
 
 export function ShareCardModal({ open, onClose, shareUrl }: ShareCardModalProps) {
   const t = useTranslator();
-  const { data: session } = useSession();
-  const isLoggedIn = !!session?.user;
+  const { isRegistered } = useCurrentAccount();
   const [showEmail, setShowEmail] = useState(false);
   const [copied, setCopied] = useState(false);
   const animationFrameRef = useRef<number | null>(null);
@@ -279,7 +278,7 @@ export function ShareCardModal({ open, onClose, shareUrl }: ShareCardModalProps)
                     {t("share.tagline")}
                   </h2>
 
-                  {isLoggedIn ? (
+                  {isRegistered ? (
                     <button
                       onClick={async () => {
                         if (!shareUrl) return;
@@ -300,7 +299,10 @@ export function ShareCardModal({ open, onClose, shareUrl }: ShareCardModalProps)
                       {copied ? t("share.copied") : t("share.copy_link")}
                     </button>
                   ) : showEmail ? (
-                    <EmailLoginForm className="text-left" />
+                    <EmailLoginForm
+                      className="text-left"
+                      onSuccess={() => setShowEmail(false)}
+                    />
                   ) : (
                     <AuthButtons
                       callbackUrl="/"

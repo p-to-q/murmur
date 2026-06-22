@@ -24,7 +24,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { useSession } from "next-auth/react";
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { ChevronsLeft, ChevronsRight, LinkIcon, LogIn } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -35,6 +34,7 @@ import { useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
 import { versionPreview } from "@/lib/music/version-preview";
 import { useCurrentLang, useI18nStore, useTranslator } from "@/lib/i18n";
+import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { useBrowserNotification } from "@/lib/hooks/use-browser-notification";
 import { NAV_ITEMS, computeTrail, type ComputedStep } from "./nav-items";
@@ -84,8 +84,8 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const { balance } = useUserBalance();
   const { resetFlow, isPlaying, auditioningVersionId } = useMurmurStore();
   const audioActive = isPlaying || auditioningVersionId !== null;
-  const { data: session } = useSession();
-  const isLoggedIn = !!session?.user;
+  const { isRegistered } = useCurrentAccount();
+  const isLoggedIn = isRegistered;
 
   const [slashFlash, setSlashFlash] = useState(false);
   const [optimisticPath, setOptimisticPath] = useState<string | null>(null);
@@ -479,11 +479,11 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
 export function SideNavWithModal() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareInviteUrl, setShareInviteUrl] = useState<string | null>(null);
-  const t = useTranslator();
-  const { data: session, status } = useSession();
+  const { user, isRegistered, isLoading } = useCurrentAccount();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (isLoading) return;
     let cancelled = false;
 
     void getShareInviteUrl(window.location.origin).then((url) => {
@@ -493,7 +493,7 @@ export function SideNavWithModal() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id, status]);
+  }, [isLoading, isRegistered, user?.id]);
 
   const handleShareClick = () => {
     setShareModalOpen(true);

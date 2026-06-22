@@ -101,9 +101,9 @@ export const externalIdentities = pgTable(
   "external_identities",
   {
     id:         text("id").primaryKey(),               // ulid `eid_…`
-    userId:     text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    userId:     varchar("user_id", { length: 128 }).notNull().references(() => users.id, { onDelete: "cascade" }),
     provider:   varchar("provider", { length: 16 }).notNull(),
-    // provider: "apple" | "google" | "wechat" | "wechat_mp" | "email"
+    // provider: "apple" | "google" | "github" | "wechat" | "wechat_mp" | "email"
     externalId: varchar("external_id", { length: 256 }).notNull(),
     linkedAt:   timestamp("linked_at").notNull().defaultNow(),
     metadata:   jsonb("metadata").$type<Record<string, unknown>>().notNull().default(sql`'{}'`),
@@ -120,6 +120,7 @@ Constraints:
 - A user must have ≥1 identity (enforced in app code, not DB).
 - `(provider, externalId)` is unique globally; the same Apple ID cannot
   bind to two `users` rows.
+- `user_id → users.id` is a real Postgres FK with `ON DELETE cascade`.
 
 ### 3.3 `sessions` (NEW)
 

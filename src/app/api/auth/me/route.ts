@@ -3,6 +3,7 @@ import { resolveRequestAuth } from "@/lib/auth";
 import { buildAuthMePayload } from "@/lib/auth/me-payload";
 import { getDevBalanceFallback, shouldUseDevBalanceFallback } from "@/lib/billing/dev-balance";
 import { getNotesBalance } from "@/lib/db/queries/notes-ledger";
+import { getIdentityProvidersForUser } from "@/lib/db/queries/users";
 import { log } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
@@ -14,7 +15,12 @@ export async function GET(request: NextRequest) {
   if (!auth.ok) return auth.response;
 
   try {
-    const balance = await getNotesBalance(auth.user.id);
+    const [balance, identityProviders] = await Promise.all([
+      getNotesBalance(auth.user.id),
+      auth.user.id === "guest" || auth.user.accountKind === "local_creator"
+        ? Promise.resolve([])
+        : getIdentityProvidersForUser(auth.user.id),
+    ]);
     if (!balance.ok) {
       return NextResponse.json(
         {
@@ -30,6 +36,7 @@ export async function GET(request: NextRequest) {
         user: auth.user,
         source: auth.source,
         sessionId: auth.sessionId,
+        identityProviders,
         balance: {
           notes: balance.notes,
           planTier: balance.planTier,
@@ -54,6 +61,7 @@ export async function GET(request: NextRequest) {
           user: auth.user,
           source: auth.source,
           sessionId: auth.sessionId,
+          identityProviders: [],
           balance: fallback,
         }),
       );

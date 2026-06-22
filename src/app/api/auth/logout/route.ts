@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
+import {
+  clearMurmurSessionCookieOptions,
+  getSessionToken,
+  SESSION_COOKIE_NAME,
+} from "@/lib/auth";
 import { revokeSessionByToken } from "@/lib/db/queries/sessions";
 import { log } from "@/lib/observability/log";
 
@@ -37,13 +41,6 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.json({ ok: true, revoked });
-  response.cookies.set(SESSION_COOKIE_NAME, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    expires: new Date(0),
-    maxAge: 0,
-  });
+  response.cookies.set(SESSION_COOKIE_NAME, "", clearMurmurSessionCookieOptions());
   return response;
 }

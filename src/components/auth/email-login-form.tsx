@@ -6,6 +6,8 @@ import { MurmurLoadingNote } from "@/components/murmur/murmur-loading-note";
 import { authClient } from "@/lib/platform/auth-client";
 import { useTranslator } from "@/lib/i18n";
 import { clearRememberedShareReferrer } from "@/lib/api/share-referral";
+import { refreshCurrentAccount } from "@/lib/hooks/use-current-account";
+import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
 
 type Stage = "email" | "code";
 
@@ -76,10 +78,10 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
         });
       }
       clearRememberedShareReferrer();
+      await refreshCurrentAccount();
+      await fetchUserBalance({ force: true });
       if (onSuccess) {
         onSuccess();
-      } else {
-        window.location.reload();
       }
     } catch {
       toast.error(t("auth.code_invalid"));

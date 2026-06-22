@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { request } from "@/lib/api/request";
-import { useSession } from "next-auth/react";
 import { getLocalBalance } from "@/lib/balance/balance-manager";
+import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 
 /**
  * Snapshot of the authenticated user's notes balance, as returned by
@@ -120,27 +120,29 @@ export function __resetUserBalanceCacheForTesting(): void {
  * rendering — `isLoading` is true only while the very first fetch is in
  * flight.
  *
- * For Local Creator: returns local balance from localStorage
- * For Google users: fetches from API
+ * Murmur sessions (registered users and Local Creator rows) use the server
+ * ledger. Only pure no-session preview fallback uses the device-local counter.
  */
 export function useUserBalance(): UseUserBalanceResult {
-  const { data: session, status } = useSession();
-  const isSessionLoading = status === "loading";
-  const isGoogleUser = !!session?.user;
+  const { account, isLoading: accountLoading } = useCurrentAccount();
+  const hasServerAccount =
+    Boolean(account?.user?.id) &&
+    account?.user?.id !== "guest" &&
+    account?.source !== "guest";
 
   const [snapshot, setSnapshot] = useState<UserBalance | null>(cachedBalance);
   const [error, setError] = useState<UserBalanceFetchError | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(cachedBalance === null);
 
   const refresh = useCallback(async () => {
-    if (isSessionLoading) {
+    if (accountLoading) {
       setIsLoading(cachedBalance === null);
       return cachedBalance
         ? { ok: true, balance: cachedBalance, error: null }
         : null;
     }
 
-    if (!isGoogleUser) {
+    if (!hasServerAccount) {
       const localBalance = getLocalBalance();
       const balance: UserBalance = {
         notes: localBalance.notes,
@@ -154,26 +156,22 @@ export function useUserBalance(): UseUserBalanceResult {
       return { ok: true, balance, error: null };
     }
 
-    // Google user: fetch from API
     setIsLoading((prev) => prev || cachedBalance === null);
     const result = await fetchUserBalance({ force: true });
     setSnapshot((previous) => result.balance ?? previous);
     setError(result.error);
     setIsLoading(false);
     return result;
-  }, [isGoogleUser, isSessionLoading]);
+  }, [accountLoading, hasServerAccount]);
 
   useEffect(() => {
     let cancelled = false;
 
-    if (isSessionLoading) {
+    if (accountLoading) {
       return;
     }
 
-    if (!isGoogleUser) {
-      // Local Creator: immediate local balance. localStorage can only be
-      // read after mount (SSR has none), so this one post-mount render is
-      // the hydration-safe pattern, not a cascading-update bug.
+    if (!hasServerAccount) {
       const localBalance = getLocalBalance();
       queueMicrotask(() => {
         if (cancelled) return;
@@ -189,7 +187,6 @@ export function useUserBalance(): UseUserBalanceResult {
       return;
     }
 
-    // Google user: fetch from API
     const notify = () => {
       if (cancelled) return;
       setSnapshot(cachedBalance);
@@ -208,7 +205,7 @@ export function useUserBalance(): UseUserBalanceResult {
       cancelled = true;
       subscribers.delete(notify);
     };
-  }, [isGoogleUser, isSessionLoading]);
+  }, [accountLoading, hasServerAccount]);
 
   return { balance: snapshot, isLoading, error, refresh };
 }

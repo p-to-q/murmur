@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
 
 import { request } from "@/lib/api/request";
+import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 
 export interface TopupSurfaceData {
   lifetimeTopupCents: number;
@@ -11,19 +11,18 @@ export interface TopupSurfaceData {
 }
 
 export function useTopupSurface() {
-  const { data: session, status } = useSession();
-  const isGoogleUser = !!session?.user;
+  const { isRegistered, isLoading: accountLoading } = useCurrentAccount();
   const [data, setData] = useState<TopupSurfaceData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<"unavailable" | null>(null);
 
   const refresh = useCallback(async () => {
-    if (status === "loading") {
+    if (accountLoading) {
       setIsLoading(true);
       return null;
     }
 
-    if (!isGoogleUser) {
+    if (!isRegistered) {
       const nextData = {
         lifetimeTopupCents: 0,
         latestPlanSkuId: null,
@@ -60,7 +59,7 @@ export function useTopupSurface() {
     } finally {
       setIsLoading(false);
     }
-  }, [isGoogleUser, status]);
+  }, [accountLoading, isRegistered]);
 
   useEffect(() => {
     queueMicrotask(() => {

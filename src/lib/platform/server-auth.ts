@@ -3,6 +3,7 @@ import { auth as nextAuthSession } from "@/lib/auth/auth";
 import { getSessionByToken, type ResolvedSession } from "@/lib/db/queries/sessions";
 
 export const SESSION_COOKIE_NAME = "__murmur_session";
+export const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 type AuthRuntimeMode = "production" | "demo" | "local";
 
@@ -34,6 +35,28 @@ export function getSessionToken(request: Request): string | null {
     }
   }
   return null;
+}
+
+export function murmurSessionCookieOptions(expires: Date) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    expires,
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  };
+}
+
+export function clearMurmurSessionCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    expires: new Date(0),
+    maxAge: 0,
+  };
 }
 
 export function getRequestUser(request: Request): AppUser {

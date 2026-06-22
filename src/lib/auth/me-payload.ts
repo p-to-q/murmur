@@ -7,6 +7,7 @@ export interface AuthMePayloadInput {
   user: AppUser;
   source: RequestAuthSource;
   sessionId: string | null;
+  identityProviders?: string[];
   balance: {
     notes: number;
     planTier: "free" | "premium";
@@ -30,6 +31,7 @@ export function buildAuthMePayload(input: AuthMePayloadInput) {
     source: input.source,
     authenticated,
     sessionId: input.sessionId,
+    identityProviders: input.identityProviders ?? [],
     balance: {
       notes: input.balance.notes,
       planTier: input.balance.planTier,

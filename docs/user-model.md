@@ -67,7 +67,7 @@ a real user, but a real user is never demoted to guest.
 
 | Shell | Primary provider | Fallback | Session medium |
 |---|---|---|---|
-| Web (intl) | Sign in with Apple, Sign in with Google | magic-link email (Stytch / Clerk / Supabase) | Murmur opaque session cookie (`__murmur_session`) |
+| Web (intl) | Sign in with Google, Sign in with GitHub | email verification code | Murmur opaque session cookie (`__murmur_session`) |
 | Web (cn) | WeChat OAuth, 微信扫码登录 | phone OTP (短信) | same cookie |
 | iOS (Capacitor) | Sign in with Apple **required** (App Store rule) | Apple only | Keychain-backed session token, forwarded as `Authorization: Bearer` |
 | Android (Capacitor) | Google Sign-In | Google only | Encrypted-storage token |
@@ -79,7 +79,7 @@ a `User` row keyed by `users.id` (a Murmur-internal ulid) with a
 
 ```ts
 type ExternalIdentity = {
-  provider: "apple" | "google" | "wechat" | "wechat_mp" | "email";
+  provider: "apple" | "google" | "github" | "wechat" | "wechat_mp" | "email";
   externalId: string;     // sub | openid | email
   linkedAt: string;       // ISO timestamp
 };
@@ -91,10 +91,21 @@ table; see `data-model.md` §3.2).
 
 ### Why a separate table
 
-Apple sub + Google sub + WeChat openid are three different namespaces.
+Apple sub + Google sub + GitHub id + WeChat openid are different namespaces.
 A user could link two; we don't want to overload `users.email` with
 provider strings. The side table also gives us an audit trail when a
 provider key rotates.
+
+This follows the same product shape as dedicated identity products: the
+application has one user profile, and multiple provider identities can link
+to it. Auth0 documents this as letting people authenticate through different
+providers while still being recognized as the same application user; Clerk's
+account-linking model likewise connects multiple external accounts into one
+account when the ownership signal is trusted. Auth.js is intentionally more
+conservative and does not automatically link by email unless the provider is
+explicitly trusted. Murmur therefore keeps the policy in our own
+`external_identities` table instead of letting any provider session become the
+product user by itself.
 
 ---
 
@@ -104,11 +115,13 @@ Server-issued, signed, opaque. **Not** JWTs unless we genuinely need
 audience federation later (v2 doesn't).
 
 Production identity source of truth: `resolveRequestAuth(request)` returns a
-Murmur `users.id` only from a validated Murmur opaque session token/cookie, or
-from the temporary Auth.js Web session bridge while Google login adoption is in
-progress. `guest`, local storage users, and `x-murmur-user-*` headers are
-allowed only in explicit local/demo auth modes and must never gate payment,
-cloud ownership, or account-sensitive actions in production.
+Murmur `users.id` from a validated Murmur opaque session token/cookie. Web
+OAuth still starts through Auth.js, but `/api/auth/oauth/adopt` immediately
+turns a successful Google/GitHub provider session into a Murmur session. The
+provider session is not the product identity. `guest`, local storage users,
+and `x-murmur-user-*` headers are allowed only in explicit local/demo auth
+modes and must never gate payment, cloud ownership, or account-sensitive
+actions in production.
 
 ```ts
 type Session = {
@@ -131,8 +144,26 @@ Set-Cookie: __murmur_session=<opaque>; HttpOnly; Secure; SameSite=Lax; Path=/; M
 Capacitor: shell stores the session token in Keychain / EncryptedSharedPreferences,
 and the API client injects `Authorization: Bearer <token>` on every
 fetch. Web uses the opaque `__murmur_session` cookie. Auth.js / NextAuth may
-still initiate the login UI, but production API identity is the Murmur session
-resolved by `resolveRequestAuth()`, not the provider session object itself.
+still initiate OAuth redirects, but production API identity is the Murmur
+session resolved by `resolveRequestAuth()`, not the provider session object
+itself.
+
+The session choice also follows OWASP's session-management guidance: keep a
+server-side session identifier that is unique, difficult to predict, revocable,
+and bounded by an absolute timeout. Murmur stores only the SHA-256 token hash
+in `sessions`, sends the opaque token in an HttpOnly SameSite cookie on Web,
+and revokes by row on logout or account deletion.
+
+### Industry references
+
+- [Auth0 user account linking](https://auth0.com/docs/manage-users/user-accounts/user-account-linking):
+  multiple identity providers can authenticate the same app user profile.
+- [Auth.js provider account linking](https://authjs.dev/reference/core/providers#allowdangerousemailaccountlinking):
+  automatic linking by email is disabled by default unless the provider's
+  email verification is explicitly trusted.
+- [OWASP Session Management Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html):
+  keep the session id meaningless to the client, store session state on the
+  server, and set cookie attributes such as HttpOnly / SameSite / Secure.
 
 ### Session lifecycle
 
@@ -297,6 +328,7 @@ Transitions in detail:
 |---|---|
 | `POST /api/auth/login/init` | start an OAuth or OTP flow; returns provider redirect URL or challenge |
 | `POST /api/auth/login/callback` | server-side callback; sets session cookie / returns token |
+| `POST /api/auth/oauth/adopt` | converts a successful Auth.js OAuth session into a Murmur session |
 | `POST /api/auth/refresh` | rotate the session token (Capacitor + MP) |
 | `POST /api/auth/logout` | revoke current session |
 | `GET /api/auth/me` | returns the session-resolved `User` + `Entitlement` |
@@ -395,12 +427,13 @@ A downstream agent has shipped this when:
 
 - [ ] `users` table extended with `regionId`, `planTier`, `notesBalance`,
       `freeNotesGrantedAt`, `deletedAt`, `consents`.
-- [ ] `external_identities` table exists; `sessions` table exists.
+- [x] `external_identities` table exists; `sessions` table exists.
 - [ ] `getRequestUser` + `requireAuth` reject spoofed headers; only
       session cookies / bearer tokens authenticate.
-- [ ] At least one provider (Sign in with Apple OR Google) wired
-      end-to-end on the Web shell.
-- [ ] `useCurrentUser()` returns a stable shape across all shells.
+- [x] Email, Google, and GitHub all resolve to one Murmur `users.id` through
+      `external_identities`.
+- [x] `useCurrentAccount()` returns a stable `/api/auth/me` shape for product
+      UI state.
 - [ ] Local Creator → authenticated promotion preserves the same `userId`,
       so songs + ledger remain attached without copying.
 - [ ] Logout works on Web + Capacitor; sessions are revoked server-side.
@@ -426,6 +459,7 @@ A downstream agent has shipped this when:
 | Concern | Enforced in | Notes |
 |---|---|---|
 | Identity | `src/lib/platform/server-auth.ts` (v2 rewrite) | the *only* source of truth on who the request is |
+| Login identity links | `src/lib/db/schema/external-identities.ts` + `src/lib/db/queries/users.ts` | maps email / Google / GitHub to the canonical `users.id` |
 | Entitlements | `packages/murmur-core/auth/entitlements.ts` | derived, never stored |
 | Region routing | server middleware (Next.js `middleware.ts`) | rewrites the user to the correct deploy if cross-region |
 | Audit log | `memory.reportAction` adapter | client + server both call |

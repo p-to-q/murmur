@@ -155,8 +155,9 @@ See `user-model.md` §4. From the API's view:
 - Session resolved in this order:
   1. `Authorization: Bearer <token>` (Capacitor + MP).
   2. `__murmur_session` cookie (Web).
-  3. Auth.js/NextAuth Web session, while the Google login path is still being
-     adopted into Murmur's opaque session table.
+  3. Auth.js/NextAuth Web session only as a compatibility fallback during
+     OAuth redirect/adoption. Normal Web OAuth completion immediately calls
+     `/api/auth/oauth/adopt` and receives a Murmur session cookie.
   4. fallback: no session → 401 `unauthorized`.
 - This production-like behavior is also the default on localhost. In explicit
   `MURMUR_AUTH_MODE=local` or `demo`, no-session requests may resolve to the
@@ -172,8 +173,8 @@ The `x-murmur-user-id` header from v1 is no longer a production identity
 source. It is accepted only outside production auth mode, and only when
 `MURMUR_ALLOW_HEADER_AUTH=true` or in `MURMUR_AUTH_MODE=local` by default.
 In `MURMUR_AUTH_MODE=demo`, guest fallback is allowed but header identity is
-off unless explicitly enabled. Login, refresh, and full Auth.js → Murmur
-opaque session adoption remain the follow-up work.
+off unless explicitly enabled. Login, refresh, and provider-link management
+build on top of the same Murmur session boundary.
 
 ---
 

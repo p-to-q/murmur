@@ -99,6 +99,13 @@
       "when": 1782086400000,
       "tag": "0013_share_referrals",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1782172800000,
+      "tag": "0014_external_identity_user_fk",
+      "breakpoints": true
     }
   ]
 }

@@ -17,6 +17,15 @@ export async function getUserByEmail(email: string): Promise<User | undefined> {
   return rows[0];
 }
 
+export async function getIdentityProvidersForUser(userId: string): Promise<string[]> {
+  const rows = await db
+    .select({ provider: externalIdentities.provider })
+    .from(externalIdentities)
+    .where(eq(externalIdentities.userId, userId));
+
+  return rows.map((row) => row.provider);
+}
+
 export async function upsertUser(data: {
   id: string;
   email?: string | null;
