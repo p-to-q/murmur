@@ -7,6 +7,7 @@ type TitleContext = {
   genre?: string;
   mood?: string;
   scene?: string;
+  batchIndex?: number;
 };
 
 type TitleProfile = "soft" | "night" | "open" | "motion";
@@ -700,23 +701,44 @@ export function buildZhTitleCandidates(context: TitleContext, count = 3): string
 }
 
 export function buildVersionTitleSuggestions(version: VibeVersion, lang: Lang): string[] {
+  return buildVersionTitleSuggestionBatch(version, lang);
+}
+
+export function buildVersionTitleSuggestionBatch(
+  version: VibeVersion,
+  lang: Lang,
+  batchIndex = 0,
+): string[] {
   const facets = version.visualConfig.visualFacets;
   const context: TitleContext = {
     seed: `${version.versionSeed}:${version.id}:${version.title}`,
     genre: firstString(facets?.genre, version.tags[0], version.vibe),
     mood: firstString(facets?.mood, version.tags[1]),
     scene: firstString(facets?.scene),
+    batchIndex,
   };
-  return lang === "zh"
-    ? buildZhTitleCandidates(context)
-    : buildEnglishTitleCandidates(context);
+  return buildLocalizedTitleCandidates(context, lang);
 }
 
 export function buildFallbackTitleSuggestions(lang: Lang): string[] {
-  const context = { seed: "fallback-title-suggestions" };
-  return lang === "zh"
-    ? buildZhTitleCandidates(context)
-    : buildEnglishTitleCandidates(context);
+  return buildFallbackTitleSuggestionBatch(lang);
+}
+
+export function buildFallbackTitleSuggestionBatch(lang: Lang, batchIndex = 0): string[] {
+  const context = { seed: "fallback-title-suggestions", batchIndex };
+  return buildLocalizedTitleCandidates(context, lang);
+}
+
+function buildLocalizedTitleCandidates(context: TitleContext, lang: Lang, count = 3): string[] {
+  if (lang === "zh") {
+    const zhCount = Math.max(0, count - 1);
+    return [
+      ...buildZhTitleCandidates(context, zhCount),
+      ...buildEnglishTitleCandidates(context, count - zhCount),
+    ].slice(0, count);
+  }
+
+  return buildEnglishTitleCandidates(context, count);
 }
 
 function titleProfileFor(context: Pick<VisualFacets, "genre" | "mood" | "scene">): TitleProfile {
@@ -800,18 +822,19 @@ function englishTitlePoolsFor(profile: TitleProfile): EnglishTitlePools {
 }
 
 function titleRng(context: TitleContext, lang: Lang): () => number {
-  return mulberry32(
-    hashString(
-      [
-        "title",
-        lang,
-        context.seed,
-        context.genre ?? "",
-        context.mood ?? "",
-        context.scene ?? "",
-      ].join(":"),
-    ),
-  );
+  return mulberry32(hashString(titleSeedFor(context, lang)));
+}
+
+function titleSeedFor(context: TitleContext, lang: Lang): string {
+  return [
+    "title",
+    lang,
+    context.seed,
+    context.genre ?? "",
+    context.mood ?? "",
+    context.scene ?? "",
+    context.batchIndex ?? 0,
+  ].join(":");
 }
 
 function pick<T>(rng: () => number, items: readonly T[]): T {
