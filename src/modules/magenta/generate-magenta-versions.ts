@@ -152,6 +152,7 @@ export function createMagentaVersions(
     melody,
   });
 
+  const batchArtworkIds: string[] = [];
   const versions = scaffold.map((version, index) => {
     const spec = prompts[index]!;
     const generation: VersionGeneration = {
@@ -170,7 +171,8 @@ export function createMagentaVersions(
       tags: spec.tags,
       visualConfig: (() => {
         const artworkSeed = `${options.draftId}:${options.batchIndex}:${index}:${version.id}`;
-        const artwork = pickArtworkSelection(spec.visualFacets, artworkSeed);
+        const artwork = pickArtworkSelection(spec.visualFacets, artworkSeed, [], batchArtworkIds);
+        if (artwork) batchArtworkIds.push(artwork.id);
         const gradient = artwork?.palette?.length
           ? gradientFromPalette(artwork.palette, artworkSeed)
           : spec.gradient;

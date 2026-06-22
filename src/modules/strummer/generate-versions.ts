@@ -254,6 +254,7 @@ export function generateVibeVersions(
   const lineageDepth = options.lineageDepth ?? 0;
   const sourceType = options.sourceType ?? "hum";
   const sourceMelodyKind = options.sourceMelodyKind ?? "corrected";
+  const batchArtworkIds: string[] = [];
 
   const versions: VibeVersion[] = picks.map((preset) => {
     const id = crypto.randomUUID();
@@ -319,7 +320,8 @@ export function generateVibeVersions(
       mood: preset.tags[0],
       energy: preset.energy,
     };
-    const artwork = pickArtworkSelection(visualFacets, artworkSeed);
+    const artwork = pickArtworkSelection(visualFacets, artworkSeed, [], batchArtworkIds);
+    if (artwork) batchArtworkIds.push(artwork.id);
     const visualConfig: VisualConfig = {
       preset:         preset.visualPreset,
       gradient:       artwork?.palette?.length
