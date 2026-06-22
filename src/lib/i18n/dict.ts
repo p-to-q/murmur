@@ -165,8 +165,8 @@ export const DICT = {
   "nav.device.desc":   { zh: "手机端体验更佳，所有数据实时同步", en: "Better on mobile, all data syncs in real-time" },
   "nav.device.toast_title": { zh: "同步准备中", en: "Sync in progress" },
   "nav.device.toast_body": {
-    zh: "先绑定账号，作品和音磅会更稳妥",
-    en: "Bind an account to keep songs and Notes safer",
+    zh: "手机端还在准备中；先绑定账号，作品和音磅会更稳妥",
+    en: "Mobile is still in progress; bind an account to keep songs and Notes safer",
   },
   "nav.notify.title":  { zh: "通知",              en: "Notifications" },
   "nav.notify.desc":   { zh: "查看最新动态和更新", en: "Check latest updates and news" },

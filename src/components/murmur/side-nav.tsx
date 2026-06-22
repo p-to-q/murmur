@@ -736,7 +736,6 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
   const {
     permission,
     browserAlertsEnabled,
-    requestPermission,
     setBrowserAlertsEnabled,
   } = useBrowserNotification();
   const [open, setOpen] = useState(false);
@@ -783,10 +782,6 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
   }, [open]);
 
   const handleClick = async () => {
-    if (permission === "default") {
-      await requestPermission();
-      return;
-    }
     setOpen((v) => !v);
   };
 

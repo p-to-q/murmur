@@ -56,6 +56,12 @@ export function useBrowserNotification() {
 
   useEffect(() => {
     syncPermission();
+    window.addEventListener("focus", syncPermission);
+    document.addEventListener("visibilitychange", syncPermission);
+    return () => {
+      window.removeEventListener("focus", syncPermission);
+      document.removeEventListener("visibilitychange", syncPermission);
+    };
   }, []);
 
   const requestPermission = useCallback(async (): Promise<Permission> => {
@@ -71,9 +77,20 @@ export function useBrowserNotification() {
 
   const setEnabled = useCallback(
     async (enabled: boolean): Promise<Permission> => {
+      const current = getPermission();
       if (!enabled) {
         setBrowserAlertsEnabled(false);
-        return getPermission();
+        return current;
+      }
+      if (current === "granted") {
+        setBrowserAlertsEnabled(true);
+        syncPermission();
+        return current;
+      }
+      if (current === "denied" || current === "unsupported") {
+        setBrowserAlertsEnabled(false);
+        syncPermission();
+        return current;
       }
       const permissionResult = await requestPermission();
       setBrowserAlertsEnabled(permissionResult === "granted");
