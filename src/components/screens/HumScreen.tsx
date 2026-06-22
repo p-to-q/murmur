@@ -9,7 +9,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { AuthButtons } from "@/components/auth/auth-buttons";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate, animate as fmAnimate } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import { HumOnboardingOverlay } from "@/components/screens/hum-onboarding";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
@@ -45,11 +45,14 @@ import {
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 import { formatHumSupportCode } from "@/lib/observability/support-code";
+import {
+  hasSeenHumOnboarding,
+  writeHumOnboardingSeen,
+} from "@/lib/onboarding";
 
 const MAX_DURATION = 15;
 const IDLE_ROTATE_INTERVAL = 9000;
 const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
-const ONBOARDING_SEEN_STORAGE_KEY = "murmur:onboarding-seen";
 const ENABLE_HUM_ENTRANCE_MOTION = true;
 
 // Guest quota stays local and action-time gated. Signed-in users are
@@ -130,22 +133,6 @@ function clearTimeoutRef(
 
 function stopMediaStream(stream: MediaStream | null) {
   stream?.getTracks().forEach((track) => track.stop());
-}
-
-function hasSeenOnboarding() {
-  if (typeof window === "undefined") return false;
-  try {
-    return !!window.localStorage.getItem(ONBOARDING_SEEN_STORAGE_KEY);
-  } catch {
-    return false;
-  }
-}
-
-function writeOnboardingSeen() {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(ONBOARDING_SEEN_STORAGE_KEY, "1");
-  } catch {}
 }
 
 function mediaRecorderOptions(): MediaRecorderOptions {
@@ -337,7 +324,7 @@ export function HumScreen() {
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      if (!hasSeenOnboarding()) {
+      if (!hasSeenHumOnboarding()) {
         setShowOnboarding(true);
       }
     });
@@ -366,7 +353,7 @@ export function HumScreen() {
   }, [showOnboarding, revealRadius]);
 
   const markOnboardingSeen = useCallback(() => {
-    writeOnboardingSeen();
+    writeHumOnboardingSeen();
   }, []);
 
   const triggerOnboardingReveal = useCallback(() => {
@@ -380,18 +367,12 @@ export function HumScreen() {
         size: rect.width,
       });
     }
-    const maxDim = Math.max(window.innerWidth, window.innerHeight) * 1.5;
-    fmAnimate(revealRadius, maxDim, {
-      duration: 1.12,
-      ease: [0.22, 1, 0.36, 1],
-      delay: 0.08,
-    });
     setTimeout(() => {
       setShowOnboarding(false);
       setOnboardingRippling(false);
       markOnboardingSeen();
-    }, 1220);
-  }, [markOnboardingSeen, revealRadius]);
+    }, 1520);
+  }, [markOnboardingSeen]);
 
   // Rotate idle headlines only while the landing state is truly quiet.
   useEffect(() => {
@@ -806,7 +787,6 @@ export function HumScreen() {
       return;
     }
     triggerOnboardingReveal();
-    beginIdleCapture();
   };
 
   const handleRecoveryAction = (action: HumRecoveryAction) => {
@@ -1049,8 +1029,9 @@ export function HumScreen() {
               {/* White orb button */}
               <motion.button
                 ref={orbButtonRef}
-                onClick={() => {
+                onClick={(event) => {
                   if (showOnboarding && !onboardingRippling) {
+                    event.stopPropagation();
                     handleOnboardingPress();
                     return;
                   }
@@ -1321,7 +1302,7 @@ export function HumScreen() {
         revealRadius={revealRadius}
         rippling={onboardingRippling}
         line={onboardingLine}
-        step={onboardingStep}
+        onAdvance={handleOnboardingPress}
       />
     </div>
   );

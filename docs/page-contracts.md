@@ -59,6 +59,11 @@ Interaction rules that should remain true:
   collapsing into generic retry copy
 - browser recording failures should surface as a quiet card with a stable
   retry or demo action
+- first-run onboarding owns the full viewport while visible: any click advances
+  the copy, the final onboarding click only dismisses the overlay, and live
+  recording remains a separate post-onboarding orb action
+- global audio-unlock hints should wait until first-run onboarding is complete
+  so permission guidance does not appear inside the onboarding veil
 
 Implementation note:
 
@@ -66,6 +71,8 @@ Implementation note:
   screen boundary
 - keep transcription / fixture branching inside the client transcription
   facade, not in the view tree
+- keep onboarding persistence and completion events in the shared onboarding
+  helper so the Hum screen and global audio unlock layer cannot drift
 
 ## Me personal-center contract notes
 
