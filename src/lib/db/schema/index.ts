@@ -7,3 +7,4 @@ export * from "./external-identities";
 export * from "./events-webhook";
 export * from "./email-verification-codes";
 export * from "./share-referrals";
+export * from "./rate-limits";

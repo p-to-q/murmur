@@ -56,7 +56,7 @@ let cachedDefaultStore: RateLimitStore | null = null;
  * Process-default store, chosen by `MURMUR_RATE_LIMIT_DRIVER`:
  *   "memory" (dev/test default)
  *   "redis"  — TODO; throws until the adapter lands
- *   "postgres" — TODO; throws until the adapter lands
+ *   "postgres" — production default; shared across app instances
  *
  * Most call sites should accept a `RateLimitStore` parameter for
  * testability; only the route-handler edge needs the default.
@@ -73,7 +73,7 @@ export function resetCachedRateLimitStore(): void {
 
 function resolveDriverFromEnv(): RateLimitDriver {
   const raw = process.env.MURMUR_RATE_LIMIT_DRIVER?.trim();
-  if (!raw) return process.env.NODE_ENV === "production" ? "memory" : "memory";
+  if (!raw) return process.env.NODE_ENV === "production" ? "postgres" : "memory";
   if (raw === "memory" || raw === "redis" || raw === "postgres") return raw;
   throw new RateLimitError(
     "invalid_options",
@@ -91,9 +91,33 @@ function buildStore(driver: RateLimitDriver): RateLimitStore {
         "redis adapter is not yet implemented; see follow-up PR",
       );
     case "postgres":
-      throw new RateLimitError(
-        "invalid_options",
-        "postgres adapter is not yet implemented; see follow-up PR",
-      );
+      return createLazyPostgresRateLimitStore();
   }
+}
+
+function createLazyPostgresRateLimitStore(): RateLimitStore {
+  let storePromise: Promise<RateLimitStore> | null = null;
+
+  async function store(): Promise<RateLimitStore> {
+    storePromise ??= import("./adapters/postgres").then((module) =>
+      module.createPostgresRateLimitStore(),
+    );
+    return storePromise;
+  }
+
+  return {
+    driver: "postgres",
+    async hit(key, opts, now) {
+      return (await store()).hit(key, opts, now);
+    },
+    async refund(key, opts, now) {
+      return (await store()).refund(key, opts, now);
+    },
+    async reset(key) {
+      return (await store()).reset(key);
+    },
+    async resetAll() {
+      return (await store()).resetAll();
+    },
+  };
 }

@@ -1,4 +1,9 @@
-import type { CleanMelody, VibeVersion, VersionGeneration } from "@/modules/shared/types";
+import type {
+  CleanMelody,
+  VersionGeneration,
+  VersionGenerationErrorCode,
+  VibeVersion,
+} from "@/modules/shared/types";
 import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import { createVibePromptBatch } from "@/lib/music/vibe-prompts";
 import { useMurmurStore } from "@/lib/store/murmur-store";
@@ -212,7 +217,13 @@ export function createMagentaVersions(
 /** Re-request audio for a single version (error-card retry). */
 export function regenerateVersionAudio(version: VibeVersion): void {
   if (!version.generation) return;
-  patchGeneration(version.id, { status: "pending", error: undefined });
+  patchGeneration(version.id, {
+    status: "pending",
+    error: undefined,
+    errorCode: undefined,
+    currentBalance: undefined,
+    cost: undefined,
+  });
   const humBlob = useMurmurStore.getState().humStyleBlob;
   void requestClip(version, humBlob, activeAbort?.signal ?? null);
 }
@@ -256,7 +267,7 @@ async function requestClip(
       signal: signal ?? undefined,
     });
     if (!res.ok) {
-      throw new Error(`music generate HTTP ${res.status}`);
+      throw await buildMusicGenerateError(res);
     }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -278,19 +289,109 @@ async function requestClip(
     notifyIfBatchComplete();
   } catch (error) {
     if (signal?.aborted) return;
+    const failure = normalizeMusicGenerateError(error);
     patchGeneration(version.id, {
       status: "error",
-      error: error instanceof Error ? error.message : String(error),
+      error: failure.message,
+      errorCode: failure.code,
+      currentBalance: failure.currentBalance,
+      cost: failure.cost,
     });
     log("magenta.clip_failed", {
       vibe: version.vibe,
       prompt: generation.prompt,
-      message: error instanceof Error ? error.message : String(error),
+      message: failure.message,
+      code: failure.code,
     }, {
       level: "warn",
       durationMs: Math.round(performance.now() - startedAt),
     });
     notifyIfBatchComplete();
+  }
+}
+
+class MusicGenerateRequestError extends Error {
+  constructor(
+    readonly code: VersionGenerationErrorCode,
+    message: string,
+    readonly status: number,
+    readonly currentBalance?: number,
+    readonly cost?: number,
+  ) {
+    super(message);
+    this.name = "MusicGenerateRequestError";
+  }
+}
+
+async function buildMusicGenerateError(response: Response): Promise<MusicGenerateRequestError> {
+  let payload: Record<string, unknown> = {};
+  try {
+    payload = (await response.json()) as Record<string, unknown>;
+  } catch {
+    // Non-JSON response; fall through to status mapping.
+  }
+
+  const serverError = typeof payload.error === "string" ? payload.error : null;
+  const message =
+    typeof payload.message === "string"
+      ? payload.message
+      : serverError ?? `music generate HTTP ${response.status}`;
+  const currentBalance =
+    typeof payload.currentBalance === "number" ? payload.currentBalance : undefined;
+  const cost = typeof payload.cost === "number" ? payload.cost : undefined;
+  return new MusicGenerateRequestError(
+    mapMusicGenerateErrorCode(serverError, response.status),
+    message,
+    response.status,
+    currentBalance,
+    cost,
+  );
+}
+
+function normalizeMusicGenerateError(error: unknown): {
+  code: VersionGenerationErrorCode;
+  message: string;
+  currentBalance?: number;
+  cost?: number;
+} {
+  if (error instanceof MusicGenerateRequestError) {
+    return {
+      code: error.code,
+      message: error.message,
+      currentBalance: error.currentBalance,
+      cost: error.cost,
+    };
+  }
+  return {
+    code: "network_error",
+    message: error instanceof Error ? error.message : String(error),
+  };
+}
+
+function mapMusicGenerateErrorCode(
+  serverError: string | null,
+  status: number,
+): VersionGenerationErrorCode {
+  switch (serverError) {
+    case "insufficient_notes":
+      return "insufficient_notes";
+    case "rate_limited":
+      return "rate_limited";
+    case "billing_unavailable":
+      return "billing_unavailable";
+    case "worker_unconfigured":
+      return "worker_unconfigured";
+    case "worker_http_error":
+    case "worker_unauthorized":
+      return "worker_unavailable";
+    case "server_error":
+      return "server_error";
+    default:
+      if (status === 402) return "insufficient_notes";
+      if (status === 429) return "rate_limited";
+      if (status === 503) return "worker_unconfigured";
+      if (status >= 500) return "worker_unavailable";
+      return "server_error";
   }
 }
 

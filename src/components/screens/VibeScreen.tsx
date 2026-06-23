@@ -208,9 +208,29 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleGenerationRecovery = useCallback(
+    (version: VibeVersion) => {
+      const code = version.generation?.errorCode;
+      if (code === "insufficient_notes") {
+        toast(t("vibe.gen.insufficient_toast") || "Top up notes before brewing more.");
+        router.push("/topup");
+        return;
+      }
+      if (code === "rate_limited") {
+        toast(t("vibe.gen.rate_limited_toast") || "Too many generations in a row. Try again shortly.");
+        return;
+      }
+    },
+    [router, t],
+  );
+
   const handleRetryVersion = useCallback(
     (version: VibeVersion) => {
       if (version.generation?.status !== "error") return;
+      if (!canRetryGeneration(version)) {
+        handleGenerationRecovery(version);
+        return;
+      }
       if (auditionStartTimerRef.current !== null) {
         window.clearTimeout(auditionStartTimerRef.current);
         auditionStartTimerRef.current = null;
@@ -220,7 +240,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       regenerateVersionAudio(version);
       toast(t("vibe.gen.retrying") || "Brewing this one again…");
     },
-    [setAuditioning, t],
+    [handleGenerationRecovery, setAuditioning, t],
   );
 
   const handlePick = useCallback(
@@ -330,7 +350,8 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
   const handleRetryFailed = useCallback(() => {
     const failedVersions = vibeVersions.filter(
-      (version) => version.generation?.status === "error",
+      (version) =>
+        version.generation?.status === "error" && canRetryGeneration(version),
     );
     if (failedVersions.length === 0) return;
     versionPreview.stop();
@@ -340,6 +361,16 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     }
     toast(t("vibe.gen.retrying_all") || "Brewing the whole set again…");
   }, [setAuditioning, t, vibeVersions]);
+
+  const failedRetryableVersions = vibeVersions.filter(
+    (version) => version.generation?.status === "error" && canRetryGeneration(version),
+  );
+  const hasInsufficientNotesFailure = vibeVersions.some(
+    (version) => version.generation?.errorCode === "insufficient_notes",
+  );
+  const allFailuresAreRateLimited =
+    vibeVersions.length > 0 &&
+    vibeVersions.every((version) => version.generation?.errorCode === "rate_limited");
 
   const handleUseDemo = useCallback(() => {
     versionPreview.stop();
@@ -497,17 +528,32 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                       {t("vibe.all_failed.title") || "This batch did not finish."}
                     </p>
                     <p className="mt-1 max-w-[46rem] text-[12px] leading-relaxed text-[#756F67]">
-                      {t("vibe.all_failed.detail") || "Retry these versions, use the demo melody, or record a fresh take."}
+                      {hasInsufficientNotesFailure
+                        ? t("vibe.all_failed.insufficient_detail") || "Top up notes to brew this batch, use the demo melody, or record a fresh take."
+                        : allFailuresAreRateLimited
+                          ? t("vibe.all_failed.rate_limited_detail") || "Too many generations in a row. Wait a bit, use the demo melody, or record a fresh take."
+                          : t("vibe.all_failed.detail") || "Retry these versions, use the demo melody, or record a fresh take."}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={handleRetryFailed}
-                      className="inline-flex h-9 items-center rounded-full bg-[#1A1A1A] px-4 text-[12px] font-medium text-white transition-colors hover:bg-[#35312D]"
-                    >
-                      {t("vibe.all_failed.retry") || "Retry set"}
-                    </button>
+                    {failedRetryableVersions.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleRetryFailed}
+                        className="inline-flex h-9 items-center rounded-full bg-[#1A1A1A] px-4 text-[12px] font-medium text-white transition-colors hover:bg-[#35312D]"
+                      >
+                        {t("vibe.all_failed.retry") || "Retry set"}
+                      </button>
+                    )}
+                    {hasInsufficientNotesFailure && (
+                      <button
+                        type="button"
+                        onClick={() => router.push("/topup")}
+                        className="inline-flex h-9 items-center rounded-full bg-[#1A1A1A] px-4 text-[12px] font-medium text-white transition-colors hover:bg-[#35312D]"
+                      >
+                        {t("vibe.gen.topup") || "Top up"}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={handleUseDemo}
@@ -614,8 +660,9 @@ function VibeCard({
   const isPending = readinessBlockReason === "generation_pending";
   const isError = readinessBlockReason === "generation_failed";
   const canEnterStudio = readinessBlockReason === null;
+  const errorRecovery = generationErrorRecovery(version);
   const pickButtonLabel = isError
-    ? t("vibe.retry") || "Retry"
+    ? t(errorRecovery.ctaKey) || errorRecovery.ctaFallback
     : isPending
       ? t("vibe.pick.wait") || "Brewing"
       : pickLabel;
@@ -706,7 +753,7 @@ function VibeCard({
           {isPending
             ? t("vibe.generating") || "Brewing"
             : isError
-              ? t("vibe.gen.failed") || "Didn't brew — tap retry"
+              ? t(errorRecovery.detailKey) || errorRecovery.detailFallback
               : version.tags.slice(0, 3).join(" · ")}
         </p>
       </div>
@@ -723,7 +770,7 @@ function VibeCard({
             isPending
               ? "Generating preview"
               : isError
-                ? "Retry generation"
+                ? errorRecovery.ctaFallback
                 : isAuditioning
                   ? "Pause preview"
                   : "Play preview"
@@ -781,4 +828,54 @@ function VibeCard({
       </AnimatePresence>
     </motion.div>
   );
+}
+
+function canRetryGeneration(version: VibeVersion): boolean {
+  const code = version.generation?.errorCode;
+  return code !== "insufficient_notes" && code !== "rate_limited";
+}
+
+function generationErrorRecovery(version: VibeVersion): {
+  ctaKey: string;
+  ctaFallback: string;
+  detailKey: string;
+  detailFallback: string;
+} {
+  switch (version.generation?.errorCode) {
+    case "insufficient_notes":
+      return {
+        ctaKey: "vibe.gen.topup",
+        ctaFallback: "Top up",
+        detailKey: "vibe.gen.insufficient_notes",
+        detailFallback: "Out of notes — top up to brew more.",
+      };
+    case "rate_limited":
+      return {
+        ctaKey: "vibe.gen.wait",
+        ctaFallback: "Try later",
+        detailKey: "vibe.gen.rate_limited",
+        detailFallback: "Too many generations in a row — try again shortly.",
+      };
+    case "billing_unavailable":
+      return {
+        ctaKey: "vibe.retry",
+        ctaFallback: "Retry",
+        detailKey: "vibe.gen.billing_unavailable",
+        detailFallback: "Notes ledger unavailable — try again in a bit.",
+      };
+    case "worker_unconfigured":
+      return {
+        ctaKey: "vibe.retry",
+        ctaFallback: "Retry",
+        detailKey: "vibe.gen.worker_unconfigured",
+        detailFallback: "Music engine is not connected yet.",
+      };
+    default:
+      return {
+        ctaKey: "vibe.retry",
+        ctaFallback: "Retry",
+        detailKey: "vibe.gen.failed",
+        detailFallback: "Didn't brew — tap to retry",
+      };
+  }
 }

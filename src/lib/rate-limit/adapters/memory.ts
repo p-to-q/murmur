@@ -9,8 +9,8 @@ import {
 /**
  * Process-local token-bucket store. Suitable for dev, tests, and
  * single-instance prod runs. NOT safe across multiple Node/Bun
- * processes — for that, use the redis adapter (TODO) which atomically
- * mutates state via Lua/EVAL.
+ * processes — production route handlers should use the shared default
+ * driver instead.
  *
  * Concurrency: single-threaded execution model means consecutive
  * `hit()` calls are observably serial. No locks needed.
