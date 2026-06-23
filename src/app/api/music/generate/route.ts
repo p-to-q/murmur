@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
+import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
+import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
+import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { log } from "@/lib/observability/log";
 import {
@@ -9,6 +12,7 @@ import {
   getMusicWorkerUrl,
 } from "@/lib/platform/music-worker";
 import { RunpodError, runJob } from "@/lib/platform/runpod-serverless";
+import { COST } from "@murmur/core";
 
 export const runtime = "nodejs";
 // Vercel Pro ceiling (300 s). Let RunPod finish at its own pace — the client
@@ -33,10 +37,24 @@ const MAX_DURATION = 20;
 type MusicRouteError =
   | "prompt_required"
   | "validation_error"
+  | "insufficient_notes"
+  | "billing_unavailable"
   | "worker_unconfigured"
   | "worker_unauthorized"
   | "worker_http_error"
   | "server_error";
+
+type BillingMode = "ledger" | "dev_fallback";
+type SuccessfulSpend = Extract<Awaited<ReturnType<typeof spendNotes>>, { ok: true }>;
+type DevFallbackSpend = {
+  ok: true;
+  ledgerId: null;
+  balanceBefore: null;
+  balanceAfter: null;
+  duplicate: false;
+};
+type SpendForRefund = SuccessfulSpend | DevFallbackSpend;
+type OkAuth = Extract<Awaited<ReturnType<typeof resolveRequestAuth>>, { ok: true }>;
 
 interface GenerateParams {
   prompt: string;
@@ -69,15 +87,17 @@ type GenerateResult =
  * Proxies a clip request to the Magenta RealTime worker — RunPod Serverless in
  * production, or the local FastAPI worker in dev (see getMusicEngineMode).
  * Multipart in (`prompt`, `duration`, optional `styleMix` + `hum` recording +
- * `melody`), WAV out. Generation itself is free — the hum that started the flow
- * already spent the note in /api/transcribe.
+ * `melody`), WAV out. Each worker handoff spends one Murmur Note server-side;
+ * failed worker calls refund that spend before returning the error.
  */
 export async function POST(request: NextRequest) {
   const startedAt = performance.now();
   const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+  const spendRef = createSpendReference("music_generate");
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
+  let spendForRefund: SpendForRefund | null = null;
 
   // All anonymous traffic resolves to the single "guest" user; keying the
   // bucket by IP for guests keeps one visitor from draining everyone's
@@ -156,9 +176,30 @@ export async function POST(request: NextRequest) {
     const melody = typeof melodyRaw === "string" ? melodyRaw.trim() : "";
 
     const params: GenerateParams = { prompt, duration, styleMix, hum, melody };
+    const billing = await prepareMusicGenerationBilling({
+      request,
+      auth,
+      userId,
+      sessionId: auth.sessionId,
+      requestId,
+      spendRef,
+      startedAt,
+      mode,
+      promptLength: prompt.length,
+      duration,
+      styleMix,
+      humBytes: hum ? hum.size : 0,
+    });
+    if (!billing.ok) {
+      return billing.response;
+    }
+    spendForRefund = billing.spend;
 
     log("music.generate_requested", {
       mode,
+      cost: COST.music_generate,
+      balanceBefore: billing.balanceBefore,
+      billingMode: billing.billingMode,
       promptChars: prompt.length,
       duration,
       styleMix,
@@ -173,6 +214,16 @@ export async function POST(request: NextRequest) {
         : await generateViaHttp(params, requestId);
 
     if (!result.ok) {
+      await refundMusicGenerateSpendIfNeeded({
+        spend: spendForRefund,
+        requestId,
+        userId,
+        sessionId: auth.sessionId,
+        promptLength: prompt.length,
+        duration,
+        trigger: result.error,
+      });
+      spendForRefund = null;
       return fail(result.error, result.message, result.status, {
         requestId, userId, startedAt, ext: result.ext,
       });
@@ -181,6 +232,9 @@ export async function POST(request: NextRequest) {
     log("music.generate_completed", {
       mode,
       bytes: result.audio.byteLength,
+      cost: COST.music_generate,
+      balanceAfter: billing.spend.balanceAfter,
+      billingMode: billing.billingMode,
       generationMs: Number(result.generationMs) || null,
       model: result.model,
       styleMix: result.styleMix,
@@ -200,11 +254,257 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    await refundMusicGenerateSpendIfNeeded({
+      spend: spendForRefund,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+      promptLength: null,
+      duration: null,
+      trigger: "route_exception",
+    });
     return fail("server_error", "Music generation failed", 500, {
       requestId, userId, startedAt,
       ext: { message: error instanceof Error ? error.message : String(error) },
     });
   }
+}
+
+async function prepareMusicGenerationBilling(options: {
+  request: NextRequest;
+  auth: OkAuth;
+  userId: string;
+  sessionId: string | null;
+  requestId: string;
+  spendRef: string;
+  startedAt: number;
+  mode: "serverless" | "http";
+  promptLength: number;
+  duration: number;
+  styleMix: number;
+  humBytes: number;
+}): Promise<
+  | {
+      ok: true;
+      spend: SpendForRefund;
+      balanceBefore: number | null;
+      billingMode: BillingMode;
+    }
+  | { ok: false; response: NextResponse }
+> {
+  if (
+    shouldSkipNotesBilling(options.auth)
+    || shouldBypassMusicBillingForLocalDemo(options.request, options.auth)
+  ) {
+    return {
+      ok: true,
+      spend: {
+        ok: true,
+        ledgerId: null,
+        balanceBefore: null,
+        balanceAfter: null,
+        duplicate: false,
+      },
+      balanceBefore: null,
+      billingMode: "dev_fallback",
+    };
+  }
+
+  let balance: Awaited<ReturnType<typeof getNotesBalance>>;
+  try {
+    balance = await getNotesBalance(options.userId);
+  } catch (error) {
+    return {
+      ok: false,
+      response: fail("billing_unavailable", "User balance is unavailable", 503, {
+        requestId: options.requestId,
+        userId: options.userId,
+        startedAt: options.startedAt,
+        ext: { message: error instanceof Error ? error.message : String(error) },
+      }),
+    };
+  }
+
+  if (!balance.ok) {
+    return {
+      ok: false,
+      response: fail("billing_unavailable", "User balance is unavailable", 503, {
+        requestId: options.requestId,
+        userId: options.userId,
+        startedAt: options.startedAt,
+      }),
+    };
+  }
+
+  if (balance.notes < COST.music_generate) {
+    return {
+      ok: false,
+      response: fail("insufficient_notes", "Not enough Murmur Notes", 402, {
+        requestId: options.requestId,
+        userId: options.userId,
+        startedAt: options.startedAt,
+        ext: { currentBalance: balance.notes, cost: COST.music_generate },
+        body: { currentBalance: balance.notes, cost: COST.music_generate },
+      }),
+    };
+  }
+
+  let spend: Awaited<ReturnType<typeof spendNotes>>;
+  try {
+    spend = await spendNotes({
+      userId: options.userId,
+      cost: COST.music_generate,
+      reason: "spend:music_generate",
+      externalRef: options.spendRef,
+      metadata: {
+        requestId: options.requestId,
+        route: ROUTE,
+        phase: "preflight",
+        mode: options.mode,
+        promptLength: options.promptLength,
+        duration: options.duration,
+        styleMix: options.styleMix,
+        humBytes: options.humBytes,
+      },
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      response: fail("billing_unavailable", "Could not spend Murmur Notes", 503, {
+        requestId: options.requestId,
+        userId: options.userId,
+        startedAt: options.startedAt,
+        ext: { message: error instanceof Error ? error.message : String(error) },
+      }),
+    };
+  }
+
+  if (!spend.ok) {
+    const response =
+      spend.reason === "insufficient_notes"
+        ? fail("insufficient_notes", "Not enough Murmur Notes", 402, {
+            requestId: options.requestId,
+            userId: options.userId,
+            startedAt: options.startedAt,
+            ext: { currentBalance: spend.currentBalance, cost: COST.music_generate },
+            body: { currentBalance: spend.currentBalance, cost: COST.music_generate },
+          })
+        : fail("billing_unavailable", "User balance is unavailable", 503, {
+            requestId: options.requestId,
+            userId: options.userId,
+            startedAt: options.startedAt,
+          });
+    return { ok: false, response };
+  }
+
+  if (!spend.duplicate) {
+    log("notes.spent", {
+      reason: "spend:music_generate",
+      cost: COST.music_generate,
+      balanceAfter: spend.balanceAfter,
+      ledgerId: spend.ledgerId,
+    }, {
+      route: ROUTE,
+      requestId: options.requestId,
+      userId: options.userId,
+      sessionId: options.sessionId,
+    });
+  }
+
+  return {
+    ok: true,
+    spend,
+    balanceBefore: spend.balanceBefore,
+    billingMode: "ledger",
+  };
+}
+
+function shouldBypassMusicBillingForLocalDemo(
+  request: NextRequest,
+  auth: OkAuth,
+): boolean {
+  if (auth.user.accountKind === "local_creator") return false;
+  const host = request.nextUrl?.hostname || safeHostnameFromUrl(request.url);
+  return shouldBypassBillingInDevelopment({ host });
+}
+
+async function refundMusicGenerateSpendIfNeeded(options: {
+  spend: SpendForRefund | null;
+  requestId: string;
+  userId: string;
+  sessionId: string | null;
+  promptLength: number | null;
+  duration: number | null;
+  trigger: string;
+}): Promise<void> {
+  if (!options.spend || options.spend.ledgerId === null || options.spend.duplicate) {
+    return;
+  }
+
+  try {
+    const refund = await refundNotes({
+      originalLedgerId: options.spend.ledgerId,
+      metadata: {
+        requestId: options.requestId,
+        promptLength: options.promptLength,
+        duration: options.duration,
+        trigger: options.trigger,
+      },
+    });
+
+    if (refund.ok) {
+      if (!refund.duplicate) {
+        log("notes.granted", {
+          reason: "refund:spend",
+          delta: refund.amount,
+          balanceAfter: refund.balanceAfter,
+          originalLedgerId: refund.originalLedgerId,
+          refundLedgerId: refund.refundLedgerId,
+        }, {
+          route: ROUTE,
+          requestId: options.requestId,
+          userId: options.userId,
+          sessionId: options.sessionId,
+          level: "warn",
+        });
+      }
+      return;
+    }
+
+    log("notes.refund_failed", {
+      requestLedgerId: options.spend.ledgerId,
+      reason: refund.reason,
+    }, {
+      route: ROUTE,
+      requestId: options.requestId,
+      userId: options.userId,
+      sessionId: options.sessionId,
+      level: "error",
+    });
+  } catch (error) {
+    log("notes.refund_failed", {
+      requestLedgerId: options.spend.ledgerId,
+      reason: error instanceof Error ? error.message : String(error),
+    }, {
+      route: ROUTE,
+      requestId: options.requestId,
+      userId: options.userId,
+      sessionId: options.sessionId,
+      level: "error",
+    });
+  }
+}
+
+function safeHostnameFromUrl(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function createSpendReference(kind: "music_generate"): string {
+  return `${kind}:${crypto.randomUUID()}`;
 }
 
 /** Production path: invoke the RunPod Serverless endpoint (JSON + base64). */
@@ -363,6 +663,7 @@ function fail(
     requestId: string;
     userId: string;
     startedAt: number;
+    body?: Record<string, unknown>;
     ext?: Record<string, unknown>;
   },
 ) {
@@ -378,7 +679,7 @@ function fail(
   });
 
   return NextResponse.json(
-    { error, message, requestId: options.requestId },
+    { error, message, requestId: options.requestId, ...options.body },
     { status, headers: { "X-Request-Id": options.requestId } },
   );
 }
