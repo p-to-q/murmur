@@ -21,12 +21,21 @@ mock.module("@/lib/platform/music-worker", () => ({
   isMusicWorkerConfigured: () => nextMode !== null,
 }));
 
+class TestRunpodError extends Error {
+  readonly kind = "server_error";
+  readonly detail = null;
+}
+
 mock.module("@/lib/platform/runpod-serverless", () => ({
+  RunpodError: TestRunpodError,
   endpointHealth: async () => ({
     ok: true,
     status: 200,
     body: { workers: { idle: 0, running: 1 } },
   }),
+  runJob: async () => {
+    throw new Error("runJob should not be called in health route tests");
+  },
 }));
 
 const originalFetch = globalThis.fetch;
