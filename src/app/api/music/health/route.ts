@@ -10,6 +10,14 @@ import { endpointHealth } from "@/lib/platform/runpod-serverless";
 
 export const runtime = "nodejs";
 
+type PublicMusicHealth = {
+  available: boolean;
+  configured: boolean;
+  mode?: "serverless" | "http" | null;
+  requestedMode?: "serverless" | "http" | "auto";
+  reason: "unconfigured" | "unauthorized" | "unreachable" | "degraded" | `http_${number}` | null;
+};
+
 /**
  * GET /api/music/health — can the Magenta engine take generation requests?
  *
@@ -20,12 +28,16 @@ export const runtime = "nodejs";
  *
  * HTTP (dev/legacy): available also while the model is still warming up;
  * requests queue behind the load instead of failing.
+ *
+ * The response is intentionally minimal: transport `mode`/`requestedMode` plus a
+ * coarse availability `reason`. Worker counts, model names, and raw load-error
+ * strings stay server-side so this public endpoint cannot leak deployment shape.
  */
 export async function GET() {
   const mode = getMusicEngineMode();
   if (!mode) {
     const requestedMode = getRequestedMusicEngineMode();
-    return NextResponse.json({
+    return publicHealth({
       available: false,
       configured: false,
       mode: requestedMode === "auto" ? null : requestedMode,
@@ -40,7 +52,7 @@ export async function GET() {
 async function serverlessHealth() {
   const config = getMusicServerlessConfig();
   if (!config) {
-    return NextResponse.json({
+    return publicHealth({
       available: false,
       configured: false,
       mode: "serverless",
@@ -50,10 +62,10 @@ async function serverlessHealth() {
   }
 
   try {
-    const { ok, status, body } = await endpointHealth(config, AbortSignal.timeout(12_000));
+    const { ok, status } = await endpointHealth(config, AbortSignal.timeout(12_000));
     if (!ok) {
       const unauthorized = status === 401 || status === 403;
-      return NextResponse.json({
+      return publicHealth({
         available: false,
         configured: true,
         mode: "serverless",
@@ -61,17 +73,15 @@ async function serverlessHealth() {
         reason: unauthorized ? "unauthorized" : `http_${status}`,
       });
     }
-    const workers = (body as { workers?: Record<string, number> } | null)?.workers ?? null;
-    return NextResponse.json({
+    return publicHealth({
       available: true,
       configured: true,
       mode: "serverless",
       requestedMode: getRequestedMusicEngineMode(),
-      workers,
       reason: null,
     });
   } catch {
-    return NextResponse.json({
+    return publicHealth({
       available: false,
       configured: true,
       mode: "serverless",
@@ -85,7 +95,7 @@ async function httpHealth() {
   const configured = isMusicWorkerConfigured();
   const workerBase = getMusicWorkerUrl();
   if (!workerBase) {
-    return NextResponse.json({
+    return publicHealth({
       available: false,
       configured: false,
       mode: "http",
@@ -103,7 +113,7 @@ async function httpHealth() {
       cache: "no-store",
     });
     if (!res.ok) {
-      return NextResponse.json({
+      return publicHealth({
         available: false,
         configured,
         mode: "http",
@@ -125,19 +135,15 @@ async function httpHealth() {
     // blip must not pin clients to the legacy engine.
     const available =
       data.status === "ok" || data.loaded === true || data.loading === true;
-    return NextResponse.json({
+    return publicHealth({
       available,
       configured,
       mode: "http",
       requestedMode: getRequestedMusicEngineMode(),
-      model: data.model ?? null,
-      mock: data.mock ?? false,
-      loaded: data.loaded ?? false,
-      loading: data.loading ?? false,
-      reason: available ? null : data.loadError ?? "degraded",
+      reason: available ? null : "degraded",
     });
   } catch {
-    return NextResponse.json({
+    return publicHealth({
       available: false,
       configured,
       mode: "http",
@@ -145,4 +151,8 @@ async function httpHealth() {
       reason: "unreachable",
     });
   }
+}
+
+function publicHealth(body: PublicMusicHealth): NextResponse {
+  return NextResponse.json(body);
 }

@@ -73,10 +73,28 @@ async function checkRoute(
       redirect: "follow",
     });
     const html = await response.text();
+    const gateMarkersMatched =
+      (route.gateMarkers?.length ?? 0) > 0 &&
+      route.gateMarkers.every((marker) => html.includes(marker));
+    const gatedByStatus =
+      route.okStatuses?.includes(response.status) &&
+      response.status !== 200 &&
+      (!route.gateMarkers || gateMarkersMatched);
+    const gatedByShell = response.status === 200 && gateMarkersMatched;
+    if (gatedByStatus || gatedByShell) {
+      return {
+        name: route.name,
+        ok: true,
+        detail: `status=${response.status} gated`,
+      };
+    }
     const missing = route.markers.filter((marker) => !html.includes(marker));
+    const statusOk = route.okStatuses
+      ? route.okStatuses.includes(response.status)
+      : response.ok;
     return {
       name: route.name,
-      ok: response.ok && missing.length === 0,
+      ok: statusOk && missing.length === 0,
       detail:
         missing.length === 0
           ? `status=${response.status} markers=${route.markers.length}`

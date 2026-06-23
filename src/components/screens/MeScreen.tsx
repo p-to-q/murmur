@@ -225,10 +225,14 @@ export function MeScreen() {
           >
             {t("me.delete_account") || "Delete account"}
           </Link>
-          <span className="text-[#D2C9B6]">·</span>
-          <Link href="/me/debug/melo-lab" className="hover:text-[#1A1A1A] transition-colors">
-            {t("me.melo_lab") || "MeLo Lab"}
-          </Link>
+          {developerMode ? (
+            <>
+              <span className="text-[#D2C9B6]">·</span>
+              <Link href="/me/debug/melo-lab" className="hover:text-[#1A1A1A] transition-colors">
+                {t("me.melo_lab") || "MeLo Lab"}
+              </Link>
+            </>
+          ) : null}
         </div>
       </div>
     </div>

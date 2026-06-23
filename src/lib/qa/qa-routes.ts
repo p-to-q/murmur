@@ -7,6 +7,8 @@ export interface QaRouteLink {
 export interface QaRouteContract extends QaRouteLink {
   name: string;
   markers: string[];
+  gateMarkers?: string[];
+  okStatuses?: number[];
 }
 
 export const QA_ROUTE_CONTRACTS: QaRouteContract[] = [
@@ -77,8 +79,10 @@ export const QA_ROUTE_CONTRACTS: QaRouteContract[] = [
     name: "debug-melo-lab",
     href: "/me/debug/melo-lab?debug=1",
     label: "MeLo Lab",
-    note: "Test-only local melody diagnostics for audio-worker JSON, repair layers, and local music-worker drift.",
+    note: "Test-only local melody diagnostics. Production and closed diagnostic builds should return 404.",
     markers: ["TEST ONLY / local melo-lab", "MeLo Lab"],
+    gateMarkers: ["NEXT_HTTP_ERROR_FALLBACK;404"],
+    okStatuses: [200, 404],
   },
   {
     name: "settings-developer-mode",

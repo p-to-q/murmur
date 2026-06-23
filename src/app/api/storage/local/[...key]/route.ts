@@ -14,9 +14,8 @@ let cachedLocalStore: ObjectStore | null = null;
  * Dev-only egress for objects written by the `local-fs` adapter.
  * Production deployments must use an external object-storage host
  * (R2 / 腾讯云 COS) and never serve user blobs through Next.js
- * itself. This route refuses to run unless the active driver is
- * `local-fs`, which makes accidental production exposure impossible
- * provided `MURMUR_STORAGE_DRIVER` is configured correctly.
+ * itself. This route refuses to run in production entirely, including
+ * mistakenly configured `MURMUR_STORAGE_DRIVER=local-fs` deployments.
  *
  * Access control: this is intentionally open in dev — anyone with
  * network access to the dev server already has filesystem access.
@@ -71,13 +70,13 @@ export async function GET(
 }
 
 async function getLocalServeStore(): Promise<ObjectStore | null> {
-  const driver = process.env.MURMUR_STORAGE_DRIVER?.trim().toLowerCase();
-
-  if (driver && driver !== "local-fs") {
+  if (process.env.NODE_ENV === "production") {
     return null;
   }
 
-  if (!driver && process.env.NODE_ENV === "production") {
+  const driver = process.env.MURMUR_STORAGE_DRIVER?.trim().toLowerCase();
+
+  if (driver && driver !== "local-fs") {
     return null;
   }
 
