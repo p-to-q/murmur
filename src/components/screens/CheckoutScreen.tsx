@@ -39,6 +39,11 @@ import {
 } from "@murmur/core";
 
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
+import {
+  checkoutFailedPrimaryAction,
+  checkoutFailedPrimaryLabelKey,
+  type CheckoutFailureKind,
+} from "@/lib/billing/checkout-confirmation";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 import { fetchUserBalance, type UserBalance } from "@/lib/hooks/use-user-balance";
@@ -115,7 +120,7 @@ export function CheckoutScreen() {
         : "review",
   );
   const [failureMessage, setFailureMessage] = useState<string | null>(null);
-  const [failureKind, setFailureKind] = useState<"sign_in_required" | "generic" | null>(null);
+  const [failureKind, setFailureKind] = useState<CheckoutFailureKind | null>(null);
   const [receiptTorn, setReceiptTorn] = useState(returnStatus === "success");
   const checkoutStartedRef = useRef(false);
   const billingEmailEditedRef = useRef(false);
@@ -223,7 +228,7 @@ export function CheckoutScreen() {
         t("checkout.grant_pending") ||
           "Payment is still being confirmed. Refresh your balance in a moment.",
       );
-      setFailureKind("generic");
+      setFailureKind("grant_pending");
       setPhase("failed");
     },
     [finishSucceeded, purchase.notesGranted, t],
@@ -350,10 +355,18 @@ export function CheckoutScreen() {
       return;
     }
     if (phase === "failed") {
-      if (failureKind === "sign_in_required") {
-        handleSignIn();
-      } else {
-        retryCheckout();
+      switch (checkoutFailedPrimaryAction(failureKind)) {
+        case "sign_in":
+          handleSignIn();
+          break;
+        case "confirm_grant":
+          setFailureMessage(null);
+          setPhase("confirming");
+          void confirmGrant();
+          break;
+        case "retry_checkout":
+          retryCheckout();
+          break;
       }
       return;
     }
@@ -606,7 +619,7 @@ function ReviewControls({
   acceptedPolicy: boolean;
   billingEmail: string;
   checkoutUrl: string | null;
-  failureKind: "sign_in_required" | "generic" | null;
+  failureKind: CheckoutFailureKind | null;
   failureMessage: string | null;
   hasSignedInUser: boolean;
   isAuthLoading: boolean;
@@ -642,9 +655,12 @@ function ReviewControls({
         : phase === "canceled"
           ? t("checkout.retry") || "Pick a top up"
           : phase === "failed"
-            ? failureKind === "sign_in_required"
-              ? t("checkout.sign_in_btn") || "Sign in"
-              : t("checkout.try_again") || "Try again"
+            ? t(checkoutFailedPrimaryLabelKey(failureKind)) ||
+              (failureKind === "sign_in_required"
+                ? "Sign in"
+                : failureKind === "grant_pending"
+                  ? "Check again"
+                  : "Try again")
             : t("checkout.continue") || "Pay securely";
   const buttonTitle =
     phase === "failed"
