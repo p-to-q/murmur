@@ -37,6 +37,10 @@ const requestAccountDeletionMock = mock(async () => {
 });
 
 mock.module("@/lib/auth", () => ({
+  resolveRequestAuth: async () => nextAuth,
+}));
+
+mock.module("@/lib/platform/server-auth", () => ({
   SESSION_COOKIE_NAME: "__murmur_session",
   clearMurmurSessionCookieOptions: () => ({
     httpOnly: true,
@@ -46,7 +50,6 @@ mock.module("@/lib/auth", () => ({
     expires: new Date(0),
     maxAge: 0,
   }),
-  resolveRequestAuth: async () => nextAuth,
 }));
 
 mock.module("@/lib/db/queries/users", () => ({

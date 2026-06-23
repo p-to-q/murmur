@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveRequestAuth } from "@/lib/auth";
 import {
   clearMurmurSessionCookieOptions,
-  resolveRequestAuth,
   SESSION_COOKIE_NAME,
-} from "@/lib/auth";
+} from "@/lib/platform/server-auth";
 import { requestAccountDeletion } from "@/lib/db/queries/users";
 import { log } from "@/lib/observability/log";
 
