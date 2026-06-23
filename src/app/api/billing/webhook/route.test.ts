@@ -378,6 +378,26 @@ describe("POST /api/billing/webhook", () => {
     });
   });
 
+  it("acknowledges already-refunded purchases without reversing notes again", async () => {
+    nextEvent = refundSucceededEvent({ refundTicketMerchantExternalId: "REF_later_duplicate" });
+    purchaseRow = {
+      id: "pur_test",
+      userId: "usr_buyer",
+      productId: "topup_120_notes",
+      notesGranted: 130,
+      status: "refunded",
+    };
+
+    const response = await POST(buildRequest());
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { refunded?: number; duplicate?: boolean };
+    expect(body.refunded).toBe(0);
+    expect(body.duplicate).toBe(true);
+    expect(reverseInputs).toHaveLength(0);
+    expect(purchaseUpdates).toHaveLength(0);
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
   it("marks malformed orders failed but acknowledges them", async () => {
     nextEvent = orderCompletedEvent({ orderMetadata: {} });
     const response = await POST(buildRequest());

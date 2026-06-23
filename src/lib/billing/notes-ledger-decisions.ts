@@ -97,6 +97,30 @@ export function decideRefund(input: {
   };
 }
 
+export type TopupReversalDecision =
+  | { kind: "duplicate"; ledgerId: string; balanceAfter: number; amount: number }
+  | { kind: "proceed"; balanceAfter: number; amount: number };
+
+export function decideTopupReversal(input: {
+  currentBalance: number;
+  amount: number;
+  existingRefund: ExistingLedgerRow | null;
+}): TopupReversalDecision {
+  if (input.existingRefund) {
+    return {
+      kind: "duplicate",
+      ledgerId: input.existingRefund.id,
+      balanceAfter: input.currentBalance,
+      amount: Math.abs(input.existingRefund.delta),
+    };
+  }
+  return {
+    kind: "proceed",
+    balanceAfter: input.currentBalance - input.amount,
+    amount: input.amount,
+  };
+}
+
 /**
  * Deterministic external_ref string a refund writes so the
  * unique-partial idempotency index dedupes duplicate refund attempts
@@ -144,6 +168,21 @@ export function trimDailyFreeAfterTopupReversal(
   balanceAfter: number,
 ): number {
   return Math.min(clampNonNegative(dailyFreeNotes), clampNonNegative(balanceAfter));
+}
+
+/** Apply a daily-free grant while respecting negative debt first. */
+export function dailyFreeAfterGrant(input: {
+  currentBalance: number;
+  currentDailyFree: number;
+  grantAmount: number;
+  maxDailyFreeBalance: number;
+}): number {
+  const balanceAfter = input.currentBalance + input.grantAmount;
+  return Math.min(
+    clampNonNegative(input.currentDailyFree) + clampNonNegative(input.grantAmount),
+    clampNonNegative(balanceAfter),
+    clampNonNegative(input.maxDailyFreeBalance),
+  );
 }
 
 /** Restore the daily-free portion of a refunded spend when metadata allows it. */

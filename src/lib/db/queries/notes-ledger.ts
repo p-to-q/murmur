@@ -14,6 +14,8 @@ import {
   decideRefund,
   decideSpend,
   decideSpendPoolsForCost,
+  decideTopupReversal,
+  dailyFreeAfterGrant,
   refundReferenceFor,
   trimDailyFreeAfterTopupReversal,
   accountNotesFromTotal,
@@ -29,6 +31,8 @@ export {
   decideRefund,
   decideSpend,
   decideSpendPoolsForCost,
+  decideTopupReversal,
+  dailyFreeAfterGrant,
   refundReferenceFor,
   trimDailyFreeAfterTopupReversal,
   accountNotesFromTotal,
@@ -479,26 +483,29 @@ export async function reverseTopupGrant(
       input.refundExternalRef,
     );
 
-    if (existingRefund) {
-      const reversedAmount = Math.abs(existingRefund.delta);
+    const decision = decideTopupReversal({
+      currentBalance: user.notesBalance,
+      amount,
+      existingRefund,
+    });
+
+    if (decision.kind === "duplicate") {
       return {
         ok: true,
-        ledgerId: existingRefund.id,
+        ledgerId: decision.ledgerId,
         purchaseLedgerId: purchaseGrant.id,
         balanceBefore: user.notesBalance,
-        balanceAfter: user.notesBalance,
-        amount: reversedAmount,
+        balanceAfter: decision.balanceAfter,
+        amount: decision.amount,
         duplicate: true,
       };
     }
 
-    const balanceAfter = Math.max(0, user.notesBalance - amount);
-    const reversedAmount = user.notesBalance - balanceAfter;
     const ledgerId = createLedgerId();
     await tx.insert(notesLedger).values({
       id: ledgerId,
       userId: input.userId,
-      delta: -reversedAmount,
+      delta: -decision.amount,
       reason: "refund:topup",
       externalRef: input.refundExternalRef,
       metadata: {
@@ -510,10 +517,10 @@ export async function reverseTopupGrant(
     await tx
       .update(users)
       .set({
-        notesBalance: balanceAfter,
+        notesBalance: decision.balanceAfter,
         dailyFreeNotesBalance: trimDailyFreeAfterTopupReversal(
           user.dailyFreeNotesBalance,
-          balanceAfter,
+          decision.balanceAfter,
         ),
         updatedAt: new Date(),
       })
@@ -524,8 +531,8 @@ export async function reverseTopupGrant(
       ledgerId,
       purchaseLedgerId: purchaseGrant.id,
       balanceBefore: user.notesBalance,
-      balanceAfter,
-      amount: reversedAmount,
+      balanceAfter: decision.balanceAfter,
+      amount: decision.amount,
       duplicate: false,
     };
   });
@@ -613,6 +620,13 @@ async function grantDailyFreeRefillInTransaction(
   const grantAmount = Math.min(DAILY_REFILL, dailyRoom);
 
   if (grantAmount > 0) {
+    const dailyFreeAfter = dailyFreeAfterGrant({
+      currentBalance: user.notesBalance,
+      currentDailyFree: currentDaily,
+      grantAmount,
+      maxDailyFreeBalance: MAX_FREE_BALANCE,
+    });
+
     const inserted = await tx
       .insert(notesLedger)
       .values({
@@ -624,7 +638,7 @@ async function grantDailyFreeRefillInTransaction(
         metadata: {
           source: "ensure_daily_free_refill",
           dailyFreeBefore: currentDaily,
-          dailyFreeAfter: currentDaily + grantAmount,
+          dailyFreeAfter,
         },
       })
       .onConflictDoNothing()
@@ -643,7 +657,12 @@ async function grantDailyFreeRefillInTransaction(
     .update(users)
     .set({
       notesBalance: user.notesBalance + grantAmount,
-      dailyFreeNotesBalance: currentDaily + grantAmount,
+      dailyFreeNotesBalance: dailyFreeAfterGrant({
+        currentBalance: user.notesBalance,
+        currentDailyFree: currentDaily,
+        grantAmount,
+        maxDailyFreeBalance: MAX_FREE_BALANCE,
+      }),
       freeNotesGrantedAt: windowStart,
       updatedAt: new Date(),
     })

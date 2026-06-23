@@ -282,6 +282,14 @@ async function refundOrder(
     );
   }
 
+  if (purchase.status === "refunded") {
+    return {
+      refunded: 0,
+      duplicate: true,
+      orderId,
+    };
+  }
+
   const refundRef =
     typeof data.refundTicketMerchantExternalId === "string" && data.refundTicketMerchantExternalId.length > 0
       ? `waffo-refund:${data.refundTicketMerchantExternalId}`
