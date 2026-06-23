@@ -2,6 +2,7 @@ import { QA_ROUTE_CONTRACTS } from "@/lib/qa/qa-routes";
 
 const webBase = (process.env.MURMUR_WEB_BASE_URL ?? "http://127.0.0.1:3000").replace(/\/+$/, "");
 const acceptLanguage = process.env.MURMUR_SMOKE_ACCEPT_LANGUAGE ?? "zh-CN,zh;q=0.9";
+const localAuthHeaders = { "x-murmur-user-id": "local_stack_smoke" };
 
 type CheckResult = {
   name: string;
@@ -27,8 +28,15 @@ async function main() {
 
 async function checkRoute(route: (typeof QA_ROUTE_CONTRACTS)[number]): Promise<CheckResult> {
   try {
+    const headers = new Headers({ "Accept-Language": acceptLanguage });
+    if (route.href.startsWith("/me/debug")) {
+      for (const [name, value] of Object.entries(localAuthHeaders)) {
+        headers.set(name, value);
+      }
+    }
+
     const response = await fetch(`${webBase}${route.href}`, {
-      headers: { "Accept-Language": acceptLanguage },
+      headers,
       redirect: "follow",
     });
     const html = await response.text();
