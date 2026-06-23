@@ -22,10 +22,13 @@ mock.module("@/lib/auth", () => ({
 const { GET } = await import("./route");
 
 let originalAppUrl: string | undefined;
+let originalVercelUrl: string | undefined;
 
 beforeEach(() => {
   originalAppUrl = process.env.MURMUR_APP_URL;
+  originalVercelUrl = process.env.VERCEL_URL;
   process.env.MURMUR_APP_URL = "https://murmur.example";
+  delete process.env.VERCEL_URL;
   nextAuth = {
     ok: true,
     user: {
@@ -43,6 +46,8 @@ beforeEach(() => {
 afterEach(() => {
   if (originalAppUrl === undefined) delete process.env.MURMUR_APP_URL;
   else process.env.MURMUR_APP_URL = originalAppUrl;
+  if (originalVercelUrl === undefined) delete process.env.VERCEL_URL;
+  else process.env.VERCEL_URL = originalVercelUrl;
 });
 
 describe("GET /api/share/invite", () => {
@@ -54,6 +59,19 @@ describe("GET /api/share/invite", () => {
     expect(response.status).toBe(200);
     const body = await response.json() as { url?: string };
     expect(body.url).toBe("https://murmur.example/?ref=usr_inviter");
+  });
+
+  it("uses the request origin when no canonical app URL is configured", async () => {
+    delete process.env.MURMUR_APP_URL;
+    delete process.env.VERCEL_URL;
+
+    const response = await GET(
+      new Request("http://localhost:3000/api/share/invite") as unknown as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { url?: string };
+    expect(body.url).toBe("http://localhost:3000/?ref=usr_inviter");
   });
 
   it("falls back to a plain share link for Local Creator sessions", async () => {
