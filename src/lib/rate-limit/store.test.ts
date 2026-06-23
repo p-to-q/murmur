@@ -158,13 +158,28 @@ describe("getRateLimitStore (env-driven factory)", () => {
     expect(a).toBe(b);
   });
 
-  it("throws on redis / postgres drivers until adapters land", () => {
+  it("defaults to postgres in production when env is unset", () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "production";
+      resetCachedRateLimitStore();
+      const store = getRateLimitStore();
+      expect(store.driver).toBe("postgres");
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv;
+      resetCachedRateLimitStore();
+    }
+  });
+
+  it("uses the postgres adapter when configured", () => {
+    process.env.MURMUR_RATE_LIMIT_DRIVER = "postgres";
+    const store = getRateLimitStore();
+    expect(store.driver).toBe("postgres");
+  });
+
+  it("throws on redis until that adapter lands", () => {
     resetCachedRateLimitStore();
     process.env.MURMUR_RATE_LIMIT_DRIVER = "redis";
-    expect(() => getRateLimitStore()).toThrow(RateLimitError);
-
-    resetCachedRateLimitStore();
-    process.env.MURMUR_RATE_LIMIT_DRIVER = "postgres";
     expect(() => getRateLimitStore()).toThrow(RateLimitError);
   });
 

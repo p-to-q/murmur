@@ -43,6 +43,7 @@ export AUTH_SECRET="${AUTH_SECRET:-murmur-ci-smoke-secret}"
 # Satisfy production db/client guard; routes fall back when Postgres is absent.
 export DATABASE_URL="${DATABASE_URL:-postgresql://postgres:password@127.0.0.1:5432/murmur_ci_smoke}"
 export MURMUR_STORAGE_DRIVER="${MURMUR_STORAGE_DRIVER:-memory}"
+export MURMUR_RATE_LIMIT_DRIVER="${MURMUR_RATE_LIMIT_DRIVER:-memory}"
 # This smoke test intentionally runs without Postgres or OAuth. Exercise the
 # local/demo fallback path; production auth strictness is covered by unit tests.
 export MURMUR_AUTH_MODE="${MURMUR_AUTH_MODE:-local}"

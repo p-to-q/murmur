@@ -164,6 +164,14 @@ export type VisualConfig = {
 };
 
 export type VersionGenerationStatus = "pending" | "ready" | "error";
+export type VersionGenerationErrorCode =
+  | "insufficient_notes"
+  | "rate_limited"
+  | "billing_unavailable"
+  | "worker_unconfigured"
+  | "worker_unavailable"
+  | "server_error"
+  | "network_error";
 
 /**
  * Present when the version's audio comes from the Magenta RealTime worker
@@ -184,6 +192,9 @@ export type VersionGeneration = {
   /** Weight of the hum's audio embedding blended into the text style. */
   styleMix: number;
   error?: string;
+  errorCode?: VersionGenerationErrorCode;
+  currentBalance?: number;
+  cost?: number;
 };
 
 export type VibeVersion = {

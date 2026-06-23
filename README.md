@@ -287,6 +287,7 @@ cp .env.example .env
 | `MELO_LAB_MUSIC_WORKER_URL` | Optional loopback music worker override for `/api/test/melo-lab/music`. Defaults to `http://127.0.0.1:8002`. |
 | `DATABASE_URL` | Postgres connection string for Drizzle. |
 | `POSTGRES_URL` | Vercel Postgres-compatible fallback accepted by DB scripts and production env audit. |
+| `MURMUR_RATE_LIMIT_DRIVER` | Rate-limit backend. Production defaults to `postgres` for shared route-level buckets; local/test default to `memory`. `redis` remains reserved until an adapter lands. |
 | `CRON_SECRET` | Shared secret for cron routes; production must use a non-placeholder value. |
 | `MURMUR_STORAGE_DRIVER` | Storage adapter. Production on Vercel must use `s3-compatible`; dev defaults to local storage. |
 | `MURMUR_STORAGE_S3_*` | Bucket, region, access key, and secret for the `s3-compatible` storage adapter. |

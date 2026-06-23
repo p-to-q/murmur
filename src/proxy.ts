@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ulid } from "ulid";
 
-import { rateLimitedResponse } from "@/lib/api/rate-limit";
+import { rateLimitedResponse } from "@/lib/api/rate-limit-response";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { validateCookieAuthenticatedSameOrigin } from "@/lib/http/origin-guard";
 import { log } from "@/lib/observability/log";
-import { getRateLimitStore } from "@/lib/rate-limit";
+import { createMemoryRateLimitStore } from "@/lib/rate-limit/adapters/memory";
 
 /**
  * Edge-of-app proxy (Next 16's successor to middleware.ts).
@@ -18,12 +18,12 @@ import { getRateLimitStore } from "@/lib/rate-limit";
  *     runaway clients and scripted abuse. Per-user limits on expensive
  *     routes (song create, transcribe) still apply downstream.
  *
- * The store is process-local (memory driver), so on multi-instance deploys
- * each instance enforces its own bucket. That's acceptable for a backstop;
- * a shared driver can be swapped in via MURMUR_RATE_LIMIT_DRIVER later.
+ * The proxy deliberately keeps its coarse edge backstop in memory. Route-level
+ * expensive-operation limits use the shared default rate-limit store.
  */
 
 const GLOBAL_API_RATE_LIMIT = { capacity: 100, refillWindowMs: 60_000 };
+const globalApiRateLimitStore = createMemoryRateLimitStore();
 
 function clientIp(request: NextRequest): string {
   return clientIpFromHeaders(request.headers);
@@ -53,7 +53,7 @@ export default async function proxy(request: NextRequest) {
     );
   }
 
-  const result = await getRateLimitStore().hit(
+  const result = await globalApiRateLimitStore.hit(
     `global:ip:${clientIp(request)}`,
     GLOBAL_API_RATE_LIMIT,
   );

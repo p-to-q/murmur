@@ -41,7 +41,7 @@ v2-0006  songs.alter           (add melody jsonb + mp3Url; nullable)
 v2-0007  songs.backfill        (one-off, see §3.1)
 v2-0008  events-webhook
 v2-0009  share-referrals       (invite-link attribution)
-v2-0010  rate-limits           (optional; redis preferred)
+v2-0010  rate-limits           (shared production token buckets)
 v2-0011  audit-events          (optional; clickhouse preferred)
 ```
 
@@ -422,22 +422,32 @@ Codex picks Postgres for v2 and migrates to Clickhouse only when row
 counts demand. Retention: 180 days, downsample weekly to a slim
 aggregate table.
 
-### 3.10 `rate_limits` (OPTIONAL; Redis preferred)
+### 3.10 `rate_limits`
 
-If Codex runs without Redis, fall back to:
+Production route-level rate limits use Postgres-backed token buckets by default
+(`MURMUR_RATE_LIMIT_DRIVER=postgres`). Local development and tests keep the
+process-local memory store unless explicitly configured. The table stores one
+opaque bucket row per limiter key; callers own namespacing (`route:bucket:user`).
 
 ```ts
 export const rateLimits = pgTable(
   "rate_limits",
   {
-    bucketKey:  varchar("bucket_key", { length: 96 }).primaryKey(), // "<userId>:<route>:<minute>"
-    counter:    integer("counter").notNull().default(0),
-    expiresAt:  timestamp("expires_at").notNull(),
+    bucketKey: text("bucket_key").primaryKey(),
+    tokens:    doublePrecision("tokens").notNull(),
+    updatedAt: timestamp("updated_at").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
   },
+  (table) => ({
+    expiresAtIdx: index("rate_limits_expires_at_idx").on(table.expiresAt),
+  }),
 );
 ```
 
-Worse than Redis in every way but ships. Retire when Redis lands.
+`hit` and `refund` mutate each bucket inside a transaction and take a
+per-bucket advisory lock, so multiple app instances converge on one shared
+token count. `expires_at` is a cleanup hint for stale buckets and is indexed for
+background or opportunistic deletion.
 
 ---
 
