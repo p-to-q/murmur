@@ -26,8 +26,6 @@ import { Play, Pause, Loader2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 
-import Image from "next/image";
-
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
@@ -42,15 +40,70 @@ import {
 } from "@/modules/music/version-contract";
 import type { VibeVersion } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
-import { buildMeshGradient } from "@/components/song-detail/mesh-gradient";
-import {
-  coverArtworkImageStyle,
-  coverBrightnessCompensationStyle,
-} from "@/lib/music/cover-visual-treatment";
+import { MurmurWave } from "@/components/murmur/murmur-wave";
+import { hashString } from "@/lib/music/seeded-random";
 import { VIBE_PRESETS } from "@/presets/vibes";
 
 /** Visual phases of the route arrival. */
 type Phase = "closing" | "opening" | "cards";
+
+const STAR_SEA_VISUALS = [
+  {
+    gradient: "linear-gradient(148deg, #16242C 0%, #3F7791 48%, #D7D0BF 100%)",
+    accent: "#D7D0BF",
+  },
+  {
+    gradient: "linear-gradient(148deg, #102A43 0%, #2F80A0 45%, #E6C98A 100%)",
+    accent: "#E6C98A",
+  },
+  {
+    gradient: "linear-gradient(148deg, #18313F 0%, #4A9B8E 48%, #D8E6D6 100%)",
+    accent: "#D8E6D6",
+  },
+  {
+    gradient: "linear-gradient(148deg, #466E82 0%, #8FB0BA 48%, #E7E4D8 100%)",
+    accent: "#E7E4D8",
+  },
+  {
+    gradient: "linear-gradient(148deg, #0F3A3D 0%, #4F9F9A 46%, #F0CC8B 100%)",
+    accent: "#F0CC8B",
+  },
+  {
+    gradient: "linear-gradient(148deg, #24223D 0%, #586CA3 48%, #C8BEDD 100%)",
+    accent: "#C8BEDD",
+  },
+  {
+    gradient: "linear-gradient(148deg, #6C3D6F 0%, #D46A76 45%, #F6C36E 100%)",
+    accent: "#F6C36E",
+  },
+  {
+    gradient: "linear-gradient(148deg, #FFBA5A 0%, #F0663E 42%, #B87FCC 100%)",
+    accent: "#FFBA5A",
+  },
+  {
+    gradient: "linear-gradient(148deg, #123C35 0%, #5E937F 48%, #E3C77A 100%)",
+    accent: "#E3C77A",
+  },
+  {
+    gradient: "linear-gradient(148deg, #202D54 0%, #2D9AB1 45%, #B5E3C8 100%)",
+    accent: "#B5E3C8",
+  },
+  {
+    gradient: "linear-gradient(148deg, #161616 0%, #5C6063 48%, #EFEDE5 100%)",
+    accent: "#EFEDE5",
+  },
+  {
+    gradient: "linear-gradient(148deg, #1B2541 0%, #6F85B8 48%, #D6D6C5 100%)",
+    accent: "#D6D6C5",
+  },
+] as const;
+
+function resolveStarSeaVisual(visualBatchSeed: number, version: VibeVersion, cardIndex: number) {
+  const batchIndex = version.generation?.batchIndex ?? 0;
+  const index =
+    (visualBatchSeed + batchIndex * 3 + cardIndex * 5) % STAR_SEA_VISUALS.length;
+  return STAR_SEA_VISUALS[index]!;
+}
 
 function playShutterClick() {
   try {
@@ -331,6 +384,9 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     vibeVersions.length > 0 &&
     generatedVersions.length === vibeVersions.length &&
     generatedVersions.every((version) => version.generation?.status === "error");
+  const visualBatchSeed = hashString(
+    vibeVersions.map((candidate) => candidate.id).join(":"),
+  );
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
@@ -491,6 +547,8 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                     >
                       <VibeCard
                         version={version}
+                        visualBatchSeed={visualBatchSeed}
+                        cardIndex={i}
                         isLarge={isLarge}
                         isAuditioning={isAuditioning}
                         someoneIsAuditioning={someoneIsAuditioning}
@@ -524,6 +582,8 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
 function VibeCard({
   version,
+  visualBatchSeed,
+  cardIndex,
   isLarge,
   isAuditioning,
   someoneIsAuditioning,
@@ -534,6 +594,8 @@ function VibeCard({
   pickLabel,
 }: {
   version: VibeVersion;
+  visualBatchSeed: number;
+  cardIndex: number;
   isLarge: boolean;
   isAuditioning: boolean;
   someoneIsAuditioning: boolean;
@@ -557,10 +619,7 @@ function VibeCard({
     : isPending
       ? t("vibe.pick.wait") || "Brewing"
       : pickLabel;
-
-  const artwork = version.visualConfig.artwork;
-  const artworkPath = artwork?.backgroundImagePath ?? artwork?.imagePath;
-  const meshStyle = buildMeshGradient(version.visualConfig.gradient, artwork?.palette);
+  const starSeaVisual = resolveStarSeaVisual(visualBatchSeed, version, cardIndex);
 
   // Background layer blur: idle = slight soft focus, auditioning = clear, others = blurred
   const bgBlur = isAuditioning ? 0 : someoneIsAuditioning ? 4.5 : 1.5;
@@ -588,25 +647,14 @@ function VibeCard({
         }}
         transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
       >
-        {/* Mesh gradient fill */}
-        <div className="absolute inset-0" style={meshStyle} />
-        {artwork && artworkPath && (
-          <Image
-            src={artworkPath}
-            alt={artwork.title ?? ""}
-            fill
-            sizes="(max-width: 768px) 100vw, 60vw"
-            className="absolute inset-0 h-full w-full object-cover opacity-35"
-            style={coverArtworkImageStyle(artwork)}
-          />
-        )}
-        {artworkPath && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={coverBrightnessCompensationStyle}
-          />
-        )}
+        <div className="absolute inset-0" style={{ background: starSeaVisual.gradient }} />
+        <MurmurWave
+          color={starSeaVisual.accent}
+          intensity={isAuditioning ? 0.88 : 0.56}
+          isPlaying={isAuditioning}
+          waveY={isLarge ? 0.5 : 0.46}
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[64%] w-full"
+        />
         {/* Top darken for legibility */}
         <div
           className="absolute inset-x-0 top-0 h-2/5 pointer-events-none"
