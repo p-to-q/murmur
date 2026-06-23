@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { cookies, headers } from "next/headers";
+import Script from "next/script";
 // Keep the original Traditional Chinese WenKai as the visual lead, with the
 // Simplified Chinese face available only as missing-glyph fallback.
 import "@fontsource/lxgw-wenkai-tc/300.css";
@@ -130,6 +131,9 @@ export default async function RootLayout({
         suppressHydrationWarning
         className="min-h-svh flex flex-col bg-[#F5F1EB]"
       >
+        <Script id="strip-extension-hydration-attrs" strategy="beforeInteractive">
+          {`document.querySelectorAll('[data-sg-checked]').forEach(function (element) { element.removeAttribute('data-sg-checked'); });`}
+        </Script>
         <I18nProvider initialLang={initialLang}>
           <AuthProvider>
             <I18nHydrator />
