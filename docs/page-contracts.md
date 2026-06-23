@@ -86,6 +86,9 @@ under Me, not as a new top-level destination and not as a fully expanded
 account menu:
 
 - `/me/settings` — durable user preferences and local device-facing settings
+- `/me/notifications` — local in-app notification inbox and management actions;
+  browser alert controls stay in the sidebar bell popover, and this page appears
+  in the Me trail only after notifications are enabled
 - `/me/payments` — note top-up receipts and provider reconciliation state
 - `/me/privacy` — privacy policy, consent, and future privacy controls
 - `/me/delete` — account deletion request and retention/cooldown status

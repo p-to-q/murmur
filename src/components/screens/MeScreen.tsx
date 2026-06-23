@@ -23,12 +23,15 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { BellRing, CheckCheck, ChevronRight } from "lucide-react";
 import { UserBadge } from "@/components/user-profile/user-badge";
 import { useCurrentLang, useI18nStore, useTranslator } from "@/lib/i18n";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
+import { useNotificationActions } from "@/lib/hooks/use-notification-actions";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
+import { useNotificationStore } from "@/lib/store/notification-store";
 
 export function MeScreen() {
   const [songCount, setSongCount] = useState(0);
@@ -38,6 +41,13 @@ export function MeScreen() {
   const { balance, isLoading } = useUserBalance();
   const { isRegistered } = useCurrentAccount();
   const developerMode = usePreferencesStore((state) => state.developerMode);
+  const notifications = useNotificationStore((state) => state.items);
+  const markAllRead = useNotificationStore((state) => state.markAllRead);
+  const {
+    alertsOn,
+    isTesting,
+    sendTestNotification,
+  } = useNotificationActions();
 
   useEffect(() => {
     let cancelled = false;
@@ -80,9 +90,6 @@ export function MeScreen() {
         <h1 className="hero-serif-italic text-[#1A1A1A] text-[44px] leading-[1.02] md:text-[72px]">
           {t("me.title")}
         </h1>
-        <p className="font-serif-italic mt-3 max-w-[28rem] text-[15px] leading-[1.55] text-[#6F6A63] md:text-[16px]">
-          {t("me.sub") || "A small shelf of your own."}
-        </p>
       </div>
 
       {/* ── Body cards ─────────────────────────────────────────────── */}
@@ -122,6 +129,13 @@ export function MeScreen() {
             </div>
           </div>
         </Card>
+
+        <NotificationPanel
+          notifications={notifications}
+          isTesting={isTesting}
+          onMarkAllRead={markAllRead}
+          onSendTest={() => void sendTestNotification()}
+        />
 
         {/* Milestone & Next move — achievement-driven guidance */}
         <Card>
@@ -194,45 +208,49 @@ export function MeScreen() {
 
       {/* ── Tertiary footer ─────────────────────────────────────────── */}
       <div className="relative z-10 px-6 md:px-12 max-w-3xl mx-auto pb-28">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px] tracking-[0.04em] text-[#8C8780]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[12px] tracking-[0.04em] text-[#8C8780]">
           {developerMode ? (
             <>
-              <Link href="/me/debug" className="hover:text-[#1A1A1A] transition-colors">
+              <Link href="/me/debug" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
                 {t("me.debug") || "Debug"}
               </Link>
-              <span className="text-[#D2C9B6]">·</span>
+              <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
             </>
           ) : null}
-          <Link href="/me/settings" className="hover:text-[#1A1A1A] transition-colors">
+          <Link href="/me/settings" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
             {t("me.settings") || "Settings"}
           </Link>
-          <span className="text-[#D2C9B6]">·</span>
-          <Link href="/me/payments" className="hover:text-[#1A1A1A] transition-colors">
+          <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
+          {alertsOn ? (
+            <>
+              <Link href="/me/notifications" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
+                {t("me.notifications") || "Notifications"}
+              </Link>
+              <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
+            </>
+          ) : null}
+          <Link href="/me/payments" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
             {t("me.payments") || "Payment records"}
           </Link>
-          <span className="text-[#D2C9B6]">·</span>
-          <Link href="/me/privacy" className="hover:text-[#1A1A1A] transition-colors">
+          <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
+          <Link href="/me/privacy" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
             {t("me.privacy") || "Privacy"}
           </Link>
-          <span className="text-[#D2C9B6]">·</span>
-          <Link href="/me/terms" className="hover:text-[#1A1A1A] transition-colors">
+          <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
+          <Link href="/me/terms" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
             {t("me.terms") || "Terms"}
           </Link>
-          <span className="text-[#D2C9B6]">·</span>
+          <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
           <Link
             href="/me/delete"
-            className="hover:text-[#D9421A] transition-colors"
+            className="whitespace-nowrap hover:text-[#D9421A] transition-colors"
           >
             {t("me.delete_account") || "Delete account"}
           </Link>
-          {developerMode ? (
-            <>
-              <span className="text-[#D2C9B6]">·</span>
-              <Link href="/me/debug/melo-lab" className="hover:text-[#1A1A1A] transition-colors">
-                {t("me.melo_lab") || "MeLo Lab"}
-              </Link>
-            </>
-          ) : null}
+          <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
+          <Link href="/me/debug/melo-lab" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
+            {t("me.melo_lab") || "MeLo Lab"}
+          </Link>
         </div>
       </div>
     </div>
@@ -352,6 +370,100 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
   return <div className={`mm-card p-6 ${className || ""}`}>{children}</div>;
 }
 
+function NotificationPanel({
+  notifications,
+  isTesting,
+  onMarkAllRead,
+  onSendTest,
+}: {
+  notifications: Array<{
+    id: string;
+    title: string;
+    body: string;
+    readAt?: number;
+    createdAt: number;
+  }>;
+  isTesting: boolean;
+  onMarkAllRead: () => void;
+  onSendTest: () => void;
+}) {
+  const t = useTranslator();
+  const lang = useCurrentLang();
+  const preview = notifications.slice(0, 3);
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <SectionLabel>{t("me.notifications") || "Notifications"}</SectionLabel>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-1.5">
+        {preview.length === 0 ? (
+          <p className="rounded-[8px] border border-dashed border-[#E5DDD0] bg-[#F8F3EA]/55 px-3 py-3 text-[12px] leading-[1.5] text-[#8C8780]">
+            {t("me.notifications.placeholder") || "Notifications will appear here."}
+          </p>
+        ) : (
+          preview.map((item) => (
+            <Link
+              key={item.id}
+              href="/me/notifications"
+              className="flex items-start gap-2 rounded-[8px] px-2 py-2 transition-colors hover:bg-[#F8F3EA]"
+            >
+              <span
+                className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                  item.readAt ? "bg-[#D8CCBA]" : "bg-[#FF5924]"
+                }`}
+                aria-hidden
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12px] font-medium leading-snug text-[#1A1A1A]">
+                  {item.title}
+                </span>
+                <span className="mt-0.5 block truncate text-[11px] leading-snug text-[#8C8780]">
+                  {item.body}
+                </span>
+              </span>
+              <span className="shrink-0 text-[10px] leading-snug text-[#B6B0A4]">
+                {formatNotificationTime(item.createdAt, lang)}
+              </span>
+            </Link>
+          ))
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Link
+          href="/me/notifications"
+          className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5DDD0] bg-white/55 px-3 text-[12px] text-[#6F6A63] transition-colors hover:border-[#C8C0B4] hover:text-[#1A1A1A]"
+        >
+          {t("me.notifications.open") || "Open inbox"}
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+        <button
+          type="button"
+          onClick={onMarkAllRead}
+          disabled={notifications.length === 0}
+          className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5DDD0] bg-white/55 px-3 text-[12px] text-[#6F6A63] transition-colors hover:border-[#C8C0B4] hover:text-[#1A1A1A] disabled:pointer-events-none disabled:opacity-40"
+        >
+          <CheckCheck className="h-3.5 w-3.5" />
+          {t("nav.notify.mark_all") || "Mark all read"}
+        </button>
+        <button
+          type="button"
+          onClick={onSendTest}
+          disabled={isTesting}
+          className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5DDD0] bg-[#F8F3EA] px-3 text-[12px] text-[#6F6A63] transition-colors hover:border-[#C8C0B4] hover:text-[#1A1A1A] disabled:cursor-wait disabled:opacity-60"
+        >
+          <BellRing className="h-3.5 w-3.5" />
+          {t("nav.notify.test") || "Test notification"}
+        </button>
+      </div>
+    </Card>
+  );
+}
+
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="eyebrow mb-3 text-[#8C8780]">{children}</p>;
 }
@@ -377,4 +489,23 @@ function LangPill({
       {label}
     </button>
   );
+}
+
+export function formatNotificationTime(createdAt: number, lang: string): string {
+  const diffMs = Date.now() - createdAt;
+  const locale = lang === "zh" ? "zh-CN" : "en-US";
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < minute) return lang === "zh" ? "刚刚" : "now";
+  if (diffMs < hour) return formatter.format(-Math.round(diffMs / minute), "minute");
+  if (diffMs < day) return formatter.format(-Math.round(diffMs / hour), "hour");
+  if (diffMs < 7 * day) return formatter.format(-Math.round(diffMs / day), "day");
+
+  return new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(createdAt));
 }

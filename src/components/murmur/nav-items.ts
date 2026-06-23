@@ -84,6 +84,7 @@ export const TRAIL_ROOTS: TrailRoot[] = [
     mode: "single",
     steps: [
       { match: "/me/settings",    labelKey: "nav.flow.settings",        fallback: "Settings"        },
+      { match: "/me/notifications", labelKey: "nav.flow.notifications",  fallback: "Notifications"   },
       { match: "/me/payments",    labelKey: "nav.flow.payment_records", fallback: "Payment records" },
       { match: "/me/privacy",     labelKey: "nav.flow.privacy",         fallback: "Privacy"         },
       { match: "/me/delete",      labelKey: "nav.flow.delete_account",  fallback: "Delete account"  },
@@ -118,24 +119,52 @@ export interface ComputedTrail {
  * `/gallery`) because there's no child row to render yet. Additive roots
  * reveal prior steps in a flow; single roots reveal only the active child.
  */
-export function computeTrail(pathname: string | null | undefined): ComputedTrail | null {
+export function computeTrail(
+  pathname: string | null | undefined,
+  options: { notificationsEnabled?: boolean } = {},
+): ComputedTrail | null {
   if (!pathname) return null;
   for (const root of TRAIL_ROOTS) {
+    const notificationStep = root.steps.find((step) => step.match === "/me/notifications");
+    const steps =
+      root.href === "/me" && options.notificationsEnabled === false
+        ? root.steps.filter((step) => step.match !== "/me/notifications")
+        : root.steps;
     let activeIdx = -1;
     // Longest-prefix wins, so `/studio/name` beats `/studio`.
-    for (let i = root.steps.length - 1; i >= 0; i--) {
-      const s = root.steps[i]!;
+    for (let i = steps.length - 1; i >= 0; i--) {
+      const s = steps[i]!;
       if (pathname === s.match || pathname.startsWith(`${s.match}/`)) {
         activeIdx = i;
         break;
       }
     }
-    if (activeIdx === -1) continue;
+    if (activeIdx === -1) {
+      if (
+        root.href === "/me" &&
+        options.notificationsEnabled &&
+        notificationStep &&
+        (pathname === "/me" || pathname.startsWith("/me/"))
+      ) {
+        return {
+          rootHref: root.href,
+          steps: [{ step: notificationStep, isActive: false }],
+        };
+      }
+      continue;
+    }
 
     const visibleSteps = root.mode === "single"
-      ? root.steps.slice(activeIdx, activeIdx + 1)
-      : root.steps.slice(0, activeIdx + 1);
-    const computed: ComputedStep[] = visibleSteps.map((step) => ({
+      ? steps.slice(activeIdx, activeIdx + 1)
+      : steps.slice(0, activeIdx + 1);
+    const visibleWithPersistentNotification =
+      root.href === "/me" &&
+      options.notificationsEnabled &&
+      notificationStep &&
+      !visibleSteps.some((step) => step.match === notificationStep.match)
+        ? [notificationStep, ...visibleSteps]
+        : visibleSteps;
+    const computed: ComputedStep[] = visibleWithPersistentNotification.map((step) => ({
       step,
       isActive:
         pathname === step.match || pathname.startsWith(`${step.match}/`),
