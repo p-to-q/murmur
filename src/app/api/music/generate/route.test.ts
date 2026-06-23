@@ -28,6 +28,11 @@ class TestRunpodError extends Error {
 
 mock.module("@/lib/platform/runpod-serverless", () => ({
   RunpodError: TestRunpodError,
+  endpointHealth: async () => ({
+    ok: true,
+    status: 200,
+    body: { workers: { idle: 0, running: 0 } },
+  }),
   runJob: async () => {
     throw new Error("runJob should not be called in route tests");
   },
