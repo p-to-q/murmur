@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import MeloLabClient from "./MeloLabClient";
+import { meloLabGate } from "@/lib/test/melo-lab";
 
 export const metadata: Metadata = {
   title: "MeLo Lab | Murmur",
@@ -14,5 +16,8 @@ export const metadata: Metadata = {
 };
 
 export default function MeloLabPage() {
+  if (!meloLabGate().ok) {
+    notFound();
+  }
   return <MeloLabClient />;
 }

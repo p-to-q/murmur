@@ -3,7 +3,7 @@ import { compactMeloLabDiagnostics } from "@/lib/test/melo-lab-contract";
 import { meloLabGate, resolveLocalWorkerUrl } from "@/lib/test/melo-lab";
 
 describe("MeLo Lab helpers", () => {
-  it("keeps production test APIs behind an explicit flag", () => {
+  it("keeps production test APIs disabled even when the flag is set", () => {
     const originalNodeEnv = process.env.NODE_ENV;
     const originalFlag = process.env.MURMUR_ENABLE_MELO_LAB;
 
@@ -15,6 +15,30 @@ describe("MeLo Lab helpers", () => {
     delete process.env.MURMUR_ENABLE_MELO_LAB;
     expect(meloLabGate()).toEqual({ ok: false, reason: "disabled" });
 
+    process.env.MURMUR_ENABLE_MELO_LAB = "1";
+    expect(meloLabGate()).toEqual({ ok: false, reason: "disabled" });
+
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: originalNodeEnv,
+      configurable: true,
+      writable: true,
+    });
+    if (originalFlag === undefined) {
+      delete process.env.MURMUR_ENABLE_MELO_LAB;
+    } else {
+      process.env.MURMUR_ENABLE_MELO_LAB = originalFlag;
+    }
+  });
+
+  it("allows the explicit flag outside production", () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalFlag = process.env.MURMUR_ENABLE_MELO_LAB;
+
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "test",
+      configurable: true,
+      writable: true,
+    });
     process.env.MURMUR_ENABLE_MELO_LAB = "1";
     expect(meloLabGate()).toEqual({ ok: true, reason: "enabled" });
 

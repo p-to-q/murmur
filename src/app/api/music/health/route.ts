@@ -9,6 +9,13 @@ import { endpointHealth } from "@/lib/platform/runpod-serverless";
 
 export const runtime = "nodejs";
 
+type PublicMusicHealth = {
+  available: boolean;
+  configured: boolean;
+  mode?: "serverless" | "http";
+  reason: "unconfigured" | "unauthorized" | "unreachable" | "degraded" | `http_${number}` | null;
+};
+
 /**
  * GET /api/music/health — can the Magenta engine take generation requests?
  *
@@ -23,7 +30,7 @@ export const runtime = "nodejs";
 export async function GET() {
   const mode = getMusicEngineMode();
   if (!mode) {
-    return NextResponse.json({
+    return publicHealth({
       available: false,
       configured: false,
       reason: "unconfigured",
@@ -36,30 +43,28 @@ export async function GET() {
 async function serverlessHealth() {
   const config = getMusicServerlessConfig();
   if (!config) {
-    return NextResponse.json({ available: false, configured: false, reason: "unconfigured" });
+    return publicHealth({ available: false, configured: false, reason: "unconfigured" });
   }
 
   try {
-    const { ok, status, body } = await endpointHealth(config, AbortSignal.timeout(12_000));
+    const { ok, status } = await endpointHealth(config, AbortSignal.timeout(12_000));
     if (!ok) {
       const unauthorized = status === 401 || status === 403;
-      return NextResponse.json({
+      return publicHealth({
         available: false,
         configured: true,
         mode: "serverless",
         reason: unauthorized ? "unauthorized" : `http_${status}`,
       });
     }
-    const workers = (body as { workers?: Record<string, number> } | null)?.workers ?? null;
-    return NextResponse.json({
+    return publicHealth({
       available: true,
       configured: true,
       mode: "serverless",
-      workers,
       reason: null,
     });
   } catch {
-    return NextResponse.json({
+    return publicHealth({
       available: false,
       configured: true,
       mode: "serverless",
@@ -72,7 +77,7 @@ async function httpHealth() {
   const configured = isMusicWorkerConfigured();
   const workerBase = getMusicWorkerUrl();
   if (!workerBase) {
-    return NextResponse.json({
+    return publicHealth({
       available: false,
       configured: false,
       reason: "unconfigured",
@@ -88,7 +93,7 @@ async function httpHealth() {
       cache: "no-store",
     });
     if (!res.ok) {
-      return NextResponse.json({
+      return publicHealth({
         available: false,
         configured,
         reason: `http_${res.status}`,
@@ -108,21 +113,21 @@ async function httpHealth() {
     // blip must not pin clients to the legacy engine.
     const available =
       data.status === "ok" || data.loaded === true || data.loading === true;
-    return NextResponse.json({
+    return publicHealth({
       available,
       configured,
       mode: "http",
-      model: data.model ?? null,
-      mock: data.mock ?? false,
-      loaded: data.loaded ?? false,
-      loading: data.loading ?? false,
-      reason: available ? null : data.loadError ?? "degraded",
+      reason: available ? null : "degraded",
     });
   } catch {
-    return NextResponse.json({
+    return publicHealth({
       available: false,
       configured,
       reason: "unreachable",
     });
   }
+}
+
+function publicHealth(body: PublicMusicHealth): NextResponse {
+  return NextResponse.json(body);
 }

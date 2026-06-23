@@ -180,7 +180,8 @@ async function finishUp(apiKey: string, podId: string) {
     console.log("\nManual prod env (or re-run with VERCEL=1 to push automatically):");
     console.log(`  MUSIC_ENGINE_MODE=http`);
     console.log(`  MUSIC_WORKER_URL=${url}`);
-    console.log(`  MUSIC_WORKER_TOKEN=${ensureWorkerToken()}`);
+    ensureWorkerToken();
+    console.log("  MUSIC_WORKER_TOKEN=<redacted; stored in .env.workers.local>");
   }
 }
 

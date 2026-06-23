@@ -13,18 +13,21 @@ export type MeloLabLocalGate = {
 
 /**
  * Melo-lab is a test-only local diagnostic surface. It is available in local
- * development by default, or in an explicit diagnostic build when
- * MURMUR_ENABLE_MELO_LAB=1. The risky part stays isolated in the test APIs:
- * they only call loopback workers and never touch billing or remote workers.
+ * development by default, or in an explicit non-production diagnostic build
+ * when MURMUR_ENABLE_MELO_LAB=1. Production never enables this surface: the
+ * APIs bypass product billing and expose raw diagnostics, so a mistaken flag
+ * must fail closed before launch.
  */
 export function meloLabGate(): MeloLabLocalGate {
+  if (process.env.NODE_ENV === "production") {
+    return { ok: false, reason: "disabled" };
+  }
   if (process.env.MURMUR_ENABLE_MELO_LAB === "1") {
     return { ok: true, reason: "enabled" };
   }
-  if (process.env.NODE_ENV !== "production") {
+  {
     return { ok: true, reason: "local" };
   }
-  return { ok: false, reason: "disabled" };
 }
 
 export function resolveLocalWorkerUrl(
