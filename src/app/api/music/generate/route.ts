@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
         : await generateViaHttp(params, requestId);
 
     if (!result.ok) {
-      await refundMusicGenerateSpendIfNeeded({
+      const refunded = await refundMusicGenerateSpendIfNeeded({
         spend: spendForRefund,
         requestId,
         userId,
@@ -225,7 +225,8 @@ export async function POST(request: NextRequest) {
       });
       spendForRefund = null;
       return fail(result.error, result.message, result.status, {
-        requestId, userId, startedAt, ext: result.ext,
+        requestId, userId, startedAt,
+        ext: { ...result.ext, ...(refunded ? {} : { refundFailed: true }) },
       });
     }
 
@@ -254,7 +255,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    await refundMusicGenerateSpendIfNeeded({
+    const refunded = await refundMusicGenerateSpendIfNeeded({
       spend: spendForRefund,
       requestId,
       userId,
@@ -265,7 +266,10 @@ export async function POST(request: NextRequest) {
     });
     return fail("server_error", "Music generation failed", 500, {
       requestId, userId, startedAt,
-      ext: { message: error instanceof Error ? error.message : String(error) },
+      ext: {
+        message: error instanceof Error ? error.message : String(error),
+        ...(refunded ? {} : { refundFailed: true }),
+      },
     });
   }
 }
@@ -436,9 +440,9 @@ async function refundMusicGenerateSpendIfNeeded(options: {
   promptLength: number | null;
   duration: number | null;
   trigger: string;
-}): Promise<void> {
+}): Promise<boolean> {
   if (!options.spend || options.spend.ledgerId === null || options.spend.duplicate) {
-    return;
+    return true;
   }
 
   try {
@@ -468,7 +472,7 @@ async function refundMusicGenerateSpendIfNeeded(options: {
           level: "warn",
         });
       }
-      return;
+      return true;
     }
 
     log("notes.refund_failed", {
@@ -481,6 +485,7 @@ async function refundMusicGenerateSpendIfNeeded(options: {
       sessionId: options.sessionId,
       level: "error",
     });
+    return false;
   } catch (error) {
     log("notes.refund_failed", {
       requestLedgerId: options.spend.ledgerId,
@@ -492,6 +497,7 @@ async function refundMusicGenerateSpendIfNeeded(options: {
       sessionId: options.sessionId,
       level: "error",
     });
+    return false;
   }
 }
 
