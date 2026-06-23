@@ -1,9 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { resolveRequestAuth } from "@/lib/auth";
+import { requireDebugSurfaceAccess } from "@/lib/observability/debug-surface";
 import { QA_ROUTE_PATHS } from "@/lib/qa/qa-routes";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const gate = await requireDebugSurfaceAccess(request, resolveRequestAuth);
+  if (gate) return gate;
+
   const workerBase = process.env.AUDIO_WORKER_URL?.trim() ?? "";
   const workerConfigured = workerBase.length > 0;
   const workerHealthUrl = workerConfigured
