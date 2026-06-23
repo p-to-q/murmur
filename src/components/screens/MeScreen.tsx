@@ -186,10 +186,7 @@ export function MeScreen() {
         <div className="mm-manifesto">
           <p className="eyebrow text-[#FF8A5C] mb-5">{t("me.manifesto.eyebrow") || "A QUIET PLACE"}</p>
           <p className="font-serif text-[28px] md:text-[34px] leading-[1.15] text-[#F5F1EB]">
-            No <span className="mm-strike">ads</span>, no{" "}
-            <span className="mm-strike">feeds</span>, no{" "}
-            <span className="mm-strike">algorithm</span>, no{" "}
-            <span className="mm-strike">likes</span>.
+            {t("me.manifesto.headline") || "No ads, no feeds, no algorithm, no likes."}
           </p>
           <p className="mt-6 text-[#F5F1EB]/70 text-[15px] leading-[1.55] max-w-md">
             {t("me.manifesto.body") ||

@@ -59,14 +59,17 @@ export function NotificationsScreen() {
           <SummaryTile
             label={t("notifications.summary.status") || "Status"}
             value={alertsOn ? t("notifications.status.on") || "On" : t("notifications.status.off") || "Off"}
+            lang={lang}
           />
           <SummaryTile
             label={t("notifications.summary.unread") || "Unread"}
             value={String(unreadCount)}
+            lang={lang}
           />
           <SummaryTile
             label={t("notifications.summary.total") || "Total"}
             value={String(notifications.length)}
+            lang={lang}
           />
         </section>
 
@@ -141,11 +144,17 @@ export function NotificationsScreen() {
   );
 }
 
-function SummaryTile({ label, value }: { label: string; value: string }) {
+function SummaryTile({ label, value, lang }: { label: string; value: string; lang: "zh" | "en" }) {
   return (
     <div className="rounded-[8px] border border-white/65 bg-white/55 px-4 py-3 shadow-[0_14px_35px_rgba(92,72,45,0.06)]">
       <p className="text-[11px] uppercase tracking-[0.14em] text-[#B7AEA1]">{label}</p>
-      <p className="mt-1 font-serif text-[24px] leading-none text-[#1A1A1A] tabular-nums">{value}</p>
+      <p
+        className={`mt-1 text-[24px] leading-none text-[#1A1A1A] tabular-nums ${
+          lang === "zh" ? "font-chinese-title" : "font-serif"
+        }`}
+      >
+        {value}
+      </p>
     </div>
   );
 }

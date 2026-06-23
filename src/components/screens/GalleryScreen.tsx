@@ -14,7 +14,6 @@ import { useI18nStore, useTranslator } from "@/lib/i18n";
 import type { Lang } from "@/lib/i18n/dict";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import type { SongCard as SongCardType } from "@/modules/shared/types";
-import { FloatingMusicNotes } from "@/components/murmur/floating-music-notes";
 import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
@@ -257,19 +256,6 @@ export function GalleryScreen() {
           </motion.div>
         )}
       </div>
-
-      {/* Music note animation — empty-state filler only; with real songs it
-          pushed the grid below the fold for nothing */}
-      {!isLoading && isShowingDemo && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="relative z-10 flex flex-col items-center px-5 md:px-12 py-8 md:py-12 max-w-2xl mx-auto text-center"
-        >
-          <FloatingMusicNotes size={160} className="opacity-20" />
-        </motion.div>
-      )}
 
       {/* Sort toggle — only visible when there are songs */}
       {!isLoading && displaySongs.length > 1 && (
