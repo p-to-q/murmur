@@ -108,7 +108,7 @@ describe("title suggestions", () => {
   test("saved magenta vibe display can localize genre labels", () => {
     expect(displayVibeLabel("mgt-demo", ["city pop"], "en")).toBe("City Pop");
     expect(displayVibeLabel("mgt-demo", ["city pop"], "zh")).toBe("灯火阑珊");
-    expect(displayVibeLabel("rain", null, "zh")).toBe("雨天");
+    expect(displayVibeLabel("rain", null, "zh")).toBe("夜雨寄北");
     expect(displayVibeLabel("rain", null, "en")).toBe("Rainy");
   });
 });

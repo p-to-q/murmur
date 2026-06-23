@@ -1,7 +1,7 @@
 export const VIBE_PRESETS = [
   {
     id: "sunset",
-    label: { zh: "黄昏", en: "Sunset" },
+    label: { zh: "落霞孤鹜", en: "Sunset" },
     tags: ["warm piano", "soft drums", "gold particles"],
     gradient: "linear-gradient(148deg, #FFBA5A 0%, #F0663E 42%, #B87FCC 100%)",
     energy: 0.45,
@@ -10,7 +10,7 @@ export const VIBE_PRESETS = [
   },
   {
     id: "bedroom",
-    label: { zh: "卧室", en: "Bedroom" },
+    label: { zh: "闲敲棋子", en: "Bedroom" },
     tags: ["lo-fi", "quiet bass", "dust texture"],
     gradient: "linear-gradient(148deg, #EDD9A3 0%, #8BAFC2 52%, #6A6472 100%)",
     energy: 0.35,
@@ -19,7 +19,7 @@ export const VIBE_PRESETS = [
   },
   {
     id: "cinematic",
-    label: { zh: "电影", en: "Cinematic" },
+    label: { zh: "大江东去", en: "Cinematic" },
     tags: ["strings", "slow pulse", "wide reverb"],
     gradient: "linear-gradient(148deg, #16242C 0%, #4E7D96 48%, #D8D0C4 100%)",
     energy: 0.55,
@@ -28,7 +28,7 @@ export const VIBE_PRESETS = [
   },
   {
     id: "party",
-    label: { zh: "派对", en: "Party" },
+    label: { zh: "东风夜放", en: "Party" },
     tags: ["bright synth", "stronger drums", "confetti"],
     gradient: "linear-gradient(148deg, #FF6E35 0%, #EE6AA0 42%, #9B70D0 100%)",
     energy: 0.85,
@@ -37,7 +37,7 @@ export const VIBE_PRESETS = [
   },
   {
     id: "rain",
-    label: { zh: "雨天", en: "Rainy" },
+    label: { zh: "夜雨寄北", en: "Rainy" },
     tags: ["soft keys", "rain air", "slow bass"],
     gradient: "linear-gradient(148deg, #5A8EAA 0%, #9DB8C0 48%, #DFE0DA 100%)",
     energy: 0.3,
@@ -46,7 +46,7 @@ export const VIBE_PRESETS = [
   },
   {
     id: "synth",
-    label: { zh: "合成器", en: "Synth" },
+    label: { zh: "星汉灿烂", en: "Synth" },
     tags: ["synth pad", "moving bass", "night glow"],
     gradient: "linear-gradient(148deg, #8654C4 0%, #141E30 45%, #C85A28 100%)",
     energy: 0.7,
