@@ -74,6 +74,6 @@ export function rateLimitHeaders(
   return headers;
 }
 
-function apiRateLimitKey(input: ApiRateLimitInput): string {
+export function apiRateLimitKey(input: ApiRateLimitInput): string {
   return `${input.route}:${input.bucket}:${input.userId}`;
 }

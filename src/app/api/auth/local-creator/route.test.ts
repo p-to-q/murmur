@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
+import { apiRateLimitKey } from "@/lib/api/rate-limit";
+import { localCreatorFingerprintLimitInput } from "@/lib/api/local-creator-rate-limit";
 import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
@@ -97,12 +99,15 @@ describe("POST /api/auth/local-creator", () => {
       sessionId: "ses_existing",
     };
 
-    await getRateLimitStore().hit(
-      "/api/auth/local-creator:fingerprint:daily:203.0.113.10:ua:fef52b7ea4f03405",
-      { capacity: 1, refillWindowMs: 24 * 60 * 60 * 1000 },
-    );
+    const request = buildRequest();
+    const input = localCreatorFingerprintLimitInput({
+      headers: request.headers,
+      ip: "203.0.113.10",
+      requestId: "req_existing",
+    });
+    await getRateLimitStore().hit(apiRateLimitKey(input), input.options);
 
-    const response = await POST(buildRequest());
+    const response = await POST(request);
 
     expect(response.status).toBe(200);
     const body = await response.json() as { created?: boolean; user?: { id?: string } };
@@ -207,5 +212,21 @@ describe("POST /api/auth/local-creator", () => {
     expect(blocked.headers.get("X-RateLimit-Limit")).toBe("10");
     expect(createdUsers).toBe(10);
     expect(createdSessions).toBe(10);
+  });
+
+  it("does not collapse missing IP metadata into a shared daily IP cap", async () => {
+    for (let i = 0; i < 11; i += 1) {
+      const response = await POST(
+        buildRequest({
+          "x-real-ip": "",
+          "x-request-id": `req_unknown_ip_${i}`,
+          "user-agent": `Murmur Unknown IP Browser ${i}`,
+        }),
+      );
+      expect(response.status).toBe(200);
+    }
+
+    expect(createdUsers).toBe(11);
+    expect(createdSessions).toBe(11);
   });
 });
