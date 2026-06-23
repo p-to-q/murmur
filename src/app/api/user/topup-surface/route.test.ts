@@ -87,8 +87,8 @@ describe("GET /api/user/topup-surface", () => {
     expect(body.error).toBe("topup_surface_unavailable");
   });
 
-  it("keeps localhost previews usable when the surface query fails", async () => {
-    process.env.NODE_ENV = "production";
+  it("keeps localhost previews usable outside production when the surface query fails", async () => {
+    process.env.NODE_ENV = "test";
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     nextSnapshotError = new Error("db unavailable");
 
@@ -105,6 +105,20 @@ describe("GET /api/user/topup-surface", () => {
       lifetimeTopupCents: 0,
       latestPlanSkuId: null,
     });
+  });
+
+  it("does not use the topup surface fallback in production", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
+    nextSnapshotError = new Error("db unavailable");
+
+    const response = await GET(
+      new Request("http://127.0.0.1:3100/api/user/topup-surface") as unknown as NextRequest,
+    );
+
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe("topup_surface_unavailable");
   });
 
   it("keeps the plan field empty when there is no fixed plan purchase", async () => {
