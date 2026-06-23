@@ -5,7 +5,7 @@ import { CallbackRouteError } from "@auth/core/errors";
 import { headers } from "next/headers";
 import { db } from "@/lib/db/client";
 import { users, externalIdentities } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import {
   googleOAuthProviderOptions,
   isGoogleOAuthConfigured,
@@ -165,7 +165,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const [user] = await db
           .select()
           .from(users)
-          .where(eq(users.id, murmurUserId))
+          .where(and(eq(users.id, murmurUserId), isNull(users.deletedAt)))
           .limit(1);
 
         if (user) {
@@ -181,6 +181,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return session;
         }
       }
+
+      delete (session.user as { id?: string }).id;
+      delete (session.user as { accountKind?: string }).accountKind;
+      delete (session.user as { authProvider?: string }).authProvider;
 
       // Fallback: resolve by externalId from token
       const sub =
@@ -213,7 +217,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const [user] = await db
             .select()
             .from(users)
-            .where(eq(users.id, identity.userId))
+            .where(and(eq(users.id, identity.userId), isNull(users.deletedAt)))
             .limit(1);
 
           if (user) {

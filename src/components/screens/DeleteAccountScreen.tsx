@@ -1,17 +1,54 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
 
 import { useTranslator } from "@/lib/i18n";
+import { request } from "@/lib/api/request";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
-import { useCurrentAccount } from "@/lib/hooks/use-current-account";
+import {
+  clearCurrentAccountCache,
+  useCurrentAccount,
+} from "@/lib/hooks/use-current-account";
+import { authClient } from "@/lib/platform/auth-client";
 
 export function DeleteAccountScreen() {
   const t = useTranslator();
+  const router = useRouter();
   const { isRegistered } = useCurrentAccount();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const steps = ["delete.steps.1", "delete.steps.2", "delete.steps.3"] as const;
+
+  async function handleDelete() {
+    if (!isRegistered || isSubmitting) return;
+    setIsSubmitting(true);
+
+    try {
+      const response = await request("/api/account/delete", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error(`delete HTTP ${response.status}`);
+
+      clearCurrentAccountCache();
+      authClient.setUser({
+        id: "guest",
+        email: null,
+        name: "Local Creator",
+        avatarUrl: null,
+        accountKind: "local_creator",
+      });
+      toast.success(t("delete.toast.done"));
+      router.push("/");
+    } catch {
+      toast.error(t("delete.toast.failed"));
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
@@ -61,14 +98,15 @@ export function DeleteAccountScreen() {
         <div className="mt-10">
           <button
             type="button"
-            disabled
-            className="mm-btn-primary w-full max-w-sm opacity-60 cursor-not-allowed"
-            aria-disabled="true"
+            disabled={!isRegistered || isSubmitting}
+            onClick={handleDelete}
+            className="mm-btn-primary w-full max-w-sm disabled:cursor-not-allowed disabled:opacity-60"
+            aria-disabled={!isRegistered || isSubmitting}
           >
-            {t("delete.cta")}
+            {isSubmitting ? t("delete.cta.working") : t("delete.cta")}
           </button>
           <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-[#8C8780]">
-            {t("delete.cta.pending")}
+            {t(isRegistered ? "delete.cta.ready" : "delete.sign_in")}
           </p>
         </div>
       </div>

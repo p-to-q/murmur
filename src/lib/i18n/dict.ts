@@ -748,8 +748,11 @@ export const DICT = {
   "delete.steps.1":      { zh: "账号进入 30 天冷静期，期间可以取消删除。", en: "Your account enters a 30-day grace period during which you can cancel." },
   "delete.steps.2":      { zh: "冷静期结束后，个人资料与关联数据会被永久删除。", en: "After the grace period, your profile and linked data are permanently deleted." },
   "delete.steps.3":      { zh: "已购买的音磅余额不可退款；删除前请先用完或联系支持。", en: "Purchased note balances are non-refundable — use them or contact support before deleting." },
-  "delete.cta":          { zh: "发送删除请求", en: "Request deletion" },
-  "delete.cta.pending":  { zh: "删除 API 即将上线。如需立即处理，请发邮件至 hi@ptoq.io。", en: "The delete API is coming soon. For immediate help, email hi@ptoq.io." },
+  "delete.cta":          { zh: "删除我的账号", en: "Delete my account" },
+  "delete.cta.working":  { zh: "正在删除…", en: "Deleting…" },
+  "delete.cta.ready":    { zh: "提交后会立即退出登录，并撤销你所有公开分享链接。", en: "Submitting signs you out immediately and revokes every public share link." },
+  "delete.toast.done":   { zh: "账号删除请求已提交。", en: "Account deletion requested." },
+  "delete.toast.failed": { zh: "删除请求暂时失败，请稍后再试。", en: "Couldn't request deletion right now. Try again shortly." },
   "delete.back":         { zh: "返回我的", en: "Back to Me" },
 
   // ── Topup extras ───────────────────────────────────────────────────

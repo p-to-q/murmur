@@ -15,6 +15,7 @@ export const users = pgTable(
     freeNotesGrantedAt: timestamp("free_notes_granted_at").notNull().defaultNow(),
     planTier: varchar("plan_tier", { length: 32 }).notNull().default("free"),
     promotedAt: timestamp("promoted_at"),
+    deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

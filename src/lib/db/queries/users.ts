@@ -1,7 +1,9 @@
-import { and, eq, ilike } from "drizzle-orm";
+import { and, eq, ilike, isNull } from "drizzle-orm";
 import { ulid } from "ulid";
 import { db } from "../client";
 import { users, type User } from "../schema/users";
+import { songs } from "../schema/songs";
+import { sessions } from "../schema/sessions";
 import { externalIdentities } from "../schema/external-identities";
 import { notesLedger } from "../schema/notes-ledger";
 import { DAILY_REFILL, GRANTS, LOCAL_CREATOR_FREE_NOTES } from "@murmur/core";
@@ -66,6 +68,72 @@ export async function updateUser(
 export async function deleteUser(id: string): Promise<boolean> {
   const rows = await db.delete(users).where(eq(users.id, id)).returning({ id: users.id });
   return rows.length > 0;
+}
+
+export type AccountDeletionResult =
+  | {
+      ok: true;
+      deletedAt: Date;
+      revokedSongs: number;
+      revokedSessions: number;
+      alreadyDeleted: boolean;
+    }
+  | {
+      ok: false;
+      reason: "user_not_found";
+    };
+
+export async function requestAccountDeletion(
+  userId: string,
+  now = new Date(),
+): Promise<AccountDeletionResult> {
+  return db.transaction(async (tx) => {
+    const [user] = await tx
+      .select({
+        id: users.id,
+        deletedAt: users.deletedAt,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+      .for("update");
+
+    if (!user) {
+      return { ok: false, reason: "user_not_found" };
+    }
+
+    const deletedAt = user.deletedAt ?? now;
+    if (!user.deletedAt) {
+      await tx
+        .update(users)
+        .set({ deletedAt, updatedAt: now })
+        .where(eq(users.id, userId));
+    }
+
+    const revokedSongs = await tx
+      .update(songs)
+      .set({
+        shareCode: null,
+        visibility: "private",
+        updatedAt: now,
+      })
+      .where(eq(songs.userId, userId))
+      .returning({ id: songs.id });
+
+    const revokedSessions = await tx
+      .update(sessions)
+      .set({ revokedAt: now })
+      .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
+      .returning({ id: sessions.id });
+
+    return {
+      ok: true,
+      deletedAt,
+      revokedSongs: revokedSongs.length,
+      revokedSessions: revokedSessions.length,
+      alreadyDeleted: Boolean(user.deletedAt),
+    };
+  });
 }
 
 /** Trim + lowercase. OIDC emails are ASCII, so toLowerCase is safe here. */
@@ -148,8 +216,12 @@ export async function upsertOAuthUser(
   const localCreatorUserId = normalizeLocalCreatorUserId(profile.localCreatorUserId);
 
   const [identity] = await db
-    .select({ userId: externalIdentities.userId })
+    .select({
+      userId: externalIdentities.userId,
+      deletedAt: users.deletedAt,
+    })
     .from(externalIdentities)
+    .innerJoin(users, eq(externalIdentities.userId, users.id))
     .where(
       and(
         eq(externalIdentities.provider, provider),
@@ -159,6 +231,10 @@ export async function upsertOAuthUser(
     .limit(1);
 
   if (identity) {
+    if (identity.deletedAt) {
+      throw new Error("account_deleted");
+    }
+
     await db
       .update(users)
       .set({ name, avatarUrl, updatedAt: new Date() })
@@ -168,7 +244,7 @@ export async function upsertOAuthUser(
 
   return db.transaction(async (tx) => {
     const [existingByEmail] = await tx
-      .select({ id: users.id })
+      .select({ id: users.id, deletedAt: users.deletedAt })
       .from(users)
       .where(ilike(users.email, email))
       .limit(1);
@@ -177,6 +253,10 @@ export async function upsertOAuthUser(
     let created: boolean;
     let registrationKind: UserRegistrationKind;
     if (existingByEmail) {
+      if (existingByEmail.deletedAt) {
+        throw new Error("account_deleted");
+      }
+
       userId = existingByEmail.id;
       created = false;
       registrationKind = "existing_user";
@@ -303,13 +383,14 @@ async function lockPromotableLocalCreator(
       id: users.id,
       accountKind: users.accountKind,
       email: users.email,
+      deletedAt: users.deletedAt,
     })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
     .for("update");
 
-  if (!user || user.accountKind !== "local_creator" || user.email) return null;
+  if (!user || user.deletedAt || user.accountKind !== "local_creator" || user.email) return null;
   return { id: user.id };
 }
 
