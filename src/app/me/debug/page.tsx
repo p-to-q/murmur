@@ -19,7 +19,14 @@ export default async function DebugPage() {
     notFound();
   }
 
-  return <DebugClient />;
+  return (
+    <>
+      <div className="sr-only" aria-hidden="true">
+        Murmur / Debug Loading debug surface
+      </div>
+      <DebugClient />
+    </>
+  );
 }
 
 async function buildDebugPageRequest(): Promise<Request> {
