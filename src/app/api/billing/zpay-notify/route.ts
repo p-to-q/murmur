@@ -25,6 +25,29 @@ function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
 }
 
+function parseUniqueFormParams(body: string): Record<string, string> | null {
+  const params: Record<string, string> = Object.create(null);
+  for (const [key, value] of new URLSearchParams(body)) {
+    if (Object.prototype.hasOwnProperty.call(params, key)) return null;
+    params[key] = value;
+  }
+  return params;
+}
+
+function parseCnyCents(money: string): number | null {
+  const normalized = money.trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
+  const [whole = "0", fraction = ""] = normalized.split(".");
+  return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+}
+
+async function markEventFailed(eventRowId: string, error: string) {
+  await db
+    .update(eventsWebhook)
+    .set({ status: "failed", processedAt: new Date(), error })
+    .where(eq(eventsWebhook.id, eventRowId));
+}
+
 export async function POST(request: NextRequest) {
   const requestId = crypto.randomUUID();
 
@@ -33,9 +56,10 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.text();
-  const params: Record<string, string> = {};
-  for (const [k, v] of new URLSearchParams(body)) {
-    params[k] = v;
+  const params = parseUniqueFormParams(body);
+  if (!params) {
+    log("billing.zpay_notify_failed", { stage: "params" }, { route: ROUTE, requestId, level: "warn" });
+    return new NextResponse("fail", { status: 400 });
   }
 
   const verified = zpayVerifyNotify(params);
@@ -76,22 +100,25 @@ export async function POST(request: NextRequest) {
 
   // Parse our out_trade_no format: {userId}:{skuId}:{uuid}
   const parts = outTradeNo.split(":");
-  if (parts.length < 3) {
+  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
     log("billing.zpay_notify_failed", { stage: "parse", outTradeNo }, { route: ROUTE, requestId, level: "error" });
-    await db.update(eventsWebhook).set({ status: "failed", processedAt: new Date(), error: "invalid out_trade_no format" }).where(eq(eventsWebhook.id, eventRowId));
+    await markEventFailed(eventRowId, "invalid out_trade_no format");
     return new NextResponse("success");
   }
 
-  const userId = parts[0]!;
-  const skuId = parts[1]!;
+  const outUserId = parts[0]!;
+  const outSkuId = parts[1]!;
 
   // Resolve notes from the pending_zpay_orders metadata stored at checkout time
   // We look up the purchase record created during checkout
   const [pendingPurchase] = await db
     .select({
       id: purchases.id,
+      userId: purchases.userId,
+      productId: purchases.productId,
       notesGranted: purchases.notesGranted,
       amountCents: purchases.amountCents,
+      currency: purchases.currency,
       status: purchases.status,
     })
     .from(purchases)
@@ -105,7 +132,7 @@ export async function POST(request: NextRequest) {
 
   if (!pendingPurchase) {
     log("billing.zpay_notify_failed", { stage: "no_pending", outTradeNo }, { route: ROUTE, requestId, level: "error" });
-    await db.update(eventsWebhook).set({ status: "failed", processedAt: new Date(), error: "no pending purchase" }).where(eq(eventsWebhook.id, eventRowId));
+    await markEventFailed(eventRowId, "no pending purchase");
     return new NextResponse("success");
   }
 
@@ -114,39 +141,68 @@ export async function POST(request: NextRequest) {
     return new NextResponse("success");
   }
 
+  if (pendingPurchase.status !== "pending") {
+    log(
+      "billing.zpay_notify_failed",
+      { stage: "invalid_status", outTradeNo, status: pendingPurchase.status },
+      { route: ROUTE, requestId, level: "error" },
+    );
+    await markEventFailed(eventRowId, "invalid purchase status");
+    return new NextResponse("success");
+  }
+
+  if (
+    pendingPurchase.userId !== outUserId ||
+    pendingPurchase.productId !== outSkuId ||
+    pendingPurchase.currency.toUpperCase() !== "CNY"
+  ) {
+    log(
+      "billing.zpay_notify_failed",
+      {
+        stage: "purchase_mismatch",
+        outTradeNo,
+        expectedUserId: pendingPurchase.userId,
+        expectedSkuId: pendingPurchase.productId,
+        expectedCurrency: pendingPurchase.currency,
+        actualUserId: outUserId,
+        actualSkuId: outSkuId,
+      },
+      { route: ROUTE, requestId, level: "error" },
+    );
+    await markEventFailed(eventRowId, "purchase mismatch");
+    return new NextResponse("success");
+  }
+
   const notesGranted = pendingPurchase.notesGranted;
-  const moneyCents = Math.round(Number(verified.money) * 100);
-  if (!Number.isFinite(moneyCents) || moneyCents !== pendingPurchase.amountCents) {
+  const moneyCents = parseCnyCents(verified.money);
+  if (moneyCents === null || moneyCents !== pendingPurchase.amountCents) {
     log(
       "billing.zpay_notify_failed",
       {
         stage: "amount_mismatch",
         outTradeNo,
         expectedCents: pendingPurchase.amountCents,
-        actualCents: Number.isFinite(moneyCents) ? moneyCents : null,
+        actualCents: moneyCents,
       },
       { route: ROUTE, requestId, level: "error" },
     );
-    await db
-      .update(eventsWebhook)
-      .set({
-        status: "failed",
-        processedAt: new Date(),
-        error: "amount mismatch",
-      })
-      .where(eq(eventsWebhook.id, eventRowId));
-    return new NextResponse("fail", { status: 400 });
+    await markEventFailed(eventRowId, "amount mismatch");
+    // The money value is signature-verified, so a mismatch is immutable: a
+    // retry would re-fail identically. Ack with 200 (like the other
+    // post-lookup validation failures) to stop ZPay's retry loop; the event is
+    // recorded as failed for manual review.
+    return new NextResponse("success");
   }
 
   // Grant notes
   const grant = await grantNotes({
-    userId,
+    userId: pendingPurchase.userId,
     amount: notesGranted,
     reason: "purchase:topup",
     externalRef: outTradeNo,
     metadata: {
       provider: PROVIDER,
-      skuId,
+      skuId: pendingPurchase.productId,
       zpayTradeNo: verified.trade_no,
       paymentType: verified.type,
       money: verified.money,
@@ -155,7 +211,7 @@ export async function POST(request: NextRequest) {
 
   if (!grant.ok) {
     log("billing.zpay_notify_failed", { stage: "grant", outTradeNo, reason: grant.reason }, { route: ROUTE, requestId, level: "error" });
-    await db.update(eventsWebhook).set({ status: "failed", processedAt: new Date(), error: `grant failed: ${grant.reason}` }).where(eq(eventsWebhook.id, eventRowId));
+    await markEventFailed(eventRowId, `grant failed: ${grant.reason}`);
     return new NextResponse("fail", { status: 500 });
   }
 
@@ -175,13 +231,13 @@ export async function POST(request: NextRequest) {
     "notes.granted",
     {
       amount: notesGranted,
-      skuId,
+      skuId: pendingPurchase.productId,
       duplicate: grant.duplicate,
       orderId: outTradeNo,
       balanceAfter: grant.balanceAfter,
       provider: PROVIDER,
     },
-    { route: ROUTE, userId, requestId },
+    { route: ROUTE, userId: pendingPurchase.userId, requestId },
   );
 
   // zpay requires plain text "success" response
