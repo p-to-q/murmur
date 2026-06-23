@@ -661,6 +661,7 @@ export const DICT = {
   "checkout.failed":             { zh: "我们这边出了点小问题。", en: "Something tripped on our end." },
   "checkout.grant_pending":      { zh: "支付还在确认中，稍后刷新余额再看。", en: "Payment is still being confirmed. Refresh your balance in a moment." },
   "checkout.provider_unavailable": { zh: "当前部署还没有配置好支付通道。", en: "Payment is not configured for this deployment yet." },
+  "checkout.check_again":        { zh: "再确认一次",       en: "Check again" },
   "checkout.try_again":          { zh: "再试一次",         en: "Try again" },
   "checkout.different":          { zh: "换个支付方式",     en: "use a different method" },
   "checkout.toast.success":      { zh: "已经多了 {notes} 颗音磅。", en: "+{notes} notes added." },
