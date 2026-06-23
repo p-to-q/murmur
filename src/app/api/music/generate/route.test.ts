@@ -16,9 +16,16 @@ mock.module("@/lib/auth", () => ({
 }));
 
 mock.module("@/lib/platform/music-worker", () => ({
-  getMusicEngineMode: () => null,
+  getMusicEngineMode: () => {
+    if (process.env.MUSIC_ENGINE_MODE === "http" && process.env.MUSIC_WORKER_URL) {
+      return "http";
+    }
+    return null;
+  },
   getMusicServerlessConfig: () => null,
-  getMusicWorkerUrl: () => null,
+  getMusicWorkerUrl: () => process.env.MUSIC_WORKER_URL?.trim() || null,
+  getRequestedMusicEngineMode: () =>
+    process.env.MUSIC_ENGINE_MODE === "http" ? "http" : "auto",
 }));
 
 class TestRunpodError extends Error {
