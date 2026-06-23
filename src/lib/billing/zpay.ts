@@ -59,6 +59,10 @@ export function isZpayConfigured(): boolean {
   return getZpayConfig() !== null;
 }
 
+export function resetZpayConfigForTests(): void {
+  cachedConfig = undefined;
+}
+
 /**
  * MD5 signature per zpay spec:
  * 1. Sort params alphabetically by key
@@ -117,6 +121,23 @@ export function zpayVerifyNotify(
 ): ZpayNotifyParams | null {
   const config = getZpayConfig();
   if (!config) return null;
+
+  const requiredFields = [
+    "pid",
+    "trade_no",
+    "out_trade_no",
+    "type",
+    "money",
+    "trade_status",
+    "sign",
+    "sign_type",
+  ];
+  for (const field of requiredFields) {
+    if (!params[field]?.trim()) return null;
+  }
+
+  if (params.pid !== config.pid) return null;
+  if (params.sign_type !== "MD5") return null;
 
   const expected = zpaySign(params, config.key);
   if (params.sign !== expected) return null;

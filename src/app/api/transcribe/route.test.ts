@@ -584,7 +584,7 @@ describe("POST /api/transcribe", () => {
     }
   });
 
-  it("keeps localhost previews usable when billing is unavailable outside dev mode", async () => {
+  it("rejects production dev billing fallback even on localhost", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
     const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     process.env.NODE_ENV = "production";
@@ -600,7 +600,9 @@ describe("POST /api/transcribe", () => {
           url: "http://localhost:3000/api/transcribe",
         }),
       );
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(503);
+      const body = (await response.json()) as { error: string };
+      expect(body.error).toBe("billing_unavailable");
       expect(lastSpendInputs).toHaveLength(0);
       expect(lastRefundInputs).toHaveLength(0);
     } finally {

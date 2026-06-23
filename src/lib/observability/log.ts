@@ -60,6 +60,7 @@ export type LogEvent =
   | "billing.reconcile_ok"
   | "billing.webhook_received"
   | "billing.webhook_failed"
+  | "billing.webhook_refund_manual_review"
   | "share.referral_failed"
   | "storage.local_serve_failed";
 

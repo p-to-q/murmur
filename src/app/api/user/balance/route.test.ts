@@ -138,10 +138,10 @@ describe("GET /api/user/balance", () => {
     expect(body.unlimited).toBe(false);
   });
 
-  it("keeps localhost previews usable when the ledger is unavailable outside dev mode", async () => {
+  it("keeps localhost previews usable when the ledger is unavailable outside production", async () => {
     const prevNode = process.env.NODE_ENV;
     const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    process.env.NODE_ENV = "production";
+    process.env.NODE_ENV = "test";
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     nextBalanceError = new Error("ECONNREFUSED");
 
@@ -161,6 +161,29 @@ describe("GET /api/user/balance", () => {
       expect(body.accountNotes).toBe(9999);
       expect(body.dailyFreeNotes).toBe(0);
       expect(body.planTier).toBe("free");
+    } finally {
+      if (prevNode === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = prevNode;
+      if (prevFlag === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+      else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
+    }
+  });
+
+  it("does not use dev billing fallback in production", async () => {
+    const prevNode = process.env.NODE_ENV;
+    const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    process.env.NODE_ENV = "production";
+    process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
+    nextBalanceError = new Error("ECONNREFUSED");
+
+    try {
+      const response = await GET(
+        new Request("http://127.0.0.1:3100/api/user/balance") as unknown as NextRequest,
+      );
+
+      expect(response.status).toBe(503);
+      const body = await response.json() as { error?: unknown };
+      expect(body.error).toBe("balance_unavailable");
     } finally {
       if (prevNode === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = prevNode;

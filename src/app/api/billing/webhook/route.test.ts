@@ -340,6 +340,8 @@ describe("POST /api/billing/webhook", () => {
       id: "pur_test",
       userId: "usr_buyer",
       productId: "topup_120_notes",
+      amountCents: 599,
+      currency: "USD",
       notesGranted: 130,
       status: "succeeded",
     };
@@ -354,27 +356,80 @@ describe("POST /api/billing/webhook", () => {
       userId: "usr_buyer",
       orderId: "ORD_test_123",
       notesGranted: 130,
-      refundExternalRef: "waffo-refund:REF_ticket_123",
+      refundExternalRef: "waffo-refund:ORD_test_123",
     });
 
     expect(purchaseUpdates.at(-1)).toMatchObject({ status: "refunded" });
     expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
   });
 
-  it("falls back to the refund event id when no refund ticket ref is present", async () => {
-    nextEvent = refundSucceededEvent({ refundTicketMerchantExternalId: undefined });
+  it("acknowledges partial refunds for manual review without reversing notes", async () => {
+    nextEvent = refundSucceededEvent({ amount: "1.00" });
     purchaseRow = {
       id: "pur_test",
       userId: "usr_buyer",
       productId: "topup_120_notes",
+      amountCents: 599,
+      currency: "USD",
       notesGranted: 130,
       status: "succeeded",
     };
 
     const response = await POST(buildRequest());
     expect(response.status).toBe(200);
-    expect(reverseInputs[0]).toMatchObject({
-      refundExternalRef: "waffo-refund:RF_test_123",
+    const body = (await response.json()) as {
+      manualReview?: boolean;
+      refunded?: number;
+      reason?: string;
+    };
+    expect(body.manualReview).toBe(true);
+    expect(body.refunded).toBe(0);
+    expect(body.reason).toBe("refund_amount_mismatch");
+    expect(reverseInputs).toHaveLength(0);
+    expect(purchaseUpdates).toHaveLength(0);
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
+  it("does not reverse notes again for already refunded purchases", async () => {
+    nextEvent = refundSucceededEvent();
+    purchaseRow = {
+      id: "pur_test",
+      userId: "usr_buyer",
+      productId: "topup_120_notes",
+      amountCents: 599,
+      currency: "USD",
+      notesGranted: 130,
+      status: "refunded",
+    };
+
+    const response = await POST(buildRequest());
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      alreadyRefunded?: boolean;
+      duplicate?: boolean;
+      refunded?: number;
+    };
+    expect(body.alreadyRefunded).toBe(true);
+    expect(body.duplicate).toBe(true);
+    expect(body.refunded).toBe(0);
+    expect(reverseInputs).toHaveLength(0);
+    expect(purchaseUpdates).toHaveLength(0);
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
+  it("keeps refund events for unknown orders retryable", async () => {
+    nextEvent = refundSucceededEvent();
+    purchaseRow = null;
+    reclaimRow = null;
+
+    const response = await POST(buildRequest());
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as { error?: string };
+    expect(body.error).toBe("webhook_processing_failed");
+    expect(reverseInputs).toHaveLength(0);
+    expect(purchaseUpdates).toHaveLength(0);
+    expect(eventUpdates.at(-1)).toMatchObject({
+      status: "failed",
     });
   });
 

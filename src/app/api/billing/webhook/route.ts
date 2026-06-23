@@ -35,6 +35,24 @@ function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
 }
 
+function parseDisplayAmountCents(
+  amount: string | null | undefined,
+  currency: string | null | undefined,
+): number | null {
+  if (!amount || !currency) return null;
+  const normalizedCurrency = currency.trim().toUpperCase();
+  const normalizedAmount = amount.trim();
+
+  if (normalizedCurrency === "JPY") {
+    if (!/^\d+$/.test(normalizedAmount)) return null;
+    return Number(normalizedAmount);
+  }
+
+  if (!/^\d+(?:\.\d{1,2})?$/.test(normalizedAmount)) return null;
+  const [whole = "0", fraction = ""] = normalizedAmount.split(".");
+  return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+}
+
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
 
@@ -269,6 +287,8 @@ async function refundOrder(
       id: purchases.id,
       userId: purchases.userId,
       productId: purchases.productId,
+      amountCents: purchases.amountCents,
+      currency: purchases.currency,
       notesGranted: purchases.notesGranted,
       status: purchases.status,
     })
@@ -277,17 +297,51 @@ async function refundOrder(
     .limit(1);
 
   if (!purchase) {
-    throw new NonRetryableWebhookError(
+    throw new Error(
       `refund.succeeded references unknown Waffo order ${orderId}`,
     );
   }
 
-  const refundRef =
-    typeof data.refundTicketMerchantExternalId === "string" && data.refundTicketMerchantExternalId.length > 0
-      ? `waffo-refund:${data.refundTicketMerchantExternalId}`
-      : event.eventId
-        ? `waffo-refund:${event.eventId}`
-        : `waffo-refund:${orderId}`;
+  if (purchase.status === "refunded") {
+    return {
+      refunded: 0,
+      duplicate: true,
+      orderId,
+      alreadyRefunded: true,
+    };
+  }
+
+  const refundCurrency = data.currency?.trim().toUpperCase();
+  const purchaseCurrency = purchase.currency.trim().toUpperCase();
+  const refundAmountCents = parseDisplayAmountCents(data.amount, refundCurrency);
+  if (
+    refundCurrency !== purchaseCurrency ||
+    refundAmountCents === null ||
+    refundAmountCents !== purchase.amountCents
+  ) {
+    log(
+      "billing.webhook_refund_manual_review",
+      {
+        orderId,
+        refundEventId: event.eventId,
+        refundTicketMerchantExternalId: data.refundTicketMerchantExternalId,
+        expectedCents: purchase.amountCents,
+        expectedCurrency: purchaseCurrency,
+        actualCents: refundAmountCents,
+        actualCurrency: refundCurrency ?? null,
+      },
+      { route: ROUTE, userId: purchase.userId, level: "warn" },
+    );
+
+    return {
+      refunded: 0,
+      manualReview: true,
+      reason: "refund_amount_mismatch",
+      orderId,
+    };
+  }
+
+  const refundRef = `waffo-refund:${orderId}`;
   const reversal = await reverseTopupGrant({
     userId: purchase.userId,
     orderId,

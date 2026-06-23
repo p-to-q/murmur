@@ -216,7 +216,6 @@ For the most reliable local startup, set:
 ```bash
 AUDIO_WORKER_URL=http://localhost:8001
 AUDIO_ENGINE_PITCH_PROVIDER=auto
-MURMUR_ALLOW_DEV_BILLING_FALLBACK=1
 MURMUR_DEV_NOTES_BALANCE=9999
 ```
 
@@ -296,7 +295,7 @@ cp .env.example .env
 | `MURMUR_AUTH_MODE` | Auth runtime mode. Defaults to production-like behavior even on localhost: no session means 401. Set `demo` or `local` only for explicit preview fallback work. |
 | `NEXT_PUBLIC_MURMUR_AUTH_MODE` | Browser-side companion for local header auth. Set to `local` only with `MURMUR_AUTH_MODE=local` when intentionally exercising localStorage user headers. |
 | `MURMUR_ALLOW_HEADER_AUTH` | Local/demo-only legacy switch for `x-murmur-user-*` identity headers. Ignored in production auth mode. |
-| `MURMUR_ALLOW_DEV_BILLING_FALLBACK` | Development-only switch. Defaults to enabled in `next dev`; when enabled, local development bypasses notes spending for hum/save/edit flows. Set to `0` to force real billing even in development. |
+| `MURMUR_ALLOW_DEV_BILLING_FALLBACK` | Development/test-only switch. Defaults to enabled in `next dev`; when enabled outside production, local development bypasses notes spending for hum/save/edit flows. Production runtime ignores this switch. Set to `0` to force real billing even in development. |
 | `MURMUR_DEV_NOTES_BALANCE` | Development-only display balance returned by `/api/user/balance` and `/api/auth/me` when dev billing fallback is enabled. Defaults to `9999`. |
 
 ### Notes
