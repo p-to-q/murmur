@@ -139,4 +139,23 @@ describe("GET /api/qa/health", () => {
     const body = await response.json() as { error?: string };
     expect(body.error).toBe("forbidden");
   });
+
+  it("allows authenticated loopback smoke checks when production debug is explicitly enabled", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.MURMUR_ENABLE_DEBUG_SURFACE = "true";
+    nextAuth = {
+      ok: true,
+      user: {
+        id: "ci_local_smoke",
+        email: null,
+        name: "CI Smoke",
+        avatarUrl: null,
+      },
+      source: "local_header",
+      sessionId: null,
+    };
+
+    const response = await GET(request("http://127.0.0.1:3100/api/qa/health"));
+    expect(response.status).toBe(200);
+  });
 });

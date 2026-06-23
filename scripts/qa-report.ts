@@ -5,6 +5,7 @@ const acceptLanguage = process.env.MURMUR_SMOKE_ACCEPT_LANGUAGE ?? "zh-CN,zh;q=0
 const workerBase = (
   process.env.AUDIO_WORKER_URL?.trim() || "http://127.0.0.1:8001"
 ).replace(/\/+$/, "");
+const localAuthHeaders = { "x-murmur-user-id": "qa_report" };
 
 type CheckSummary = {
   name: string;
@@ -14,7 +15,7 @@ type CheckSummary = {
 
 async function main() {
   const [qaHealth, workerHealth, pageChecks] = await Promise.all([
-    fetchJson(`${webBase}/api/qa/health`),
+    fetchJson(`${webBase}/api/qa/health`, localAuthHeaders),
     fetchJson(`${workerBase}/health`),
     Promise.all(QA_ROUTE_CONTRACTS.map(checkRoute)),
   ]);
@@ -43,9 +44,12 @@ async function main() {
   }
 }
 
-async function fetchJson(url: string): Promise<{ ok: boolean; status: number | null; body: unknown }> {
+async function fetchJson(
+  url: string,
+  headers?: Record<string, string>,
+): Promise<{ ok: boolean; status: number | null; body: unknown }> {
   try {
-    const response = await fetch(url, { redirect: "follow" });
+    const response = await fetch(url, { headers, redirect: "follow" });
     return {
       ok: response.ok,
       status: response.status,

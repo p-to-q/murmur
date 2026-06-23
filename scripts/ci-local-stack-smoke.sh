@@ -46,6 +46,7 @@ export MURMUR_STORAGE_DRIVER="${MURMUR_STORAGE_DRIVER:-memory}"
 # This smoke test intentionally runs without Postgres or OAuth. Exercise the
 # local/demo fallback path; production auth strictness is covered by unit tests.
 export MURMUR_AUTH_MODE="${MURMUR_AUTH_MODE:-local}"
+export MURMUR_ENABLE_DEBUG_SURFACE="${MURMUR_ENABLE_DEBUG_SURFACE:-1}"
 unset GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET 2>/dev/null || true
 
 "${PYTHON_BIN}" -m uvicorn \
@@ -66,7 +67,7 @@ wait_for_url() {
   local delay="${4:-0.5}"
 
   for ((i = 1; i <= attempts; i += 1)); do
-    if curl -fsS "${url}" >/dev/null 2>&1; then
+    if curl -fsS -H "x-murmur-user-id: ci_local_smoke" "${url}" >/dev/null 2>&1; then
       return 0
     fi
     sleep "${delay}"
