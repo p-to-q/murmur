@@ -39,15 +39,12 @@ from audio_engine.detectors import (
 from audio_engine.frames import f0_to_notes, pyin_to_notes  # noqa: F401 - legacy import surface
 
 logger = logging.getLogger(__name__)
+LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1", ""}
 
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
-    if not os.getenv("AUDIO_WORKER_TOKEN", "").strip():
-        logger.warning(
-            "AUDIO_WORKER_TOKEN is not set — all endpoints are UNAUTHENTICATED. "
-            "Fine for localhost dev; never expose this process through a public tunnel."
-        )
+    require_worker_token()
     _preload_pitch_model()
     yield
 
@@ -271,6 +268,51 @@ def require_worker_auth(authorization: Annotated[str | None, Header()] = None) -
         provided.encode("utf-8"), f"Bearer {expected}".encode("utf-8")
     ):
         raise HTTPException(status_code=401, detail="unauthorized")
+
+
+def _truthy_env(name: str) -> bool:
+    value = os.getenv(name, "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _runtime_env() -> str:
+    for name in ("MURMUR_ENV", "APP_ENV", "NODE_ENV", "ENV"):
+        value = os.getenv(name, "").strip().lower()
+        if value:
+            return value
+    return ""
+
+
+def _bind_host() -> str:
+    for name in ("AUDIO_ENGINE_HOST", "MURMUR_WORKER_BIND_HOST", "UVICORN_HOST", "HOST"):
+        value = os.getenv(name, "").strip().lower()
+        if value:
+            return value
+    return ""
+
+
+def worker_auth_required() -> bool:
+    host = _bind_host()
+    return (
+        _truthy_env("AUDIO_WORKER_REQUIRE_AUTH")
+        or _truthy_env("WORKER_REQUIRE_AUTH")
+        or _runtime_env() == "production"
+        or (host not in LOOPBACK_HOSTS)
+    )
+
+
+def require_worker_token() -> None:
+    if os.getenv("AUDIO_WORKER_TOKEN", "").strip():
+        return
+    if worker_auth_required():
+        raise RuntimeError(
+            "AUDIO_WORKER_TOKEN is required when the audio worker is production "
+            "or bound outside loopback."
+        )
+    logger.warning(
+        "AUDIO_WORKER_TOKEN is not set — /transcribe is UNAUTHENTICATED. "
+        "Allowed only for loopback local dev."
+    )
 
 
 def decode_audio(data: bytes, filename: str) -> np.ndarray:

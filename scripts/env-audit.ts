@@ -139,6 +139,10 @@ function main() {
     }
   }
 
+  if (process.env.MUSIC_WORKER_URL?.trim() && !process.env.MUSIC_WORKER_TOKEN?.trim()) {
+    missing.push("MUSIC_WORKER_TOKEN (required when MUSIC_WORKER_URL is configured)");
+  }
+
   if (missing.length > 0) {
     console.error("Production env audit failed. Missing:");
     for (const item of missing) console.error(`  - ${item}`);
