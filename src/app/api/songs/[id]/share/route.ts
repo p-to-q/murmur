@@ -13,7 +13,7 @@ import {
 } from "@/lib/db/queries/local-song-fallback";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { log } from "@/lib/observability/log";
-import { getSiteUrl } from "@/lib/site-url";
+import { getSiteUrlForRequest } from "@/lib/site-url";
 import {
   buildSongShareUrl,
   createSongShareCode,
@@ -37,6 +37,7 @@ export async function POST(
   const { id } = await params;
   const userId = auth.user.id;
   const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+  const shareOrigin = getSiteUrlForRequest(req);
   const body = await readJsonObject(req);
   if ("visibility" in body && !isSongShareVisibility(body.visibility)) {
     return errorResponse("validation_error", 400, requestId, {
@@ -62,7 +63,7 @@ export async function POST(
       {
         shareCode: id,
         visibility: "unlisted",
-        url: buildSongShareUrl(getSiteUrl(), id),
+        url: buildSongShareUrl(shareOrigin, id),
       },
       requestId,
     );
@@ -89,7 +90,7 @@ export async function POST(
     return shareResponse({
       shareCode: song.shareCode,
       visibility: song.visibility,
-      url: buildSongShareUrl(getSiteUrl(), song.shareCode),
+      url: buildSongShareUrl(shareOrigin, song.shareCode),
     }, requestId);
   } catch (err) {
     if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
@@ -109,7 +110,7 @@ export async function POST(
         {
           shareCode: song.shareCode,
           visibility: song.visibility,
-          url: buildSongShareUrl(getSiteUrl(), song.shareCode),
+          url: buildSongShareUrl(shareOrigin, song.shareCode),
         },
         requestId,
         { "X-Murmur-Fallback": "local-guest-song" },

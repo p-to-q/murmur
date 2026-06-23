@@ -54,6 +54,7 @@ mock.module("@/lib/db/queries/songs", () => ({
 const { DELETE, POST } = await import("./route");
 
 let originalAppUrl: string | undefined;
+let originalVercelUrl: string | undefined;
 
 function request(body: Record<string, unknown> = {}, requestId = "req_share"): NextRequest {
   return new Request("https://murmur.example/api/songs/song_1/share", {
@@ -72,7 +73,9 @@ function ctx(id = "song_1") {
 
 beforeEach(async () => {
   originalAppUrl = process.env.MURMUR_APP_URL;
+  originalVercelUrl = process.env.VERCEL_URL;
   process.env.MURMUR_APP_URL = "https://murmur.example";
+  delete process.env.VERCEL_URL;
   resetCachedRateLimitStore();
   await getRateLimitStore().resetAll();
   nextAuth = {
@@ -98,6 +101,8 @@ beforeEach(async () => {
 afterEach(() => {
   if (originalAppUrl === undefined) delete process.env.MURMUR_APP_URL;
   else process.env.MURMUR_APP_URL = originalAppUrl;
+  if (originalVercelUrl === undefined) delete process.env.VERCEL_URL;
+  else process.env.VERCEL_URL = originalVercelUrl;
 });
 
 describe("POST /api/songs/[id]/share", () => {
@@ -121,6 +126,48 @@ describe("POST /api/songs/[id]/share", () => {
     expect(body.visibility).toBe("unlisted");
     expect(body.shareCode).toMatch(/^[23456789abcdefghijkmnopqrstuvwxyz]{10}$/);
     expect(body.url).toBe(`https://murmur.example/s/${body.shareCode}`);
+  });
+
+  it("uses the request origin for local share links when no canonical app URL is configured", async () => {
+    delete process.env.MURMUR_APP_URL;
+    delete process.env.VERCEL_URL;
+
+    const response = await POST(
+      new Request("http://localhost:3000/api/songs/song_1/share", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": "req_local_share",
+        },
+        body: JSON.stringify({}),
+      }) as unknown as NextRequest,
+      ctx(),
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.url).toBe(`http://localhost:3000/s/${body.shareCode}`);
+  });
+
+  it("uses the request origin for demo share links when no canonical app URL is configured", async () => {
+    delete process.env.MURMUR_APP_URL;
+    delete process.env.VERCEL_URL;
+
+    const response = await POST(
+      new Request("http://localhost:3000/api/songs/demo-1/share", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-request-id": "req_local_demo_share",
+        },
+        body: JSON.stringify({}),
+      }) as unknown as NextRequest,
+      ctx("demo-1"),
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.url).toBe("http://localhost:3000/s/demo-1");
   });
 
   it("reuses an existing share code when changing visibility", async () => {
