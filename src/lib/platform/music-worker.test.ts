@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
   getMusicEngineMode,
+  getRequestedMusicEngineMode,
   getMusicServerlessConfig,
   getMusicWorkerUrl,
   isMusicWorkerConfigured,
@@ -58,11 +59,11 @@ describe("getMusicEngineMode transport selection", () => {
     expect(getMusicEngineMode()).toBe("http");
   });
 
-  it("production keeps serverless canonical even when MUSIC_ENGINE_MODE=http is stale", () => {
+  it("production respects MUSIC_ENGINE_MODE=http for warm pod failover", () => {
     wireServerless();
     wirePod();
     process.env.MUSIC_ENGINE_MODE = "http";
-    expect(getMusicEngineMode()).toBe("serverless");
+    expect(getMusicEngineMode()).toBe("http");
   });
 
   it("MUSIC_ENGINE_MODE=http can force the pod outside production", () => {
@@ -80,6 +81,7 @@ describe("getMusicEngineMode transport selection", () => {
     for (const alias of ["pod", "worker", "HTTP", " Pod "]) {
       process.env.MUSIC_ENGINE_MODE = alias;
       expect(getMusicEngineMode()).toBe("http");
+      expect(getRequestedMusicEngineMode()).toBe("http");
     }
   });
 
@@ -90,13 +92,31 @@ describe("getMusicEngineMode transport selection", () => {
     expect(getMusicEngineMode()).toBe("serverless");
   });
 
-  it("falls back instead of going dark when the forced transport is missing", () => {
-    // Forced to http but only serverless wired → serverless rather than null.
+  it("surfaces unconfigured in production when a forced transport is missing", () => {
+    // Forced to http in production but only serverless wired -> surface the
+    // missing pod env rather than silently using the wrong transport.
     wireServerless();
     process.env.MUSIC_ENGINE_MODE = "http";
-    expect(getMusicEngineMode()).toBe("serverless");
+    expect(getMusicEngineMode()).toBeNull();
 
-    // Forced to serverless but only the pod wired → http rather than null.
+    // Forced to serverless in production but only the pod wired -> same rule.
+    delete process.env.RUNPOD_SERVERLESS_ENDPOINT_ID;
+    delete process.env.RUNPOD_API_KEY;
+    wirePod();
+    process.env.MUSIC_ENGINE_MODE = "serverless";
+    expect(getMusicEngineMode()).toBeNull();
+  });
+
+  it("uses the local http fallback outside production when http is forced", () => {
+    process.env.NODE_ENV = "development";
+    wireServerless();
+    process.env.MUSIC_ENGINE_MODE = "http";
+    expect(getMusicEngineMode()).toBe("http");
+    expect(getMusicWorkerUrl()).toBe("http://127.0.0.1:8002");
+  });
+
+  it("falls back outside production when serverless is forced but missing", () => {
+    process.env.NODE_ENV = "development";
     delete process.env.RUNPOD_SERVERLESS_ENDPOINT_ID;
     delete process.env.RUNPOD_API_KEY;
     wirePod();

@@ -2,6 +2,7 @@ const webBase = (process.env.MURMUR_WEB_BASE_URL ?? "http://127.0.0.1:3000").rep
 const workerBase = (
   process.env.AUDIO_WORKER_URL?.trim() || "http://127.0.0.1:8001"
 ).replace(/\/+$/, "");
+const localAuthHeaders = { "x-murmur-user-id": "local_stack_smoke" };
 
 export {};
 
@@ -120,7 +121,9 @@ async function checkAudioWorkerHealth(): Promise<CheckResult> {
 
 async function checkQaHealth(): Promise<CheckResult> {
   try {
-    const response = await fetch(`${webBase}/api/qa/health`);
+    const response = await fetch(`${webBase}/api/qa/health`, {
+      headers: localAuthHeaders,
+    });
     const body = (await response.json()) as {
       status?: unknown;
       worker?: { ok?: unknown };

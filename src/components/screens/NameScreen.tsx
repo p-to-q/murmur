@@ -34,6 +34,7 @@ import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import { renderAudio } from "@/modules/export/render-mp3";
 import { canSaveHeardVersion, getSaveBlockReason } from "@/modules/music/version-contract";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { buildNameSaveMetadata } from "./name-save-metadata";
 
 const PROCESSING_INTERVAL_MS = 900;
 
@@ -173,6 +174,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     let renderedDurationSec: number | undefined;
 
     const versionWithName = { ...currentVersion, title: trimmed };
+    const saveMetadata = buildNameSaveMetadata(versionWithName);
 
     try {
       const rendered = await renderAudio(versionWithName);
@@ -196,8 +198,8 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
           id,
           userId: "guest",
           title: trimmed,
-          vibe: versionWithName.vibe,
-          vibeEn: trimmed,
+          vibe: saveMetadata.vibe,
+          vibeEn: saveMetadata.vibeEn,
           bpm: versionWithName.melody.bpm,
           keySignature: versionWithName.melody.key.split(" ")[0] ?? "C",
           scaleType: versionWithName.melody.scale,

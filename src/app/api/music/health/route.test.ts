@@ -18,6 +18,7 @@ mock.module("@/lib/platform/music-worker", () => ({
       : null,
   getMusicWorkerUrl: () =>
     nextMode === "http" ? "http://127.0.0.1:8002" : null,
+  getRequestedMusicEngineMode: () => nextMode ?? "auto",
   isMusicWorkerConfigured: () => nextMode !== null,
 }));
 

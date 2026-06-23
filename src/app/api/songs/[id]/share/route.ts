@@ -13,10 +13,11 @@ import {
 } from "@/lib/db/queries/local-song-fallback";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { log } from "@/lib/observability/log";
-import { getSiteUrl } from "@/lib/site-url";
+import { getSiteUrlForRequest } from "@/lib/site-url";
 import {
   buildSongShareUrl,
   createSongShareCode,
+  hasSongShareAudio,
   isSongShareVisibility,
   normalizeSongShareVisibility,
 } from "@/lib/share/song-share";
@@ -37,6 +38,7 @@ export async function POST(
   const { id } = await params;
   const userId = auth.user.id;
   const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+  const shareOrigin = getSiteUrlForRequest(req);
   const body = await readJsonObject(req);
   if ("visibility" in body && !isSongShareVisibility(body.visibility)) {
     return errorResponse("validation_error", 400, requestId, {
@@ -62,7 +64,7 @@ export async function POST(
       {
         shareCode: id,
         visibility: "unlisted",
-        url: buildSongShareUrl(getSiteUrl(), id),
+        url: buildSongShareUrl(shareOrigin, id),
       },
       requestId,
     );
@@ -72,6 +74,10 @@ export async function POST(
     const existing = await getSongByIdForUser(id, userId);
     if (!existing) {
       return errorResponse("not_found", 404, requestId);
+    }
+    if (!hasSongShareAudio(existing)) {
+      await revokeExistingShareIfNeeded(id, userId, existing);
+      return errorResponse("audio_required", 400, requestId);
     }
 
     const song =
@@ -89,13 +95,17 @@ export async function POST(
     return shareResponse({
       shareCode: song.shareCode,
       visibility: song.visibility,
-      url: buildSongShareUrl(getSiteUrl(), song.shareCode),
+      url: buildSongShareUrl(shareOrigin, song.shareCode),
     }, requestId);
   } catch (err) {
     if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
       const existing = getLocalSongByIdForUserFallback(id, userId);
       if (!existing) {
         return errorResponse("not_found", 404, requestId);
+      }
+      if (!hasSongShareAudio(existing)) {
+        revokeLocalShareIfNeeded(id, userId, existing);
+        return errorResponse("audio_required", 400, requestId);
       }
       const shareCode = existing.shareCode || createSongShareCode();
       const song = publishLocalSongShareForUserFallback(id, userId, {
@@ -109,7 +119,7 @@ export async function POST(
         {
           shareCode: song.shareCode,
           visibility: song.visibility,
-          url: buildSongShareUrl(getSiteUrl(), song.shareCode),
+          url: buildSongShareUrl(shareOrigin, song.shareCode),
         },
         requestId,
         { "X-Murmur-Fallback": "local-guest-song" },
@@ -260,7 +270,7 @@ async function publishSongShareWithRetry(
 }
 
 function errorResponse(
-  error: "validation_error" | "not_found" | "conflict" | "server_error",
+  error: "validation_error" | "not_found" | "conflict" | "audio_required" | "server_error",
   status: number,
   requestId: string,
   input: { message?: string } = {},
@@ -273,6 +283,24 @@ function errorResponse(
     },
     { status, headers: { "X-Request-Id": requestId } },
   );
+}
+
+async function revokeExistingShareIfNeeded(
+  songId: string,
+  userId: string,
+  song: { shareCode?: unknown; visibility?: unknown },
+) {
+  if (!song.shareCode && song.visibility === "private") return;
+  await revokeSongShareForUser(songId, userId);
+}
+
+function revokeLocalShareIfNeeded(
+  songId: string,
+  userId: string,
+  song: { shareCode?: unknown; visibility?: unknown },
+) {
+  if (!song.shareCode && song.visibility === "private") return;
+  revokeLocalSongShareForUserFallback(songId, userId);
 }
 
 async function readJsonObject(req: NextRequest): Promise<Record<string, unknown>> {

@@ -3,7 +3,13 @@ import type { NextRequest } from "next/server";
 import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
 
 let nextSong: Record<string, unknown> | null = null;
-const getSongByShareCodeMock = mock(async () => nextSong);
+let getSongError: unknown = null;
+let nextFallbackSong: Record<string, unknown> | null = null;
+const getSongByShareCodeMock = mock(async () => {
+  if (getSongError) throw getSongError;
+  return nextSong;
+});
+const getLocalSongByShareCodeFallbackMock = mock(() => nextFallbackSong);
 
 mock.module("@/lib/db/queries/songs", () => ({
   createSong: mock(async () => null),
@@ -17,6 +23,10 @@ mock.module("@/lib/db/queries/songs", () => ({
   publishSongShareForUser: mock(async () => null),
   revokeSongShareForUser: mock(async () => null),
   updateSongForUser: mock(async () => null),
+}));
+
+mock.module("@/lib/db/queries/local-song-fallback", () => ({
+  getLocalSongByShareCodeFallback: getLocalSongByShareCodeFallbackMock,
 }));
 
 const { GET } = await import("./route");
@@ -63,7 +73,10 @@ beforeEach(async () => {
     createdAt: new Date("2026-06-20T00:00:00.000Z"),
     updatedAt: new Date("2026-06-20T00:00:00.000Z"),
   };
+  getSongError = null;
+  nextFallbackSong = null;
   getSongByShareCodeMock.mockClear();
+  getLocalSongByShareCodeFallbackMock.mockClear();
 });
 
 describe("GET /api/public/songs/[shareCode]", () => {
@@ -91,6 +104,39 @@ describe("GET /api/public/songs/[shareCode]", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("X-Robots-Tag")).toBeNull();
     expect(response.headers.get("Cache-Control")).toBe("public, max-age=60, s-maxage=300");
+  });
+
+  it("returns 404 with noindex for historical shares without audio", async () => {
+    nextSong = {
+      ...nextSong,
+      visibility: "public",
+      mp3DataUrl: null,
+      mp3Url: null,
+    };
+
+    const response = await GET(request(), ctx());
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.error).toBe("not_found");
+  });
+
+  it("returns 404 with noindex for no-audio local fallback shares", async () => {
+    getSongError = new Error("db unavailable");
+    nextFallbackSong = {
+      ...nextSong,
+      visibility: "public",
+      mp3DataUrl: null,
+      mp3Url: null,
+    };
+
+    const response = await GET(request(), ctx());
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.error).toBe("not_found");
   });
 
   it("rejects malformed share codes before querying", async () => {

@@ -292,6 +292,7 @@ cp .env.example .env
 | `MURMUR_STORAGE_S3_*` | Bucket, region, access key, and secret for the `s3-compatible` storage adapter. |
 | `WAFFO_MERCHANT_ID` / `WAFFO_PRIVATE_KEY_BASE64` / `WAFFO_TOPUP_PRODUCT_ID` | Waffo checkout and billing reconcile credentials required for production top-ups. |
 | `ZPAY_PID` / `ZPAY_KEY` | Optional WeChat/Alipay route for CNY checkout. If absent, explicit WeChat checkout is unavailable. |
+| `MURMUR_ALLOW_PRODUCTION_ZPAY_WITHOUT_REFUNDS` | Explicit production allow flag for ZPay checkout while Murmur lacks a reliable ZPay refund/chargeback webhook. Must be `1`/`true`/`yes` when `ZPAY_PID` and `ZPAY_KEY` are set in production; otherwise WeChat checkout stays closed. |
 | `RUNPOD_SERVERLESS_ENDPOINT_ID` / `RUNPOD_API_KEY` | RunPod Serverless music-generation endpoint and bearer key. |
 | `MURMUR_AUTH_MODE` | Auth runtime mode. Defaults to production-like behavior even on localhost: no session means 401. Set `demo` or `local` only for explicit preview fallback work. |
 | `NEXT_PUBLIC_MURMUR_AUTH_MODE` | Browser-side companion for local header auth. Set to `local` only with `MURMUR_AUTH_MODE=local` when intentionally exercising localStorage user headers. |
@@ -313,6 +314,11 @@ cp .env.example .env
   Studio edit flows bypass notes spending, and the UI balance defaults to
   `9999` unless `MURMUR_DEV_NOTES_BALANCE` overrides it. This bypass is
   disabled outside development.
+- ZPay's current Murmur integration handles successful CNY payment notifications
+  only. Production deployments with `ZPAY_PID` / `ZPAY_KEY` must set
+  `MURMUR_ALLOW_PRODUCTION_ZPAY_WITHOUT_REFUNDS=1` to acknowledge the temporary
+  refund/reversal gap; otherwise `/api/billing/checkout` returns
+  `503 zpay_not_configured` for explicit WeChat checkout.
 - `compose.yaml` provides the expected local Postgres at
   `postgresql://postgres:password@localhost:5432/myapp`.
 - The server notification publisher is currently a stub so local development

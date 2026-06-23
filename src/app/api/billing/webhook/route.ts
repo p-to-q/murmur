@@ -12,7 +12,7 @@ import { and, eq } from "drizzle-orm";
 import { verifyWebhook, WebhookEventType } from "@waffo/pancake-ts";
 import type { WebhookEvent, WebhookEventData } from "@waffo/pancake-ts";
 
-import { isWaffoConfigured } from "@/lib/billing/waffo";
+import { displayAmountToCents, isWaffoConfigured } from "@/lib/billing/waffo";
 import {
   InvalidTopupPurchaseError,
   resolveWaffoTopupPurchase,
@@ -30,6 +30,24 @@ const ROUTE_ID = "billing.webhook.waffo";
 const PROVIDER = "waffo";
 
 class NonRetryableWebhookError extends Error {}
+
+type RefundAmountDecision =
+  | {
+      ok: true;
+      refundAmountCents: number;
+    }
+  | {
+      ok: false;
+      reason:
+        | "refund_amount_missing"
+        | "refund_amount_invalid"
+        | "refund_currency_missing"
+        | "refund_currency_mismatch"
+        | "refund_amount_exceeds_purchase"
+        | "partial_refund_not_supported";
+      refundAmountCents?: number;
+      refundCurrency?: string;
+    };
 
 function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
@@ -269,6 +287,8 @@ async function refundOrder(
       id: purchases.id,
       userId: purchases.userId,
       productId: purchases.productId,
+      amountCents: purchases.amountCents,
+      currency: purchases.currency,
       notesGranted: purchases.notesGranted,
       status: purchases.status,
     })
@@ -280,6 +300,44 @@ async function refundOrder(
     throw new NonRetryableWebhookError(
       `refund.succeeded references unknown Waffo order ${orderId}`,
     );
+  }
+
+  if (purchase.status === "refunded") {
+    return {
+      refunded: 0,
+      duplicate: true,
+      orderId,
+    };
+  }
+
+  const amountDecision = decideRefundAmount(data, {
+    amountCents: purchase.amountCents,
+    currency: purchase.currency,
+  });
+  if (!amountDecision.ok) {
+    log(
+      "billing.webhook_failed",
+      {
+        stage: "manual_review",
+        risk: amountDecision.reason,
+        orderId,
+        refundAmountCents: amountDecision.refundAmountCents,
+        refundCurrency: amountDecision.refundCurrency,
+        purchaseAmountCents: purchase.amountCents,
+        purchaseCurrency: purchase.currency,
+        providerEventId: event.id,
+        refundEventId: event.eventId,
+      },
+      { route: ROUTE, userId: purchase.userId, level: "warn" },
+    );
+
+    return {
+      manualReview: true,
+      risk: amountDecision.reason,
+      orderId,
+      refundAmountCents: amountDecision.refundAmountCents,
+      purchaseAmountCents: purchase.amountCents,
+    };
   }
 
   const refundRef =
@@ -300,6 +358,8 @@ async function refundOrder(
       refundTicketMerchantExternalId: data.refundTicketMerchantExternalId,
       refundStatus: data.refundStatus,
       refundReason: data.refundReason,
+      refundAmountCents: amountDecision.refundAmountCents,
+      purchaseAmountCents: purchase.amountCents,
       previousPurchaseStatus: purchase.status,
     },
   });
@@ -337,4 +397,57 @@ async function refundOrder(
     duplicate: reversal.duplicate,
     orderId,
   };
+}
+
+function decideRefundAmount(
+  data: WebhookEventData,
+  purchase: { amountCents: number; currency: string },
+): RefundAmountDecision {
+  const refundCurrency =
+    typeof data.currency === "string" ? data.currency.trim().toUpperCase() : "";
+  const purchaseCurrency = purchase.currency.trim().toUpperCase();
+  if (!refundCurrency) {
+    return { ok: false, reason: "refund_currency_missing" };
+  }
+  if (refundCurrency !== purchaseCurrency) {
+    return {
+      ok: false,
+      reason: "refund_currency_mismatch",
+      refundCurrency,
+    };
+  }
+
+  if (typeof data.amount !== "string" || data.amount.trim().length === 0) {
+    return { ok: false, reason: "refund_amount_missing", refundCurrency };
+  }
+
+  const refundAmountCents = displayAmountToCents(data.amount, refundCurrency);
+  if (!Number.isInteger(refundAmountCents) || refundAmountCents <= 0) {
+    return {
+      ok: false,
+      reason: "refund_amount_invalid",
+      refundAmountCents,
+      refundCurrency,
+    };
+  }
+
+  if (refundAmountCents > purchase.amountCents) {
+    return {
+      ok: false,
+      reason: "refund_amount_exceeds_purchase",
+      refundAmountCents,
+      refundCurrency,
+    };
+  }
+
+  if (refundAmountCents !== purchase.amountCents) {
+    return {
+      ok: false,
+      reason: "partial_refund_not_supported",
+      refundAmountCents,
+      refundCurrency,
+    };
+  }
+
+  return { ok: true, refundAmountCents };
 }

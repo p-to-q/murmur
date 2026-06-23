@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
+import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
 let nextAuth: ResolvedRequestAuth = {
@@ -8,6 +9,7 @@ let nextAuth: ResolvedRequestAuth = {
 };
 let createdUsers = 0;
 let createdSessions = 0;
+let failNextUserCreation = false;
 
 mock.module("@/lib/platform/server-auth", () => ({
   SESSION_COOKIE_NAME: "__murmur_session",
@@ -24,6 +26,10 @@ mock.module("@/lib/platform/server-auth", () => ({
 
 mock.module("@/lib/db/queries/users", () => ({
   createLocalCreatorUser: async () => {
+    if (failNextUserCreation) {
+      failNextUserCreation = false;
+      throw new Error("temporary user store outage");
+    }
     createdUsers += 1;
     return {
       id: "lc_test",
@@ -52,14 +58,29 @@ mock.module("@/lib/observability/log", () => ({
 
 const { POST } = await import("./route");
 
-beforeEach(() => {
+beforeEach(async () => {
+  resetCachedRateLimitStore();
+  await getRateLimitStore().resetAll();
   nextAuth = {
     ok: false,
     response: new Response("unauthorized", { status: 401 }),
   };
   createdUsers = 0;
   createdSessions = 0;
+  failNextUserCreation = false;
 });
+
+function buildRequest(headers: HeadersInit = {}): NextRequest {
+  return new Request("http://test.local/api/auth/local-creator", {
+    method: "POST",
+    headers: {
+      "x-request-id": "req_local_creator",
+      "x-real-ip": "203.0.113.10",
+      "user-agent": "Murmur Test Browser",
+      ...headers,
+    },
+  }) as unknown as NextRequest;
+}
 
 describe("POST /api/auth/local-creator", () => {
   it("returns the existing session identity without creating another Local Creator", async () => {
@@ -76,9 +97,12 @@ describe("POST /api/auth/local-creator", () => {
       sessionId: "ses_existing",
     };
 
-    const response = await POST(
-      new Request("http://test.local/api/auth/local-creator", { method: "POST" }) as unknown as NextRequest,
+    await getRateLimitStore().hit(
+      "/api/auth/local-creator:fingerprint:daily:203.0.113.10:ua:fef52b7ea4f03405",
+      { capacity: 1, refillWindowMs: 24 * 60 * 60 * 1000 },
     );
+
+    const response = await POST(buildRequest());
 
     expect(response.status).toBe(200);
     const body = await response.json() as { created?: boolean; user?: { id?: string } };
@@ -102,9 +126,7 @@ describe("POST /api/auth/local-creator", () => {
       sessionId: "ses_user",
     };
 
-    const response = await POST(
-      new Request("http://test.local/api/auth/local-creator", { method: "POST" }) as unknown as NextRequest,
-    );
+    const response = await POST(buildRequest());
 
     expect(response.status).toBe(200);
     const body = await response.json() as { created?: boolean; user?: { id?: string } };
@@ -115,9 +137,7 @@ describe("POST /api/auth/local-creator", () => {
   });
 
   it("creates a Local Creator user and sets the Murmur session cookie", async () => {
-    const response = await POST(
-      new Request("http://test.local/api/auth/local-creator", { method: "POST" }) as unknown as NextRequest,
-    );
+    const response = await POST(buildRequest());
 
     expect(response.status).toBe(200);
     const body = await response.json() as {
@@ -132,5 +152,60 @@ describe("POST /api/auth/local-creator", () => {
     expect(response.headers.get("set-cookie")).toContain("__murmur_session=tok_test");
     expect(createdUsers).toBe(1);
     expect(createdSessions).toBe(1);
+  });
+
+  it("rate limits repeated new Local Creator creation for the same IP and browser", async () => {
+    const first = await POST(buildRequest({ "x-request-id": "req_first" }));
+    const second = await POST(buildRequest({ "x-request-id": "req_second" }));
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(429);
+    const body = await second.json() as { error?: string; requestId?: string };
+    expect(body.error).toBe("rate_limited");
+    expect(body.requestId).toBe("req_second");
+    expect(second.headers.get("X-RateLimit-Limit")).toBe("1");
+    expect(createdUsers).toBe(1);
+    expect(createdSessions).toBe(1);
+  });
+
+  it("does not consume the daily limit when Local Creator creation fails", async () => {
+    failNextUserCreation = true;
+
+    const failed = await POST(buildRequest({ "x-request-id": "req_failed" }));
+    const retried = await POST(buildRequest({ "x-request-id": "req_retry" }));
+    const repeated = await POST(buildRequest({ "x-request-id": "req_repeated" }));
+
+    expect(failed.status).toBe(503);
+    expect(retried.status).toBe(200);
+    expect(repeated.status).toBe(429);
+    expect(createdUsers).toBe(1);
+    expect(createdSessions).toBe(1);
+  });
+
+  it("caps the total new Local Creator accounts from one IP per day", async () => {
+    for (let i = 0; i < 10; i += 1) {
+      const response = await POST(
+        buildRequest({
+          "x-request-id": `req_allowed_${i}`,
+          "user-agent": `Murmur Test Browser ${i}`,
+        }),
+      );
+      expect(response.status).toBe(200);
+    }
+
+    const blocked = await POST(
+      buildRequest({
+        "x-request-id": "req_ip_blocked",
+        "user-agent": "Murmur Test Browser 11",
+      }),
+    );
+
+    expect(blocked.status).toBe(429);
+    const body = await blocked.json() as { error?: string; requestId?: string };
+    expect(body.error).toBe("rate_limited");
+    expect(body.requestId).toBe("req_ip_blocked");
+    expect(blocked.headers.get("X-RateLimit-Limit")).toBe("10");
+    expect(createdUsers).toBe(10);
+    expect(createdSessions).toBe(10);
   });
 });

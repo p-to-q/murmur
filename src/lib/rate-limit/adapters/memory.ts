@@ -1,4 +1,4 @@
-import { decideHit } from "../token-bucket";
+import { decideHit, decideRefund } from "../token-bucket";
 import {
   type RateLimitOptions,
   type RateLimitResult,
@@ -27,6 +27,12 @@ export function createMemoryRateLimitStore(): RateLimitStore {
       const decision = decideHit(prev, opts, nowMs);
       buckets.set(key, decision.nextState);
       return decision.result;
+    },
+
+    async refund(key: string, opts: RateLimitOptions, now?: Date): Promise<void> {
+      const nowMs = (now ?? new Date()).getTime();
+      const prev = buckets.get(key) ?? null;
+      buckets.set(key, decideRefund(prev, opts, nowMs));
     },
 
     async reset(key: string): Promise<void> {

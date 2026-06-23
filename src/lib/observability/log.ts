@@ -22,6 +22,8 @@ export type LogEvent =
   | "auth.email_verify_failed"
   | "auth.oauth_adopt_existing_session_failed"
   | "auth.oauth_adopt_failed"
+  | "account.delete_requested"
+  | "account.delete_failed"
   | "capture.failed"
   | "capture.prepared"
   | "transcribe.requested"

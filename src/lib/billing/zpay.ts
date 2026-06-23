@@ -10,6 +10,8 @@ import { createHash } from "crypto";
 export type ZpayPaymentType = "alipay" | "wxpay";
 
 const ZPAY_API_URL = "https://zpayz.cn/mapi.php";
+export const ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV =
+  "MURMUR_ALLOW_PRODUCTION_ZPAY_WITHOUT_REFUNDS";
 
 interface ZpayConfig {
   pid: string;
@@ -57,6 +59,32 @@ function getZpayConfig(): ZpayConfig | null {
 
 export function isZpayConfigured(): boolean {
   return getZpayConfig() !== null;
+}
+
+function isTruthyEnv(key: string): boolean {
+  const value = process.env[key]?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+/**
+ * ZPay currently has only a success notify path in Murmur. Production checkout
+ * needs an explicit operator acknowledgement until refund/reversal webhooks are
+ * wired into the notes ledger.
+ */
+export function isZpayCheckoutEnabled(): boolean {
+  if (!isZpayConfigured()) return false;
+  if (!isProductionDeployment()) return true;
+  return isTruthyEnv(ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV);
+}
+
+export function __resetZpayConfigForTesting(): void {
+  cachedConfig = undefined;
+}
+
+function isProductionDeployment(): boolean {
+  const vercelEnv = process.env.VERCEL_ENV?.trim().toLowerCase();
+  if (process.env.VERCEL === "1") return vercelEnv === "production";
+  return process.env.NODE_ENV === "production";
 }
 
 /**
@@ -117,6 +145,23 @@ export function zpayVerifyNotify(
 ): ZpayNotifyParams | null {
   const config = getZpayConfig();
   if (!config) return null;
+
+  const requiredFields = [
+    "pid",
+    "trade_no",
+    "out_trade_no",
+    "type",
+    "money",
+    "trade_status",
+    "sign",
+    "sign_type",
+  ];
+  for (const field of requiredFields) {
+    if (!params[field]?.trim()) return null;
+  }
+
+  if (params.pid !== config.pid) return null;
+  if (params.sign_type !== "MD5") return null;
 
   const expected = zpaySign(params, config.key);
   if (params.sign !== expected) return null;

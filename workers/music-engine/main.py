@@ -22,7 +22,7 @@ GET /health
     → {status, mock, model, loaded, loading, loadError}
 
 Env: see engine.py (MAGENTA_MODEL / MAGENTA_BACKEND / MUSIC_ENGINE_MOCK /
-MUSIC_ENGINE_PRELOAD) plus MUSIC_WORKER_TOKEN (optional bearer token).
+MUSIC_ENGINE_PRELOAD) plus MUSIC_WORKER_TOKEN (required outside local dev).
 
 The model loads once and stays resident; generation is serialized on a single
 dedicated thread (MLX binds its GPU stream to the loading thread).
@@ -62,6 +62,7 @@ logger = logging.getLogger("music-engine")
 
 MAX_HUM_BYTES = engine.MAX_HUM_BYTES
 MAX_PROMPT_CHARS = engine.MAX_PROMPT_CHARS
+LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1", ""}
 
 # MLX binds its GPU stream to the thread that loaded the model, so *every*
 # model operation (load, embed, generate) must run on one dedicated thread.
@@ -71,11 +72,7 @@ _executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="magenta")
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
-    if not os.getenv("MUSIC_WORKER_TOKEN", "").strip():
-        logger.warning(
-            "MUSIC_WORKER_TOKEN is not set — all endpoints are UNAUTHENTICATED. "
-            "Fine for localhost dev; never expose this process through a public tunnel."
-        )
+    require_worker_token()
 
     if not engine.MOCK and engine.PRELOAD:
         def _bg() -> None:
@@ -90,6 +87,51 @@ async def _lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="murmur-music-engine", lifespan=_lifespan)
+
+
+def _truthy_env(name: str) -> bool:
+    value = os.getenv(name, "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _runtime_env() -> str:
+    for name in ("MURMUR_ENV", "APP_ENV", "NODE_ENV", "ENV"):
+        value = os.getenv(name, "").strip().lower()
+        if value:
+            return value
+    return ""
+
+
+def _bind_host() -> str:
+    for name in ("MUSIC_ENGINE_HOST", "MURMUR_WORKER_BIND_HOST", "UVICORN_HOST", "HOST"):
+        value = os.getenv(name, "").strip().lower()
+        if value:
+            return value
+    return ""
+
+
+def worker_auth_required() -> bool:
+    host = _bind_host()
+    return (
+        _truthy_env("MUSIC_WORKER_REQUIRE_AUTH")
+        or _truthy_env("WORKER_REQUIRE_AUTH")
+        or _runtime_env() == "production"
+        or (host not in LOOPBACK_HOSTS)
+    )
+
+
+def require_worker_token() -> None:
+    if os.getenv("MUSIC_WORKER_TOKEN", "").strip():
+        return
+    if worker_auth_required():
+        raise RuntimeError(
+            "MUSIC_WORKER_TOKEN is required when the music worker is production "
+            "or bound outside loopback."
+        )
+    logger.warning(
+        "MUSIC_WORKER_TOKEN is not set — /generate is UNAUTHENTICATED. "
+        "Allowed only for loopback local dev."
+    )
 
 
 def _verify_auth(request: Request) -> None:

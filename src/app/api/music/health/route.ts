@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   getMusicEngineMode,
+  getRequestedMusicEngineMode,
   getMusicServerlessConfig,
   getMusicWorkerUrl,
   isMusicWorkerConfigured,
@@ -12,7 +13,8 @@ export const runtime = "nodejs";
 type PublicMusicHealth = {
   available: boolean;
   configured: boolean;
-  mode?: "serverless" | "http";
+  mode?: "serverless" | "http" | null;
+  requestedMode?: "serverless" | "http" | "auto";
   reason: "unconfigured" | "unauthorized" | "unreachable" | "degraded" | `http_${number}` | null;
 };
 
@@ -26,13 +28,20 @@ type PublicMusicHealth = {
  *
  * HTTP (dev/legacy): available also while the model is still warming up;
  * requests queue behind the load instead of failing.
+ *
+ * The response is intentionally minimal: transport `mode`/`requestedMode` plus a
+ * coarse availability `reason`. Worker counts, model names, and raw load-error
+ * strings stay server-side so this public endpoint cannot leak deployment shape.
  */
 export async function GET() {
   const mode = getMusicEngineMode();
   if (!mode) {
+    const requestedMode = getRequestedMusicEngineMode();
     return publicHealth({
       available: false,
       configured: false,
+      mode: requestedMode === "auto" ? null : requestedMode,
+      requestedMode,
       reason: "unconfigured",
     });
   }
@@ -43,7 +52,13 @@ export async function GET() {
 async function serverlessHealth() {
   const config = getMusicServerlessConfig();
   if (!config) {
-    return publicHealth({ available: false, configured: false, reason: "unconfigured" });
+    return publicHealth({
+      available: false,
+      configured: false,
+      mode: "serverless",
+      requestedMode: getRequestedMusicEngineMode(),
+      reason: "unconfigured",
+    });
   }
 
   try {
@@ -54,6 +69,7 @@ async function serverlessHealth() {
         available: false,
         configured: true,
         mode: "serverless",
+        requestedMode: getRequestedMusicEngineMode(),
         reason: unauthorized ? "unauthorized" : `http_${status}`,
       });
     }
@@ -61,6 +77,7 @@ async function serverlessHealth() {
       available: true,
       configured: true,
       mode: "serverless",
+      requestedMode: getRequestedMusicEngineMode(),
       reason: null,
     });
   } catch {
@@ -68,6 +85,7 @@ async function serverlessHealth() {
       available: false,
       configured: true,
       mode: "serverless",
+      requestedMode: getRequestedMusicEngineMode(),
       reason: "unreachable",
     });
   }
@@ -80,6 +98,8 @@ async function httpHealth() {
     return publicHealth({
       available: false,
       configured: false,
+      mode: "http",
+      requestedMode: getRequestedMusicEngineMode(),
       reason: "unconfigured",
     });
   }
@@ -96,6 +116,8 @@ async function httpHealth() {
       return publicHealth({
         available: false,
         configured,
+        mode: "http",
+        requestedMode: getRequestedMusicEngineMode(),
         reason: `http_${res.status}`,
       });
     }
@@ -117,12 +139,15 @@ async function httpHealth() {
       available,
       configured,
       mode: "http",
+      requestedMode: getRequestedMusicEngineMode(),
       reason: available ? null : "degraded",
     });
   } catch {
     return publicHealth({
       available: false,
       configured,
+      mode: "http",
+      requestedMode: getRequestedMusicEngineMode(),
       reason: "unreachable",
     });
   }

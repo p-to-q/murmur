@@ -5,8 +5,11 @@ let zpayConfigured = true;
 let verifiedNotify: Record<string, string> | null = null;
 let pendingPurchase: {
   id: string;
+  userId: string;
+  productId: string;
   notesGranted: number;
   amountCents: number;
+  currency: string;
   status: string;
 } | null = null;
 let eventInsertConflicts = false;
@@ -143,8 +146,11 @@ beforeEach(() => {
   };
   pendingPurchase = {
     id: "pur_zpay",
+    userId: "usr_zpay",
+    productId: "topup_120_notes",
     notesGranted: 130,
     amountCents: 4290,
+    currency: "CNY",
     status: "pending",
   };
   eventInsertConflicts = false;
@@ -157,10 +163,14 @@ beforeEach(() => {
 });
 
 function request(): NextRequest {
+  return requestWithBody("ignored=1");
+}
+
+function requestWithBody(body: string): NextRequest {
   return new Request("http://test.local/api/billing/zpay-notify", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: "ignored=1",
+    body,
   }) as unknown as NextRequest;
 }
 
@@ -189,14 +199,92 @@ describe("POST /api/billing/zpay-notify", () => {
 
     const response = await POST(request());
 
-    expect(response.status).toBe(400);
-    expect(await response.text()).toBe("fail");
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("success");
     expect(grantInputs).toHaveLength(0);
     expect(purchaseUpdates).toHaveLength(0);
     expect(eventUpdates.at(-1)).toMatchObject({
       status: "failed",
       error: "amount mismatch",
     });
+  });
+
+  it("rejects invalid amount formats before granting notes", async () => {
+    verifiedNotify = {
+      ...verifiedNotify!,
+      money: "42.900",
+    };
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("success");
+    expect(grantInputs).toHaveLength(0);
+    expect(purchaseUpdates).toHaveLength(0);
+    expect(eventUpdates.at(-1)).toMatchObject({
+      status: "failed",
+      error: "amount mismatch",
+    });
+  });
+
+  it("does not grant notes for non-pending purchases", async () => {
+    pendingPurchase = {
+      ...pendingPurchase!,
+      status: "refunded",
+    };
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("success");
+    expect(grantInputs).toHaveLength(0);
+    expect(purchaseUpdates).toHaveLength(0);
+    expect(eventUpdates.at(-1)).toMatchObject({
+      status: "failed",
+      error: "invalid purchase status",
+    });
+  });
+
+  it("acknowledges already succeeded purchases without regranting", async () => {
+    pendingPurchase = {
+      ...pendingPurchase!,
+      status: "succeeded",
+    };
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("success");
+    expect(grantInputs).toHaveLength(0);
+    expect(purchaseUpdates).toHaveLength(0);
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
+  it("rejects out_trade_no values that do not match the pending purchase", async () => {
+    pendingPurchase = {
+      ...pendingPurchase!,
+      userId: "usr_other",
+    };
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("success");
+    expect(grantInputs).toHaveLength(0);
+    expect(purchaseUpdates).toHaveLength(0);
+    expect(eventUpdates.at(-1)).toMatchObject({
+      status: "failed",
+      error: "purchase mismatch",
+    });
+  });
+
+  it("rejects duplicate form keys before recording a webhook event", async () => {
+    const response = await POST(requestWithBody("money=42.90&money=0.01"));
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toBe("fail");
+    expect(eventInserts).toHaveLength(0);
+    expect(grantInputs).toHaveLength(0);
   });
 
   it("reprocesses a redelivered notification after an earlier failed attempt", async () => {

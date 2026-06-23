@@ -3,14 +3,14 @@ import { describe, expect, it } from "bun:test";
 import { shouldUseDevBalanceFallback } from "./dev-balance";
 
 describe("shouldUseDevBalanceFallback", () => {
-  it("allows explicit production opt-in via env flag", () => {
+  it("ignores explicit production opt-in on public hosts", () => {
     const prevNode = process.env.NODE_ENV;
     const prev = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     process.env.NODE_ENV = "production";
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
 
     try {
-      expect(shouldUseDevBalanceFallback({ host: "murmur.ptoq.io" })).toBe(true);
+      expect(shouldUseDevBalanceFallback({ host: "murmur.ptoq.io" })).toBe(false);
     } finally {
       if (prevNode === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = prevNode;
@@ -31,6 +31,22 @@ describe("shouldUseDevBalanceFallback", () => {
       process.env.NODE_ENV = prevNode;
       if (prevFlag === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
+    }
+  });
+
+  it("allows explicit opt-in outside production", () => {
+    const prevNode = process.env.NODE_ENV;
+    const prev = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    process.env.NODE_ENV = "test";
+    process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "true";
+
+    try {
+      expect(shouldUseDevBalanceFallback({ host: "preview.test" })).toBe(true);
+    } finally {
+      if (prevNode === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = prevNode;
+      if (prev === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+      else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prev;
     }
   });
 });

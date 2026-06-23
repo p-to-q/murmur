@@ -120,6 +120,13 @@
       "when": 1782345600000,
       "tag": "0016_daily_free_notes_pool",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782432000000,
+      "tag": "0017_account_deletion",
+      "breakpoints": true
     }
   ]
 }

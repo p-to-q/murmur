@@ -18,7 +18,7 @@
  *   bun run pod:status            # show desiredStatus + /health + URL
  *
  * Flags / env:
- *   VERCEL=1     also sync MUSIC_WORKER_URL/TOKEN + MUSIC_ENGINE_MODE to prod
+ *   VERCEL=1     sync MUSIC_WORKER_URL/TOKEN + explicit MUSIC_ENGINE_MODE=http
  *   SWITCH=1     (with stop) flip MUSIC_ENGINE_MODE back to serverless
  *   RUNPOD_API_KEY (required) · RUNPOD_GPU_TYPE_ID · MUSIC_WORKER_TOKEN
  *   MURMUR_MUSIC_IMAGE · RUNPOD_NETWORK_VOLUME_ID · RUNPOD_REGISTRY_AUTH_ID
@@ -176,6 +176,8 @@ async function finishUp(apiKey: string, podId: string) {
   if (envFlag("VERCEL")) {
     await syncVercel({ mode: "http", url, token: ensureWorkerToken() });
     console.log("Prod switched to the pod (MUSIC_ENGINE_MODE=http).");
+    console.log("Serverless env may remain present for failback; explicit mode=http now selects the pod.");
+    console.log("Verify with: curl -sS https://murmur.ptoq.io/api/music/health");
   } else {
     console.log("\nManual prod env (or re-run with VERCEL=1 to push automatically):");
     console.log(`  MUSIC_ENGINE_MODE=http`);
@@ -236,6 +238,7 @@ function podEnv(token: string): Array<{ key: string; value: string }> {
     MAGENTA_BACKEND: "jax",
     MAGENTA_MODEL: MODEL,
     MUSIC_ENGINE_PRELOAD: "1",
+    MUSIC_WORKER_REQUIRE_AUTH: "1",
     MUSIC_WORKER_TOKEN: token,
   };
   const cfgNotes = process.env.MAGENTA_CFG_NOTES?.trim();

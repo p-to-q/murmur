@@ -55,6 +55,8 @@ export interface RateLimitResult {
 export interface RateLimitStore {
   readonly driver: RateLimitDriver;
   hit(key: string, opts: RateLimitOptions, now?: Date): Promise<RateLimitResult>;
+  /** Refund a successful hit when the protected operation did not complete. */
+  refund(key: string, opts: RateLimitOptions, now?: Date): Promise<void>;
   /** Reset a specific bucket. Useful for `/admin/unlock` flows. */
   reset(key: string): Promise<void>;
   /** Drop every bucket. Tests-only; production callers should use `reset(key)`. */

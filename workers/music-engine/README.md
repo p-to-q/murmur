@@ -46,7 +46,8 @@ WebM/Opus blob directly, the worker transcodes it through ffmpeg to a temporary
 | --- | --- | --- |
 | `MAGENTA_MODEL` | `mrt2_base` | production highest-spec default; use `mrt2_small` only for constrained local tests |
 | `MAGENTA_CFG_NOTES` | `1.5` | melody-conditioning scale; current experiment winner for clear melody without robotic over-control |
-| `MUSIC_WORKER_TOKEN` | _(unset)_ | bearer token, same scheme as audio-engine |
+| `MUSIC_WORKER_TOKEN` | _(unset in loopback dev)_ | bearer token, required for deployed/public HTTP workers |
+| `MUSIC_WORKER_REQUIRE_AUTH` | _(unset)_ | `1` forces startup to fail when `MUSIC_WORKER_TOKEN` is missing |
 | `MUSIC_ENGINE_MOCK` | _(unset)_ | `1` → sine-chord placeholder clips, no model |
 | `MUSIC_ENGINE_PRELOAD` | `1` | `0` → lazy-load on first request |
 

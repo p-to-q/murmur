@@ -1,11 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import {
   accountNotesFromTotal,
+  dailyFreeAfterGrant,
   decideGrant,
   decideRefund,
   decideRefundPoolsForOriginalSpend,
   decideSpend,
   decideSpendPoolsForCost,
+  decideTopupReversal,
   refundReferenceFor,
   trimDailyFreeAfterTopupReversal,
 } from "@/lib/billing/notes-ledger-decisions";
@@ -142,6 +144,37 @@ describe("refundReferenceFor", () => {
   });
 });
 
+describe("decideTopupReversal", () => {
+  it("fully reverses the purchased amount even when the balance goes negative", () => {
+    const result = decideTopupReversal({
+      currentBalance: 2,
+      amount: 130,
+      existingRefund: null,
+    });
+
+    expect(result).toEqual({
+      kind: "proceed",
+      balanceAfter: -128,
+      amount: 130,
+    });
+  });
+
+  it("returns duplicate when the refund reference already has a ledger row", () => {
+    const result = decideTopupReversal({
+      currentBalance: -128,
+      amount: 130,
+      existingRefund: { id: "nle_refund_prior", delta: -130 },
+    });
+
+    expect(result).toEqual({
+      kind: "duplicate",
+      ledgerId: "nle_refund_prior",
+      balanceAfter: -128,
+      amount: 130,
+    });
+  });
+});
+
 describe("daily-free pool decisions", () => {
   it("derives account notes from total notes without double counting daily-free notes", () => {
     expect(accountNotesFromTotal(15, 5)).toBe(10);
@@ -199,5 +232,21 @@ describe("daily-free pool decisions", () => {
 
   it("trims daily-free notes when a top-up reversal shrinks the total balance", () => {
     expect(trimDailyFreeAfterTopupReversal(8, 3)).toBe(3);
+  });
+
+  it("applies daily-free grants to debt before making them spendable", () => {
+    expect(dailyFreeAfterGrant({
+      currentBalance: -4,
+      currentDailyFree: 0,
+      grantAmount: 3,
+      maxDailyFreeBalance: 10,
+    })).toBe(0);
+
+    expect(dailyFreeAfterGrant({
+      currentBalance: -2,
+      currentDailyFree: 0,
+      grantAmount: 5,
+      maxDailyFreeBalance: 10,
+    })).toBe(3);
   });
 });

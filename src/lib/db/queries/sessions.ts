@@ -53,6 +53,7 @@ export async function getSessionByToken(
       name: users.name,
       avatarUrl: users.avatarUrl,
       accountKind: users.accountKind,
+      deletedAt: users.deletedAt,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
@@ -61,6 +62,7 @@ export async function getSessionByToken(
         eq(sessions.tokenHash, hashSessionToken(token)),
         isNull(sessions.revokedAt),
         gt(sessions.expiresAt, now),
+        isNull(users.deletedAt),
       ),
     )
     .limit(1);
@@ -91,6 +93,15 @@ export async function revokeSessionByToken(token: string): Promise<boolean> {
     .where(eq(sessions.tokenHash, hashSessionToken(token)))
     .returning({ id: sessions.id });
   return rows.length > 0;
+}
+
+export async function revokeSessionsForUser(userId: string): Promise<number> {
+  const rows = await db
+    .update(sessions)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
+    .returning({ id: sessions.id });
+  return rows.length;
 }
 
 export function hashSessionToken(token: string): string {
