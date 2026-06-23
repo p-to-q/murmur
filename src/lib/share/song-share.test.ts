@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   buildSongShareUrl,
   createSongShareCode,
+  hasSongShareAudio,
   normalizeSongShareCode,
   normalizeSongShareVisibility,
 } from "./song-share";
@@ -28,5 +29,12 @@ describe("song share helpers", () => {
   it("builds canonical public song URLs", () => {
     expect(buildSongShareUrl("https://murmur.example/", "abc234defg"))
       .toBe("https://murmur.example/s/abc234defg");
+  });
+
+  it("requires a non-empty audio URL before a song can be shared", () => {
+    expect(hasSongShareAudio({ mp3DataUrl: "data:audio/mpeg;base64,abc" })).toBe(true);
+    expect(hasSongShareAudio({ mp3Url: "/songs/demo.mp3" })).toBe(true);
+    expect(hasSongShareAudio({ mp3DataUrl: " ", mp3Url: "" })).toBe(false);
+    expect(hasSongShareAudio({})).toBe(false);
   });
 });

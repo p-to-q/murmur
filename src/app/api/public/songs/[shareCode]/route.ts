@@ -4,7 +4,7 @@ import { getSongByShareCode } from "@/lib/db/queries/songs";
 import { getLocalSongByShareCodeFallback } from "@/lib/db/queries/local-song-fallback";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { log } from "@/lib/observability/log";
-import { normalizeSongShareCode } from "@/lib/share/song-share";
+import { hasSongShareAudio, normalizeSongShareCode } from "@/lib/share/song-share";
 import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
 
 const ROUTE = "/api/public/songs/[shareCode]";
@@ -44,12 +44,15 @@ export async function GET(
 
   try {
     const song = await getSongByShareCode(shareCode!);
-    if (!song) {
+    if (!song || !hasSongShareAudio(song)) {
       return errorResponse("not_found", 404, requestId);
     }
     return publicSongResponse(toPublicSong(song), requestId);
   } catch (err) {
     const fallbackSong = getLocalSongByShareCodeFallback(shareCode!);
+    if (fallbackSong && !hasSongShareAudio(fallbackSong)) {
+      return errorResponse("not_found", 404, requestId);
+    }
     if (fallbackSong) {
       return publicSongResponse(toPublicSong(fallbackSong), requestId, {
         "X-Murmur-Fallback": "local-guest-song",

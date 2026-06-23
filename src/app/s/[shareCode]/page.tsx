@@ -2,7 +2,7 @@ import dynamic from "next/dynamic";
 import type { Metadata } from "next";
 import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 import { getSongByShareCode } from "@/lib/db/queries/songs";
-import { normalizeSongShareCode } from "@/lib/share/song-share";
+import { hasSongShareAudio, normalizeSongShareCode } from "@/lib/share/song-share";
 import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
 
 const PublicSongScreen = dynamic(
@@ -49,7 +49,8 @@ async function resolveShareVisibility(shareCode: string): Promise<string | null>
   if (!normalized) return null;
 
   try {
-    return (await getSongByShareCode(normalized))?.visibility ?? null;
+    const song = await getSongByShareCode(normalized);
+    return song && hasSongShareAudio(song) ? song.visibility : null;
   } catch {
     return null;
   }
