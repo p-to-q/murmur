@@ -49,6 +49,7 @@ import { buildLineageTrail } from "@/modules/music/lineage";
 import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
+import { hasSongShareAudio } from "@/lib/share/song-share";
 import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
@@ -290,6 +291,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
   const copyShareLink = useCallback(async () => {
     if (!song) return;
+    if (!hasSongShareAudio(song)) {
+      toast(t("song.share.no_audio"));
+      return;
+    }
     setBusy("link");
     try {
       const res = await fetch(`/api/songs/${encodeURIComponent(song.id)}/share`, {
@@ -416,6 +421,8 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     latin: "hero-serif-latin-italic",
     cjk: "hero-serif-italic",
   });
+  const audioSrc = song.mp3DataUrl || song.mp3Url;
+  const audioReady = hasSongShareAudio(song);
 
   const handleEditAgain = () => {
     const version = hydrateSavedSongToVersion(song);
@@ -674,6 +681,8 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.share.link.label") || "Share link"}
                 hint={t("song.share.link.hint") || "Anyone with the link can listen"}
                 cost={t("song.export.free") || "free"}
+                disabled={!audioReady}
+                disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
                 busy={busy === "link"}
                 icon={<Copy className="h-4 w-4" />}
                 onClick={copyShareLink}
@@ -682,7 +691,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.export.audio.label") || "Audio"}
                 hint={t("song.export.audio.hint") || "mp3"}
                 cost={t("song.export.free") || "free"}
-                disabled={!song.mp3DataUrl && !song.mp3Url}
+                disabled={!audioReady}
                 disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
                 busy={busy === "audio"}
                 onClick={exportAudio}
@@ -701,7 +710,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.export.video.label") || "Video"}
                 hint={t("song.export.video.hint") || "mp4"}
                 cost={t("song.export.free") || "free"}
-                disabled={!song.mp3DataUrl && !song.mp3Url}
+                disabled={!audioReady}
                 disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
                 busy={busy === "video"}
                 onClick={() => {
@@ -750,7 +759,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         bpm={song.bpm ?? 80}
         keySignature={song.keySignature ?? "C"}
         createdAt={song.createdAt}
-        audioSrc={song.mp3DataUrl || song.mp3Url}
+        audioSrc={audioSrc}
         open={shareCardOpen}
         onClose={() => setShareCardOpen(false)}
         mode={shareCardMode}
