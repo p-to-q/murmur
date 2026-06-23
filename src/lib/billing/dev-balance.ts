@@ -8,17 +8,21 @@ const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 /**
  * Billing fallback keeps local demos usable when the ledger DB is unreachable.
- * Enabled when NODE_ENV is development, the host is loopback, or
- * MURMUR_ALLOW_DEV_BILLING_FALLBACK is explicitly set to 1/true.
+ * Enabled when NODE_ENV is development, the host is loopback, or (outside
+ * production) MURMUR_ALLOW_DEV_BILLING_FALLBACK is explicitly set to 1/true.
  */
 export function shouldUseDevBalanceFallback(options: {
   host?: string | null;
 } = {}): boolean {
+  const host = options.host?.trim().toLowerCase();
+  if (isProductionRuntime(host)) {
+    return false;
+  }
+
   if (process.env.NODE_ENV === "development") {
     return true;
   }
 
-  const host = options.host?.trim().toLowerCase();
   if (host && LOOPBACK_HOSTS.has(host)) {
     return true;
   }
@@ -44,4 +48,11 @@ export function getDevBalanceFallback(): DevBalanceFallback {
     notes,
     planTier: "free",
   };
+}
+
+function isProductionRuntime(host?: string | null): boolean {
+  const vercelEnv = process.env.VERCEL_ENV?.trim().toLowerCase();
+  if (vercelEnv === "production") return true;
+  if (process.env.NODE_ENV !== "production") return false;
+  return !host || !LOOPBACK_HOSTS.has(host);
 }
