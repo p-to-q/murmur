@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import { buildSavedSongVibeVersions, hydrateSavedSongToVersion } from "./saved-song-version";
+import {
+  buildSavedSongEditDraft,
+  buildSavedSongVibeVersions,
+  hydrateSavedSongToVersion,
+} from "./saved-song-version";
 
 describe("hydrateSavedSongToVersion", () => {
   it("preserves saved melody origin and prefers typed pitch sequence", () => {
@@ -236,8 +240,92 @@ describe("hydrateSavedSongToVersion", () => {
       expect(version.lineageDepth).toBe(3);
       expect(version.sourceMelodyKind).toBe("intent");
       expect(version.draftId).not.toBe("song_seed");
-      expect(version.originFlowId).toBe("saved-song_seed");
+      expect(version.originFlowId).not.toBe("saved-song_seed");
+      expect(version.originFlowId).not.toBe(version.draftId);
     }
+  });
+
+  it("creates a fresh editable draft when reopening a saved song", () => {
+    const version = buildSavedSongEditDraft({
+      id: "song_seed",
+      title: "Afterglow",
+      vibe: "sunset",
+      duration: 15,
+      createdAt: "2026-06-05T12:00:00.000Z",
+      rootSongId: "song_root",
+      lineageDepth: 2,
+      sourceMelodyKind: "intent",
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.5,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: {
+          enabled: true,
+          intensity: 0.8,
+          originalPattern: "60 64 67",
+          currentPattern: "60 64 67",
+          instrument: "piano",
+          versionHistory: [],
+          melodyPitchSequence: [60, 64, 67],
+        },
+        chords: {
+          enabled: true,
+          intensity: 0.5,
+          originalPattern: "gen:sunset",
+          currentPattern: "gen:sunset",
+          instrument: "felt_piano",
+          versionHistory: [],
+        },
+        strings: {
+          enabled: false,
+          intensity: 0.2,
+          originalPattern: "pad",
+          currentPattern: "pad",
+          instrument: "string_ensemble",
+          versionHistory: [],
+        },
+        drums: {
+          enabled: false,
+          intensity: 0.2,
+          originalPattern: "none",
+          currentPattern: "none",
+          instrument: "brush_kit",
+          versionHistory: [],
+        },
+        bass: {
+          enabled: true,
+          intensity: 0.3,
+          originalPattern: "root",
+          currentPattern: "root",
+          instrument: "upright_bass",
+          versionHistory: [],
+        },
+        texture: {
+          enabled: true,
+          intensity: 0.3,
+          originalPattern: "dust",
+          currentPattern: "dust",
+          instrument: "vinyl_noise",
+          versionHistory: [],
+        },
+      },
+      bpm: 88,
+      keySignature: "C",
+    });
+
+    expect(version.id).not.toBe("saved-song_seed");
+    expect(version.draftId).not.toBe("song_seed");
+    expect(version.originFlowId).not.toBe(`saved-song_seed`);
+    expect(version.originFlowId).not.toBe(version.draftId);
+    expect(version.parentSongId).toBe("song_seed");
+    expect(version.rootSongId).toBe("song_root");
+    expect(version.lineageDepth).toBe(3);
+    expect(version.sourceType).toBe("library");
+    expect(version.sourceMelodyKind).toBe("intent");
+    expect(version.melody.notes.map((note) => note.pitch)).toEqual([60, 64, 67]);
   });
 
   it("anchors reworked songs to their current vibe when generating fresh versions", () => {

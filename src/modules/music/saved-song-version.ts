@@ -11,6 +11,14 @@ type SavedSong = SongCard & {
   sourceMelodyKind?: MelodySelectionKind;
 };
 
+export type SavedSongDraftContext = {
+  draftId: string;
+  originFlowId: string;
+  parentSongId: string;
+  rootSongId: string;
+  lineageDepth: number;
+};
+
 export function hydrateSavedSongToVersion(song: SavedSong): VibeVersion {
   const melody = buildMelodyFromSong(song);
 
@@ -45,20 +53,36 @@ export function buildSavedSongVibeVersions(song: SavedSong): VibeVersion[] {
       : version.editDepth === "shaped"
         ? "boost"
         : undefined;
-  const remixLineage = buildRemixLineage(song);
-  const remixDraftId = crypto.randomUUID();
+  const draftContext = buildSavedSongDraftContext(song);
 
   return generateVibeVersions(version.melody, {
-    draftId: remixDraftId,
-    originFlowId: `saved-${song.id}`,
-    parentSongId: remixLineage.parentSongId,
-    rootSongId: remixLineage.rootSongId,
-    lineageDepth: remixLineage.lineageDepth,
+    ...draftContext,
     sourceType: "library",
     sourceMelodyKind: version.sourceMelodyKind,
     preferredVibeId,
     preferredVibeMode,
   });
+}
+
+export function buildSavedSongEditDraft(song: SavedSong): VibeVersion {
+  const version = hydrateSavedSongToVersion(song);
+  const draftContext = buildSavedSongDraftContext(song);
+  const versionId = crypto.randomUUID();
+
+  return {
+    ...version,
+    id: versionId,
+    ...draftContext,
+    versionSeed: versionId,
+  };
+}
+
+export function buildSavedSongDraftContext(song: SavedSong): SavedSongDraftContext {
+  return {
+    draftId: crypto.randomUUID(),
+    originFlowId: crypto.randomUUID(),
+    ...buildRemixLineage(song),
+  };
 }
 
 /**
@@ -73,12 +97,9 @@ export async function buildSavedSongRemixVersions(song: SavedSong): Promise<Vibe
     return [];
   }
   const version = hydrateSavedSongToVersion(song);
+  const draftContext = buildSavedSongDraftContext(song);
   return createMagentaVersions(version.melody, {
-    draftId: crypto.randomUUID(),
-    originFlowId: `saved-${song.id}`,
-    parentSongId: resolveParentSongId(song),
-    rootSongId: resolveRootSongId(song),
-    lineageDepth: normalizeLineageDepth(song.lineageDepth) + 1,
+    ...draftContext,
     sourceType: "library",
     sourceMelodyKind: version.sourceMelodyKind,
     batchIndex: 0,
