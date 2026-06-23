@@ -81,7 +81,7 @@ export const QA_ROUTE_CONTRACTS: QaRouteContract[] = [
     label: "MeLo Lab",
     note: "Test-only local melody diagnostics. Production and closed diagnostic builds should return 404.",
     markers: ["TEST ONLY / local melo-lab", "MeLo Lab"],
-    gateMarkers: ["404", "这里没有旋律。"],
+    gateMarkers: ["NEXT_HTTP_ERROR_FALLBACK;404"],
     okStatuses: [200, 404],
   },
   {
