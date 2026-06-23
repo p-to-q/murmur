@@ -51,7 +51,7 @@ balance; the guest web preview keeps a small one-time local allowance.
 | Action | Cost (notes) | Why |
 |---|---|---|
 | Hum → ScoredMelody | 1 | server audio worker CPU |
-| Generate 3 vibe versions | 0 | runs client / arrangement engine |
+| Generate one Magenta vibe clip | 1 | GPU worker / RunPod cost |
 | Studio LLM edit (Auris) | 1 / call | OpenAI cost passthrough |
 | Save song (persistence) | 0 | saving is retention, not the paywall |
 | Export video (MP4 or WebM) | 0 | currently free; browser chooses container |
@@ -70,8 +70,9 @@ Welcome and guest allowance:
   signup, referrals, and operator grants).
 
 This gives a new signed-in user roughly: several hums, a few LLM edits, and
-free saves. Enough to feel the product; not enough to abuse worker or LLM
-capacity.
+free saves. The Magenta flow now spends per generated clip, so a three-card
+batch costs three notes after the initial hum. Enough to feel the product;
+not enough to abuse worker, GPU, or LLM capacity.
 
 ## 4. Data model
 
@@ -97,7 +98,7 @@ export const notesLedger = pgTable("notes_ledger", {
   userId:    text("user_id").notNull(),
   delta:     integer("delta").notNull(),      // negative for spend, positive for grant/purchase
   reason:    varchar("reason", { length: 32 }).notNull(),
-  // reason values: "spend:hum" | "spend:llm_edit" | "spend:save" | "spend:export_webm"
+  // reason values: "spend:hum" | "spend:music_generate" | "spend:llm_edit" | "spend:save" | "spend:export_webm"
   //                "grant:daily_free" | "grant:signup_bonus" | "purchase:topup"
   externalRef: text("external_ref"),          // Waffo orderId, WeChat transaction_id, RevenueCat tx id…
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -223,8 +224,8 @@ New routes (all in `src/app/api/`):
 | `/api/billing/webhook/revenuecat` | POST | RevenueCat (App Store + Play) → ledger write (future) |
 | `/api/billing/refund` | POST | manual op-tool entry (internal) |
 
-All chargeable routes (`/api/transcribe`, `/api/strummer/edit`,
-`/api/songs`) gain a balance-check + ledger-write
+All chargeable routes (`/api/transcribe`, `/api/music/generate`,
+`/api/strummer/edit`, `/api/songs`) gain a balance-check + ledger-write
 transaction:
 
 ```ts
@@ -242,10 +243,12 @@ Current substrate shipped in Phase 4 pre-work:
 - `notes_ledger` and `purchases` are registered and migrated.
 - `POST /api/transcribe` checks balance and returns
   `402 insufficient_notes` before worker execution when the user lacks notes.
-- Transcription spends `1` note only after a successful worker result, so
-  no-voice and worker failures do not consume notes.
+- Transcription spends `1` note before worker execution and refunds failed
+  spends on no-voice and worker failures.
+- `POST /api/music/generate` checks balance and spends `1` note before each
+  Magenta worker handoff; worker failures refund the spend.
 - `POST /api/strummer/edit` checks balance before the LLM call and spends
-  `1` note only after a successful classifier response.
+  `1` note before provider work; provider failures refund the spend.
 - `POST /api/songs` now uses `COST.save === 0`; signed-in saves do not spend
   notes, while guest cloud saves remain identity-gated.
 

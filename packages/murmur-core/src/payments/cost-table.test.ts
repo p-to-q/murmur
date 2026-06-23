@@ -21,6 +21,7 @@ describe("cost-table", () => {
   it("defines non-negative note costs for every action", () => {
     expect(Object.values(COST).every((value) => value >= 0)).toBe(true);
     expect(COST.hum).toBe(1);
+    expect(COST.music_generate).toBe(1);
     expect(COST.llm_edit).toBe(1);
     expect(COST.save).toBe(0);
     expect(COST.export_webm).toBe(0);
@@ -34,6 +35,7 @@ describe("cost-table", () => {
 
   it("maps valid cost keys and rejects unknown ones", () => {
     expect(asCostKey("hum")).toBe("hum");
+    expect(asCostKey("music_generate")).toBe("music_generate");
     expect(asCostKey("unknown")).toBeNull();
   });
 
