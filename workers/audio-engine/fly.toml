@@ -20,6 +20,7 @@ primary_region = "iad"
   AUDIO_ENGINE_RMVPE_DEVICE = "cpu"
   AUDIO_ENGINE_RMVPE_ALLOW_DOWNLOAD = "0"
   AUDIO_ENGINE_RMVPE_CONFIDENCE_THRESHOLD = "0.03"
+  AUDIO_WORKER_REQUIRE_AUTH = "1"
 
 [http_service]
   internal_port = 8001

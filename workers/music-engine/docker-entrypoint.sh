@@ -57,6 +57,7 @@ fi
 ROLE="${MUSIC_ENGINE_ROLE:-handler}"
 if [ "$ROLE" = "server" ]; then
   PORT="${MUSIC_ENGINE_PORT:-8002}"
+  export MUSIC_WORKER_REQUIRE_AUTH="${MUSIC_WORKER_REQUIRE_AUTH:-1}"
   echo "[entrypoint] starting FastAPI server on 0.0.0.0:${PORT} (backend=${MAGENTA_BACKEND:-jax})"
   exec python -u -m uvicorn main:app --host 0.0.0.0 --port "${PORT}"
 fi

@@ -235,6 +235,7 @@ function podEnv(token: string): Array<{ key: string; value: string }> {
     MAGENTA_BACKEND: "jax",
     MAGENTA_MODEL: MODEL,
     MUSIC_ENGINE_PRELOAD: "1",
+    MUSIC_WORKER_REQUIRE_AUTH: "1",
     MUSIC_WORKER_TOKEN: token,
   };
   const cfgNotes = process.env.MAGENTA_CFG_NOTES?.trim();
