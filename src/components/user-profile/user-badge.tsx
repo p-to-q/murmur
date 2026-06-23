@@ -47,39 +47,15 @@ export function UserBadge() {
   }
 
   if (!user) {
-    const hasAnyOAuth = providers.google !== false || providers.github !== false;
     return (
       <div className="flex items-center gap-2">
-        {hasAnyOAuth && (
-          <div className="flex items-center gap-1.5">
-            {providers.google !== false && (
-              <button
-                onClick={() => signInWithOAuth("google", "/")}
-                disabled={providers.google === null}
-                className="flex items-center gap-2 rounded-full border border-[#E0DDD5] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] shadow-sm transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <GoogleIcon className="h-4 w-4" />
-                {t("auth.continue_google")}
-              </button>
-            )}
-            {providers.github !== false && (
-              <button
-                onClick={() => signInWithOAuth("github", "/")}
-                disabled={providers.github === null}
-                className="flex items-center gap-2 rounded-full border border-[#E0DDD5] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] shadow-sm transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <GitHubIcon className="h-4 w-4" />
-                {t("auth.continue_github")}
-              </button>
-            )}
-          </div>
-        )}
         <button
           onClick={() => {
             void (async () => {
               await ensureLocalCreatorSession();
               await refreshCurrentAccount();
               await fetchUserBalance({ force: true });
+              setOpen(true);
             })();
           }}
           className="flex items-center gap-2 rounded-full border border-[#E0DDD5] bg-[#F5F1EB] px-3 py-1.5 text-sm font-medium text-[#8C8780] shadow-sm transition-shadow hover:shadow-md"
