@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   getMusicEngineMode,
+  getRequestedMusicEngineMode,
   getMusicServerlessConfig,
   getMusicWorkerUrl,
   isMusicWorkerConfigured,
@@ -23,9 +24,12 @@ export const runtime = "nodejs";
 export async function GET() {
   const mode = getMusicEngineMode();
   if (!mode) {
+    const requestedMode = getRequestedMusicEngineMode();
     return NextResponse.json({
       available: false,
       configured: false,
+      mode: requestedMode === "auto" ? null : requestedMode,
+      requestedMode,
       reason: "unconfigured",
     });
   }
@@ -36,7 +40,13 @@ export async function GET() {
 async function serverlessHealth() {
   const config = getMusicServerlessConfig();
   if (!config) {
-    return NextResponse.json({ available: false, configured: false, reason: "unconfigured" });
+    return NextResponse.json({
+      available: false,
+      configured: false,
+      mode: "serverless",
+      requestedMode: getRequestedMusicEngineMode(),
+      reason: "unconfigured",
+    });
   }
 
   try {
@@ -47,6 +57,7 @@ async function serverlessHealth() {
         available: false,
         configured: true,
         mode: "serverless",
+        requestedMode: getRequestedMusicEngineMode(),
         reason: unauthorized ? "unauthorized" : `http_${status}`,
       });
     }
@@ -55,6 +66,7 @@ async function serverlessHealth() {
       available: true,
       configured: true,
       mode: "serverless",
+      requestedMode: getRequestedMusicEngineMode(),
       workers,
       reason: null,
     });
@@ -63,6 +75,7 @@ async function serverlessHealth() {
       available: false,
       configured: true,
       mode: "serverless",
+      requestedMode: getRequestedMusicEngineMode(),
       reason: "unreachable",
     });
   }
@@ -75,6 +88,8 @@ async function httpHealth() {
     return NextResponse.json({
       available: false,
       configured: false,
+      mode: "http",
+      requestedMode: getRequestedMusicEngineMode(),
       reason: "unconfigured",
     });
   }
@@ -91,6 +106,8 @@ async function httpHealth() {
       return NextResponse.json({
         available: false,
         configured,
+        mode: "http",
+        requestedMode: getRequestedMusicEngineMode(),
         reason: `http_${res.status}`,
       });
     }
@@ -112,6 +129,7 @@ async function httpHealth() {
       available,
       configured,
       mode: "http",
+      requestedMode: getRequestedMusicEngineMode(),
       model: data.model ?? null,
       mock: data.mock ?? false,
       loaded: data.loaded ?? false,
@@ -122,6 +140,8 @@ async function httpHealth() {
     return NextResponse.json({
       available: false,
       configured,
+      mode: "http",
+      requestedMode: getRequestedMusicEngineMode(),
       reason: "unreachable",
     });
   }
