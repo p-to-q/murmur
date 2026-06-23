@@ -77,8 +77,9 @@ Constraints:
 - `planTier IN ("free", "premium")`.
 - `regionId IN ("intl", "cn")`.
 - `accountKind IN ("local_creator", "registered")`.
-- `notesBalance >= 0` (enforced in app; DB check optional).
-- `dailyFreeNotesBalance >= 0` and `dailyFreeNotesBalance <= notesBalance`
+- `notesBalance` may be negative after a provider refund reverses notes the
+  user already spent; the negative value is billing debt, not spendable balance.
+- `dailyFreeNotesBalance >= 0` and `dailyFreeNotesBalance <= max(notesBalance, 0)`
   (enforced in app).
 
 Indexes (in addition to existing email + createdAt):
@@ -185,11 +186,13 @@ Invariants:
 - The sum of `delta` over a user's rows == `users.notesBalance`. Always.
   A nightly reconciliation job fails loud if they diverge.
 - `dailyFreeNotesBalance` is the unspent daily-free portion of
-  `notesBalance`; account-pool display derives as
-  `notesBalance - dailyFreeNotesBalance`.
+  positive `notesBalance`; account-pool display derives as
+  `max(notesBalance, 0) - dailyFreeNotesBalance`.
 - No row is ever updated or deleted. Provider top-up refunds insert a
-  negative `refund:topup` row keyed by the provider refund event; failed-spend
-  refunds insert a positive `refund:spend` row keyed by the original spend.
+  full negative `refund:topup` row keyed by the provider refund event; if the
+  user has already spent those notes, `users.notesBalance` goes negative until
+  future grants/top-ups repay the debt. Failed-spend refunds insert a positive
+  `refund:spend` row keyed by the original spend.
 - Every business action that consumes or grants notes inserts exactly
   one ledger row inside the same SQL transaction as the action itself.
 - `spendNotes` consumes daily-free notes first, then account notes. Spend
