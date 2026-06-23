@@ -65,6 +65,27 @@ export function decideHit(
   };
 }
 
+export function decideRefund(
+  prevState: RateLimitState | null,
+  opts: RateLimitOptions,
+  nowMs: number,
+): RateLimitState {
+  validateOptions(opts);
+  const cost = opts.cost ?? 1;
+  const refillPerMs = opts.capacity / opts.refillWindowMs;
+  const startingTokens = prevState
+    ? Math.min(
+        opts.capacity,
+        prevState.tokens + Math.max(0, nowMs - prevState.updatedAtMs) * refillPerMs,
+      )
+    : opts.capacity;
+
+  return {
+    tokens: Math.min(opts.capacity, startingTokens + cost),
+    updatedAtMs: nowMs,
+  };
+}
+
 function validateOptions(opts: RateLimitOptions): void {
   if (!Number.isFinite(opts.capacity) || opts.capacity <= 0) {
     throw new RateLimitError("invalid_options", "capacity must be a positive number");

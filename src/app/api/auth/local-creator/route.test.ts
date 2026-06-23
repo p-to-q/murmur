@@ -9,6 +9,7 @@ let nextAuth: ResolvedRequestAuth = {
 };
 let createdUsers = 0;
 let createdSessions = 0;
+let failNextUserCreation = false;
 
 mock.module("@/lib/platform/server-auth", () => ({
   SESSION_COOKIE_NAME: "__murmur_session",
@@ -25,6 +26,10 @@ mock.module("@/lib/platform/server-auth", () => ({
 
 mock.module("@/lib/db/queries/users", () => ({
   createLocalCreatorUser: async () => {
+    if (failNextUserCreation) {
+      failNextUserCreation = false;
+      throw new Error("temporary user store outage");
+    }
     createdUsers += 1;
     return {
       id: "lc_test",
@@ -62,6 +67,7 @@ beforeEach(async () => {
   };
   createdUsers = 0;
   createdSessions = 0;
+  failNextUserCreation = false;
 });
 
 function buildRequest(headers: HeadersInit = {}): NextRequest {
@@ -158,6 +164,20 @@ describe("POST /api/auth/local-creator", () => {
     expect(body.error).toBe("rate_limited");
     expect(body.requestId).toBe("req_second");
     expect(second.headers.get("X-RateLimit-Limit")).toBe("1");
+    expect(createdUsers).toBe(1);
+    expect(createdSessions).toBe(1);
+  });
+
+  it("does not consume the daily limit when Local Creator creation fails", async () => {
+    failNextUserCreation = true;
+
+    const failed = await POST(buildRequest({ "x-request-id": "req_failed" }));
+    const retried = await POST(buildRequest({ "x-request-id": "req_retry" }));
+    const repeated = await POST(buildRequest({ "x-request-id": "req_repeated" }));
+
+    expect(failed.status).toBe(503);
+    expect(retried.status).toBe(200);
+    expect(repeated.status).toBe(429);
     expect(createdUsers).toBe(1);
     expect(createdSessions).toBe(1);
   });

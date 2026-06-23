@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { LOCAL_CREATOR_FREE_NOTES } from "@murmur/core";
-import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import {
+  checkApiRateLimit,
+  rateLimitedResponse,
+  refundApiRateLimit,
+  type ApiRateLimitInput,
+} from "@/lib/api/rate-limit";
 import {
   SESSION_COOKIE_NAME,
   murmurSessionCookieOptions,
@@ -37,29 +42,35 @@ export async function POST(request: NextRequest) {
   }
 
   const ip = clientIpFromHeaders(request.headers);
-  const fingerprintLimit = await checkApiRateLimit({
+  const consumedLimits: ApiRateLimitInput[] = [];
+  const fingerprintLimitInput = {
     route: ROUTE,
     bucket: "fingerprint:daily",
     userId: localCreatorFingerprint(request, ip),
     requestId,
     sessionId: null,
     options: LOCAL_CREATOR_FINGERPRINT_LIMIT,
-  });
+  };
+  const fingerprintLimit = await checkApiRateLimit(fingerprintLimitInput);
   if (!fingerprintLimit.allowed) {
     return rateLimitedResponse(fingerprintLimit, requestId);
   }
+  consumedLimits.push(fingerprintLimitInput);
 
-  const ipLimit = await checkApiRateLimit({
+  const ipLimitInput = {
     route: ROUTE,
     bucket: "ip:daily",
     userId: ip,
     requestId,
     sessionId: null,
     options: LOCAL_CREATOR_IP_LIMIT,
-  });
+  };
+  const ipLimit = await checkApiRateLimit(ipLimitInput);
   if (!ipLimit.allowed) {
+    await refundConsumedLimits(consumedLimits);
     return rateLimitedResponse(ipLimit, requestId);
   }
+  consumedLimits.push(ipLimitInput);
 
   try {
     const user = await createLocalCreatorUser();
@@ -97,6 +108,7 @@ export async function POST(request: NextRequest) {
     );
     return response;
   } catch (error) {
+    await refundConsumedLimits(consumedLimits);
     log(
       "auth.local_creator_failed",
       { error: error instanceof Error ? error.message : String(error) },
@@ -110,6 +122,10 @@ export async function POST(request: NextRequest) {
       { status: 503 },
     );
   }
+}
+
+async function refundConsumedLimits(inputs: ApiRateLimitInput[]): Promise<void> {
+  await Promise.all(inputs.map((input) => refundApiRateLimit(input)));
 }
 
 function localCreatorFingerprint(request: NextRequest, ip: string): string {
