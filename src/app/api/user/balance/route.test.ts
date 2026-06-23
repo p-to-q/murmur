@@ -168,4 +168,19 @@ describe("GET /api/user/balance", () => {
       else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
     }
   });
+
+  it("does not expose the dev balance fallback on public production hosts", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
+    nextBalanceError = new Error("ECONNREFUSED");
+
+    const response = await GET(
+      new Request("https://murmur.ptoq.io/api/user/balance") as unknown as NextRequest,
+    );
+
+    expect(response.status).toBe(503);
+    const body = await response.json() as { error?: unknown; notes?: unknown };
+    expect(body.error).toBe("balance_unavailable");
+    expect(body.notes).toBeUndefined();
+  });
 });
