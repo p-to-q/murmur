@@ -253,8 +253,11 @@ Carry-forward: Waffo checkout (`/api/billing/checkout`) and the
 `order.completed` webhook (`/api/billing/webhook`) have since shipped — see
 [billing-waffo.md](billing-waffo.md). CNY ZPay checkout is webhook-backed from
 the same `purchases` + `grantNotes(reason: "purchase:topup")` pipe and rejects
-amount mismatches before granting. The top-up page polish, region-aware SKU
-route, and RevenueCat channels are still pending.
+amount mismatches before granting, but it currently has no reliable refund /
+chargeback reversal webhook. Production ZPay checkout therefore requires the
+explicit `MURMUR_ALLOW_PRODUCTION_ZPAY_WITHOUT_REFUNDS=1` launch-gate flag while
+that gap exists. The top-up page polish, region-aware SKU route, and RevenueCat
+channels are still pending.
 
 ## 7. Cross-platform integration (recap)
 
