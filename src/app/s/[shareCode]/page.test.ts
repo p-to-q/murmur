@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 
-let nextSong: { visibility: "private" | "unlisted" | "public" } | null = null;
+let nextSong: {
+  visibility: "private" | "unlisted" | "public";
+  mp3DataUrl?: string | null;
+  mp3Url?: string | null;
+} | null = null;
 const getSongByShareCodeMock = mock(async () => nextSong);
 
 mock.module("@/lib/db/queries/songs", () => ({
@@ -30,7 +34,7 @@ beforeEach(() => {
 
 describe("generateMetadata for public song share pages", () => {
   it("marks unlisted share pages noindex", async () => {
-    nextSong = { visibility: "unlisted" };
+    nextSong = { visibility: "unlisted", mp3DataUrl: "data:audio/mpeg;base64,abc" };
 
     const metadata = await generateMetadata(props("abc234defg"));
 
@@ -39,11 +43,19 @@ describe("generateMetadata for public song share pages", () => {
   });
 
   it("allows public share pages to be indexed", async () => {
-    nextSong = { visibility: "public" };
+    nextSong = { visibility: "public", mp3DataUrl: "data:audio/mpeg;base64,abc" };
 
     const metadata = await generateMetadata(props("abc234defg"));
 
     expect(metadata.robots).toEqual({ index: true, follow: true });
+  });
+
+  it("marks no-audio public share pages noindex", async () => {
+    nextSong = { visibility: "public", mp3DataUrl: null, mp3Url: null };
+
+    const metadata = await generateMetadata(props("abc234defg"));
+
+    expect(metadata.robots).toEqual({ index: false, follow: false });
   });
 
   it("marks missing share pages noindex", async () => {

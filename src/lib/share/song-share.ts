@@ -20,6 +20,13 @@ export function isSongShareVisibility(value: unknown): value is SongShareVisibil
   return value === "unlisted" || value === "public";
 }
 
+export function hasSongShareAudio(song: {
+  mp3DataUrl?: unknown;
+  mp3Url?: unknown;
+}): boolean {
+  return isNonEmptyString(song.mp3DataUrl) || isNonEmptyString(song.mp3Url);
+}
+
 export function isSongShareCode(value: unknown): value is string {
   return typeof value === "string" && SHARE_CODE_RE.test(value);
 }
@@ -32,4 +39,8 @@ export function normalizeSongShareCode(value: string): string | null {
 export function buildSongShareUrl(origin: string, shareCode: string): string {
   const base = origin.replace(/\/+$/, "");
   return new URL(`/s/${encodeURIComponent(shareCode)}`, base).toString();
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }

@@ -87,6 +87,7 @@ beforeEach(async () => {
     title: "Share Me",
     shareCode: null,
     visibility: "private",
+    mp3DataUrl: "data:audio/mpeg;base64,abc",
   };
   publishError = null;
   revokeError = null;
@@ -130,6 +131,7 @@ describe("POST /api/songs/[id]/share", () => {
       title: "Share Me",
       shareCode: "abc234defg",
       visibility: "unlisted",
+      mp3DataUrl: "data:audio/mpeg;base64,abc",
     };
 
     const response = await POST(request({ visibility: "public" }), ctx());
@@ -152,6 +154,26 @@ describe("POST /api/songs/[id]/share", () => {
     expect(publishSongShareForUserMock).not.toHaveBeenCalled();
     const body = await response.json() as Record<string, unknown>;
     expect(body.error).toBe("validation_error");
+  });
+
+  it("rejects and revokes an existing no-audio share link", async () => {
+    nextSong = {
+      id: "song_1",
+      userId: "usr_owner",
+      title: "Silent Share",
+      shareCode: "abc234defg",
+      visibility: "public",
+      mp3DataUrl: null,
+      mp3Url: null,
+    };
+
+    const response = await POST(request(), ctx());
+
+    expect(response.status).toBe(400);
+    expect(publishSongShareForUserMock).not.toHaveBeenCalled();
+    expect(revokeSongShareForUserMock).toHaveBeenCalledWith("song_1", "usr_owner");
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.error).toBe("audio_required");
   });
 
   it("does not publish songs the user does not own", async () => {

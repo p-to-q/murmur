@@ -17,6 +17,7 @@ import { getSiteUrl } from "@/lib/site-url";
 import {
   buildSongShareUrl,
   createSongShareCode,
+  hasSongShareAudio,
   isSongShareVisibility,
   normalizeSongShareVisibility,
 } from "@/lib/share/song-share";
@@ -73,6 +74,10 @@ export async function POST(
     if (!existing) {
       return errorResponse("not_found", 404, requestId);
     }
+    if (!hasSongShareAudio(existing)) {
+      await revokeExistingShareIfNeeded(id, userId, existing);
+      return errorResponse("audio_required", 400, requestId);
+    }
 
     const song =
       existing.shareCode && existing.visibility === visibility
@@ -96,6 +101,10 @@ export async function POST(
       const existing = getLocalSongByIdForUserFallback(id, userId);
       if (!existing) {
         return errorResponse("not_found", 404, requestId);
+      }
+      if (!hasSongShareAudio(existing)) {
+        revokeLocalShareIfNeeded(id, userId, existing);
+        return errorResponse("audio_required", 400, requestId);
       }
       const shareCode = existing.shareCode || createSongShareCode();
       const song = publishLocalSongShareForUserFallback(id, userId, {
@@ -260,7 +269,7 @@ async function publishSongShareWithRetry(
 }
 
 function errorResponse(
-  error: "validation_error" | "not_found" | "conflict" | "server_error",
+  error: "validation_error" | "not_found" | "conflict" | "audio_required" | "server_error",
   status: number,
   requestId: string,
   input: { message?: string } = {},
@@ -273,6 +282,24 @@ function errorResponse(
     },
     { status, headers: { "X-Request-Id": requestId } },
   );
+}
+
+async function revokeExistingShareIfNeeded(
+  songId: string,
+  userId: string,
+  song: { shareCode?: unknown; visibility?: unknown },
+) {
+  if (!song.shareCode && song.visibility === "private") return;
+  await revokeSongShareForUser(songId, userId);
+}
+
+function revokeLocalShareIfNeeded(
+  songId: string,
+  userId: string,
+  song: { shareCode?: unknown; visibility?: unknown },
+) {
+  if (!song.shareCode && song.visibility === "private") return;
+  revokeLocalSongShareForUserFallback(songId, userId);
 }
 
 async function readJsonObject(req: NextRequest): Promise<Record<string, unknown>> {
