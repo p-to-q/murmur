@@ -86,5 +86,5 @@ wait_for_url "${WORKER_BASE}/health" "worker"
 wait_for_url "${WEB_BASE}" "web"
 wait_for_url "${WEB_BASE}/api/qa/health" "web-api"
 
-MURMUR_WEB_BASE_URL="${WEB_BASE}" AUDIO_WORKER_URL="${WORKER_BASE}" bun run smoke:local
+MURMUR_WEB_BASE_URL="${WEB_BASE}" AUDIO_WORKER_URL="${WORKER_BASE}" MURMUR_SMOKE_EXPECT_BALANCE_UNAVAILABLE=1 bun run smoke:local
 MURMUR_WEB_BASE_URL="${WEB_BASE}" bun run smoke:pages

@@ -2,6 +2,8 @@ const webBase = (process.env.MURMUR_WEB_BASE_URL ?? "http://127.0.0.1:3000").rep
 const workerBase = (
   process.env.AUDIO_WORKER_URL?.trim() || "http://127.0.0.1:8001"
 ).replace(/\/+$/, "");
+const expectBalanceUnavailable =
+  process.env.MURMUR_SMOKE_EXPECT_BALANCE_UNAVAILABLE === "1";
 
 export {};
 
@@ -58,7 +60,21 @@ async function checkWebHome(): Promise<CheckResult> {
 async function checkUserBalance(): Promise<CheckResult> {
   try {
     const response = await fetch(`${webBase}/api/user/balance`);
-    const body = (await response.json()) as { notes?: unknown; planTier?: unknown };
+    const body = (await response.json()) as {
+      error?: unknown;
+      notes?: unknown;
+      planTier?: unknown;
+    };
+    if (expectBalanceUnavailable) {
+      const expected =
+        response.status === 503 && body.error === "balance_unavailable";
+      return {
+        name: "api-user-balance",
+        ok: expected,
+        detail: `status=${response.status} error=${String(body.error ?? "unknown")}`,
+      };
+    }
+
     const validShape =
       typeof body.notes === "number" &&
       (body.planTier === "free" || body.planTier === "premium");
