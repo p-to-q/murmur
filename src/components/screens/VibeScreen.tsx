@@ -36,7 +36,10 @@ import {
   regenerateVersionAudio,
   shouldUseMagentaEngine,
 } from "@/modules/magenta/generate-magenta-versions";
-import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
+import { buildDemoFlowState, buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
+import {
+  getVersionReadinessBlockReason,
+} from "@/modules/music/version-contract";
 import type { VibeVersion } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { buildMeshGradient } from "@/components/song-detail/mesh-gradient";
@@ -92,6 +95,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     setAuditioning,
     resetFlow,
     humStyleBlob,
+    setHumStyleBlob,
   } = useMurmurStore();
 
   const [phase, setPhase] = useState<Phase>("closing");
@@ -151,9 +155,34 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleRetryVersion = useCallback(
+    (version: VibeVersion) => {
+      if (version.generation?.status !== "error") return;
+      if (auditionStartTimerRef.current !== null) {
+        window.clearTimeout(auditionStartTimerRef.current);
+        auditionStartTimerRef.current = null;
+      }
+      versionPreview.stop();
+      setAuditioning(null);
+      regenerateVersionAudio(version);
+      toast(t("vibe.gen.retrying") || "Brewing this one again…");
+    },
+    [setAuditioning, t],
+  );
+
   const handlePick = useCallback(
     (version: VibeVersion) => {
       if (pickingId) return;
+      const blockReason = getVersionReadinessBlockReason(version);
+      if (blockReason === "generation_failed") {
+        handleRetryVersion(version);
+        return;
+      }
+      if (blockReason === "generation_pending") {
+        toast(t("vibe.pick.pending") || "Let this one finish before Studio.");
+        return;
+      }
+
       setPickingId(version.id);
       versionPreview.stop();
       setAuditioning(null);
@@ -168,7 +197,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
         .catch(() => {});
       window.setTimeout(() => router.push("/studio"), 460);
     },
-    [pickingId, router, setAuditioning, setCurrentVersion],
+    [handleRetryVersion, pickingId, router, setAuditioning, setCurrentVersion, t],
   );
 
   const handleAudition = useCallback(
@@ -184,14 +213,13 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
         return;
       }
 
-      // Magenta clips stream in asynchronously — no audio yet, no sound.
-      if (version.generation && version.generation.status !== "ready") {
-        if (version.generation.status === "error") {
-          regenerateVersionAudio(version);
-          toast(t("vibe.gen.retrying") || "Brewing this one again…");
-        } else {
-          toast(t("vibe.generating.toast") || "Still brewing — a few more seconds.");
-        }
+      const blockReason = getVersionReadinessBlockReason(version);
+      if (blockReason === "generation_failed") {
+        handleRetryVersion(version);
+        return;
+      }
+      if (blockReason === "generation_pending") {
+        toast(t("vibe.generating.toast") || "Still brewing — a few more seconds.");
         return;
       }
 
@@ -207,7 +235,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
         setAuditioning(null);
       }
     },
-    [auditioningVersionId, setAuditioning, t],
+    [auditioningVersionId, handleRetryVersion, setAuditioning, t],
   );
 
   const handleReroll = useCallback(async () => {
@@ -247,6 +275,45 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     vibeVersions,
   ]);
 
+  const handleRetryFailed = useCallback(() => {
+    const failedVersions = vibeVersions.filter(
+      (version) => version.generation?.status === "error",
+    );
+    if (failedVersions.length === 0) return;
+    versionPreview.stop();
+    setAuditioning(null);
+    for (const version of failedVersions) {
+      regenerateVersionAudio(version);
+    }
+    toast(t("vibe.gen.retrying_all") || "Brewing the whole set again…");
+  }, [setAuditioning, t, vibeVersions]);
+
+  const handleUseDemo = useCallback(() => {
+    versionPreview.stop();
+    setAuditioning(null);
+    setPickingId(null);
+    setCurrentVersion(null);
+    setHumStyleBlob(null);
+    const demo = buildDemoFlowState();
+    setVibeVersions(demo.versions);
+    setCurrentDraftId(demo.draftId);
+    setCurrentFlowId(demo.flowId);
+  }, [
+    setAuditioning,
+    setCurrentDraftId,
+    setCurrentFlowId,
+    setCurrentVersion,
+    setHumStyleBlob,
+    setVibeVersions,
+  ]);
+
+  const handleRecordAgain = useCallback(() => {
+    versionPreview.stop();
+    setAuditioning(null);
+    resetFlow();
+    router.push("/");
+  }, [resetFlow, router, setAuditioning]);
+
   const handleBack = useCallback(() => {
     versionPreview.stop();
     setAuditioning(null);
@@ -258,6 +325,12 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     }
     router.push("/");
   }, [fromSavedSong, resetFlow, router, setAuditioning, sourceVersion]);
+
+  const generatedVersions = vibeVersions.filter((version) => version.generation);
+  const allGenerationFailed =
+    vibeVersions.length > 0 &&
+    generatedVersions.length === vibeVersions.length &&
+    generatedVersions.every((version) => version.generation?.status === "error");
 
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
@@ -356,6 +429,47 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                 </motion.h2>
               </div>
 
+              {allGenerationFailed && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="mb-4 flex flex-col gap-3 rounded-[22px] border border-[#E3D8CB] bg-white/60 p-4 text-[#1A1A1A] shadow-[0_8px_28px_rgba(95,70,48,0.08)] backdrop-blur-sm md:flex-row md:items-center md:justify-between"
+                >
+                  <div>
+                    <p className="text-[13px] font-medium">
+                      {t("vibe.all_failed.title") || "This batch did not finish."}
+                    </p>
+                    <p className="mt-1 max-w-[46rem] text-[12px] leading-relaxed text-[#756F67]">
+                      {t("vibe.all_failed.detail") || "Retry these versions, use the demo melody, or record a fresh take."}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRetryFailed}
+                      className="inline-flex h-9 items-center rounded-full bg-[#1A1A1A] px-4 text-[12px] font-medium text-white transition-colors hover:bg-[#35312D]"
+                    >
+                      {t("vibe.all_failed.retry") || "Retry set"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleUseDemo}
+                      className="inline-flex h-9 items-center rounded-full border border-[#D6C9BA] bg-white/70 px-4 text-[12px] font-medium text-[#1A1A1A] transition-colors hover:bg-white"
+                    >
+                      {t("vibe.all_failed.demo") || "Use demo"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRecordAgain}
+                      className="inline-flex h-9 items-center rounded-full border border-[#D6C9BA] bg-white/40 px-4 text-[12px] font-medium text-[#1A1A1A] transition-colors hover:bg-white/80"
+                    >
+                      {t("vibe.all_failed.record") || "Record again"}
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
               {/* ── Card grid — dominates the viewport ───────── */}
               <div className="grid grid-cols-1 md:grid-cols-[1.18fr_1fr] gap-4 md:gap-5 flex-1 min-h-0 md:min-h-[68vh] lg:min-h-[72vh]">
                 {vibeVersions.map((version, i) => {
@@ -382,6 +496,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                         someoneIsAuditioning={someoneIsAuditioning}
                         isPicking={isPicking}
                         onPick={handlePick}
+                        onRetry={handleRetryVersion}
                         onPlayToggle={handleAudition}
                         pickLabel={t("cards.choose") || "Pick"}
                       />
@@ -414,6 +529,7 @@ function VibeCard({
   someoneIsAuditioning,
   isPicking,
   onPick,
+  onRetry,
   onPlayToggle,
   pickLabel,
 }: {
@@ -423,6 +539,7 @@ function VibeCard({
   someoneIsAuditioning: boolean;
   isPicking: boolean;
   onPick: (v: VibeVersion) => void;
+  onRetry: (v: VibeVersion) => void;
   onPlayToggle: (v: VibeVersion) => void;
   pickLabel: string;
 }) {
@@ -431,9 +548,15 @@ function VibeCard({
   const vibePreset = VIBE_PRESETS.find((p) => p.id === version.vibe);
   const vibeLabel =
     version.generation?.vibeLabel[lang] || vibePreset?.label[lang] || version.vibe;
-  const genStatus = version.generation?.status ?? "ready";
-  const isPending = genStatus === "pending";
-  const isError = genStatus === "error";
+  const readinessBlockReason = getVersionReadinessBlockReason(version);
+  const isPending = readinessBlockReason === "generation_pending";
+  const isError = readinessBlockReason === "generation_failed";
+  const canEnterStudio = readinessBlockReason === null;
+  const pickButtonLabel = isError
+    ? t("vibe.retry") || "Retry"
+    : isPending
+      ? t("vibe.pick.wait") || "Brewing"
+      : pickLabel;
 
   const artwork = version.visualConfig.artwork;
   const artworkPath = artwork?.backgroundImagePath ?? artwork?.imagePath;
@@ -445,9 +568,15 @@ function VibeCard({
 
   return (
     <motion.div
-      className="relative overflow-hidden rounded-[32px] cursor-pointer select-none h-full min-h-[200px] md:min-h-[240px]"
+      aria-disabled={!canEnterStudio}
+      className={[
+        "relative h-full min-h-[200px] select-none overflow-hidden rounded-[32px] md:min-h-[240px]",
+        isPending ? "cursor-wait" : "cursor-pointer",
+      ].join(" ")}
       onClick={() => onPick(version)}
-      whileHover={!isPicking && !someoneIsAuditioning ? { y: -3 } : undefined}
+      whileHover={
+        !isPicking && !someoneIsAuditioning && !isPending ? { y: -3 } : undefined
+      }
       animate={isPicking ? { scale: 0.95 } : { scale: 1 }}
       transition={{ type: "spring", stiffness: 240, damping: 26 }}
     >
@@ -571,13 +700,23 @@ function VibeCard({
 
         <motion.button
           whileTap={{ scale: 0.94 }}
+          disabled={isPending}
           onClick={(e) => {
             e.stopPropagation();
+            if (isError) {
+              onRetry(version);
+              return;
+            }
             onPick(version);
           }}
-          className="inline-flex h-11 items-center rounded-full bg-white/90 px-5 text-[13px] font-medium text-[#1A1A1A] shadow-[0_4px_16px_rgba(0,0,0,0.1)] transition-colors hover:bg-white"
+          className={[
+            "inline-flex h-11 items-center rounded-full px-5 text-[13px] font-medium shadow-[0_4px_16px_rgba(0,0,0,0.1)] transition-colors",
+            isPending
+              ? "cursor-not-allowed bg-white/55 text-[#5F5850]/70"
+              : "bg-white/90 text-[#1A1A1A] hover:bg-white",
+          ].join(" ")}
         >
-          {pickLabel} →
+          {pickButtonLabel} {!isPending ? "→" : ""}
         </motion.button>
       </div>
 
