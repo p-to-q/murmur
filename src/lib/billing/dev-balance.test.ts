@@ -19,11 +19,13 @@ describe("shouldUseDevBalanceFallback", () => {
     }
   });
 
-  it("still allows loopback hosts outside development", () => {
+  it("still allows loopback hosts on local production builds", () => {
     const prevNode = process.env.NODE_ENV;
     const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    const prevVercel = process.env.VERCEL;
     process.env.NODE_ENV = "production";
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    delete process.env.VERCEL;
 
     try {
       expect(shouldUseDevBalanceFallback({ host: "127.0.0.1" })).toBe(true);
@@ -31,6 +33,29 @@ describe("shouldUseDevBalanceFallback", () => {
       process.env.NODE_ENV = prevNode;
       if (prevFlag === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
+      if (prevVercel === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = prevVercel;
+    }
+  });
+
+  it("ignores a spoofed loopback host on managed cloud (Vercel)", () => {
+    const prevNode = process.env.NODE_ENV;
+    const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    const prevVercel = process.env.VERCEL;
+    process.env.NODE_ENV = "production";
+    delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    process.env.VERCEL = "1";
+
+    try {
+      expect(shouldUseDevBalanceFallback({ host: "localhost" })).toBe(false);
+      expect(shouldUseDevBalanceFallback({ host: "127.0.0.1" })).toBe(false);
+      expect(shouldUseDevBalanceFallback({ host: "::1" })).toBe(false);
+    } finally {
+      process.env.NODE_ENV = prevNode;
+      if (prevFlag === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+      else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
+      if (prevVercel === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = prevVercel;
     }
   });
 

@@ -8,15 +8,20 @@ const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 /**
  * Billing fallback keeps local demos usable when the ledger DB is unreachable.
- * Enabled in development, on loopback hosts, or by explicit opt-in outside
- * production. Public production hosts must never expose the 9999-note demo
- * snapshot when the real ledger is unavailable.
+ * Enabled in development, on loopback hosts (local builds only), or by explicit
+ * opt-in outside production. On a managed cloud deployment (Vercel) the loopback
+ * host signal is ignored, so a spoofed `Host: localhost` can never unlock the
+ * 9999-note demo snapshot or free generation in production/preview.
  */
 export function shouldUseDevBalanceFallback(options: {
   host?: string | null;
 } = {}): boolean {
+  // A request-supplied host is only trustworthy off managed cloud: local
+  // production builds (`next build && next start`) set no VERCEL flag, so
+  // loopback still works there; Vercel deployments must never honor it.
+  const onManagedCloud = process.env.VERCEL === "1";
   const host = options.host?.trim().toLowerCase();
-  if (host && LOOPBACK_HOSTS.has(host)) {
+  if (!onManagedCloud && host && LOOPBACK_HOSTS.has(host)) {
     return true;
   }
 
