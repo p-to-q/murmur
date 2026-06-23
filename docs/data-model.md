@@ -166,8 +166,8 @@ export const notesLedger = pgTable(
     delta:       integer("delta").notNull(),                // signed
     reason:      varchar("reason", { length: 32 }).notNull(),
     // reason taxonomy:
-    //   "spend:hum" | "spend:llm_edit" | "spend:save" | "spend:export_webm"
-    //   "grant:daily_free" | "grant:signup_bonus" | "grant:cutover_gift" | "grant:referral"
+    //   "spend:hum" | "spend:music_generate" | "spend:llm_edit" | "spend:save" | "spend:export_webm"
+    //   "grant:daily_free" | "grant:signup_bonus" | "grant:cutover_gift" | "grant:referral" | "grant:local_creator"
     //   "purchase:topup" | "refund:topup" | "refund:spend" | "manual:op_grant"
     externalRef: text("external_ref"),                       // provider tx id, song id, etc.
     metadata:    jsonb("metadata").$type<Record<string, unknown>>().notNull().default(sql`'{}'`),
