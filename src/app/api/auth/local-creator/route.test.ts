@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import { apiRateLimitKey } from "@/lib/api/rate-limit";
-import { localCreatorFingerprintLimitInput } from "@/lib/api/local-creator-rate-limit";
+import {
+  localCreatorFingerprintLimitInput,
+  localCreatorIpLimitInput,
+} from "@/lib/api/local-creator-rate-limit";
 import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
@@ -159,6 +162,22 @@ describe("POST /api/auth/local-creator", () => {
     expect(createdSessions).toBe(1);
   });
 
+  it("creates a Local Creator when the user-agent header is missing", async () => {
+    const response = await POST(
+      new Request("http://test.local/api/auth/local-creator", {
+        method: "POST",
+        headers: {
+          "x-request-id": "req_missing_user_agent",
+          "x-real-ip": "203.0.113.10",
+        },
+      }) as unknown as NextRequest,
+    );
+
+    expect(response.status).toBe(200);
+    expect(createdUsers).toBe(1);
+    expect(createdSessions).toBe(1);
+  });
+
   it("rate limits repeated new Local Creator creation for the same IP and browser", async () => {
     const first = await POST(buildRequest({ "x-request-id": "req_first" }));
     const second = await POST(buildRequest({ "x-request-id": "req_second" }));
@@ -212,6 +231,43 @@ describe("POST /api/auth/local-creator", () => {
     expect(blocked.headers.get("X-RateLimit-Limit")).toBe("10");
     expect(createdUsers).toBe(10);
     expect(createdSessions).toBe(10);
+  });
+
+  it("keeps the IP rate-limit response when fingerprint refund fails", async () => {
+    const store = getRateLimitStore();
+    const ipLimitInput = localCreatorIpLimitInput({
+      ip: "203.0.113.10",
+      requestId: "req_prefill_ip_limit",
+    });
+    if (!ipLimitInput) throw new Error("expected concrete IP rate-limit input");
+    await store.hit(apiRateLimitKey(ipLimitInput), {
+      ...ipLimitInput.options,
+      cost: ipLimitInput.options.capacity,
+    });
+
+    const originalRefund = store.refund;
+    store.refund = async () => {
+      throw new Error("refund store unavailable");
+    };
+
+    try {
+      const response = await POST(
+        buildRequest({
+          "x-request-id": "req_ip_blocked_refund_failed",
+          "user-agent": "Murmur Refund Failure Browser",
+        }),
+      );
+
+      expect(response.status).toBe(429);
+      const body = await response.json() as { error?: string; requestId?: string };
+      expect(body.error).toBe("rate_limited");
+      expect(body.requestId).toBe("req_ip_blocked_refund_failed");
+      expect(response.headers.get("X-RateLimit-Limit")).toBe("10");
+      expect(createdUsers).toBe(0);
+      expect(createdSessions).toBe(0);
+    } finally {
+      store.refund = originalRefund;
+    }
   });
 
   it("does not collapse missing IP metadata into a shared daily IP cap", async () => {

@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import type {
   BalanceResult,
   RefundNotesInput,
+  RefundNotesResult,
   SpendNotesInput,
   SpendNotesResult,
 } from "@/lib/db/queries/notes-ledger";
@@ -34,6 +35,8 @@ let nextSpendResult: SpendNotesResult = {
 };
 let nextEngineMode: "serverless" | "http" | null = null;
 let nextRunJobThrows: Error | null = null;
+let nextRefundResult: RefundNotesResult | null = null;
+let nextRefundThrows: Error | null = null;
 const lastSpendInputs: SpendNotesInput[] = [];
 const lastRefundInputs: RefundNotesInput[] = [];
 let runJobCallCount = 0;
@@ -50,6 +53,8 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
   },
   refundNotes: async (input: RefundNotesInput) => {
     lastRefundInputs.push(input);
+    if (nextRefundThrows) throw nextRefundThrows;
+    if (nextRefundResult) return nextRefundResult;
     return {
       ok: true as const,
       refundLedgerId: "nle_music_refund",
@@ -175,6 +180,8 @@ beforeEach(async () => {
   };
   nextEngineMode = null;
   nextRunJobThrows = null;
+  nextRefundResult = null;
+  nextRefundThrows = null;
   lastSpendInputs.length = 0;
   lastRefundInputs.length = 0;
   runJobCallCount = 0;
@@ -315,6 +322,28 @@ describe("POST /api/music/generate", () => {
     expect(lastRefundInputs).toHaveLength(1);
     expect(lastRefundInputs[0]?.originalLedgerId).toBe("nle_music_generate");
     expect(lastRefundInputs[0]?.metadata?.trigger).toBe("worker_http_error");
+  });
+
+  it("surfaces refund failures instead of swallowing a charged failed generation", async () => {
+    nextEngineMode = "serverless";
+    nextRunJobThrows = new Error("runpod unavailable");
+    nextRefundResult = { ok: false, reason: "original_not_found" };
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_refund_fail", email: null, name: "Refund Fail", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_refund_fail",
+    };
+
+    const response = await POST(buildRequest("req_music_refund_fail"));
+
+    expect(response.status).toBe(500);
+    expect(runJobCallCount).toBe(1);
+    expect(lastSpendInputs).toHaveLength(1);
+    expect(lastRefundInputs).toHaveLength(1);
+    const body = await response.json() as { error: string; message: string };
+    expect(body.error).toBe("billing_unavailable");
+    expect(body.message).toBe("Music generation refund failed");
   });
 
   it("does not use dev billing fallback for Local Creator sessions", async () => {
