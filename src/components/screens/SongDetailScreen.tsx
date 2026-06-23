@@ -42,8 +42,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { ShareTicketCard } from "@/components/song-detail/ShareTicketCard";
 import { exportSongAsVideo } from "@/modules/export/export-video";
 import {
+  buildSavedSongEditDraft,
   buildSavedSongRemixVersions,
-  hydrateSavedSongToVersion,
 } from "@/modules/music/saved-song-version";
 import { buildLineageTrail } from "@/modules/music/lineage";
 import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
@@ -418,8 +418,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   });
 
   const handleEditAgain = () => {
-    const version = hydrateSavedSongToVersion(song);
+    const version = buildSavedSongEditDraft(song);
     setCurrentVersion(version);
+    setCurrentDraftId(version.draftId);
+    setCurrentFlowId(version.originFlowId);
     memory
       .reportAction({
         content: `Reopened "${song.title}" in studio`,
@@ -444,9 +446,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         toast(t("vibe.gen.engine_warming") || "Music engine is warming up — try again in a moment.");
         return;
       }
+      const firstVersion = versions[0]!;
       setVibeVersions(versions);
-      setCurrentDraftId(song.id);
-      setCurrentFlowId(`saved-${song.id}`);
+      setCurrentDraftId(firstVersion.draftId);
+      setCurrentFlowId(firstVersion.originFlowId);
       setCurrentVersion(null);
       memory
         .reportAction({
