@@ -19,8 +19,7 @@ export interface ApiRateLimitInput {
 export async function checkApiRateLimit(
   input: ApiRateLimitInput,
 ): Promise<RateLimitResult> {
-  const key = `${input.route}:${input.bucket}:${input.userId}`;
-  const result = await getRateLimitStore().hit(key, input.options);
+  const result = await getRateLimitStore().hit(apiRateLimitKey(input), input.options);
 
   if (!result.allowed) {
     log("rate_limit.tripped", {
@@ -38,6 +37,10 @@ export async function checkApiRateLimit(
   }
 
   return result;
+}
+
+export async function refundApiRateLimit(input: ApiRateLimitInput): Promise<void> {
+  await getRateLimitStore().refund(apiRateLimitKey(input), input.options);
 }
 
 export function rateLimitedResponse(
@@ -69,4 +72,8 @@ export function rateLimitHeaders(
   };
   if (requestId) headers["X-Request-Id"] = requestId;
   return headers;
+}
+
+function apiRateLimitKey(input: ApiRateLimitInput): string {
+  return `${input.route}:${input.bucket}:${input.userId}`;
 }
