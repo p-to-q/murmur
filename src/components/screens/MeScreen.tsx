@@ -123,7 +123,11 @@ export function MeScreen() {
               {isRegistered ? (
                 <span className="text-[13px] text-[#8C8780]">{t("me.notes.signed_in")}</span>
               ) : null}
-              <Link href="/topup" className="mm-btn-primary inline-flex shrink-0">
+              <Link
+                href="/topup"
+                className="mm-btn-primary inline-flex shrink-0"
+                suppressHydrationWarning
+              >
                 {t("me.notes.cta") || "Top up"}
               </Link>
             </div>
@@ -149,7 +153,11 @@ export function MeScreen() {
                 {lang === "zh" ? milestone.actionZh : milestone.action}
               </p>
             </div>
-            <Link href={shelfCtaHref} className="mm-btn-primary inline-flex shrink-0">
+            <Link
+              href={shelfCtaHref}
+              className="mm-btn-primary inline-flex shrink-0"
+              suppressHydrationWarning
+            >
               {shelfCtaLabel}
             </Link>
           </div>
@@ -211,44 +219,73 @@ export function MeScreen() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[12px] tracking-[0.04em] text-[#8C8780]">
           {developerMode ? (
             <>
-              <Link href="/me/debug" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
+              <Link
+                href="/me/debug"
+                className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors"
+                suppressHydrationWarning
+              >
                 {t("me.debug") || "Debug"}
               </Link>
               <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
             </>
           ) : null}
-          <Link href="/me/settings" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
+          <Link
+            href="/me/settings"
+            className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors"
+            suppressHydrationWarning
+          >
             {t("me.settings") || "Settings"}
           </Link>
           <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
           {alertsOn ? (
             <>
-              <Link href="/me/notifications" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
+              <Link
+                href="/me/notifications"
+                className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors"
+                suppressHydrationWarning
+              >
                 {t("me.notifications") || "Notifications"}
               </Link>
               <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
             </>
           ) : null}
-          <Link href="/me/payments" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
+          <Link
+            href="/me/payments"
+            className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors"
+            suppressHydrationWarning
+          >
             {t("me.payments") || "Payment records"}
           </Link>
           <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
-          <Link href="/me/privacy" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
+          <Link
+            href="/me/privacy"
+            className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors"
+            suppressHydrationWarning
+          >
             {t("me.privacy") || "Privacy"}
           </Link>
           <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
-          <Link href="/me/terms" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
+          <Link
+            href="/me/terms"
+            className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors"
+            suppressHydrationWarning
+          >
             {t("me.terms") || "Terms"}
           </Link>
           <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
           <Link
             href="/me/delete"
             className="whitespace-nowrap hover:text-[#D9421A] transition-colors"
+            suppressHydrationWarning
           >
             {t("me.delete_account") || "Delete account"}
           </Link>
           <span className="whitespace-nowrap text-[#D2C9B6]">·</span>
-          <Link href="/me/debug/melo-lab" className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors">
+          <Link
+            href="/me/debug/melo-lab"
+            className="whitespace-nowrap hover:text-[#1A1A1A] transition-colors"
+            suppressHydrationWarning
+          >
             {t("me.melo_lab") || "MeLo Lab"}
           </Link>
         </div>
@@ -410,6 +447,7 @@ function NotificationPanel({
               key={item.id}
               href="/me/notifications"
               className="flex items-start gap-2 rounded-[8px] px-2 py-2 transition-colors hover:bg-[#F8F3EA]"
+              suppressHydrationWarning
             >
               <span
                 className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
@@ -437,6 +475,7 @@ function NotificationPanel({
         <Link
           href="/me/notifications"
           className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5DDD0] bg-white/55 px-3 text-[12px] text-[#6F6A63] transition-colors hover:border-[#C8C0B4] hover:text-[#1A1A1A]"
+          suppressHydrationWarning
         >
           {t("me.notifications.open") || "Open inbox"}
           <ChevronRight className="h-3.5 w-3.5" />
