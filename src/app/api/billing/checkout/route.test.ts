@@ -20,6 +20,7 @@ const checkoutCreate = mock(async (payload: Record<string, unknown>) => {
 const createdSessions: Array<Record<string, unknown>> = [];
 let waffoConfigured = true;
 let zpayConfigured = false;
+let zpayCheckoutEnabled = false;
 const zpayCreateOrder = mock(async () => ({
   payUrl: "https://zpay.test/pay",
   tradeNo: "zpay_trade_123",
@@ -41,6 +42,7 @@ mock.module("@/lib/billing/waffo", () => ({
 
 mock.module("@/lib/billing/zpay", () => ({
   isZpayConfigured: () => zpayConfigured,
+  isZpayCheckoutEnabled: () => zpayCheckoutEnabled,
   zpayCreateOrder,
 }));
 
@@ -84,6 +86,7 @@ beforeEach(async () => {
   zpayCreateOrder.mockClear();
   waffoConfigured = true;
   zpayConfigured = false;
+  zpayCheckoutEnabled = false;
 });
 
 describe("POST /api/billing/checkout", () => {
@@ -152,6 +155,7 @@ describe("POST /api/billing/checkout", () => {
 
   it("keeps the billing email on pending Zpay purchases", async () => {
     zpayConfigured = true;
+    zpayCheckoutEnabled = true;
 
     const response = await POST(
       buildRequest({
@@ -173,6 +177,28 @@ describe("POST /api/billing/checkout", () => {
         billingEmail: "wechat-receipt@test.local",
       },
     });
+  });
+
+  it("blocks WeChat checkout when Zpay credentials exist but the launch gate is closed", async () => {
+    zpayConfigured = true;
+    zpayCheckoutEnabled = false;
+
+    const response = await POST(
+      buildRequest({
+        sku: "topup_120_notes",
+        currency: "CNY",
+        payMethod: "wxpay",
+        billingEmail: "wechat-receipt@test.local",
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as { error: string; message: string };
+    expect(body.error).toBe("zpay_not_configured");
+    expect(body.message).toContain("not enabled");
+    expect(createdSessions).toHaveLength(0);
+    expect(zpayCreateOrder).toHaveBeenCalledTimes(0);
+    expect(purchaseInserts).toHaveLength(0);
   });
 
   it("rejects explicit WeChat checkout when Zpay is not configured", async () => {

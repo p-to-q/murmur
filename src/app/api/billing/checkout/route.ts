@@ -40,6 +40,7 @@ import {
   isWaffoConfigured,
 } from "@/lib/billing/waffo";
 import {
+  isZpayCheckoutEnabled,
   isZpayConfigured,
   zpayCreateOrder,
   type ZpayPaymentType,
@@ -247,14 +248,32 @@ export async function POST(request: NextRequest) {
   const payMethod = typeof body.payMethod === "string" ? body.payMethod : "";
   const useZpay =
     product.currency === "CNY" &&
-    isZpayConfigured() &&
+    isZpayCheckoutEnabled() &&
     payMethod === "wxpay";
 
-  if (product.currency === "CNY" && payMethod === "wxpay" && !isZpayConfigured()) {
+  if (product.currency === "CNY" && payMethod === "wxpay" && !useZpay) {
+    log(
+      "billing.zpay_checkout_failed",
+      {
+        stage: isZpayConfigured() ? "launch_gate" : "configuration",
+        reason: isZpayConfigured()
+          ? "production_refund_gap_allow_flag_missing"
+          : "zpay_not_configured",
+      },
+      {
+        route: ROUTE,
+        requestId,
+        userId,
+        sessionId: auth.sessionId,
+        level: isZpayConfigured() ? "warn" : "info",
+      },
+    );
     return NextResponse.json(
       {
         error: "zpay_not_configured",
-        message: "WeChat Pay is not configured on this deployment.",
+        message: isZpayConfigured()
+          ? "WeChat Pay is not enabled on this production deployment."
+          : "WeChat Pay is not configured on this deployment.",
         requestId,
       },
       { status: 503, headers: { "X-Request-Id": requestId } },
