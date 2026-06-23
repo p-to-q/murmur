@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
-import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
+import {
+  clearLocalCreatorBootstrapFlag,
+  ensureLocalCreatorSession,
+} from "@/lib/auth/local-creator-client";
 
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import type { Lang } from "@/lib/i18n/dict";
@@ -29,6 +32,7 @@ type SongWithMeta = Omit<SongCardType, "visualConfig" | "duration" | "arrangemen
   };
 type SortMode = "newest" | "alpha";
 const LOCAL_CREATOR_BOOTSTRAP_TIMEOUT_MS = 2_000;
+const SONGS_ROUTE = "/api/songs";
 
 function demoArtwork(id: string) {
   const artwork = ARTWORK_CATALOG.find((entry) => entry.id === id);
@@ -105,6 +109,31 @@ async function withSoftTimeout<T>(
   }
 }
 
+export async function loadGallerySongsOnce(): Promise<SongWithMeta[] | null> {
+  const hasSession = await withSoftTimeout(
+    ensureLocalCreatorSession({ background: true }),
+    LOCAL_CREATOR_BOOTSTRAP_TIMEOUT_MS,
+    false,
+  );
+  if (!hasSession) return null;
+
+  const first = await fetch(SONGS_ROUTE);
+  if (first.ok) return (await first.json()) as SongWithMeta[];
+  if (first.status !== 401) return null;
+
+  clearLocalCreatorBootstrapFlag();
+  const refreshed = await withSoftTimeout(
+    ensureLocalCreatorSession({ background: true, force: true }),
+    LOCAL_CREATOR_BOOTSTRAP_TIMEOUT_MS,
+    false,
+  );
+  if (!refreshed) return null;
+
+  const second = await fetch(SONGS_ROUTE);
+  if (!second.ok) return null;
+  return (await second.json()) as SongWithMeta[];
+}
+
 export function GalleryScreen() {
   const router = useRouter();
   const t = useTranslator();
@@ -124,15 +153,8 @@ export function GalleryScreen() {
     let cancelled = false;
     async function load() {
       try {
-        const hasSession = await withSoftTimeout(
-          ensureLocalCreatorSession({ background: true }),
-          LOCAL_CREATOR_BOOTSTRAP_TIMEOUT_MS,
-          false,
-        );
-        if (!hasSession) return;
-        const res = await fetch("/api/songs");
-        if (res.ok && !cancelled) {
-          const data = (await res.json()) as SongWithMeta[];
+        const data = await loadGallerySongsOnce();
+        if (data && !cancelled) {
           setSongs(data);
         }
       } catch {

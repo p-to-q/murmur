@@ -6,6 +6,7 @@ let inflight: Promise<boolean> | null = null;
 
 interface EnsureLocalCreatorSessionOptions {
   background?: boolean;
+  force?: boolean;
 }
 
 export function hasTriedLocalCreatorBootstrap(): boolean {
@@ -13,11 +14,17 @@ export function hasTriedLocalCreatorBootstrap(): boolean {
   return window.sessionStorage.getItem(STORAGE_KEY) === "1";
 }
 
+export function clearLocalCreatorBootstrapFlag(): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(STORAGE_KEY);
+}
+
 export async function ensureLocalCreatorSession(
   options: EnsureLocalCreatorSessionOptions = {},
 ): Promise<boolean> {
   if (typeof window === "undefined") return false;
-  if (options.background && hasTriedLocalCreatorBootstrap()) return true;
+  if (options.force) clearLocalCreatorBootstrapFlag();
+  if (options.background && !options.force && hasTriedLocalCreatorBootstrap()) return true;
   if (inflight) return inflight;
 
   inflight = (async () => {
@@ -49,4 +56,9 @@ export async function ensureLocalCreatorSession(
   })();
 
   return inflight;
+}
+
+export function __resetLocalCreatorBootstrapForTesting(): void {
+  inflight = null;
+  clearLocalCreatorBootstrapFlag();
 }
