@@ -17,7 +17,8 @@ import {
   tempoDelta,
   type EditToken,
 } from "@/modules/strummer/apply-edit";
-import { classifyPromptWithLLM } from "@/lib/api/strummer";
+import { classifyPromptWithLLM, StrummerEditRequestError } from "@/lib/api/strummer";
+import { studioPromptRecoveryForCode } from "@/components/screens/studio-prompt-recovery";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { memory } from "@/lib/platform/memory";
 import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
@@ -224,6 +225,15 @@ function StudioContent({ version }: { version: VibeVersion }) {
       }
 
       toast(t("studio.prompt.unknown"));
+    } catch (error) {
+      if (error instanceof StrummerEditRequestError) {
+        const recovery = studioPromptRecoveryForCode(error.code);
+        if (recovery.refreshBalance) void refreshBalance();
+        toast.error(t(recovery.messageKey));
+        if (recovery.navigateTo) router.push(recovery.navigateTo);
+        return;
+      }
+      toast.error(t("studio.prompt.llm_unavailable"));
     } finally {
       setPromptBusy(false);
     }
