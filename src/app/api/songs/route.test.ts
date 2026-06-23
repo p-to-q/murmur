@@ -498,4 +498,57 @@ describe("POST /api/songs", () => {
     expect(body.id).toBe("song_guest_fallback");
     expect(body.userId).toBe("guest");
   });
+
+  it("returns 503 instead of a volatile fallback for registered saves when the database is unavailable", async () => {
+    nextAuth = {
+      ok: true,
+      user: {
+        id: "usr_registered",
+        email: "registered@example.com",
+        name: "Registered",
+        avatarUrl: null,
+        accountKind: "registered",
+      },
+      source: "session",
+      sessionId: "sess_registered",
+    };
+    const dbUnavailableError = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:5432"), {
+      code: "ECONNREFUSED",
+    });
+    createSongError = dbUnavailableError;
+    createSongWithSpendError = dbUnavailableError;
+
+    const response = await POST(buildRequest({
+      id: "song_registered_db_down",
+      title: "Registered Draft",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    }, "req_registered_db_down", "https://murmur.example/api/songs"));
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("X-Murmur-Fallback")).toBeNull();
+    expect(createdSongs).toHaveLength(0);
+    const body = await response.json() as { error?: string; requestId?: string };
+    expect(body.error).toBe("save_unavailable");
+    expect(body.requestId).toBe("req_registered_db_down");
+  });
 });

@@ -21,6 +21,7 @@ import { normalizeLineageDepth, resolveParentSongId, resolveRootSongId } from "@
 import { arrangementStateSchema, visualConfigSchema } from "./schema";
 import type { MelodySelectionKind } from "@/modules/shared/types";
 import type { songs } from "@/lib/db/schema/songs";
+import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
 const ROUTE = "/api/songs";
 const SONG_CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
@@ -49,6 +50,7 @@ const songPayloadSchema = z.object({
 
 type SongPayload = z.infer<typeof songPayloadSchema>;
 type SongInput = typeof songs.$inferInsert;
+type OkAuth = Extract<ResolvedRequestAuth, { ok: true }>;
 
 export async function GET(req: NextRequest) {
   const auth = await resolveRequestAuth(req);
@@ -58,7 +60,7 @@ export async function GET(req: NextRequest) {
     const rows = await getSongSummariesByUser(userId);
     return NextResponse.json(rows);
   } catch (err) {
-    if (shouldUseLocalSongFallback() && isDatabaseUnavailable(err)) {
+    if (shouldUseLocalSongFallback(auth, req.nextUrl?.hostname) && isDatabaseUnavailable(err)) {
       const rows = getLocalSongSummariesByUserFallback(userId);
       log("song.list_failed", {
         reason: "database_unavailable",
@@ -81,6 +83,12 @@ export async function GET(req: NextRequest) {
       sessionId: auth.sessionId,
       level: "error",
     });
+    if (isDatabaseUnavailable(err)) {
+      return NextResponse.json(
+        { error: "songs_unavailable", message: "Database unavailable" },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: "Failed to fetch songs" }, { status: 500 });
   }
 }
@@ -155,7 +163,10 @@ export async function POST(req: NextRequest) {
         if (isSongIdUniqueConstraintViolation(dbError)) {
           return handleSongIdConflict(songInput.id, userId, requestId);
         }
-        if (isDatabaseUnavailable(dbError)) {
+        if (
+          shouldUseLocalSongFallback(auth, req.nextUrl?.hostname)
+          && isDatabaseUnavailable(dbError)
+        ) {
           const fallbackSong = createLocalSongFallback(songInput);
           log("song.create_failed", {
             reason: "database_unavailable",
@@ -240,7 +251,7 @@ export async function POST(req: NextRequest) {
       headers: { "X-Request-Id": requestId },
     });
   } catch (err) {
-    if (shouldUseLocalSongFallback() && isDatabaseUnavailable(err)) {
+    if (shouldUseLocalSongFallback(auth, req.nextUrl?.hostname) && isDatabaseUnavailable(err)) {
       const fallbackSong = createLocalSongFallback(songInput);
       log("song.create_failed", {
         reason: "database_unavailable",
@@ -276,7 +287,7 @@ export async function POST(req: NextRequest) {
     });
     if (isDatabaseUnavailable(err)) {
       return NextResponse.json(
-        { error: "billing_unavailable", message: "Database unavailable", requestId },
+        { error: "save_unavailable", message: "Database unavailable", requestId },
         { status: 503, headers: { "X-Request-Id": requestId } },
       );
     }
@@ -412,11 +423,15 @@ function objectFieldAsString(value: unknown, key: string): string | undefined {
   return typeof field === "string" ? field : String(field);
 }
 
-function shouldUseLocalSongFallback(): boolean {
-  // Free era: every action costs 0, so local fallback is safe for all users
-  // when the database is unreachable. Once real billing returns, gate this
-  // back to dev-only or guest-only.
-  return true;
+function shouldUseLocalSongFallback(auth: OkAuth, host?: string | null): boolean {
+  if (auth.source === "guest" || auth.source === "local_header") {
+    return true;
+  }
+
+  return (
+    auth.user.accountKind === "local_creator"
+    && shouldBypassBillingInDevelopment({ host })
+  );
 }
 
 
