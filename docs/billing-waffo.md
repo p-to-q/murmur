@@ -1,4 +1,4 @@
-# Billing — Waffo (web top-ups)
+# Billing — Waffo + guarded ZPay (web top-ups)
 
 Murmur's **web** payment provider is [Waffo](https://waffo.com)'s *Pancake*
 checkout, integrated through the `@waffo/pancake-ts` SDK. It funds one-time
@@ -36,8 +36,9 @@ against local repository truth before opening the external docs.
 > ResolvedStripeTopupPurchase` alias in
 > [topup-purchase.ts](../src/lib/billing/topup-purchase.ts) are the only Stripe
 > residue. Mobile-store IAP (Apple / Google via RevenueCat) is future work for
-> the Capacitor shells and is **not** wired today; Waffo is the only live
-> payment path.
+> the Capacitor shells and is **not** wired today. Waffo is the only fully
+> refund-webhook-backed web payment path; ZPay is guarded for CNY WeChat checkout
+> until its refund / chargeback reversal loop is implemented.
 
 ## File map
 
@@ -53,6 +54,8 @@ against local repository truth before opening the external docs.
 | Register webhook endpoint | [scripts/waffo-webhook-register.ts](../scripts/waffo-webhook-register.ts) |
 | Read-only Waffo ↔ local reconciliation | [scripts/waffo-reconcile.ts](../scripts/waffo-reconcile.ts) |
 | Scheduled Waffo reconciliation | [src/app/api/billing/cron/reconcile/route.ts](../src/app/api/billing/cron/reconcile/route.ts) |
+| Guarded CNY ZPay checkout | [src/lib/billing/zpay.ts](../src/lib/billing/zpay.ts) |
+| ZPay payment success notify | [src/app/api/billing/zpay-notify/route.ts](../src/app/api/billing/zpay-notify/route.ts) |
 
 ## SKUs
 
@@ -98,7 +101,7 @@ POST /api/billing/webhook
    │  • order.completed → resolveWaffoTopupPurchase(order)
    │  • insert purchases row (provider, providerRef = orderId)
    │  • grantNotes(reason "purchase:topup", externalRef = orderId)  ← idempotent
-   │  • refund.succeeded → reverseTopupGrant + purchases.status = refunded
+   │  • refund.succeeded → amount check, then reverseTopupGrant + refunded status
    ▼
    notes balance += notesGranted
 ```
@@ -106,6 +109,25 @@ POST /api/billing/webhook
 The client does **not** grant anything. After the success redirect it polls
 `GET /api/user/balance` once; the ledger write only ever happens on the
 verified webhook.
+
+### ZPay launch gate
+
+Explicit WeChat checkout (`payMethod: "wxpay"` on a CNY order) uses ZPay only
+when `isZpayCheckoutEnabled()` returns true. That requires:
+
+- `ZPAY_PID` and `ZPAY_KEY`;
+- outside production, no additional flag, so local/staging integration testing
+  remains possible;
+- in production, `MURMUR_ALLOW_PRODUCTION_ZPAY_WITHOUT_REFUNDS=1` until Murmur
+  has a reliable ZPay refund / chargeback webhook that calls the same
+  `reverseTopupGrant` ledger path Waffo uses.
+
+If production credentials are present but that explicit allow flag is absent,
+`POST /api/billing/checkout` returns `503 zpay_not_configured` for WeChat
+checkout and logs `billing.zpay_checkout_failed` with `stage: "launch_gate"`.
+The notify route still accepts verified successful payment callbacks so any
+orders created before closing the gate can settle; it does not implement refund
+or chargeback reversal.
 
 ### Checkout session
 
@@ -142,8 +164,13 @@ It returns `{ checkoutUrl, sessionId }`; the client opens `checkoutUrl`.
    `(provider, providerRef)`.
 5. **Grant** — `grantNotes({ reason: "purchase:topup", externalRef: orderId })`.
 6. **Refund** — for `refund.succeeded`, find the local purchase by Waffo
-   `orderId`, insert a negative `refund:topup` ledger row through
-   `reverseTopupGrant`, then flip `purchases.status` to `refunded`.
+   `orderId`, convert the Waffo refund `amount` / `currency` to cents, and
+   only auto-reverse when that amount exactly equals the local
+   `purchases.amountCents`. Full refunds insert a negative `refund:topup`
+   ledger row through `reverseTopupGrant`, then flip `purchases.status` to
+   `refunded`. Partial or mismatched refund amounts are acknowledged with
+   `manualReview: true`, logged as a billing webhook warning, and do not mutate
+   the purchase or notes ledger.
 
 `InvalidTopupPurchaseError` (bad/unknown SKU, amount mismatch, missing
 `userId`) is treated as **non-retryable** — the route returns `200` so Waffo
@@ -173,6 +200,12 @@ to `event.eventId`, then the order id. If the user has already spent some of the
 refunded top-up, Murmur caps the balance at zero and records the actual notes
 recovered in the `refund:topup` ledger row.
 
+Partial Waffo refunds are intentionally not auto-applied yet. The webhook
+records enough context for support review, but Murmur currently has no
+`partially_refunded` purchase state or durable cumulative refund amount. Until
+that exists, refund amounts that differ from the original purchase amount must
+be handled manually instead of guessing how many bonus notes to reverse.
+
 See [data-model.md](data-model.md) §3.4 / §3.5 / §3.7 for the table shapes and
 the ledger invariant (`SUM(delta) == users.notesBalance`).
 
@@ -201,9 +234,15 @@ secrets keep working (`isWaffoConfigured()`).
 | `WAFFO_WEBHOOK_TEST_MODE` | force test/live webhook; auto-detected from a localhost URL otherwise |
 | `WAFFO_WEBHOOK_PROD_PUBLIC_KEY` / `WAFFO_WEBHOOK_TEST_PUBLIC_KEY` | optional signature verification keys for Waffo key rotation; the SDK also has built-in keys |
 | `MURMUR_APP_URL` | origin used to build the checkout `successUrl` |
+| `ZPAY_PID` / `ZPAY_KEY` | optional ZPay credentials for CNY WeChat checkout |
+| `MURMUR_ALLOW_PRODUCTION_ZPAY_WITHOUT_REFUNDS` | production-only acknowledgement required when ZPay credentials are set before refund / chargeback webhooks exist |
 
 `isWaffoConfigured()` requires both a usable client (merchant id + private key)
 **and** `WAFFO_TOPUP_PRODUCT_ID`.
+
+The production env audit fails when only one ZPay credential is set, or when
+both are set without `MURMUR_ALLOW_PRODUCTION_ZPAY_WITHOUT_REFUNDS=1`. That is a
+launch gate, not a refund implementation.
 
 ## Setup scripts
 
@@ -252,6 +291,9 @@ through a Murmur-owned ticket flow.
   and `refundTicketMerchantExternalId`; Murmur should preserve the latter when
   an internal refund tool creates tickets so reconciliation can hard-check
   refunds instead of warning on missing local rows.
+- **Partial refund support** — add a durable partial-refund state, cumulative
+  refunded amount tracking, and an explicit cents-to-notes rule before
+  auto-applying refund amounts smaller than the original purchase.
 - **Region-aware tax / billing detail** — pass `billingDetail` when we have a
   reliable billing country. Today the hosted checkout collects provider-side
   details.

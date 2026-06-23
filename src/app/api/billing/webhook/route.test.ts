@@ -340,6 +340,8 @@ describe("POST /api/billing/webhook", () => {
       id: "pur_test",
       userId: "usr_buyer",
       productId: "topup_120_notes",
+      amountCents: 599,
+      currency: "USD",
       notesGranted: 130,
       status: "succeeded",
     };
@@ -367,6 +369,8 @@ describe("POST /api/billing/webhook", () => {
       id: "pur_test",
       userId: "usr_buyer",
       productId: "topup_120_notes",
+      amountCents: 599,
+      currency: "USD",
       notesGranted: 130,
       status: "succeeded",
     };
@@ -376,6 +380,35 @@ describe("POST /api/billing/webhook", () => {
     expect(reverseInputs[0]).toMatchObject({
       refundExternalRef: "waffo-refund:RF_test_123",
     });
+  });
+
+  it("does not auto-reverse notes for partial refund.succeeded amounts", async () => {
+    nextEvent = refundSucceededEvent({ amount: "2.00" });
+    purchaseRow = {
+      id: "pur_test",
+      userId: "usr_buyer",
+      productId: "topup_120_notes",
+      amountCents: 599,
+      currency: "USD",
+      notesGranted: 130,
+      status: "succeeded",
+    };
+
+    const response = await POST(buildRequest());
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      manualReview?: boolean;
+      risk?: string;
+      refundAmountCents?: number;
+      purchaseAmountCents?: number;
+    };
+    expect(body.manualReview).toBe(true);
+    expect(body.risk).toBe("partial_refund_not_supported");
+    expect(body.refundAmountCents).toBe(200);
+    expect(body.purchaseAmountCents).toBe(599);
+    expect(reverseInputs).toHaveLength(0);
+    expect(purchaseUpdates).toHaveLength(0);
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
   });
 
   it("marks malformed orders failed but acknowledges them", async () => {

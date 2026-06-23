@@ -1,3 +1,5 @@
+import { ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV } from "@/lib/billing/zpay";
+
 const REQUIRED_IN_PRODUCTION = [
   {
     keys: ["DATABASE_URL", "POSTGRES_URL"],
@@ -118,6 +120,18 @@ function main() {
 
   if (isTruthyEnv("MURMUR_ALLOW_DEV_BILLING_FALLBACK")) {
     missing.push("MURMUR_ALLOW_DEV_BILLING_FALLBACK must be unset/false in production");
+  }
+
+  const zpayHasPid = Boolean(process.env.ZPAY_PID?.trim());
+  const zpayHasKey = Boolean(process.env.ZPAY_KEY?.trim());
+  if (zpayHasPid !== zpayHasKey) {
+    missing.push("ZPAY_PID and ZPAY_KEY must both be set for ZPay, or both unset");
+  }
+
+  if (zpayHasPid && zpayHasKey && !isTruthyEnv(ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV)) {
+    missing.push(
+      `${ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV}=1 is required to enable production ZPay checkout until refund/reversal webhooks are implemented`,
+    );
   }
 
   if (isTruthyEnv("MURMUR_CAPTURE_HUMS")) {
