@@ -32,10 +32,20 @@ async function checkRoute(route: (typeof QA_ROUTE_CONTRACTS)[number]): Promise<C
       redirect: "follow",
     });
     const html = await response.text();
+    if (route.okStatuses?.includes(response.status) && response.status !== 200) {
+      return {
+        name: route.name,
+        ok: true,
+        detail: `status=${response.status} gated`,
+      };
+    }
     const missing = route.markers.filter((marker) => !html.includes(marker));
+    const statusOk = route.okStatuses
+      ? route.okStatuses.includes(response.status)
+      : response.ok;
     return {
       name: route.name,
-      ok: response.ok && missing.length === 0,
+      ok: statusOk && missing.length === 0,
       detail:
         missing.length === 0
           ? `status=${response.status} markers=${route.markers.length}`
