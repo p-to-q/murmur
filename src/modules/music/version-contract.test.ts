@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
-import { canSaveHeardVersion, getSaveBlockReason } from "./version-contract";
+import {
+  canSaveHeardVersion,
+  getSaveBlockReason,
+  getVersionReadinessBlockReason,
+  isVersionReadyForStudio,
+} from "./version-contract";
 import type { VibeVersion } from "@/modules/shared/types";
 
 function makeVersion(overrides: Partial<VibeVersion> = {}): VibeVersion {
@@ -90,7 +95,9 @@ describe("version save contract", () => {
   it("allows legacy arrangement versions to save", () => {
     const version = makeVersion();
     expect(canSaveHeardVersion(version)).toBe(true);
+    expect(isVersionReadyForStudio(version)).toBe(true);
     expect(getSaveBlockReason(version)).toBeNull();
+    expect(getVersionReadinessBlockReason(version)).toBeNull();
   });
 
   it("blocks generated versions that are still pending", () => {
@@ -107,7 +114,9 @@ describe("version save contract", () => {
     });
 
     expect(canSaveHeardVersion(version)).toBe(false);
+    expect(isVersionReadyForStudio(version)).toBe(false);
     expect(getSaveBlockReason(version)).toBe("generation_pending");
+    expect(getVersionReadinessBlockReason(version)).toBe("generation_pending");
   });
 
   it("blocks generated versions that failed to render", () => {
@@ -125,7 +134,9 @@ describe("version save contract", () => {
     });
 
     expect(canSaveHeardVersion(version)).toBe(false);
+    expect(isVersionReadyForStudio(version)).toBe(false);
     expect(getSaveBlockReason(version)).toBe("generation_failed");
+    expect(getVersionReadinessBlockReason(version)).toBe("generation_failed");
   });
 
   it("allows generated versions only when the heard clip is concrete", () => {
@@ -143,6 +154,8 @@ describe("version save contract", () => {
     });
 
     expect(canSaveHeardVersion(version)).toBe(true);
+    expect(isVersionReadyForStudio(version)).toBe(true);
     expect(getSaveBlockReason(version)).toBeNull();
+    expect(getVersionReadinessBlockReason(version)).toBeNull();
   });
 });

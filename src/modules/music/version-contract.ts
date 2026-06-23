@@ -1,5 +1,9 @@
 import type { VibeVersion, VersionGeneration } from "@/modules/shared/types";
 
+export type VersionReadinessBlockReason =
+  | "generation_pending"
+  | "generation_failed";
+
 function hasReadyGeneratedAudio(
   generation: VersionGeneration | undefined,
 ): generation is VersionGeneration & { status: "ready"; audioUrl: string } {
@@ -14,13 +18,23 @@ function hasReadyGeneratedAudio(
  *   user heard exists as a concrete audio URL we can transcode and persist
  */
 export function canSaveHeardVersion(version: VibeVersion): boolean {
+  return isVersionReadyForStudio(version);
+}
+
+export function isVersionReadyForStudio(version: VibeVersion): boolean {
   if (!version.generation) return true;
   return hasReadyGeneratedAudio(version.generation);
 }
 
 export function getSaveBlockReason(
   version: VibeVersion,
-): "generation_pending" | "generation_failed" | null {
+): VersionReadinessBlockReason | null {
+  return getVersionReadinessBlockReason(version);
+}
+
+export function getVersionReadinessBlockReason(
+  version: VibeVersion,
+): VersionReadinessBlockReason | null {
   const generation = version.generation;
   if (!generation) return null;
   if (hasReadyGeneratedAudio(generation)) return null;
