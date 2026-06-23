@@ -27,6 +27,51 @@ mock.module("@/lib/platform/runpod-serverless", () => ({
   },
 }));
 
+mock.module("@/lib/platform/music-worker", () => {
+  function serverlessConfigured() {
+    const endpointId = process.env.RUNPOD_SERVERLESS_ENDPOINT_ID?.trim();
+    const apiKey = process.env.RUNPOD_API_KEY?.trim();
+    return endpointId && apiKey ? { endpointId, apiKey } : null;
+  }
+
+  function workerUrl() {
+    const configured = process.env.MUSIC_WORKER_URL?.trim();
+    if (configured) return configured;
+    if (process.env.NODE_ENV !== "production") return "http://127.0.0.1:8002";
+    return null;
+  }
+
+  function requestedMode() {
+    const raw = process.env.MUSIC_ENGINE_MODE?.trim().toLowerCase();
+    if (raw === "serverless") return "serverless";
+    if (raw === "http" || raw === "pod" || raw === "worker") return "http";
+    return "auto";
+  }
+
+  function engineMode() {
+    const serverless = serverlessConfigured() ? "serverless" : null;
+    const http = workerUrl() ? "http" : null;
+    const preference = requestedMode();
+
+    if (process.env.NODE_ENV === "production") {
+      if (preference === "http") return http;
+      if (preference === "serverless") return serverless;
+      return serverless ?? http;
+    }
+    if (preference === "http") return http ?? serverless;
+    if (preference === "serverless") return serverless ?? http;
+    return serverless ?? http;
+  }
+
+  return {
+    getMusicEngineMode: engineMode,
+    getRequestedMusicEngineMode: requestedMode,
+    getMusicServerlessConfig: serverlessConfigured,
+    getMusicWorkerUrl: workerUrl,
+    isMusicWorkerConfigured: () => engineMode() !== null,
+  };
+});
+
 const { GET } = await import("./route");
 
 beforeEach(() => {

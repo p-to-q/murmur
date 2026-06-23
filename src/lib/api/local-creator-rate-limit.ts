@@ -47,7 +47,8 @@ export function localCreatorIpLimitInput(
 }
 
 function localCreatorFingerprint(headers: Headers, ip: string): string {
-  const userAgent = headers.get("user-agent")?.trim().slice(0, 512) || "unknown";
+  const userAgentHeader = headers.get("user-agent");
+  const userAgent = userAgentHeader ? userAgentHeader.trim().slice(0, 512) : "unknown";
   const uaHash = createHash("sha256").update(userAgent, "utf8").digest("hex").slice(0, 16);
   return `${ip}:ua:${uaHash}`;
 }

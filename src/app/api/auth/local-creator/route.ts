@@ -113,5 +113,17 @@ export async function POST(request: NextRequest) {
 }
 
 async function refundConsumedLimits(inputs: ApiRateLimitInput[]): Promise<void> {
-  await Promise.all(inputs.map((input) => refundApiRateLimit(input)));
+  const results = await Promise.allSettled(inputs.map((input) => refundApiRateLimit(input)));
+  for (const result of results) {
+    if (result.status === "rejected") {
+      log(
+        "auth.local_creator_failed",
+        {
+          phase: "rate_limit_refund",
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        },
+        { route: ROUTE, level: "error" },
+      );
+    }
+  }
 }
