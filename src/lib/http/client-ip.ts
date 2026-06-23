@@ -6,6 +6,8 @@
  * prepend arbitrary values to mint fresh rate-limit buckets per request, so
  * never read the left end.
  */
+export const UNKNOWN_CLIENT_IP = "unknown";
+
 export function clientIpFromHeaders(headers: Headers): string {
   const real = headers.get("x-real-ip")?.trim();
   if (real) return real;
@@ -15,5 +17,5 @@ export function clientIpFromHeaders(headers: Headers): string {
     const last = hops[hops.length - 1]?.trim();
     if (last) return last;
   }
-  return "unknown";
+  return UNKNOWN_CLIENT_IP;
 }
