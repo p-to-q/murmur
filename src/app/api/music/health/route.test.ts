@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 
 const originalFetch = globalThis.fetch;
 
@@ -11,6 +11,21 @@ const KEYS = [
 ] as const;
 
 let saved: Record<string, string | undefined>;
+
+mock.module("@/lib/platform/runpod-serverless", () => ({
+  RunpodError: class RunpodError extends Error {
+    readonly kind = "failed";
+    readonly detail = null;
+  },
+  endpointHealth: async () => ({
+    ok: true,
+    status: 200,
+    body: { workers: { idle: 0, running: 0 } },
+  }),
+  runJob: async () => {
+    throw new Error("runJob should not be called in health route tests");
+  },
+}));
 
 const { GET } = await import("./route");
 
