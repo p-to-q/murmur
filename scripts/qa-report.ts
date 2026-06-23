@@ -69,7 +69,10 @@ async function checkRoute(
       redirect: "follow",
     });
     const html = await response.text();
-    if (route.okStatuses?.includes(response.status) && response.status !== 200) {
+    const gatedByStatus = route.okStatuses?.includes(response.status) && response.status !== 200;
+    const gatedByMarkers =
+      route.gateMarkers && route.gateMarkers.every((marker) => html.includes(marker));
+    if (gatedByStatus || gatedByMarkers) {
       return {
         name: route.name,
         ok: true,
