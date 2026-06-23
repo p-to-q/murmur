@@ -224,9 +224,15 @@ export async function POST(request: NextRequest) {
         trigger: result.error,
       });
       spendForRefund = null;
+      if (!refunded) {
+        return fail("billing_unavailable", "Music generation refund failed", 500, {
+          requestId, userId, startedAt,
+          ext: { trigger: result.error },
+        });
+      }
       return fail(result.error, result.message, result.status, {
         requestId, userId, startedAt,
-        ext: { ...result.ext, ...(refunded ? {} : { refundFailed: true }) },
+        ext: result.ext,
       });
     }
 
@@ -264,11 +270,20 @@ export async function POST(request: NextRequest) {
       duration: null,
       trigger: "route_exception",
     });
+    spendForRefund = null;
+    if (!refunded) {
+      return fail("billing_unavailable", "Music generation refund failed", 500, {
+        requestId, userId, startedAt,
+        ext: {
+          trigger: "route_exception",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
     return fail("server_error", "Music generation failed", 500, {
       requestId, userId, startedAt,
       ext: {
         message: error instanceof Error ? error.message : String(error),
-        ...(refunded ? {} : { refundFailed: true }),
       },
     });
   }
