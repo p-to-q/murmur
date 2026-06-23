@@ -16,9 +16,16 @@ mock.module("@/lib/auth", () => ({
 }));
 
 mock.module("@/lib/platform/music-worker", () => ({
-  getMusicEngineMode: () => null,
+  getMusicEngineMode: () => {
+    if (process.env.MUSIC_ENGINE_MODE === "http" && process.env.MUSIC_WORKER_URL) {
+      return "http";
+    }
+    return null;
+  },
   getMusicServerlessConfig: () => null,
-  getMusicWorkerUrl: () => null,
+  getMusicWorkerUrl: () => process.env.MUSIC_WORKER_URL?.trim() || null,
+  getRequestedMusicEngineMode: () =>
+    process.env.MUSIC_ENGINE_MODE === "http" ? "http" : "auto",
 }));
 
 class TestRunpodError extends Error {
@@ -28,6 +35,11 @@ class TestRunpodError extends Error {
 
 mock.module("@/lib/platform/runpod-serverless", () => ({
   RunpodError: TestRunpodError,
+  endpointHealth: async () => ({
+    ok: true,
+    status: 200,
+    body: { workers: { idle: 0, running: 0 } },
+  }),
   runJob: async () => {
     throw new Error("runJob should not be called in route tests");
   },

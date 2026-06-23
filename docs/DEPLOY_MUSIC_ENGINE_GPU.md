@@ -55,7 +55,8 @@ bun run deploy:music-serverless
 2. 创建/更新 **template** `murmur-music-serverless`（镜像 + `MAGENTA_BACKEND=jax` 等环境变量）
 3. 创建/更新 **serverless endpoint**（`workersMin=0`、`flashboot=true`、`idleTimeout=120s`、挂载网络卷、GPU 候选列表）
 4. 发一个 **warm-up** 作业并轮询 `/status`：首次会拉镜像 + 下载 ~4 GB 模型到网络卷（约 ~20 min），把模型缓存下来
-5. 写入 Vercel `RUNPOD_SERVERLESS_ENDPOINT_ID` / `RUNPOD_API_KEY` 并 redeploy
+5. 写入 Vercel `RUNPOD_SERVERLESS_ENDPOINT_ID` / `RUNPOD_API_KEY` /
+   `MUSIC_ENGINE_MODE=serverless` 并 redeploy
 
 端点信息保存在 `.env.workers.cloud`（已 gitignore）：`RUNPOD_SERVERLESS_ENDPOINT_ID` + `RUNPOD_NETWORK_VOLUME_ID`。
 
@@ -68,6 +69,11 @@ curl -sS "https://api.runpod.ai/v2/<endpoint-id>/health" \
 # 线上健康（应 configured:true, available:true）
 curl -sS https://murmur.ptoq.io/api/music/health
 ```
+
+`/api/music/health` 会回传实际 transport：`mode:"serverless"` 表示走本页方案；
+`mode:"http"` / `requestedMode:"http"` 表示 production 仍显式切在 warm pod failover 上。
+要切回 serverless，重跑本部署脚本，或设置 Vercel `MUSIC_ENGINE_MODE=serverless`
+后 redeploy。
 
 ## 调参
 
@@ -103,6 +109,7 @@ Serverless 只在 worker 运行时计费（生成 + 冷启动），闲时为 0�
 | warm-up 超时 | 正常（首次下载 ~4 GB）；端点已创建，首个真实请求会继续下载。看 RunPod 控制台日志 |
 | 首次哼唱显示音乐引擎热机 / 不可用 | 冷启动超过路由预算；再哼一次（worker 已热）即走 Magenta |
 | `/api/music/health` available:false | 核对 Vercel 的 `RUNPOD_API_KEY` 与 `RUNPOD_SERVERLESS_ENDPOINT_ID` |
+| `/api/music/health` 显示 `mode:"http"` | 线上被 `MUSIC_ENGINE_MODE=http` pin 到 warm pod；切回 serverless 后再判断本端点 |
 
 ## 架构
 

@@ -7,17 +7,26 @@ Vercel 上跑的只是 Next.js 壳；真正干活的是两个 Python worker：
 | `workers/audio-engine` | 8001 | 哼唱 → 旋律转谱 | RMVPE（主路，CPU）+ SwiftF0/pYIN fallback |
 | `workers/music-engine` | 8002 | prompt + 哼唱 → 音乐 | Magenta RT2（需要算力） |
 
-音乐生成有两条线：**生产走 RunPod Serverless**（设 `RUNPOD_SERVERLESS_ENDPOINT_ID`
-+ `RUNPOD_API_KEY` 即启用，优先级最高），**本地/旧方案走 HTTP worker**
-（`MUSIC_WORKER_URL`，本地默认 `127.0.0.1:8002`）。两者都没配才回退 Tone.js。
+音乐生成有两条线：**默认生产走 RunPod Serverless**（`MUSIC_ENGINE_MODE=auto`
+或 unset 时，`RUNPOD_SERVERLESS_ENDPOINT_ID` + `RUNPOD_API_KEY` 优先），**warm pod
+failover 走 HTTP worker**（显式 `MUSIC_ENGINE_MODE=http` + `MUSIC_WORKER_URL` +
+`MUSIC_WORKER_TOKEN`）。显式 `MUSIC_ENGINE_MODE=serverless` 只认 Serverless
+配置；显式模式缺对应 env 会在 health 里显示 unconfigured。`auto` 模式下两者都没配
+才回退 Tone.js。
 
 ```
 # 生产音乐（RunPod Serverless，App 用 RUNPOD_API_KEY 作 Bearer 调用端点）
+MUSIC_ENGINE_MODE=auto
 RUNPOD_SERVERLESS_ENDPOINT_ID=   RUNPOD_API_KEY=
 # 转写 + 本地/旧音乐（HTTP worker，公网必须带 token，Bearer 鉴权，无 token 一律 401）
 AUDIO_WORKER_URL=   AUDIO_WORKER_TOKEN=
 MUSIC_WORKER_URL=   MUSIC_WORKER_TOKEN=
 ```
+
+> Failover contract：生产环境不再无条件让 serverless 覆盖 `MUSIC_ENGINE_MODE=http`。
+> 如果 Vercel 同时保留 serverless env 和 pod env，`MUSIC_ENGINE_MODE=http` 会走 pod；
+> 缺 `MUSIC_WORKER_URL` 时 `/api/music/health` 会回 `mode:"http"`、`reason:"unconfigured"`，
+> 而不是悄悄报告 serverless healthy。
 
 audio-engine 的生产镜像会在 Docker build 阶段准备
 `/app/models/rmvpe.onnx`，Fly 环境固定
@@ -83,6 +92,31 @@ RUNPOD_API_KEY=rpa_… VERCEL=1 bun run deploy:music-serverless
 - ~4 GB 模型放网络卷（只下载一次），FlashBoot 加速冷启动
 - App 通过 `https://api.runpod.ai/v2/<endpoint>/run` 调用，`RUNPOD_API_KEY` 鉴权
 - 冷启动有代价：闲置后首个请求 ~20–60 s，太慢自动回退 Tone.js
+- Serverless 部署脚本会把 `MUSIC_ENGINE_MODE=serverless` 同步到 Vercel，作为从
+  warm pod failback 的明确开关。
+
+## 方案 B2（P1 failover）：RunPod warm pod
+
+当 serverless 冷启动影响 launch 演示时，用同一镜像拉起常驻 pod：
+
+```bash
+RUNPOD_API_KEY=rpa_… VERCEL=1 bun run pod:start
+```
+
+脚本会等待 pod `/health`、写入 `MUSIC_WORKER_URL` / `MUSIC_WORKER_TOKEN`，并把
+Vercel 的 `MUSIC_ENGINE_MODE` 设为 `http` 后 redeploy。Serverless 的
+`RUNPOD_SERVERLESS_ENDPOINT_ID` / `RUNPOD_API_KEY` 可以留在 Vercel 里，供 failback 使用；
+显式 `http` 会优先走 pod。
+
+验证：
+
+```bash
+curl -sS https://murmur.ptoq.io/api/music/health
+```
+
+期望看到 `configured:true`、`available:true`、`mode:"http"`、`requestedMode:"http"`。
+如果看到 `mode:"http"` + `reason:"unconfigured"`，说明 production mode 已切到 pod，
+但 `MUSIC_WORKER_URL` / token 没同步完整。
 
 <details>
 <summary>手动构建镜像（CI 已自动构建；包为 public）</summary>
@@ -110,6 +144,8 @@ named tunnel 固定域名。无月租、性能比同价位 GPU 云强，适合�
 
 - 线上 502 + `worker_http_error`：先看 worker 端 `/health`
   （`curl <URL>/health`），再确认 Vercel env 里的 URL 是否还是当前隧道。
+- `/api/music/health` 显示 `mode:"http"`、`reason:"unconfigured"`：Vercel 已显式切到
+  warm pod，但缺 `MUSIC_WORKER_URL`；重跑 `VERCEL=1 bun run pod:start`。
 - 首次转谱/生成慢：模型懒加载（转谱 ~40s、生成 ~1min 冷启动），
   `serve-workers-public.sh` 已内置预热。
 - 生成路由超时：`/api/music/generate` 已声明 `maxDuration = 120`，

@@ -10,10 +10,10 @@
  *    main.py), or the local `bun run dev:music` worker on :8002. A warm pod
  *    answers instantly; stop it when unused to stop paying for the GPU.
  *
- * Production treats serverless as canonical whenever it is configured. This
- * prevents stale HTTP pod env from moving logged-in users onto a different
- * worker. `MUSIC_ENGINE_MODE` still chooses a transport for local/dev and for
- * emergency deployments where serverless is absent.
+ * `MUSIC_ENGINE_MODE=auto` treats serverless as canonical whenever it is
+ * configured. An explicit `MUSIC_ENGINE_MODE=http` is the production failover
+ * switch for a warm pod, even when serverless credentials remain present for
+ * failback.
  */
 
 export type MusicEngineMode = "serverless" | "http";
@@ -40,7 +40,7 @@ export function getMusicWorkerUrl(): string | null {
 }
 
 /** Explicit transport preference from `MUSIC_ENGINE_MODE` (default "auto"). */
-function getMusicModePreference(): MusicEngineMode | "auto" {
+export function getRequestedMusicEngineMode(): MusicEngineMode | "auto" {
   const raw = process.env.MUSIC_ENGINE_MODE?.trim().toLowerCase();
   if (raw === "serverless") return "serverless";
   if (raw === "http" || raw === "pod" || raw === "worker") return "http";
@@ -53,22 +53,26 @@ function getMusicModePreference(): MusicEngineMode | "auto" {
  *  - "http"       — long-lived HTTP worker / GPU pod (or local dev on :8002).
  *  - null         — neither configured.
  *
- * In production, serverless always wins when configured. Outside production,
- * `MUSIC_ENGINE_MODE` can force a transport; when the forced one isn't
- * configured we fall back to the other rather than going dark.
+ * In production, an explicit `MUSIC_ENGINE_MODE` is authoritative so failover
+ * cannot silently land on the wrong transport. Outside production, a missing
+ * forced transport still falls back to the other worker to keep demos alive.
  */
 export function getMusicEngineMode(): MusicEngineMode | null {
   const serverless = getMusicServerlessConfig() ? "serverless" : null;
   const http = getMusicWorkerUrl() ? "http" : null;
-  const preference = getMusicModePreference();
+  const preference = getRequestedMusicEngineMode();
 
-  if (process.env.NODE_ENV === "production" && serverless) return "serverless";
+  if (process.env.NODE_ENV === "production") {
+    if (preference === "http") return http;
+    if (preference === "serverless") return serverless;
+    return serverless ?? http; // auto: serverless wins
+  }
   if (preference === "http") return http ?? serverless;
   if (preference === "serverless") return serverless ?? http;
   return serverless ?? http; // auto: serverless wins
 }
 
-/** True when this deployment is wired for Magenta (serverless, dev, or legacy URL). */
+/** True when the currently selected Magenta transport is configured. */
 export function isMusicWorkerConfigured(): boolean {
   return getMusicEngineMode() !== null;
 }
