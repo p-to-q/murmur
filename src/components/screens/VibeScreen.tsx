@@ -34,7 +34,7 @@ import {
   regenerateVersionAudio,
   shouldUseMagentaEngine,
 } from "@/modules/magenta/generate-magenta-versions";
-import { buildDemoFlowState, buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
+import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import {
   getVersionReadinessBlockReason,
 } from "@/modules/music/version-contract";
@@ -148,7 +148,6 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     setAuditioning,
     resetFlow,
     humStyleBlob,
-    setHumStyleBlob,
   } = useMurmurStore();
 
   const [phase, setPhase] = useState<Phase>("closing");
@@ -348,56 +347,6 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     vibeVersions,
   ]);
 
-  const handleRetryFailed = useCallback(() => {
-    const failedVersions = vibeVersions.filter(
-      (version) =>
-        version.generation?.status === "error" && canRetryGeneration(version),
-    );
-    if (failedVersions.length === 0) return;
-    versionPreview.stop();
-    setAuditioning(null);
-    for (const version of failedVersions) {
-      regenerateVersionAudio(version);
-    }
-    toast(t("vibe.gen.retrying_all") || "Brewing the whole set again…");
-  }, [setAuditioning, t, vibeVersions]);
-
-  const failedRetryableVersions = vibeVersions.filter(
-    (version) => version.generation?.status === "error" && canRetryGeneration(version),
-  );
-  const hasInsufficientNotesFailure = vibeVersions.some(
-    (version) => version.generation?.errorCode === "insufficient_notes",
-  );
-  const allFailuresAreRateLimited =
-    vibeVersions.length > 0 &&
-    vibeVersions.every((version) => version.generation?.errorCode === "rate_limited");
-
-  const handleUseDemo = useCallback(() => {
-    versionPreview.stop();
-    setAuditioning(null);
-    setPickingId(null);
-    setCurrentVersion(null);
-    setHumStyleBlob(null);
-    const demo = buildDemoFlowState();
-    setVibeVersions(demo.versions);
-    setCurrentDraftId(demo.draftId);
-    setCurrentFlowId(demo.flowId);
-  }, [
-    setAuditioning,
-    setCurrentDraftId,
-    setCurrentFlowId,
-    setCurrentVersion,
-    setHumStyleBlob,
-    setVibeVersions,
-  ]);
-
-  const handleRecordAgain = useCallback(() => {
-    versionPreview.stop();
-    setAuditioning(null);
-    resetFlow();
-    router.push("/");
-  }, [resetFlow, router, setAuditioning]);
-
   const handleBack = useCallback(() => {
     versionPreview.stop();
     setAuditioning(null);
@@ -410,11 +359,6 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     router.push("/");
   }, [fromSavedSong, resetFlow, router, setAuditioning, sourceVersion]);
 
-  const generatedVersions = vibeVersions.filter((version) => version.generation);
-  const allGenerationFailed =
-    vibeVersions.length > 0 &&
-    generatedVersions.length === vibeVersions.length &&
-    generatedVersions.every((version) => version.generation?.status === "error");
   const visualBatchSeed = hashString(
     vibeVersions.map((candidate) => candidate.id).join(":"),
   );
@@ -515,62 +459,6 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                   {t("cards.sub.short") || "Listen, then pick the one that feels right."}
                 </motion.h2>
               </div>
-
-              {allGenerationFailed && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="mb-4 flex flex-col gap-3 rounded-[22px] border border-[#E3D8CB] bg-white/60 p-4 text-[#1A1A1A] shadow-[0_8px_28px_rgba(95,70,48,0.08)] backdrop-blur-sm md:flex-row md:items-center md:justify-between"
-                >
-                  <div>
-                    <p className="text-[13px] font-medium">
-                      {t("vibe.all_failed.title") || "This batch did not finish."}
-                    </p>
-                    <p className="mt-1 max-w-[46rem] text-[12px] leading-relaxed text-[#756F67]">
-                      {hasInsufficientNotesFailure
-                        ? t("vibe.all_failed.insufficient_detail") || "Top up notes to brew this batch, use the demo melody, or record a fresh take."
-                        : allFailuresAreRateLimited
-                          ? t("vibe.all_failed.rate_limited_detail") || "Too many generations in a row. Wait a bit, use the demo melody, or record a fresh take."
-                          : t("vibe.all_failed.detail") || "Retry these versions, use the demo melody, or record a fresh take."}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {failedRetryableVersions.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleRetryFailed}
-                        className="inline-flex h-9 items-center rounded-full bg-[#1A1A1A] px-4 text-[12px] font-medium text-white transition-colors hover:bg-[#35312D]"
-                      >
-                        {t("vibe.all_failed.retry") || "Retry set"}
-                      </button>
-                    )}
-                    {hasInsufficientNotesFailure && (
-                      <button
-                        type="button"
-                        onClick={() => router.push("/topup")}
-                        className="inline-flex h-9 items-center rounded-full bg-[#1A1A1A] px-4 text-[12px] font-medium text-white transition-colors hover:bg-[#35312D]"
-                      >
-                        {t("vibe.gen.topup") || "Top up"}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleUseDemo}
-                      className="inline-flex h-9 items-center rounded-full border border-[#D6C9BA] bg-white/70 px-4 text-[12px] font-medium text-[#1A1A1A] transition-colors hover:bg-white"
-                    >
-                      {t("vibe.all_failed.demo") || "Use demo"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleRecordAgain}
-                      className="inline-flex h-9 items-center rounded-full border border-[#D6C9BA] bg-white/40 px-4 text-[12px] font-medium text-[#1A1A1A] transition-colors hover:bg-white/80"
-                    >
-                      {t("vibe.all_failed.record") || "Record again"}
-                    </button>
-                  </div>
-                </motion.div>
-              )}
 
               {/* ── Card grid — dominates the viewport ───────── */}
               <div className="grid grid-cols-1 md:grid-cols-[1.18fr_1fr] gap-4 md:gap-5 flex-1 min-h-0 md:min-h-[68vh] lg:min-h-[72vh]">
