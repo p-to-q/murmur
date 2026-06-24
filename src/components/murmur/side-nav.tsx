@@ -36,7 +36,7 @@ import { toast } from "sonner";
 
 import { getShareInviteUrl } from "@/lib/api/share-links";
 
-import { useMurmurStore } from "@/lib/store/murmur-store";
+import { getRecoverableCreationRoute, useMurmurStore } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
 import { versionPreview } from "@/lib/music/version-preview";
 import { useCurrentLang, useI18nStore, useTranslator } from "@/lib/i18n";
@@ -89,7 +89,10 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const lang = useCurrentLang();
   const setLang = useI18nStore((s) => s.setLang);
   const { balance } = useUserBalance();
-  const { resetFlow, isPlaying, auditioningVersionId } = useMurmurStore();
+  const {
+    isPlaying,
+    auditioningVersionId,
+  } = useMurmurStore();
   const audioActive = isPlaying || auditioningVersionId !== null;
   const { isRegistered } = useCurrentAccount();
   const isLoggedIn = isRegistered;
@@ -105,6 +108,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const totalNotes = balance?.notes;
   const accountNotes = balance?.accountNotes;
   const dailyFreeNotes = balance?.dailyFreeNotes;
+  const resolveHomeTarget = () => getRecoverableCreationRoute() ?? "/";
 
   useEffect(() => {
     const html = document.documentElement;
@@ -118,11 +122,11 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
 
   const goHome = (e: React.MouseEvent) => {
     e.preventDefault();
-    setOptimisticPath("/");
     getPlayer().stop().catch(() => {});
     versionPreview.stop();
-    resetFlow();
-    router.push("/");
+    const target = resolveHomeTarget();
+    setOptimisticPath(target);
+    router.push(target);
   };
 
   const items = NAV_ITEMS.filter((it) => it.desktopNav !== false);
@@ -301,7 +305,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
           return (
             <Fragment key={item.href}>
               {item.href === "/" ? (
-                <button onClick={goHome} onPointerDown={() => setOptimisticPath("/")} className="block w-full text-left group">
+                <button onClick={goHome} onPointerDown={() => setOptimisticPath(resolveHomeTarget())} className="block w-full text-left group">
                   {row}
                 </button>
               ) : (

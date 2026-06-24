@@ -21,7 +21,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { useMurmurStore } from "@/lib/store/murmur-store";
+import { getRecoverableCreationRoute } from "@/lib/store/murmur-store";
 import { getPlayer } from "@/lib/music/tone-player";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { NAV_ITEMS } from "./nav-items";
@@ -31,13 +31,12 @@ export function BottomNav() {
   const router = useRouter();
   const t = useTranslator();
   const lang = useCurrentLang();
-  const { resetFlow } = useMurmurStore();
 
   const goHome = (e: React.MouseEvent) => {
     e.preventDefault();
     getPlayer().stop().catch(() => {});
-    resetFlow();
-    router.push("/");
+    const recoverableRoute = getRecoverableCreationRoute();
+    router.push(recoverableRoute ?? "/");
   };
 
   const flowPage =

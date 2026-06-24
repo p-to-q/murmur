@@ -142,6 +142,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     setCurrentVersion,
     setCurrentDraftId,
     setCurrentFlowId,
+    setActiveCreationRoute,
     currentDraftId,
     currentFlowId,
     auditioningVersionId,
@@ -149,6 +150,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     resetFlow,
     humStyleBlob,
     setHumStyleBlob,
+    restoredDraftAt,
   } = useMurmurStore();
 
   const [phase, setPhase] = useState<Phase>("closing");
@@ -157,6 +159,13 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const sourceVersion = vibeVersions[0] ?? null;
   const fromSavedSong = sourceVersion?.sourceType === "library";
   const demoEnabled = initialDemo;
+  const restoredRegenerationRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (vibeVersions.length > 0) {
+      setActiveCreationRoute("/vibe");
+    }
+  }, [setActiveCreationRoute, vibeVersions.length]);
 
   /* ── Arrival sequence ─────────────────────────────────────────── */
   useEffect(() => {
@@ -195,6 +204,23 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       router.replace("/");
     }
   }, [demoEnabled, phase, vibeVersions.length, router]);
+
+  useEffect(() => {
+    if (!restoredDraftAt || restoredRegenerationRef.current === restoredDraftAt) {
+      return;
+    }
+    const needsRegeneration = vibeVersions.filter(
+      (version) =>
+        version.generation &&
+        version.generation.status === "pending" &&
+        !version.generation.audioUrl,
+    );
+    if (needsRegeneration.length === 0) return;
+    restoredRegenerationRef.current = restoredDraftAt;
+    for (const version of needsRegeneration) {
+      regenerateVersionAudio(version);
+    }
+  }, [restoredDraftAt, vibeVersions]);
 
   /* ── Stop preview on unmount ──────────────────────────────────── */
   useEffect(() => {

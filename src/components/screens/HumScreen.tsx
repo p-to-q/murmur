@@ -12,7 +12,10 @@ import { EmailLoginForm } from "@/components/auth/email-login-form";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import { HumOnboardingOverlay } from "@/components/screens/hum-onboarding";
-import { useMurmurStore } from "@/lib/store/murmur-store";
+import {
+  getRecoverableCreationRoute,
+  useMurmurStore,
+} from "@/lib/store/murmur-store";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import {
   createMagentaVersions,
@@ -297,9 +300,16 @@ export function HumScreen() {
   );
 
   useEffect(() => {
-    unmountingRef.current = false;
+    const recoverableRoute = getRecoverableCreationRoute();
+    if (recoverableRoute) {
+      router.replace(recoverableRoute);
+      return;
+    }
     resetFlow();
+  }, [resetFlow, router]);
 
+  useEffect(() => {
+    unmountingRef.current = false;
     return () => {
       unmountingRef.current = true;
       if (mediaRecorderRef.current) {
@@ -321,7 +331,6 @@ export function HumScreen() {
         audioCtxRef.current.close().catch(() => {});
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
