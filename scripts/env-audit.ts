@@ -147,6 +147,11 @@ function main() {
     missing.push("MURMUR_STORAGE_DRIVER must be s3-compatible on Vercel production");
   }
 
+  const rateLimitDriver = process.env.MURMUR_RATE_LIMIT_DRIVER?.trim();
+  if (rateLimitDriver === "redis") {
+    missing.push("MURMUR_RATE_LIMIT_DRIVER must not be redis until that adapter ships");
+  }
+
   if (storageDriver === "s3-compatible") {
     for (const key of REQUIRED_S3_ENV) {
       if (!process.env[key]?.trim()) missing.push(key);

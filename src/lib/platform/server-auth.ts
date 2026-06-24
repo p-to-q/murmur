@@ -140,26 +140,33 @@ export async function resolveRequestAuth(
   const mode = resolveAuthRuntimeMode();
   const token = getSessionToken(request);
   let invalidSessionAuth: Extract<ResolvedRequestAuth, { ok: false }> | null = null;
-  // Every visitor is auto-issued a Local Creator __murmur_session, and it is
-  // re-ensured right before the Google redirect, so this cookie is almost
-  // always present. It must NOT shadow a real Google sign-in: a local_creator
-  // session is held here and only used when no NextAuth session resolves. A
-  // registered session — including an lc_ row promoted to registered in place
-  // during sign-in — is a real identity and still short-circuits immediately.
+  // Local Creator can be created before save/generate/auth handoff, so a
+  // browser can hold both this Murmur cookie and a NextAuth cookie. It must
+  // NOT shadow a real OAuth sign-in: a local_creator session is held here and
+  // only used when no NextAuth session resolves. A registered session —
+  // including an lc_ row promoted to registered in place during sign-in —
+  // is a real identity and still short-circuits immediately.
   let localCreatorAuth: Extract<ResolvedRequestAuth, { ok: true }> | null = null;
   if (token) {
-    let session;
+    let session: ResolvedSession | null = null;
+    let sessionLookupFailed = false;
     try {
       session = await deps.getSessionByToken(token);
     } catch (error) {
-      return authError(
+      const unavailableAuth = authError(
         "session_unavailable",
         error instanceof Error ? error.message : "Session lookup failed",
         503,
       );
+      if (!options.allowGuestPreview) return unavailableAuth;
+      invalidSessionAuth = unavailableAuth;
+      sessionLookupFailed = true;
     }
 
-    if (!session) {
+    if (sessionLookupFailed) {
+      // Explicit guest-preview routes can continue when the local session DB
+      // is offline; registered Auth.js sessions still get a chance to resolve.
+    } else if (!session) {
       invalidSessionAuth = authError(
         "unauthorized",
         "Invalid or expired session",

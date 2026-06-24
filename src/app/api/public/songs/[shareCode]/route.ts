@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
-import { getSongByShareCode } from "@/lib/db/queries/songs";
-import { getLocalSongByShareCodeFallback } from "@/lib/db/queries/local-song-fallback";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { log } from "@/lib/observability/log";
 import { hasSongShareAudio, normalizeSongShareCode } from "@/lib/share/song-share";
@@ -23,6 +21,14 @@ export async function GET(
     });
   }
 
+  if (isDemoSongId(rawShareCode)) {
+    const demo = getDemoSong(rawShareCode);
+    if (!demo) {
+      return errorResponse("not_found", 404, requestId);
+    }
+    return publicSongResponse(toPublicSong(demo), requestId);
+  }
+
   const rateLimit = await checkApiRateLimit({
     route: ROUTE,
     bucket: "read:ip",
@@ -34,21 +40,15 @@ export async function GET(
     return rateLimitedResponse(rateLimit, requestId);
   }
 
-  if (isDemoSongId(rawShareCode)) {
-    const demo = getDemoSong(rawShareCode);
-    if (!demo) {
-      return errorResponse("not_found", 404, requestId);
-    }
-    return publicSongResponse(toPublicSong(demo), requestId);
-  }
-
   try {
+    const { getSongByShareCode } = await import("@/lib/db/queries/songs");
     const song = await getSongByShareCode(shareCode!);
     if (!song || !hasSongShareAudio(song)) {
       return errorResponse("not_found", 404, requestId);
     }
     return publicSongResponse(toPublicSong(song), requestId);
   } catch (err) {
+    const { getLocalSongByShareCodeFallback } = await import("@/lib/db/queries/local-song-fallback");
     const fallbackSong = getLocalSongByShareCodeFallback(shareCode!);
     if (fallbackSong && !hasSongShareAudio(fallbackSong)) {
       return errorResponse("not_found", 404, requestId);

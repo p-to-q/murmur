@@ -53,10 +53,12 @@ export async function rateLimitOrThrow(
 let cachedDefaultStore: RateLimitStore | null = null;
 
 /**
- * Process-default store, chosen by `MURMUR_RATE_LIMIT_DRIVER`:
- *   "memory" (dev/test default)
- *   "redis"  — TODO; throws until the adapter lands
- *   "postgres" — production default; shared across app instances
+ * Process-default store, chosen by `MURMUR_RATE_LIMIT_DRIVER`.
+ *
+ * Implemented stores today are memory and postgres. If an older deployment is
+ * pre-configured for the planned Redis store, keep public routes alive by
+ * falling back to memory; the production env audit blocks that configuration
+ * before the next deploy.
  *
  * Most call sites should accept a `RateLimitStore` parameter for
  * testability; only the route-handler edge needs the default.
@@ -86,13 +88,21 @@ function buildStore(driver: RateLimitDriver): RateLimitStore {
     case "memory":
       return createMemoryRateLimitStore();
     case "redis":
-      throw new RateLimitError(
-        "invalid_options",
-        "redis adapter is not yet implemented; see follow-up PR",
-      );
+      warnUnsupportedDriver(driver);
+      return createMemoryRateLimitStore();
     case "postgres":
       return createLazyPostgresRateLimitStore();
   }
+}
+
+const warnedUnsupportedDrivers = new Set<RateLimitDriver>();
+
+function warnUnsupportedDriver(driver: RateLimitDriver): void {
+  if (warnedUnsupportedDrivers.has(driver)) return;
+  warnedUnsupportedDrivers.add(driver);
+  console.warn(
+    `[murmur/rate-limit] ${driver} driver is not implemented yet; using memory rate limits for this process.`,
+  );
 }
 
 function createLazyPostgresRateLimitStore(): RateLimitStore {

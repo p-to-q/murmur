@@ -177,10 +177,10 @@ describe("getRateLimitStore (env-driven factory)", () => {
     expect(store.driver).toBe("postgres");
   });
 
-  it("throws on redis until that adapter lands", () => {
+  it("falls back to memory for redis until that adapter lands", () => {
     resetCachedRateLimitStore();
     process.env.MURMUR_RATE_LIMIT_DRIVER = "redis";
-    expect(() => getRateLimitStore()).toThrow(RateLimitError);
+    expect(getRateLimitStore().driver).toBe("memory");
   });
 
   it("throws on unknown driver", () => {

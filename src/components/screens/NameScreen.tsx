@@ -189,7 +189,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     try {
       const hasCreatorSession = await ensureLocalCreatorSession();
       if (!hasCreatorSession) {
-        throw new Error("Local Creator session unavailable");
+        console.warn("[Name] Local Creator session unavailable; trying local preview save fallback.");
       }
       const response = await fetch("/api/songs", {
         method: "POST",

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveRequestAuth } from "@/lib/auth";
 import {
+  getRequestHostname,
+  shouldAllowLocalPreviewFallback,
+} from "@/lib/auth/local-preview";
+import {
   deleteSongForUser,
   getSongByIdForUser,
   updateSongForUser,
@@ -50,7 +54,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ ...rest, mp3DataUrl: null, mp3Url });
   }
 
-  const auth = await resolveRequestAuth(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowLocalPreviewFallback(req),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
 
@@ -84,7 +90,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await resolveRequestAuth(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowLocalPreviewFallback(req),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const { id } = await params;
@@ -151,7 +159,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await resolveRequestAuth(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowLocalPreviewFallback(req),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const { id } = await params;
@@ -190,17 +200,6 @@ function shouldUseLocalSongFallback(req: NextRequest, userId: string): boolean {
   return shouldBypassBillingInDevelopment({
     host: getRequestHostname(req),
   });
-}
-
-function getRequestHostname(req: NextRequest): string | null {
-  const nextUrl = (req as { nextUrl?: { hostname?: string } }).nextUrl;
-  if (nextUrl?.hostname) return nextUrl.hostname;
-
-  try {
-    return new URL(req.url).hostname;
-  } catch {
-    return null;
-  }
 }
 
 function isDatabaseUnavailable(error: unknown): boolean {

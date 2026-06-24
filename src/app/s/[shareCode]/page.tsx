@@ -1,7 +1,6 @@
 import dynamic from "next/dynamic";
 import type { Metadata } from "next";
 import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
-import { getSongByShareCode } from "@/lib/db/queries/songs";
 import { hasSongShareAudio, normalizeSongShareCode } from "@/lib/share/song-share";
 import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
 
@@ -48,10 +47,20 @@ async function resolveShareVisibility(shareCode: string): Promise<string | null>
   const normalized = normalizeSongShareCode(shareCode);
   if (!normalized) return null;
 
+  // Metadata is best-effort; the client page still fetches through the public
+  // API. Keep this path from turning a DB outage into a broken share page.
   try {
+    const { getSongByShareCode } = await import("@/lib/db/queries/songs");
     const song = await getSongByShareCode(normalized);
     return song && hasSongShareAudio(song) ? song.visibility : null;
   } catch {
+    const { getLocalSongByShareCodeFallback } = await import(
+      "@/lib/db/queries/local-song-fallback"
+    );
+    const fallbackSong = getLocalSongByShareCodeFallback(normalized);
+    if (fallbackSong && hasSongShareAudio(fallbackSong)) {
+      return fallbackSong.visibility;
+    }
     return null;
   }
 }

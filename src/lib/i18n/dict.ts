@@ -530,6 +530,13 @@ export const DICT = {
   "song.share.link.hint":     { zh: "拿到链接的人都可以收听", en: "Anyone with the link can listen" },
   "song.share.link_copied":   { zh: "分享链接已复制", en: "Share link copied" },
   "song.share.link_failed":   { zh: "暂时没能生成分享链接", en: "Couldn't create a share link" },
+  "song.share.link_failed_auth": { zh: "请先登录，再生成分享链接", en: "Sign in before creating a share link" },
+  "song.share.link_failed_audio": { zh: "音频还在渲染或不可用，请稍候", en: "Audio is still rendering or unavailable" },
+  "song.share.link_failed_rate_limited": { zh: "分享得太频繁了，稍等一会儿再试", en: "Too many share attempts. Try again shortly" },
+  "song.share.link_failed_clipboard": { zh: "链接已生成，但暂时没能复制", en: "The link was created, but couldn't be copied" },
+  "song.share.link_failed_network": { zh: "暂时连不上 Murmur，没能生成链接", en: "Couldn't reach Murmur to create the link" },
+  "song.share.link_failed_not_found": { zh: "这首歌已经不能被分享", en: "This song is no longer available to share" },
+  "song.share.link_failed_schema": { zh: "当前线上环境还没准备好分享功能", en: "Sharing is not ready on this deployment yet" },
 
   // ── Public Song ────────────────────────────────────────────────────
   "public_song.eyebrow":      { zh: "一首 Murmur 小歌", en: "A MURMUR SONG" },

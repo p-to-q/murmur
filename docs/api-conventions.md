@@ -271,7 +271,9 @@ Song sharing has two separate route families:
 - `POST /api/songs/[id]/share` is owner-authenticated. It creates or reuses an
   opaque `shareCode`, sets `visibility` to `unlisted` by default, and returns
   `{ shareCode, visibility, url }`. It rejects `private` as an input because
-  unpublishing is an edit/privacy action, not link creation.
+  unpublishing is an edit/privacy action, not link creation. If the deployment
+  has not run the share-link migration, it returns `503 schema_unavailable`
+  instead of a generic 500 so operators know to run `bun run db:migrate`.
 - `GET /api/public/songs/[shareCode]` is anonymous. It returns the minimal
   public playback payload for `unlisted` and `public` songs only.
 
