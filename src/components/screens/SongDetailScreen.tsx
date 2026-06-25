@@ -49,6 +49,11 @@ import { buildLineageTrail } from "@/modules/music/lineage";
 import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
+import {
+  createSongShareLink,
+  SongShareRequestError,
+  type SongShareRequestErrorCode,
+} from "@/lib/api/song-share";
 import { hasSongShareAudio } from "@/lib/share/song-share";
 import type { SongCard } from "@/modules/shared/types";
 
@@ -297,43 +302,30 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     }
     setBusy("link");
     try {
-      const res = await fetch(`/api/songs/${encodeURIComponent(song.id)}/share`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          accept: "application/json",
-        },
-        body: JSON.stringify({ visibility: "unlisted" }),
+      const share = await createSongShareLink({
+        songId: song.id,
+        visibility: "unlisted",
       });
-      if (!res.ok) throw new Error(`share HTTP ${res.status}`);
 
-      const payload = (await res.json()) as {
-        url?: unknown;
-        shareCode?: unknown;
-        visibility?: unknown;
-      };
-      if (typeof payload.url !== "string" || !payload.url.trim()) {
-        throw new Error("missing share url");
-      }
-
-      const copied = await copyTextToClipboard(payload.url);
-      if (!copied) throw new Error("clipboard unavailable");
-
+      const copied = await copyTextToClipboard(share.url);
       setSong((current) =>
         current && current.id === song.id
           ? {
               ...current,
-              shareCode:
-                typeof payload.shareCode === "string"
-                  ? payload.shareCode
-                  : current.shareCode,
-              visibility:
-                payload.visibility === "public" || payload.visibility === "unlisted"
-                  ? payload.visibility
-                  : current.visibility,
+              shareCode: share.shareCode,
+              visibility: share.visibility,
             }
           : current,
       );
+      if (!copied) {
+        window.open(share.url, "_blank", "noopener,noreferrer");
+        throw new SongShareRequestError({
+          code: "clipboard_unavailable",
+          status: 0,
+          message: "Clipboard unavailable",
+          requestId: share.requestId,
+        });
+      }
       toast.success(t("song.share.link_copied") || "Share link copied");
       memory
         .reportAction({
@@ -345,7 +337,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         .catch(() => {});
     } catch (error) {
       console.error(error);
-      toast.error(t("song.share.link_failed") || "Couldn't create a share link.");
+      const code =
+        error instanceof SongShareRequestError
+          ? error.code
+          : "server_error";
+      toast.error(shareLinkErrorMessage(code, t));
     } finally {
       setBusy(null);
     }
@@ -572,7 +568,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               />
 
               <div className="absolute left-6 top-6 right-6">
-                <p className="text-[10px] uppercase tracking-[0.32em] text-white/72">
+                <p className="font-ui-label text-white/72">
                   {displayVibeLabel(song.vibe, song.tags, lang)}
                 </p>
                 <h1
@@ -607,15 +603,15 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1, duration: 0.55 }}
-              className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] uppercase tracking-[0.22em] text-[#8C8780]"
+              className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-[#8C8780]"
             >
-              <span className="tabular-nums">{song.bpm ?? 80} BPM</span>
+              <span className="font-ui-label tabular-nums">{song.bpm ?? 80} BPM</span>
               <span className="text-[#D2C9B6]">·</span>
-              <span>{song.keySignature ?? "C"}</span>
+              <span className="font-ui-label">{song.keySignature ?? "C"}</span>
               <span className="text-[#D2C9B6]">·</span>
-              <span className="tabular-nums">{durLabel}</span>
+              <span className="font-ui-label tabular-nums">{durLabel}</span>
               <span className="text-[#D2C9B6]">·</span>
-              <span>{dateLabel}</span>
+              <span className="font-ui-label">{dateLabel}</span>
             </motion.div>
 
             <motion.div
@@ -624,11 +620,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               transition={{ delay: 0.13, duration: 0.55 }}
               className="mt-4 rounded-[20px] border border-[#E5DDD0] bg-[#FFFEFB]/80 px-4 py-3"
             >
-              <p className="text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
+              <p className="font-ui-label text-[#B7AEA1]">
                 {t("song.melody_origin.eyebrow") || "MELODY SHAPE"}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3">
-                <span className="rounded-full bg-[#F3E7D9] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[#A56A3A]">
+                <span className="font-ui-label rounded-full bg-[#F3E7D9] px-3 py-1 text-[#A56A3A]">
                   {melodyOrigin.label}
                 </span>
                 <p className="font-serif-italic text-[14px] leading-[1.45] text-[#6F6A63]">
@@ -670,7 +666,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.24, duration: 0.5 }}
-              className="eyebrow mt-12 text-[#FF8A5C]"
+              className="eyebrow font-ui-label mt-12 text-[#FF8A5C]"
             >
               {t("song.export.eyebrow") || "EXPORT"}
             </motion.p>
@@ -803,7 +799,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               onClick={(e) => e.stopPropagation()}
               className="mm-card w-full max-w-sm px-6 py-7 text-center"
             >
-              <p className="eyebrow text-[#FF8A5C] mb-3">{t("song.delete.eyebrow") || "REMOVE"}</p>
+              <p className="eyebrow font-ui-label text-[#FF8A5C] mb-3">{t("song.delete.eyebrow") || "REMOVE"}</p>
               <h3 className="font-serif text-[24px] text-[#1A1A1A] leading-tight">
                 {t("song.delete.title") || "Delete this little song?"}
               </h3>
@@ -891,7 +887,7 @@ function ExportRow({
         </p>
       </div>
       <div className="flex items-center gap-3 shrink-0">
-        <span className="text-[11px] uppercase tracking-[0.22em] text-[#B6B0A4]">
+        <span className="font-ui-label text-[#B6B0A4]">
           {cost}
         </span>
         {busy ? (
@@ -945,7 +941,7 @@ function LineagePanel({
         transition={{ delay: 0.21, duration: 0.55 }}
         className="mt-6 rounded-[20px] border border-[#E5DDD0] bg-white/78 px-4 py-4"
       >
-        <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
+        <summary className="cursor-pointer list-none font-ui-label text-[#B7AEA1]">
           {t("song.lineage.reveal") || "Open song path"}
         </summary>
         <p className="mt-3 font-serif-italic text-[14px] leading-[1.5] text-[#6F6A63]">
@@ -962,7 +958,7 @@ function LineagePanel({
       transition={{ delay: 0.21, duration: 0.55 }}
       className="mt-6 rounded-[20px] border border-[#E5DDD0] bg-white/78 px-4 py-4"
     >
-      <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
+      <summary className="cursor-pointer list-none font-ui-label text-[#B7AEA1]">
         {t("song.lineage.reveal") || "Open song path"}
       </summary>
       <p className="mt-3 font-serif-italic text-[14px] leading-[1.5] text-[#6F6A63]">
@@ -1020,7 +1016,7 @@ function SourceTracePanel({
       transition={{ delay: 0.2, duration: 0.55 }}
       className="mt-6 rounded-[20px] border border-[#E5DDD0] bg-white/78 px-4 py-4"
     >
-      <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
+      <summary className="cursor-pointer list-none font-ui-label text-[#B7AEA1]">
         {t("song.trace.reveal") || "Open source trace"}
       </summary>
       <p className="mt-3 font-serif-italic text-[14px] leading-[1.5] text-[#6F6A63]">
@@ -1065,7 +1061,7 @@ function TraceCard({
 }) {
   return (
     <div className="rounded-[18px] border border-[#ECE2D5] bg-[#FFFCF8] px-4 py-4">
-      <p className="text-[10px] uppercase tracking-[0.18em] text-[#B7AEA1]">
+      <p className="font-ui-label text-[#B7AEA1]">
         {eyebrow}
       </p>
       <p className="mt-2 font-serif text-[18px] leading-tight text-[#1A1A1A]">
@@ -1102,7 +1098,7 @@ function LineageTrailCard({
           : "border-[#E8DECF] bg-[#FFFEFB] enabled:hover:border-[#FF8A5C]"
       } disabled:opacity-100`}
     >
-      <p className="text-[10px] uppercase tracking-[0.18em] text-[#B3AA9C]">{label}</p>
+      <p className="font-ui-label text-[#B3AA9C]">{label}</p>
       <p
         className={`mt-1 ${titleSerifClass(song.title, {
           latin: "font-serif-latin",
@@ -1141,4 +1137,28 @@ function MenuItem({
       {children}
     </button>
   );
+}
+
+function shareLinkErrorMessage(
+  code: SongShareRequestErrorCode,
+  t: (key: string) => string,
+): string {
+  switch (code) {
+    case "unauthorized":
+      return t("song.share.link_failed_auth") || "Sign in before creating a share link.";
+    case "audio_required":
+      return t("song.share.link_failed_audio") || "Audio is still rendering or unavailable.";
+    case "rate_limited":
+      return t("song.share.link_failed_rate_limited") || "Too many share attempts. Try again shortly.";
+    case "clipboard_unavailable":
+      return t("song.share.link_failed_clipboard") || "The link was created, but couldn't be copied.";
+    case "network_error":
+      return t("song.share.link_failed_network") || "Couldn't reach Murmur to create the link.";
+    case "not_found":
+      return t("song.share.link_failed_not_found") || "This song is no longer available to share.";
+    case "schema_unavailable":
+      return t("song.share.link_failed_schema") || "Sharing is not ready on this deployment yet.";
+    default:
+      return t("song.share.link_failed") || "Couldn't create a share link.";
+  }
 }

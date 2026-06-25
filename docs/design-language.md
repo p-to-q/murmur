@@ -76,13 +76,36 @@ breaks one of them, it is wrong.
 
 ### 2.2 Typography
 
-Two type families, three roles.
+Three type families, four roles.
 
 | Role | Family | When |
 |---|---|---|
 | **Hero serif** | `Charter` / `Iowan` / `Songti SC` | page anchors — the one big editorial moment per screen |
 | **Hero serif italic** | same, italic | song titles, named artifacts, mymind-flavored captions |
-| **Sans body** | `SF Pro Text` / `PingFang SC` | all other text |
+| **Sans body** | `Geist Sans` / `PingFang SC` / system sans | all regular body text |
+| **UI micro-label** | `Murmur Datatype`, 600 | very short labels, chips, compact state text |
+
+`Murmur Datatype` is self-hosted from `/public/fonts/datatype/` and declared
+in `src/app/fonts/datatype.css`. The local `.woff2` files are first choice,
+Google Fonts `gstatic` files remain in the same `@font-face` rules as a web
+fallback, and `Geist Sans` / system CJK fonts stay last in the CSS token stack.
+Keep future sans changes at the token/font-face layer unless a component has a
+real local exception. Use it sparingly: it should read like a label face, not a
+body face.
+
+Font loading is a product pipeline, not a component detail:
+
+- `src/lib/fonts/font-assets.ts` is the asset registry for preload targets,
+  critical samples, and readiness timeout.
+- `src/app/layout.tsx` owns critical `<link rel="preload" as="font">` tags.
+- `FontHydrator` owns `document.fonts.load(...)` readiness and sets
+  `html[data-fonts]`.
+- `.font-critical` text keeps its layout space but stays invisible while
+  brand-critical fonts are still loading, preventing onboarding and Home hero
+  copy from flashing system fallback glyphs mid-animation.
+- Native app shells should mirror the same roles: bundle brand fonts locally,
+  preload them during launch/onboarding, and gate brand copy until the platform
+  reports those faces ready.
 
 Scale (Pixel, mobile / desktop):
 
@@ -94,6 +117,7 @@ Scale (Pixel, mobile / desktop):
 | Body | 14–15 | 0 |
 | Meta | 12–13 | 0 |
 | Eyebrow (uppercase) | 11 | 0.32em |
+| Micro-label | 11–12 | 0–0.08em |
 | Tabular numeric | 12–13 | 0 (font-feature `tnum`) |
 
 **Rules:**
@@ -106,8 +130,8 @@ Scale (Pixel, mobile / desktop):
   sizes.
 - Numbers in counters / balances / BPM use tabular-numeric so they don't
   jitter as they update.
-- Chinese text uses the same scale; the serif fallback is `Songti SC` /
-  `Noto Serif CJK SC`, which already pairs.
+- Chinese text uses the same scale; CJK sans text falls through to system
+  Chinese faces, and editorial Chinese title text uses the LXGW WenKai stack.
 
 ### 2.3 Surface + edge
 

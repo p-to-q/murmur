@@ -14,7 +14,6 @@ import { useI18nStore, useTranslator } from "@/lib/i18n";
 import type { Lang } from "@/lib/i18n/dict";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import type { SongCard as SongCardType } from "@/modules/shared/types";
-import { FloatingMusicNotes } from "@/components/murmur/floating-music-notes";
 import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
@@ -258,19 +257,6 @@ export function GalleryScreen() {
         )}
       </div>
 
-      {/* Music note animation — empty-state filler only; with real songs it
-          pushed the grid below the fold for nothing */}
-      {!isLoading && isShowingDemo && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="relative z-10 flex flex-col items-center px-5 md:px-12 py-8 md:py-12 max-w-2xl mx-auto text-center"
-        >
-          <FloatingMusicNotes size={160} className="opacity-20" />
-        </motion.div>
-      )}
-
       {/* Sort toggle — only visible when there are songs */}
       {!isLoading && displaySongs.length > 1 && (
         <div className="relative z-10 px-5 md:px-12 max-w-7xl mx-auto flex justify-end pt-2 pb-6 md:pt-0 md:pb-8">
@@ -461,14 +447,14 @@ function SortToggle({
     <div className="flex shrink-0 items-center gap-3 text-[12px] tracking-[0.04em]">
       <button
         onClick={() => onChange("newest")}
-        className={`transition-colors ${sort === "newest" ? "text-[#1A1A1A] font-medium" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
+        className={`font-ui-label transition-colors ${sort === "newest" ? "text-[#1A1A1A]" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
       >
         ↑ {t("gallery.sort.newest") || "newest"}
       </button>
       <span className="text-[#D2C9B6]">·</span>
       <button
         onClick={() => onChange("alpha")}
-        className={`transition-colors ${sort === "alpha" ? "text-[#1A1A1A] font-medium" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
+        className={`font-ui-label transition-colors ${sort === "alpha" ? "text-[#1A1A1A]" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
       >
         a–z
       </button>
