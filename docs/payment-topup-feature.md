@@ -98,7 +98,7 @@ export const notesLedger = pgTable("notes_ledger", {
   userId:    text("user_id").notNull(),
   delta:     integer("delta").notNull(),      // negative for spend, positive for grant/purchase
   reason:    varchar("reason", { length: 32 }).notNull(),
-  // reason values: "spend:hum" | "spend:music_generate" | "spend:llm_edit" | "spend:save" | "spend:export_webm"
+  // reason values: "spend:hum" | "spend:music_generate" | "spend:voice_generate" | "spend:llm_edit" | "spend:save" | "spend:export_webm"
   //                "grant:daily_free" | "grant:signup_bonus" | "purchase:topup"
   externalRef: text("external_ref"),          // Waffo orderId, WeChat transaction_id, RevenueCat tx id…
   createdAt: timestamp("created_at").notNull().defaultNow(),

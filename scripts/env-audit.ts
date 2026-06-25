@@ -138,6 +138,24 @@ function main() {
     missing.push("MURMUR_CAPTURE_HUMS must be unset/false in production");
   }
 
+  if (isTruthyEnv("MURMUR_VOICE_INPUT_ENABLED")) {
+    if (!process.env.SPEECH_WORKER_URL?.trim()) {
+      missing.push("SPEECH_WORKER_URL (required when MURMUR_VOICE_INPUT_ENABLED=1)");
+    }
+    if (!process.env.SPEECH_WORKER_TOKEN?.trim()) {
+      missing.push("SPEECH_WORKER_TOKEN (required when MURMUR_VOICE_INPUT_ENABLED=1)");
+    }
+    if (!process.env.SPEECH_WORKER_MODEL_ARTIFACT?.trim()) {
+      missing.push("SPEECH_WORKER_MODEL_ARTIFACT (required when MURMUR_VOICE_INPUT_ENABLED=1)");
+    }
+    if (!process.env.SPEECH_WORKER_MODEL_SHA?.trim()) {
+      missing.push("SPEECH_WORKER_MODEL_SHA (required when MURMUR_VOICE_INPUT_ENABLED=1)");
+    }
+    if (!process.env.MINIMAX_API_KEY?.trim()) {
+      missing.push("MINIMAX_API_KEY (required when MURMUR_VOICE_INPUT_ENABLED=1)");
+    }
+  }
+
   if (isPlaceholderSecret("CRON_SECRET")) {
     missing.push("CRON_SECRET must be a non-placeholder secret");
   }
@@ -145,6 +163,11 @@ function main() {
   const storageDriver = process.env.MURMUR_STORAGE_DRIVER?.trim();
   if (onVercel && storageDriver !== "s3-compatible") {
     missing.push("MURMUR_STORAGE_DRIVER must be s3-compatible on Vercel production");
+  }
+
+  const rateLimitDriver = process.env.MURMUR_RATE_LIMIT_DRIVER?.trim();
+  if (rateLimitDriver && rateLimitDriver !== "memory") {
+    missing.push("MURMUR_RATE_LIMIT_DRIVER must be unset or memory until redis/postgres adapters ship");
   }
 
   if (storageDriver === "s3-compatible") {

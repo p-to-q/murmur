@@ -71,6 +71,10 @@ Implementation note:
 
 - keep recording cleanup, audio stream teardown, and timer clearing inside the
   screen boundary
+- Home/Create navigation should continue the current unsaved creation draft
+  when one exists, returning to Vibe, Studio, or Name instead of clearing the
+  flow. Only explicit record-again / saved completion paths should discard the
+  draft.
 - keep transcription / fixture branching inside the client transcription
   facade, not in the view tree
 - keep onboarding persistence and completion events in the shared onboarding
@@ -127,7 +131,9 @@ Implementation boundaries:
 - `/api/songs/[id]/share` owns share-code allocation and visibility changes to
   `unlisted` or `public`.
 - `/api/public/songs/[shareCode]` returns only the playback payload needed by
-  the public page.
+  the public page. Demo shares must remain independent of the song query layer
+  so a database or migration issue cannot take the basic public-share route
+  offline.
 - future search/community surfaces should query public songs through DB query
   helpers instead of changing the unlisted playback contract.
 

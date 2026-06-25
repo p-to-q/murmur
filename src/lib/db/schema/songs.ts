@@ -83,6 +83,7 @@ export interface VisualConfig {
 export type MelodySelectionKind = "intent" | "corrected" | "musical";
 export type EditDepth = "fresh" | "shaped" | "reworked";
 export type SongVisibility = "private" | "unlisted" | "public";
+export type SongInputKind = "hum" | "voice" | "demo" | "library";
 
 // ─── Drizzle table ─────────────────────────────────────────────────────────────
 
@@ -104,8 +105,12 @@ export const songs = pgTable("songs", {
   editDepth: text("edit_depth").notNull().default("fresh").$type<EditDepth>(),
   visibility: text("visibility").notNull().default("private").$type<SongVisibility>(),
   shareCode: text("share_code"),
-  // Audio — base64 data URL or CDN URL; null until generated
+  inputKind: text("input_kind").notNull().default("hum").$type<SongInputKind>(),
+  lyrics: text("lyrics"),
+  generationProvider: text("generation_provider"),
+  // Audio — base64 data URL (legacy) or object-storage URL; null until generated
   mp3DataUrl: text("mp3_data_url"),
+  mp3Url: text("mp3_url"),
   // JSON blobs
   visualConfig: jsonb("visual_config").$type<VisualConfig>().notNull(),
   arrangementState: jsonb("arrangement_state").$type<ArrangementState>().notNull(),

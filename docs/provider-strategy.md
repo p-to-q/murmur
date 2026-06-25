@@ -2,12 +2,14 @@
 
 ## Stainer Facade
 
-All UI calls `transcribeWithStainer(input)` from
-`src/modules/stainer/transcribe.ts`. Screens do not import providers directly.
+Hum-only transcription still goes through `transcribeWithStainer(input)` from
+`src/modules/stainer/transcribe.ts`. The live recording ingress is now
+`/api/capture/analyze`, which can route to either Hum or Voice without exposing
+provider selection to screens.
 
 The facade now has exactly two paths:
 
-- `input.audioBlob` present: upload to server `/api/transcribe`.
+- `input.audioBlob` present: upload to server `/api/capture/analyze`.
 - `input.audioBlob` absent: use `fixture` for the explicit demo melody.
 
 This is the Phase 1 boundary cut. Real recordings never fall through to fixture
@@ -26,6 +28,39 @@ This is a capture optimization only. The server worker still trims
 defensively and remains authoritative for transcription.
 
 ## Server Route
+
+`POST /api/capture/analyze` accepts multipart audio and optional
+`targetInstrument`. When `MURMUR_VOICE_INPUT_ENABLED=1` and `SPEECH_WORKER_URL`
+is configured, it asks the local/self-hosted speech worker for VAD, ASR, audio
+quality, and model diagnostics through `src/lib/platform/speech-recognition.ts`.
+The planned recognition strategy is SenseVoice-first with faster-whisper as the
+baseline/fallback after model artifact and corpus acceptance.
+Recognized lyrical Chinese/English singing returns:
+
+```ts
+{
+  kind: "voice";
+  lyrics: string;
+  language: "zh" | "en" | "unknown";
+  confidence: number;
+  diagnostics: VoiceRouteDiagnostics;
+}
+```
+
+Low-confidence, non-lyrical, nonsense-syllable, unconfigured, or failed ASR
+cases default to Hum and return:
+
+```ts
+{
+  kind: "hum";
+  transcription: TranscriptionResult;
+}
+```
+
+This preserves the original demo-safe Hum path while letting Voice become an
+additive branch. The Voice branch generates a single whole-song version through
+`/api/music/voice-generate` and MiniMax `music-2.6`; it stores the resulting
+audio in Murmur object storage before any song record is saved.
 
 `POST /api/transcribe` accepts multipart audio and returns a
 `TranscriptionResult`:
@@ -93,6 +128,20 @@ AUDIO_ENGINE_RMVPE_DEVICE=cpu
 AUDIO_ENGINE_RMVPE_ALLOW_DOWNLOAD=0
 AUDIO_ENGINE_RMVPE_CONFIDENCE_THRESHOLD=0.03
 AUDIO_ENGINE_DENOISE_PROVIDER=auto
+MURMUR_VOICE_INPUT_ENABLED=0
+SPEECH_WORKER_URL=http://127.0.0.1:8003
+SPEECH_WORKER_TOKEN=
+SPEECH_RECOGNITION_PROVIDER=worker
+SPEECH_WORKER_TIMEOUT_MS=8000
+SPEECH_WORKER_PRIMARY_PROVIDER=sensevoice
+SPEECH_WORKER_FALLBACK_PROVIDER=faster-whisper
+SPEECH_WORKER_REQUIRE_ARTIFACT_LICENSE=1
+SPEECH_WORKER_MODEL_ARTIFACT=
+SPEECH_WORKER_MODEL_SHA=
+MINIMAX_API_KEY=
+MINIMAX_GROUP_ID=
+MINIMAX_MUSIC_MODEL=music-2.6
+MINIMAX_MUSIC_API_URL=https://api.minimax.io/v1/music_generation
 ```
 
 No transcription URL is exposed as `NEXT_PUBLIC_*`. The browser product flow

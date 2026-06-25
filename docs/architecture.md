@@ -14,9 +14,10 @@ This document keeps the useful part of the `repo-template` discipline:
 
 ## System intent
 
-Murmur turns a hummed melody into a saved, editable song artifact. The app
-captures audio, derives melody candidates, generates arrangements, lets the user
-edit and preview them, then saves and exports the result.
+Murmur turns a melody idea into a saved song artifact. The primary path is
+still Hum -> Vibe -> Studio -> Save; the voice-aware branch adds ASR routing so
+lyrical Chinese/English singing can become a whole-song MiniMax generation
+without disturbing pure-hum melody transcription.
 
 ## Design principles
 
@@ -53,8 +54,11 @@ flowchart TB
     platform["Platform Adapters\nsrc/lib/platform"]
     music["Music + Export Modules"]
     db["Postgres / Drizzle"]
-    ai["OpenAI-compatible AI Gateway"]
+    ai["OpenAI-compatible AI Gateway\nchat"]
+    speech["Speech Worker\nVAD + local ASR"]
+    minimax["MiniMax Music"]
     worker["Transcription Worker"]
+    objectStore["Object Storage"]
     storage["Browser Storage\nlocalStorage"]
 
     user --> app
@@ -66,6 +70,9 @@ flowchart TB
     routes --> platform
     routes --> db
     routes --> ai
+    routes --> speech
+    routes --> minimax
+    routes --> objectStore
     platform --> storage
     music --> storage
 ```
@@ -75,8 +82,15 @@ flowchart TB
 ### 1. Capture and transcription
 
 - The user records or loads a melody idea in the Hum flow.
-- The audio worker derives note events through the server transcription route.
-- Murmur normalizes that output before it becomes arrangement input.
+- Live recordings enter `POST /api/capture/analyze`.
+- When voice input is disabled, ASR is unconfigured, confidence is low, or the
+  take looks like nonsense syllables / pure hum, the route returns `kind:
+  "hum"` with the existing audio-worker `TranscriptionResult`.
+- When ASR finds lyrical Chinese/English singing, the route returns `kind:
+  "voice"` with lyrics and diagnostics. Voice v1 does not promise melody
+  preservation; it preserves recognized lyrics and style intent.
+- The audio worker still owns Hum note extraction. Murmur normalizes that output
+  before it becomes arrangement input.
 
 ### 2. Arrangement and editing
 
@@ -84,23 +98,31 @@ flowchart TB
 - `src/modules/` owns the arrangement rules, preview behavior, and export logic.
 - `/api/strummer/edit` adds LLM-assisted edit-token classification when a
   compatible AI gateway is configured.
+- Hum-generated versions use the Magenta worker as whole generated clips.
+  Voice-generated versions use a single MiniMax `music-2.6` result with
+  `lyrics + stylePrompt`, then hide TrackMixer/Auris in Studio and show
+  whole-song playback plus lyrics.
 
 ### 3. Save and playback
 
 - Songs are stored through Next.js API routes and the DB query layer.
 - Playback and export reuse the same underlying arrangement model so preview and
   saved artifacts stay aligned.
+- Voice songs save `inputKind`, `lyrics`, `generationProvider`, and a stable
+  object-storage `mp3Url`. Provider-expiring URLs are never written into saved
+  song rows.
 
 ### 4. Platform concerns
 
 - Auth is session-based in production.
 - Local Creator is a lightweight account with a real `users.id`, a Murmur
-  session cookie, and 5 notes once for the current browser. Live hums spend
-  that finite server ledger when the Local Creator session exists; pure guest
-  fallback remains local/dev-only and rate-limited. It can own songs, so the
-  Gallery and song detail flows work before registration. It is still not a
-  registered account: top-up, payment, account deletion, and cross-device sync
-  require binding an external identity.
+  session cookie, and 5 notes once for the current browser. The web client
+  creates it on explicit Local Creator entry or before flows that need
+  server-side ownership, such as live hum, save, gallery load, song detail, or
+  OAuth handoff. Pure guest fallback remains local/dev-only and rate-limited.
+  It can own songs, so the Gallery and song detail flows work before
+  registration. It is still not a registered account: top-up, payment, account
+  deletion, and cross-device sync require binding an external identity.
 - When a new user signs in from an unbound Local Creator session, Murmur
   promotes that existing user row instead of copying songs. The `userId` stays
   stable, which keeps saved songs, ledger rows, and future exports attached.

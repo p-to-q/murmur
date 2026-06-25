@@ -32,8 +32,8 @@ MUSIC_STARTED_AT=0
 
 ensure_tokens() {
   if [ ! -f "$ENV_FILE" ]; then
-    printf "AUDIO_WORKER_TOKEN=%s\nMUSIC_WORKER_TOKEN=%s\n" \
-      "$(openssl rand -hex 24)" "$(openssl rand -hex 24)" > "$ENV_FILE"
+    printf "AUDIO_WORKER_TOKEN=%s\nMUSIC_WORKER_TOKEN=%s\nSPEECH_WORKER_TOKEN=%s\n" \
+      "$(openssl rand -hex 24)" "$(openssl rand -hex 24)" "$(openssl rand -hex 24)" > "$ENV_FILE"
   fi
   set -a; # shellcheck disable=SC1090
   source "$ENV_FILE"; set +a
@@ -41,9 +41,9 @@ ensure_tokens() {
 
 preflight() {
   local ok=1
-  for venv in "$ROOT/workers/audio-engine/.venv" "$ROOT/workers/music-engine/.venv"; do
+  for venv in "$ROOT/workers/audio-engine/.venv" "$ROOT/workers/music-engine/.venv" "$ROOT/workers/speech-engine/.venv"; do
     if [ ! -x "$venv/bin/uvicorn" ]; then
-      slog "preflight failed: missing $venv — run bun run setup:audio && bun run setup:music"
+      slog "preflight failed: missing $venv — run bun run setup:audio && bun run setup:music && bun run setup:speech"
       ok=0
     fi
   done
@@ -240,6 +240,7 @@ run() {
         start_worker music-engine 8002
       fi
     fi
+    worker_healthy 8003 || start_worker speech-engine 8003
     tunnel_alive audio || start_tunnel audio 8001
     tunnel_alive music || start_tunnel music 8002
     heal_tunnel audio 8001 "$(url_from "$LOG_DIR/tunnel-audio.log")"
@@ -311,7 +312,7 @@ case "${1:-}" in
     else
       echo "supervisor: stopped (install: bash scripts/murmur-services.sh install)"
     fi
-    for p in 8001 8002; do
+    for p in 8001 8002 8003; do
       printf ':%s  ' "$p"
       curl -sf -m 5 "http://127.0.0.1:$p/health" 2>/dev/null || printf 'DOWN'
       echo
@@ -329,6 +330,6 @@ case "${1:-}" in
     done
     echo "last synced: $(cat "$STATEFILE" 2>/dev/null || echo never)"
     ;;
-  logs) tail -n 40 -F "$LOG_DIR"/supervisor.log "$LOG_DIR"/music-engine.log "$LOG_DIR"/audio-engine.log ;;
+  logs) tail -n 40 -F "$LOG_DIR"/supervisor.log "$LOG_DIR"/music-engine.log "$LOG_DIR"/audio-engine.log "$LOG_DIR"/speech-engine.log ;;
   *) echo "usage: $0 {start|stop|status|logs}" >&2; exit 1 ;;
 esac

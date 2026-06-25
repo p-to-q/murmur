@@ -267,8 +267,8 @@ the limitation; do not solve it.
         ┌──────┐
         │  ∅   │       (no row, no session)
         └───┬──┘
-        │  first visit (Web only) — Local Creator row
-        │  with accountKind="local_creator", 5 notes, and a session cookie
+        │  explicit Local Creator entry or owned action (Web only)
+        │  creates accountKind="local_creator", 5 notes, and a session cookie
             ▼
         ┌──────┐
         │guest │       browser-bound Gallery; can hum, audit, save
@@ -292,8 +292,9 @@ the limitation; do not solve it.
 
 Transitions in detail:
 
-- **`∅ → guest` (Web only).** First Web visit with no Murmur session creates a
-  Local Creator row with `id = "lc_" + ulid()`,
+- **`∅ → guest` (Web only).** A user clicking Local Creator or starting a flow
+  that needs server-side ownership creates a Local Creator row with
+  `id = "lc_" + ulid()`,
   `accountKind = "local_creator"`, `planTier = "free"`, and
   `notesBalance = 5`. A `__murmur_session` cookie binds this browser to the
   row. The user owns songs, but the account is not registered.

@@ -23,8 +23,10 @@ fi
 
 web_log="$(mktemp -t murmur-web.XXXXXX.log)"
 worker_log="$(mktemp -t murmur-worker.XXXXXX.log)"
+speech_log="$(mktemp -t murmur-speech.XXXXXX.log)"
 web_pid=""
 worker_pid=""
+speech_pid=""
 
 cleanup() {
   if [[ -n "${web_pid}" ]] && kill -0 "${web_pid}" 2>/dev/null; then
@@ -35,6 +37,10 @@ cleanup() {
     kill "${worker_pid}" 2>/dev/null || true
     wait "${worker_pid}" 2>/dev/null || true
   fi
+  if [[ -n "${speech_pid}" ]] && kill -0 "${speech_pid}" 2>/dev/null; then
+    kill "${speech_pid}" 2>/dev/null || true
+    wait "${speech_pid}" 2>/dev/null || true
+  fi
 }
 
 trap cleanup EXIT
@@ -43,6 +49,8 @@ export AUTH_SECRET="${AUTH_SECRET:-murmur-ci-smoke-secret}"
 # Satisfy production db/client guard; routes fall back when Postgres is absent.
 export DATABASE_URL="${DATABASE_URL:-postgresql://postgres:password@127.0.0.1:5432/murmur_ci_smoke}"
 export MURMUR_STORAGE_DRIVER="${MURMUR_STORAGE_DRIVER:-memory}"
+export MURMUR_VOICE_INPUT_ENABLED="${MURMUR_VOICE_INPUT_ENABLED:-1}"
+export SPEECH_WORKER_URL="${SPEECH_WORKER_URL:-http://127.0.0.1:8003}"
 # This smoke test intentionally runs without Postgres or OAuth. Exercise the
 # local/demo fallback path; production auth strictness is covered by unit tests.
 export MURMUR_AUTH_MODE="${MURMUR_AUTH_MODE:-local}"
@@ -59,6 +67,14 @@ worker_pid=$!
 
 bun start --hostname 127.0.0.1 --port "${WEB_PORT}" >"${web_log}" 2>&1 &
 web_pid=$!
+
+"${PYTHON_BIN}" -m uvicorn \
+  --app-dir workers/speech-engine \
+  main:app \
+  --host 127.0.0.1 \
+  --port 8003 \
+  >"${speech_log}" 2>&1 &
+speech_pid=$!
 
 wait_for_url() {
   local url="$1"
@@ -84,6 +100,7 @@ wait_for_url() {
 }
 
 wait_for_url "${WORKER_BASE}/health" "worker"
+wait_for_url "http://127.0.0.1:8003/health" "speech-worker"
 wait_for_url "${WEB_BASE}" "web"
 wait_for_url "${WEB_BASE}/api/qa/health" "web-api"
 

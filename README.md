@@ -114,7 +114,16 @@ bun run verify:local
 ```
 
 That bundles the stack smoke check with local markdown-link validation,
-repository lint, and audio-worker unit coverage.
+repository lint, and audio/speech worker unit coverage.
+
+For the full local voice stack, use:
+
+```bash
+bun run dev:stack
+```
+
+That brings up audio `:8001`, music `:8002`, speech `:8003`, and Next.js on
+`http://localhost:3000`.
 
 For local persistence, start Postgres first:
 
@@ -134,6 +143,13 @@ bun run setup:audio
 bun run dev:audio
 ```
 
+For Voice-aware capture and local speech routing, also run:
+
+```bash
+bun run setup:speech
+bun run dev:speech
+```
+
 Equivalent manual steps:
 
 ```bash
@@ -142,6 +158,16 @@ python3 -m venv .venv
 ./.venv/bin/python -m ensurepip --upgrade
 ./.venv/bin/pip install -r requirements.txt
 ./.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001
+```
+
+Speech worker manual steps:
+
+```bash
+cd workers/speech-engine
+python3 -m venv .venv
+./.venv/bin/python -m ensurepip --upgrade
+./.venv/bin/pip install -r requirements.txt
+./.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8003
 ```
 
 For local audio acceptance and fallback verification, run:
@@ -276,6 +302,13 @@ cp .env.example .env
 | `AUDIO_WORKER_URL` | Server-only audio worker base URL used by `/api/transcribe`. |
 | `AUDIO_WORKER_TOKEN` | Bearer token for Next.js -> audio worker calls; required for production deployments. |
 | `MURMUR_CAPTURE_HUMS` | Audio-worker raw hum capture. Defaults off; keep unset/false in production unless an explicit review program is running. |
+| `MURMUR_VOICE_INPUT_ENABLED` | Enables `/api/capture/analyze` routing through the local/self-hosted speech worker. Keep `0` until sample-set acceptance passes. |
+| `SPEECH_WORKER_URL` / `SPEECH_WORKER_TOKEN` | Server-only speech worker endpoint and bearer token for Voice input recognition. |
+| `SPEECH_ENGINE_HOST` | Speech worker bind-host hint used by the worker auth guard. Keep loopback for local development. |
+| `SPEECH_WORKER_PRIMARY_PROVIDER` / `SPEECH_WORKER_FALLBACK_PROVIDER` | Speech worker model preference. Planned default is SenseVoice-first with faster-whisper fallback after artifact/license acceptance. |
+| `SPEECH_WORKER_MODEL_ARTIFACT` / `SPEECH_WORKER_MODEL_SHA` | Pinned speech model artifact identity required by production env audit when Voice input is enabled. |
+| `MINIMAX_API_KEY` / `MINIMAX_GROUP_ID` | MiniMax credentials for `/api/music/voice-generate`. |
+| `MINIMAX_MUSIC_MODEL` / `MINIMAX_MUSIC_API_URL` | Voice song provider override. Defaults to `music-2.6` at MiniMax's music generation endpoint. |
 | `AUDIO_ENGINE_PITCH_PROVIDER` | Worker pitch detector provider. `auto` uses RMVPE first, then SwiftF0 and pYIN fallback. |
 | `AUDIO_ENGINE_RMVPE_MODEL_PATH` | Optional path to a baked `rmvpe.onnx` model for the RMVPE provider. |
 | `AUDIO_ENGINE_RMVPE_DEVICE` | RMVPE ONNX Runtime device hint. Defaults to `cpu`; GPU workers can set `cuda` or another supported provider. |
@@ -308,8 +341,11 @@ cp .env.example .env
   default on localhost. Guest/header fallback is available only after opting
   into `MURMUR_AUTH_MODE=local` or `demo`; `x-murmur-user-*` is never a
   production identity source.
-- Real recordings go through server `/api/transcribe`; the fixture melody is
-  only used when the user explicitly chooses the demo action.
+- Real recordings enter through server `/api/capture/analyze`. Hum or
+  ambiguous takes continue through the audio worker; lyrical Chinese/English
+  takes can route to MiniMax voice generation when the feature flag is enabled.
+  The fixture melody is only used when the user explicitly chooses the demo
+  action.
 - In local development, billing fallback is enabled by default. Hum, save, and
   Studio edit flows bypass notes spending, and the UI balance defaults to
   `9999` unless `MURMUR_DEV_NOTES_BALANCE` overrides it. This bypass is
@@ -326,6 +362,10 @@ cp .env.example .env
   still has a local in-app notification inbox and browser alert opt-in for
   save / generation events.
 - The Strummer edit route expects an OpenAI-compatible chat API.
+- Production env audit requires `SPEECH_WORKER_URL`, `SPEECH_WORKER_TOKEN`,
+  `SPEECH_WORKER_MODEL_ARTIFACT`, `SPEECH_WORKER_MODEL_SHA`, and
+  `MINIMAX_API_KEY` whenever `MURMUR_VOICE_INPUT_ENABLED=1`; leave the flag off
+  until the consented sample set passes acceptance.
 
 ## Stack
 

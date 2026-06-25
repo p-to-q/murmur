@@ -2,6 +2,9 @@ const webBase = (process.env.MURMUR_WEB_BASE_URL ?? "http://127.0.0.1:3000").rep
 const workerBase = (
   process.env.AUDIO_WORKER_URL?.trim() || "http://127.0.0.1:8001"
 ).replace(/\/+$/, "");
+const speechWorkerBase = (
+  process.env.SPEECH_WORKER_URL?.trim() || "http://127.0.0.1:8003"
+).replace(/\/+$/, "");
 const localAuthHeaders = { "x-murmur-user-id": "local_stack_smoke" };
 
 export {};
@@ -19,6 +22,7 @@ async function main() {
     checkUserBalance,
     checkTranscribeValidation,
     checkAudioWorkerHealth,
+    checkSpeechWorkerHealth,
     checkQaHealth,
   ]) {
     results.push(await check());
@@ -113,6 +117,29 @@ async function checkAudioWorkerHealth(): Promise<CheckResult> {
   } catch (error) {
     return {
       name: "audio-worker-health",
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function checkSpeechWorkerHealth(): Promise<CheckResult> {
+  try {
+    const response = await fetch(`${speechWorkerBase}/health`);
+    const body = (await response.json()) as {
+      status?: unknown;
+      provider?: unknown;
+      artifact?: unknown;
+    };
+    const expected = response.ok && body.status === "ok" && typeof body.provider === "string";
+    return {
+      name: "speech-worker-health",
+      ok: expected,
+      detail: `status=${response.status} provider=${String(body.provider ?? "unknown")}`,
+    };
+  } catch (error) {
+    return {
+      name: "speech-worker-health",
       ok: false,
       detail: error instanceof Error ? error.message : String(error),
     };

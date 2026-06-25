@@ -36,6 +36,7 @@ Current shipped verification layers:
 
 - **Bun unit / integration-leaning tests** via `bun test`
 - **Python worker tests** via `bun run test:audio`
+- **Python speech worker tests** via `bun run test:speech`
 - **API / stack smoke** via `bun run smoke:local`
 - **Primary page-shell smoke** via `bun run smoke:pages`
 - **Built-app + live-worker smoke** via

@@ -36,9 +36,9 @@ preflight() {
       missing=1
     fi
   done
-  for venv in "$ROOT/workers/audio-engine/.venv" "$ROOT/workers/music-engine/.venv"; do
+  for venv in "$ROOT/workers/audio-engine/.venv" "$ROOT/workers/music-engine/.venv" "$ROOT/workers/speech-engine/.venv"; do
     if [ ! -x "$venv/bin/uvicorn" ]; then
-      echo "✗ missing venv: $venv — run: bun run setup:audio && bun run setup:music" >&2
+      echo "✗ missing venv: $venv — run: bun run setup:audio && bun run setup:music && bun run setup:speech" >&2
       missing=1
     fi
   done
@@ -258,6 +258,7 @@ stop() {
   agent_bootout
   bash "$SUPERVISOR" stop 2>/dev/null || true
   pkill -f 'cloudflared tunnel --url http://127.0.0.1:800[12]' 2>/dev/null || true
+  pkill -f 'uvicorn main:app --host 127.0.0.1 --port 8003' 2>/dev/null || true
   echo "✓ Murmur workers stopped"
 }
 
@@ -290,6 +291,7 @@ status() {
   fi
   echo ""
   bash "$SUPERVISOR" status
+  echo "speech worker: 8003 (local only; not part of Vercel sync)"
 }
 
 logs() {
@@ -297,6 +299,7 @@ logs() {
     "$LOG_DIR/supervisor.log" \
     "$LOG_DIR/audio-engine.log" \
     "$LOG_DIR/music-engine.log" \
+    "$LOG_DIR/speech-engine.log" \
     "$LOG_DIR/tunnel-audio.log" \
     "$LOG_DIR/tunnel-music.log" \
     "$LOG_DIR/launchagent.out.log" \

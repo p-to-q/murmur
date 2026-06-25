@@ -166,7 +166,7 @@ export const notesLedger = pgTable(
     delta:       integer("delta").notNull(),                // signed
     reason:      varchar("reason", { length: 32 }).notNull(),
     // reason taxonomy:
-    //   "spend:hum" | "spend:music_generate" | "spend:llm_edit" | "spend:save" | "spend:export_webm"
+    //   "spend:hum" | "spend:music_generate" | "spend:voice_generate" | "spend:llm_edit" | "spend:save" | "spend:export_webm"
     //   "grant:daily_free" | "grant:signup_bonus" | "grant:cutover_gift" | "grant:referral" | "grant:local_creator"
     //   "purchase:topup" | "refund:topup" | "refund:spend" | "manual:op_grant"
     externalRef: text("external_ref"),                       // provider tx id, song id, etc.
@@ -295,6 +295,9 @@ changes:
 ```ts
 mp3DataUrl: text("mp3_data_url"),       // DEPRECATED — read-only fallback for legacy rows
 mp3Url:     text("mp3_url"),            // NEW: object-storage URL (R2 / S3 / 腾讯云 COS)
+inputKind:  text("input_kind").notNull().default("hum"), // hum | voice | demo | library
+lyrics:     text("lyrics"),             // Voice branch lyrics recognized from ASR
+generationProvider: text("generation_provider"), // e.g. minimax:music-2.6
 melody:     jsonb("melody").$type<CleanMelody>(),  // NEW: durable melody so playback fidelity survives
 arrangementVersion: integer("arrangement_version").notNull().default(2),
 posterUrl:  text("poster_url"),         // NEW: optional rendered PNG; v3 wires it
@@ -323,6 +326,10 @@ Constraints + migration:
   `mp3Url` null; the next user open transparently re-uploads the data
   URL to object storage and updates the row. (Background batch job
   optional.)
+- Voice rows set `inputKind="voice"`, persist recognized `lyrics`, and store
+  the provider label in `generationProvider`. The MiniMax URL itself is never
+  stored directly when it is a 24-hour provider URL; `/api/music/voice-generate`
+  downloads the audio and saves Murmur's stable object-storage `mp3Url`.
 
 **Priority bump (`@research-2026-06` §7):** the `mp3DataUrl` removal
 moves from "v2 mid-cycle" to a **Phase 4 hard requirement** — it must

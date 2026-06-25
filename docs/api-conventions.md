@@ -234,8 +234,12 @@ Per route + per user (or per IP for guest endpoints).
 
 Exceeded: return `429 rate_limited` with `Retry-After` in seconds.
 
-Implementation: lightweight Redis (when scaling demands) or in-process
-counter with backoff (fine for early v2). Live behind a helper:
+Implementation: in-process token bucket today. Redis/Postgres are planned
+shared-driver names but are not implemented yet; production env should leave
+`MURMUR_RATE_LIMIT_DRIVER` unset or set it to `memory` until a real adapter
+ships. The runtime falls back to memory for planned-but-unavailable shared
+drivers so a stale deployment setting cannot take public routes offline.
+Live behind a helper:
 
 ```ts
 import { rateLimit } from "@/lib/api/rate-limit";
@@ -271,7 +275,9 @@ Song sharing has two separate route families:
 - `POST /api/songs/[id]/share` is owner-authenticated. It creates or reuses an
   opaque `shareCode`, sets `visibility` to `unlisted` by default, and returns
   `{ shareCode, visibility, url }`. It rejects `private` as an input because
-  unpublishing is an edit/privacy action, not link creation.
+  unpublishing is an edit/privacy action, not link creation. If the deployment
+  has not run the share-link migration, it returns `503 schema_unavailable`
+  instead of a generic 500 so operators know to run `bun run db:migrate`.
 - `GET /api/public/songs/[shareCode]` is anonymous. It returns the minimal
   public playback payload for `unlisted` and `public` songs only.
 
