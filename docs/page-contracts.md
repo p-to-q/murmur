@@ -71,6 +71,10 @@ Implementation note:
 
 - keep recording cleanup, audio stream teardown, and timer clearing inside the
   screen boundary
+- Home/Create navigation should continue the current unsaved creation draft
+  when one exists, returning to Vibe, Studio, or Name instead of clearing the
+  flow. Only explicit record-again / saved completion paths should discard the
+  draft.
 - keep transcription / fixture branching inside the client transcription
   facade, not in the view tree
 - keep onboarding persistence and completion events in the shared onboarding

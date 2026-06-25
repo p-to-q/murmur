@@ -35,6 +35,7 @@ import { renderAudio } from "@/modules/export/render-mp3";
 import { canSaveHeardVersion, getSaveBlockReason } from "@/modules/music/version-contract";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { buildNameSaveMetadata } from "./name-save-metadata";
+import { useRestoredVersionAudio } from "./use-restored-version-audio";
 
 const PROCESSING_INTERVAL_MS = 900;
 
@@ -47,6 +48,9 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const setVibeVersions = useMurmurStore((s) => s.setVibeVersions);
   const setCurrentDraftId = useMurmurStore((s) => s.setCurrentDraftId);
   const setCurrentFlowId = useMurmurStore((s) => s.setCurrentFlowId);
+  const setActiveCreationRoute = useMurmurStore((s) => s.setActiveCreationRoute);
+  const restoredDraftAt = useMurmurStore((s) => s.restoredDraftAt);
+  const resetFlow = useMurmurStore((s) => s.resetFlow);
   const demoSeededRef = useRef(false);
   const demoEnabled = initialDemo;
 
@@ -56,6 +60,14 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const [isSaving, setIsSaving] = useState(false);
   const [processingIdx, setProcessingIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (currentVersion) {
+      setActiveCreationRoute("/studio/name");
+    }
+  }, [currentVersion, setActiveCreationRoute]);
+
+  useRestoredVersionAudio(currentVersion, restoredDraftAt);
 
   useEffect(() => {
     if (!demoEnabled || currentVersion || demoSeededRef.current) {
@@ -248,6 +260,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       });
 
       toast.success(t("studio.save_ok"));
+      resetFlow();
       router.push(`/song/${savedSongId}`);
     } catch (error) {
       console.error("[Name] save failed:", error);

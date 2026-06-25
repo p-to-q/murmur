@@ -43,6 +43,7 @@ import { AurisPanel } from "@/components/studio/auris-panel";
 import { TrackMixer } from "@/components/studio/track-mixer";
 import { SceneGrid } from "@/components/studio/scene-grid";
 import { Turntable } from "@/components/studio/turntable";
+import { useRestoredVersionAudio } from "./use-restored-version-audio";
 
 export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const router = useRouter();
@@ -52,8 +53,20 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
   const setVibeVersions = useMurmurStore((state) => state.setVibeVersions);
   const setCurrentDraftId = useMurmurStore((state) => state.setCurrentDraftId);
   const setCurrentFlowId = useMurmurStore((state) => state.setCurrentFlowId);
+  const setActiveCreationRoute = useMurmurStore(
+    (state) => state.setActiveCreationRoute,
+  );
+  const restoredDraftAt = useMurmurStore((state) => state.restoredDraftAt);
   const demoSeededRef = useRef(false);
   const demoEnabled = initialDemo;
+
+  useEffect(() => {
+    if (currentVersion) {
+      setActiveCreationRoute("/studio");
+    }
+  }, [currentVersion, setActiveCreationRoute]);
+
+  useRestoredVersionAudio(currentVersion, restoredDraftAt);
 
   useEffect(() => {
     if (!demoEnabled || currentVersion || demoSeededRef.current) {
