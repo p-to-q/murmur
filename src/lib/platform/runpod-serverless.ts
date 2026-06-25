@@ -19,6 +19,38 @@ const DEFAULT_POLL_INTERVAL_MS = 1500;
 // caller's budget, not this.
 const PER_CALL_TIMEOUT_MS = 20_000;
 
+// Execution policy attached to every job we submit. RunPod's default job TTL is
+// 24h, so when a caller vanishes — e.g. the Vercel function is killed at its
+// 300s limit before the best-effort /cancel below can fire — the job lingers in
+// the endpoint queue for a full day as a phantom "queued but not running" entry.
+// A short TTL lets RunPod itself drop these orphans so the queue drains to zero
+// instead of accumulating backlog.
+//
+//   ttl              — TOTAL lifespan (queue + execution) before RunPod deletes
+//                      the job. Kept above the worst-case scale-to-zero cold
+//                      start (~4-5 min) AND above the caller's own wait budget
+//                      (WORKER_TIMEOUT_MS, ~295s) so a legitimately slow job is
+//                      never reaped while someone is still waiting for it; the
+//                      10 min default clears both bars while draining orphans
+//                      ~144× faster than the 24h platform default.
+//   executionTimeout — cap on active processing after a worker accepts the job;
+//                      a short clip finishes well under a minute.
+//
+// Both are overridable via env (no redeploy needed). Units: milliseconds.
+const JOB_TTL_MS = clampEnvInt("RUNPOD_JOB_TTL_MS", 600_000, 360_000, 86_400_000);
+const JOB_EXECUTION_TIMEOUT_MS = clampEnvInt(
+  "RUNPOD_JOB_EXECUTION_TIMEOUT_MS",
+  180_000,
+  60_000,
+  604_800_000,
+);
+
+function clampEnvInt(name: string, fallback: number, min: number, max: number): number {
+  const raw = Number(process.env[name]);
+  if (!Number.isFinite(raw)) return fallback;
+  return Math.max(min, Math.min(max, Math.trunc(raw)));
+}
+
 export type RunpodErrorKind = "unauthorized" | "http" | "failed" | "timeout";
 
 /** A failed RunPod invocation, tagged so the route can map it to its error contract. */
@@ -137,7 +169,10 @@ export async function runJob(
 
   const submitRes = await runpodFetch(config, "/run", {
     method: "POST",
-    body: JSON.stringify({ input }),
+    body: JSON.stringify({
+      input,
+      policy: { executionTimeout: JOB_EXECUTION_TIMEOUT_MS, ttl: JOB_TTL_MS },
+    }),
     signal: callTimeoutSignal(deadline),
   });
   const submitBody = await safeJson(submitRes);
