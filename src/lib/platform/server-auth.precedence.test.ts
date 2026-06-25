@@ -130,7 +130,7 @@ describe("resolveRequestAuth precedence (Local Creator vs Google)", () => {
     if (auth.ok) expect(auth.user.id).toBe("lc_1");
   });
 
-  it("returns 503 when the session lookup fails, regardless of Google", async () => {
+  it("returns 503 when the session lookup fails on normal authenticated routes", async () => {
     const auth = await resolveRequestAuth(
       reqWithSession(),
       {},
@@ -139,6 +139,35 @@ describe("resolveRequestAuth precedence (Local Creator vs Google)", () => {
 
     expect(auth.ok).toBe(false);
     if (!auth.ok) expect(auth.response.status).toBe(503);
+  });
+
+  it("falls through to Google when a guest-preview route cannot read the local cookie session", async () => {
+    const auth = await resolveRequestAuth(
+      reqWithSession(),
+      { allowGuestPreview: true },
+      deps({ sessionError: new Error("db down"), nextAuth: googleSession("g_1") }),
+    );
+
+    expect(auth.ok).toBe(true);
+    if (auth.ok) {
+      expect(auth.user.id).toBe("g_1");
+      expect(auth.user.accountKind).toBe("registered");
+    }
+  });
+
+  it("falls back to guest preview when a local cookie session lookup is unavailable and no Google session exists", async () => {
+    const auth = await resolveRequestAuth(
+      reqWithSession(),
+      { allowGuestPreview: true },
+      deps({ sessionError: new Error("db down"), nextAuthThrows: true }),
+    );
+
+    expect(auth.ok).toBe(true);
+    if (auth.ok) {
+      expect(auth.source).toBe("guest");
+      expect(auth.user.id).toBe("guest");
+      expect(auth.sessionId).toBeNull();
+    }
   });
 
   it("falls through an invalid cookie token to a valid Google session", async () => {

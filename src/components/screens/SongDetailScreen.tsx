@@ -49,6 +49,11 @@ import { buildLineageTrail } from "@/modules/music/lineage";
 import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
+import {
+  createSongShareLink,
+  SongShareRequestError,
+  type SongShareRequestErrorCode,
+} from "@/lib/api/song-share";
 import { hasSongShareAudio } from "@/lib/share/song-share";
 import type { SongCard } from "@/modules/shared/types";
 
@@ -297,43 +302,30 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     }
     setBusy("link");
     try {
-      const res = await fetch(`/api/songs/${encodeURIComponent(song.id)}/share`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          accept: "application/json",
-        },
-        body: JSON.stringify({ visibility: "unlisted" }),
+      const share = await createSongShareLink({
+        songId: song.id,
+        visibility: "unlisted",
       });
-      if (!res.ok) throw new Error(`share HTTP ${res.status}`);
 
-      const payload = (await res.json()) as {
-        url?: unknown;
-        shareCode?: unknown;
-        visibility?: unknown;
-      };
-      if (typeof payload.url !== "string" || !payload.url.trim()) {
-        throw new Error("missing share url");
-      }
-
-      const copied = await copyTextToClipboard(payload.url);
-      if (!copied) throw new Error("clipboard unavailable");
-
+      const copied = await copyTextToClipboard(share.url);
       setSong((current) =>
         current && current.id === song.id
           ? {
               ...current,
-              shareCode:
-                typeof payload.shareCode === "string"
-                  ? payload.shareCode
-                  : current.shareCode,
-              visibility:
-                payload.visibility === "public" || payload.visibility === "unlisted"
-                  ? payload.visibility
-                  : current.visibility,
+              shareCode: share.shareCode,
+              visibility: share.visibility,
             }
           : current,
       );
+      if (!copied) {
+        window.open(share.url, "_blank", "noopener,noreferrer");
+        throw new SongShareRequestError({
+          code: "clipboard_unavailable",
+          status: 0,
+          message: "Clipboard unavailable",
+          requestId: share.requestId,
+        });
+      }
       toast.success(t("song.share.link_copied") || "Share link copied");
       memory
         .reportAction({
@@ -345,7 +337,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         .catch(() => {});
     } catch (error) {
       console.error(error);
-      toast.error(t("song.share.link_failed") || "Couldn't create a share link.");
+      const code =
+        error instanceof SongShareRequestError
+          ? error.code
+          : "server_error";
+      toast.error(shareLinkErrorMessage(code, t));
     } finally {
       setBusy(null);
     }
@@ -1141,4 +1137,28 @@ function MenuItem({
       {children}
     </button>
   );
+}
+
+function shareLinkErrorMessage(
+  code: SongShareRequestErrorCode,
+  t: (key: string) => string,
+): string {
+  switch (code) {
+    case "unauthorized":
+      return t("song.share.link_failed_auth") || "Sign in before creating a share link.";
+    case "audio_required":
+      return t("song.share.link_failed_audio") || "Audio is still rendering or unavailable.";
+    case "rate_limited":
+      return t("song.share.link_failed_rate_limited") || "Too many share attempts. Try again shortly.";
+    case "clipboard_unavailable":
+      return t("song.share.link_failed_clipboard") || "The link was created, but couldn't be copied.";
+    case "network_error":
+      return t("song.share.link_failed_network") || "Couldn't reach Murmur to create the link.";
+    case "not_found":
+      return t("song.share.link_failed_not_found") || "This song is no longer available to share.";
+    case "schema_unavailable":
+      return t("song.share.link_failed_schema") || "Sharing is not ready on this deployment yet.";
+    default:
+      return t("song.share.link_failed") || "Couldn't create a share link.";
+  }
 }

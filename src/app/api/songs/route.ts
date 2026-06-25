@@ -3,6 +3,10 @@ import { z } from "zod";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
+import {
+  getRequestHostname,
+  shouldAllowLocalPreviewFallback,
+} from "@/lib/auth/local-preview";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import {
   getSongByIdForCreateConflict,
@@ -53,14 +57,17 @@ type SongInput = typeof songs.$inferInsert;
 type OkAuth = Extract<ResolvedRequestAuth, { ok: true }>;
 
 export async function GET(req: NextRequest) {
-  const auth = await resolveRequestAuth(req);
+  const requestHost = getRequestHostname(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowLocalPreviewFallback(req),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   try {
     const rows = await getSongSummariesByUser(userId);
     return NextResponse.json(rows);
   } catch (err) {
-    if (shouldUseLocalSongFallback(auth, req.nextUrl?.hostname) && isDatabaseUnavailable(err)) {
+    if (shouldUseLocalSongFallback(auth, requestHost) && isDatabaseUnavailable(err)) {
       const rows = getLocalSongSummariesByUserFallback(userId);
       log("song.list_failed", {
         reason: "database_unavailable",
@@ -95,7 +102,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
-  const auth = await resolveRequestAuth(req);
+  const requestHost = getRequestHostname(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowLocalPreviewFallback(req),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const rateLimit = await checkApiRateLimit({
@@ -149,7 +159,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const skipBilling =
-      shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname })
+      shouldBypassBillingInDevelopment({ host: requestHost })
       || COST.save === 0
       || shouldSkipNotesBilling(auth);
     if (skipBilling) {
@@ -164,7 +174,7 @@ export async function POST(req: NextRequest) {
           return handleSongIdConflict(songInput.id, userId, requestId);
         }
         if (
-          shouldUseLocalSongFallback(auth, req.nextUrl?.hostname)
+          shouldUseLocalSongFallback(auth, requestHost)
           && isDatabaseUnavailable(dbError)
         ) {
           const fallbackSong = createLocalSongFallback(songInput);
@@ -251,7 +261,7 @@ export async function POST(req: NextRequest) {
       headers: { "X-Request-Id": requestId },
     });
   } catch (err) {
-    if (shouldUseLocalSongFallback(auth, req.nextUrl?.hostname) && isDatabaseUnavailable(err)) {
+    if (shouldUseLocalSongFallback(auth, requestHost) && isDatabaseUnavailable(err)) {
       const fallbackSong = createLocalSongFallback(songInput);
       log("song.create_failed", {
         reason: "database_unavailable",

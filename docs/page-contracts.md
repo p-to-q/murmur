@@ -127,7 +127,9 @@ Implementation boundaries:
 - `/api/songs/[id]/share` owns share-code allocation and visibility changes to
   `unlisted` or `public`.
 - `/api/public/songs/[shareCode]` returns only the playback payload needed by
-  the public page.
+  the public page. Demo shares must remain independent of the song query layer
+  so a database or migration issue cannot take the basic public-share route
+  offline.
 - future search/community surfaces should query public songs through DB query
   helpers instead of changing the unlisted playback contract.
 

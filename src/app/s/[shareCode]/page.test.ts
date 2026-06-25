@@ -5,7 +5,11 @@ let nextSong: {
   mp3DataUrl?: string | null;
   mp3Url?: string | null;
 } | null = null;
-const getSongByShareCodeMock = mock(async () => nextSong);
+let getSongError: unknown = null;
+const getSongByShareCodeMock = mock(async () => {
+  if (getSongError) throw getSongError;
+  return nextSong;
+});
 
 mock.module("@/lib/db/queries/songs", () => ({
   createSong: mock(async () => null),
@@ -22,6 +26,10 @@ mock.module("@/lib/db/queries/songs", () => ({
 }));
 
 const { generateMetadata } = await import("./page");
+const {
+  createLocalSongFallback,
+  resetLocalSongFallbackForTests,
+} = await import("@/lib/db/queries/local-song-fallback");
 
 function props(shareCode: string) {
   return { params: Promise.resolve({ shareCode }) };
@@ -29,7 +37,9 @@ function props(shareCode: string) {
 
 beforeEach(() => {
   nextSong = null;
+  getSongError = null;
   getSongByShareCodeMock.mockClear();
+  resetLocalSongFallbackForTests();
 });
 
 describe("generateMetadata for public song share pages", () => {
@@ -64,6 +74,43 @@ describe("generateMetadata for public song share pages", () => {
     const metadata = await generateMetadata(props("abc234defg"));
 
     expect(metadata.robots).toEqual({ index: false, follow: false });
+  });
+
+  it("uses the local fallback for metadata when the database is unavailable", async () => {
+    getSongError = new Error("connect ECONNREFUSED 127.0.0.1:5432");
+    createLocalSongFallback({
+      id: "song_metadata_fallback",
+      userId: "guest",
+      title: "Metadata Fallback",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visibility: "public",
+      shareCode: "abc234defg",
+      mp3DataUrl: "data:audio/mpeg;base64,abc",
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    });
+
+    const metadata = await generateMetadata(props("abc234defg"));
+
+    expect(metadata.robots).toEqual({ index: true, follow: true });
   });
 
   it("marks demo share pages noindex", async () => {
