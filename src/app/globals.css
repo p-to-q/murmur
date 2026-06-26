@@ -73,9 +73,10 @@
   --murmur-font-serif: var(--font-instrument-serif), Georgia, "Iowan Old Style", "Times New Roman", Times, serif;
   --murmur-font-chinese-system: "PingFang SC", "PingFang TC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --murmur-font-chinese: "LXGW WenKai TC", "LXGW WenKai GB Screen 300", var(--murmur-font-chinese-system);
-  --murmur-font-ui: "Murmur Datatype", var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --murmur-ui-font-weight: 600;
-  --murmur-ui-letter-spacing: 0;
+  --murmur-font-ui: var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --murmur-font-micro: "Murmur Datatype", var(--murmur-font-ui);
+  --murmur-ui-font-weight: 500;
+  --murmur-ui-letter-spacing: 0.01em;
   --radius: 0.625rem; /* mymind cards are tight — 10px feels right */
   --background: #F5F1EB;
   --foreground: #1A1A1A;
@@ -167,17 +168,24 @@
   }
   .font-ui {
     font-family: var(--murmur-font-ui);
-    font-weight: var(--murmur-ui-font-weight);
-    letter-spacing: 0;
+    font-weight: 500;
+    letter-spacing: 0.01em;
   }
   .font-ui-label {
-    font-family: var(--murmur-font-ui);
+    font-family: var(--murmur-font-micro);
     font-weight: 600;
-    letter-spacing: 0;
+    letter-spacing: -0.01em;
   }
   .font-ui-label-caps {
+    font-family: var(--murmur-font-micro);
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.04em;
+  }
+  .eyebrow.font-ui-label,
+  .eyebrow.font-ui-label-caps {
+    font-weight: 600;
+    letter-spacing: 0.04em;
   }
   .underline-mm {
     text-decoration: underline;

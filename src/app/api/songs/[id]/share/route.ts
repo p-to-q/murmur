@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import {
+  getRequestHostname,
+  shouldAllowLocalPreviewFallback,
+} from "@/lib/auth/local-preview";
+import {
   getSongByIdForUser,
   publishSongShareForUser,
   revokeSongShareForUser,
@@ -12,6 +16,7 @@ import {
   revokeLocalSongShareForUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
+import { errorSummary } from "@/lib/observability/error-summary";
 import { log } from "@/lib/observability/log";
 import { getSiteUrlForRequest } from "@/lib/site-url";
 import {
@@ -32,7 +37,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await resolveRequestAuth(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowLocalPreviewFallback(req),
+  });
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
@@ -127,7 +134,8 @@ export async function POST(
     }
 
     log("song.share_failed", {
-      error: err instanceof Error ? err.message : String(err),
+      ...errorSummary(err),
+      schemaUnavailable: isSongShareSchemaUnavailable(err),
       songId: id,
     }, {
       route: ROUTE,
@@ -141,6 +149,11 @@ export async function POST(
         message: "Could not allocate a share code. Please retry.",
       });
     }
+    if (isSongShareSchemaUnavailable(err)) {
+      return errorResponse("schema_unavailable", 503, requestId, {
+        message: "Song share columns are not available. Run the latest database migrations.",
+      });
+    }
     return errorResponse("server_error", 500, requestId);
   }
 }
@@ -149,7 +162,9 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await resolveRequestAuth(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowLocalPreviewFallback(req),
+  });
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
@@ -208,7 +223,8 @@ export async function DELETE(
     }
 
     log("song.share_failed", {
-      error: err instanceof Error ? err.message : String(err),
+      ...errorSummary(err),
+      schemaUnavailable: isSongShareSchemaUnavailable(err),
       songId: id,
       action: "revoke",
     }, {
@@ -218,6 +234,11 @@ export async function DELETE(
       sessionId: auth.sessionId,
       level: "error",
     });
+    if (isSongShareSchemaUnavailable(err)) {
+      return errorResponse("schema_unavailable", 503, requestId, {
+        message: "Song share columns are not available. Run the latest database migrations.",
+      });
+    }
     return errorResponse("server_error", 500, requestId);
   }
 }
@@ -270,7 +291,13 @@ async function publishSongShareWithRetry(
 }
 
 function errorResponse(
-  error: "validation_error" | "not_found" | "conflict" | "audio_required" | "server_error",
+  error:
+    | "validation_error"
+    | "not_found"
+    | "conflict"
+    | "audio_required"
+    | "schema_unavailable"
+    | "server_error",
   status: number,
   requestId: string,
   input: { message?: string } = {},
@@ -315,7 +342,7 @@ async function readJsonObject(req: NextRequest): Promise<Record<string, unknown>
 function shouldUseLocalSongFallback(req: NextRequest, userId: string): boolean {
   if (userId !== "guest") return false;
   return shouldBypassBillingInDevelopment({
-    host: req.nextUrl?.hostname ?? null,
+    host: getRequestHostname(req),
   });
 }
 
@@ -343,12 +370,46 @@ function isDatabaseUnavailable(error: unknown): boolean {
 
 function isUniqueShareCodeConflict(error: unknown): boolean {
   if (!isObject(error)) return false;
-  const code = "code" in error ? error.code : null;
+  const code = objectFieldAsString(error, "code");
   if (code === "23505") return true;
-  const constraint = "constraint" in error ? String(error.constraint) : "";
+  const constraint = objectFieldAsString(error, "constraint") ?? "";
   if (constraint.includes("songs_share_code")) return true;
-  const message = "message" in error ? String(error.message) : "";
+  const message = objectFieldAsString(error, "message") ?? "";
   return message.includes("songs_share_code") || message.includes("duplicate key");
+}
+
+function isSongShareSchemaUnavailable(error: unknown): boolean {
+  if (!isObject(error)) return false;
+
+  const code = objectFieldAsString(error, "code");
+  const message = (objectFieldAsString(error, "message") ?? "").toLowerCase();
+  const detail = (objectFieldAsString(error, "detail") ?? "").toLowerCase();
+  const combined = `${message} ${detail}`;
+  const mentionsShareColumns =
+    combined.includes("share_code") ||
+    combined.includes("visibility") ||
+    combined.includes("songs_share_code") ||
+    combined.includes("songs_visibility");
+
+  if ((code === "42703" || code === "42P01") && mentionsShareColumns) {
+    return true;
+  }
+
+  const cause = "cause" in error ? error.cause : null;
+  if (cause && isSongShareSchemaUnavailable(cause)) return true;
+
+  const nestedErrors = "errors" in error ? error.errors : null;
+  if (Array.isArray(nestedErrors)) {
+    return nestedErrors.some((nestedError) => isSongShareSchemaUnavailable(nestedError));
+  }
+
+  return false;
+}
+
+function objectFieldAsString(value: unknown, key: string): string | undefined {
+  if (!isObject(value) || !(key in value)) return undefined;
+  const field = value[key];
+  return typeof field === "string" ? field : String(field);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

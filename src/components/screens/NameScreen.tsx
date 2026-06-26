@@ -30,6 +30,8 @@ import {
   buildVersionTitleSuggestionBatch,
 } from "@/lib/music/title-suggestions";
 import { synth } from "@/lib/music/simple-synth";
+import { regenerateVersionAudio } from "@/modules/magenta/generate-magenta-versions";
+import { regenerateMiniMaxVoiceAudio } from "@/modules/minimax/generate-voice-version";
 import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import { renderAudio } from "@/modules/export/render-mp3";
 import { canSaveHeardVersion, getSaveBlockReason } from "@/modules/music/version-contract";
@@ -47,7 +49,11 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const setVibeVersions = useMurmurStore((s) => s.setVibeVersions);
   const setCurrentDraftId = useMurmurStore((s) => s.setCurrentDraftId);
   const setCurrentFlowId = useMurmurStore((s) => s.setCurrentFlowId);
+  const setActiveCreationRoute = useMurmurStore((s) => s.setActiveCreationRoute);
+  const restoredDraftAt = useMurmurStore((s) => s.restoredDraftAt);
+  const resetFlow = useMurmurStore((s) => s.resetFlow);
   const demoSeededRef = useRef(false);
+  const restoredRegenerationRef = useRef<number | null>(null);
   const demoEnabled = initialDemo;
 
   const [title, setTitle] = useState("");
@@ -56,6 +62,29 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const [isSaving, setIsSaving] = useState(false);
   const [processingIdx, setProcessingIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (currentVersion) {
+      setActiveCreationRoute("/studio/name");
+    }
+  }, [currentVersion, setActiveCreationRoute]);
+
+  useEffect(() => {
+    if (!restoredDraftAt || restoredRegenerationRef.current === restoredDraftAt) {
+      return;
+    }
+    if (
+      currentVersion?.generation?.status === "pending" &&
+      !currentVersion.generation.audioUrl
+    ) {
+      restoredRegenerationRef.current = restoredDraftAt;
+      if (currentVersion.generation.engine === "minimax") {
+        regenerateMiniMaxVoiceAudio(currentVersion);
+      } else {
+        regenerateVersionAudio(currentVersion);
+      }
+    }
+  }, [currentVersion, restoredDraftAt]);
 
   useEffect(() => {
     if (!demoEnabled || currentVersion || demoSeededRef.current) {
@@ -171,16 +200,23 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
     const id = currentVersion.draftId;
     let mp3DataUrl: string | undefined;
+    let mp3Url: string | undefined;
     let renderedDurationSec: number | undefined;
 
     const versionWithName = { ...currentVersion, title: trimmed };
     const saveMetadata = buildNameSaveMetadata(versionWithName);
 
     try {
-      const rendered = await renderAudio(versionWithName);
-      if (rendered) {
-        mp3DataUrl = rendered.dataUrl;
-        renderedDurationSec = rendered.durationSec;
+      if (versionWithName.generation?.engine === "minimax") {
+        mp3Url = versionWithName.generation.audioUrl;
+        renderedDurationSec =
+          versionWithName.generation.durationSec || versionWithName.melody.duration;
+      } else {
+        const rendered = await renderAudio(versionWithName);
+        if (rendered) {
+          mp3DataUrl = rendered.dataUrl;
+          renderedDurationSec = rendered.durationSec;
+        }
       }
     } catch (error) {
       console.warn("[Name] render failed, saving without audio:", error);
@@ -189,7 +225,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     try {
       const hasCreatorSession = await ensureLocalCreatorSession();
       if (!hasCreatorSession) {
-        throw new Error("Local Creator session unavailable");
+        console.warn("[Name] Local Creator session unavailable; trying local preview save fallback.");
       }
       const response = await fetch("/api/songs", {
         method: "POST",
@@ -211,6 +247,10 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
           editCount: versionWithName.editCount,
           editDepth: versionWithName.editDepth,
           mp3DataUrl,
+          mp3Url,
+          inputKind: versionWithName.generation?.engine === "minimax" ? "voice" : versionWithName.sourceType,
+          lyrics: versionWithName.generation?.lyrics ?? null,
+          generationProvider: versionWithName.generation?.providerModel ?? null,
           visualConfig: versionWithName.visualConfig,
           arrangementState: versionWithName.arrangementState,
           tags: versionWithName.tags,
@@ -222,13 +262,13 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
       memory
         .reportAction({
-          content: `Saved "${trimmed}" (audio: ${mp3DataUrl ? "yes" : "no"})`,
+          content: `Saved "${trimmed}" (audio: ${mp3Url || mp3DataUrl ? "yes" : "no"})`,
           event_type: "create",
           page: "studio.name",
           metadata: {
             type: "save_song",
             song_id: id,
-            has_audio: !!mp3DataUrl,
+            has_audio: !!(mp3Url || mp3DataUrl),
             parent_song_id: versionWithName.parentSongId,
             root_song_id: versionWithName.rootSongId,
             lineage_depth: versionWithName.lineageDepth,
@@ -248,6 +288,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       });
 
       toast.success(t("studio.save_ok"));
+      resetFlow();
       router.push(`/song/${savedSongId}`);
     } catch (error) {
       console.error("[Name] save failed:", error);

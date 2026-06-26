@@ -171,7 +171,7 @@ export type VersionGenerationStatus = "pending" | "ready" | "error";
  * `audioUrl` is a session-scoped object URL filled in once the clip lands.
  */
 export type VersionGeneration = {
-  engine: "magenta";
+  engine: "magenta" | "minimax";
   /** English style prompt fed to MusicCoCa. */
   prompt: string;
   /** Bilingual display label for the generated vibe. */
@@ -183,6 +183,11 @@ export type VersionGeneration = {
   batchIndex: number;
   /** Weight of the hum's audio embedding blended into the text style. */
   styleMix: number;
+  lyrics?: string;
+  providerModel?: string;
+  audioObjectKey?: string;
+  requestId?: string;
+  loop?: boolean;
   error?: string;
 };
 
@@ -193,7 +198,7 @@ export type VibeVersion = {
   parentSongId?: string | null;
   rootSongId?: string | null;
   lineageDepth: number;
-  sourceType: "hum" | "demo" | "library";
+  sourceType: "hum" | "voice" | "demo" | "library";
   sourceMelodyKind: MelodySelectionKind;
   editCount: number;
   editDepth: EditDepth;
@@ -212,7 +217,10 @@ export type VibeVersion = {
 export type SongCard = {
   id: string;
   title: string;
+  inputKind?: "hum" | "voice" | "demo" | "library";
+  lyrics?: string;
   mp3Url?: string;
+  generationProvider?: string;
   visibility?: "private" | "unlisted" | "public";
   shareCode?: string | null;
   visualHtmlUrl?: string;

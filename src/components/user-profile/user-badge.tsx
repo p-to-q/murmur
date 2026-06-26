@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { LogOut, UserRound, X } from "lucide-react";
+import { toast } from "sonner";
 import { authClient } from "@/lib/platform/auth-client";
 import type { AppUser } from "@/lib/platform/types";
 import { useSession, signOut } from "next-auth/react";
@@ -13,21 +14,25 @@ import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { formatMemberSince } from "@/lib/user/member-since";
 import {
   clearCurrentAccountCache,
-  refreshCurrentAccount,
   useCurrentAccount,
 } from "@/lib/hooks/use-current-account";
-import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
-import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
+import { clearUserBalanceCache } from "@/lib/hooks/use-user-balance";
+import {
+  clearLocalCreatorBootstrapFlag,
+  ensureLocalCreatorSession,
+} from "@/lib/auth/local-creator-client";
 
 export function UserBadge() {
   const t = useTranslator();
-  const { account, user, isLoading, isRegistered, isLocalCreator } = useCurrentAccount();
+  const { account, user: accountUser, isLoading, isRegistered, isLocalCreator } = useCurrentAccount();
   const { status: nextAuthStatus } = useSession();
   const [open, setOpen] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [localCreatorLoading, setLocalCreatorLoading] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { providers, signInWithOAuth } = useAuthProviders();
   const hasNextAuthSession = nextAuthStatus === "authenticated";
+  const user = accountUser?.id === "guest" ? null : accountUser;
   const authProvider = preferredIdentityProvider(account?.identityProviders ?? []);
 
   useEffect(() => {
@@ -47,45 +52,30 @@ export function UserBadge() {
   }
 
   if (!user) {
-    const hasAnyOAuth = providers.google !== false || providers.github !== false;
     return (
       <div className="flex items-center gap-2">
-        {hasAnyOAuth && (
-          <div className="flex items-center gap-1.5">
-            {providers.google !== false && (
-              <button
-                onClick={() => signInWithOAuth("google", "/")}
-                disabled={providers.google === null}
-                className="flex items-center gap-2 rounded-full border border-[#E0DDD5] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] shadow-sm transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <GoogleIcon className="h-4 w-4" />
-                {t("auth.continue_google")}
-              </button>
-            )}
-            {providers.github !== false && (
-              <button
-                onClick={() => signInWithOAuth("github", "/")}
-                disabled={providers.github === null}
-                className="flex items-center gap-2 rounded-full border border-[#E0DDD5] bg-white px-4 py-2 text-sm font-medium text-[#1A1A1A] shadow-sm transition-all hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <GitHubIcon className="h-4 w-4" />
-                {t("auth.continue_github")}
-              </button>
-            )}
-          </div>
-        )}
         <button
           onClick={() => {
             void (async () => {
-              await ensureLocalCreatorSession();
-              await refreshCurrentAccount();
-              await fetchUserBalance({ force: true });
+              setLocalCreatorLoading(true);
+              const ready = await ensureLocalCreatorSession({ force: true });
+              setLocalCreatorLoading(false);
+              if (ready) {
+                setOpen(true);
+              } else {
+                toast.error(t("auth.local_creator_unavailable"));
+              }
             })();
           }}
+          disabled={localCreatorLoading}
           className="flex items-center gap-2 rounded-full border border-[#E0DDD5] bg-[#F5F1EB] px-3 py-1.5 text-sm font-medium text-[#8C8780] shadow-sm transition-shadow hover:shadow-md"
         >
-          <UserRound className="h-4 w-4" />
-          {t("auth.local_creator")}
+          {localCreatorLoading ? (
+            <Spinner size="sm" variant="muted" />
+          ) : (
+            <UserRound className="h-4 w-4" />
+          )}
+          <span>{t("auth.local_creator")}</span>
         </button>
       </div>
     );
@@ -144,13 +134,12 @@ export function UserBadge() {
           )}
           <button
             onClick={async () => {
+              clearLocalCreatorBootstrapFlag();
               await authClient.logout();
               clearCurrentAccountCache();
+              clearUserBalanceCache();
               if (hasNextAuthSession) {
                 await signOut({ callbackUrl: "/" });
-              } else {
-                await refreshCurrentAccount();
-                await fetchUserBalance({ force: true });
               }
               setOpen(false);
             }}
@@ -173,7 +162,7 @@ function BadgeTrigger({ user, onClick }: { user: AppUser; onClick: () => void })
     >
       <Avatar user={user} size={24} />
       <span className="max-w-[120px] truncate font-medium text-foreground">
-        {user.name ?? user.email ?? user.id}
+        {displayUserName(user)}
       </span>
     </button>
   );
@@ -217,7 +206,7 @@ function DropdownPanel({
         <div className="flex items-center gap-3">
           <Avatar user={user} size={40} />
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{user.name ?? "—"}</p>
+            <p className="truncate text-sm font-semibold">{displayUserName(user)}</p>
             {user.email && (
               <p className="truncate text-xs text-muted-foreground">{user.email}</p>
             )}
@@ -331,7 +320,7 @@ function InitialsAvatar({
 function Avatar({ user, size }: { user: AppUser; size: number }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const seed = user.id ?? user.email ?? user.name ?? "murmur";
-  const initial = userInitial(user.name, user.email);
+  const initial = userInitial(displayUserName(user), user.email);
   const avatarSrc = user.avatarUrl
     ? user.avatarUrl.startsWith("//")
       ? `https:${user.avatarUrl}`
@@ -343,7 +332,7 @@ function Avatar({ user, size }: { user: AppUser; size: number }) {
     return (
       <Image
         src={avatarSrc}
-        alt={user.name ?? "avatar"}
+        alt={displayUserName(user)}
         width={size}
         height={size}
         className="rounded-full object-cover ring-2 ring-border"
@@ -381,4 +370,11 @@ function accountLabelKey(provider: string | undefined, user: AppUser): string {
   return user.accountKind === "registered"
     ? "auth.account_registered"
     : "auth.account_local";
+}
+
+function displayUserName(user: AppUser): string {
+  if (user.accountKind === "local_creator" || user.name === "Local Creator") {
+    return "Guest";
+  }
+  return user.name ?? user.email ?? user.id;
 }

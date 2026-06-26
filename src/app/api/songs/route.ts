@@ -3,6 +3,10 @@ import { z } from "zod";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
+import {
+  getRequestHostname,
+  shouldAllowLocalPreviewFallback,
+} from "@/lib/auth/local-preview";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import {
   getSongByIdForCreateConflict,
@@ -43,6 +47,10 @@ const songPayloadSchema = z.object({
   editCount: z.number().int().optional(),
   editDepth: z.enum(["fresh", "shaped", "reworked"]).optional(),
   mp3DataUrl: z.string().nullable().optional(),
+  mp3Url: z.string().nullable().optional(),
+  inputKind: z.enum(["hum", "voice", "demo", "library"]).optional(),
+  lyrics: z.string().nullable().optional(),
+  generationProvider: z.string().nullable().optional(),
   visualConfig: visualConfigSchema,
   arrangementState: arrangementStateSchema,
   tags: z.array(z.string()),
@@ -53,14 +61,17 @@ type SongInput = typeof songs.$inferInsert;
 type OkAuth = Extract<ResolvedRequestAuth, { ok: true }>;
 
 export async function GET(req: NextRequest) {
-  const auth = await resolveRequestAuth(req);
+  const requestHost = getRequestHostname(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowLocalPreviewFallback(req),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   try {
     const rows = await getSongSummariesByUser(userId);
     return NextResponse.json(rows);
   } catch (err) {
-    if (shouldUseLocalSongFallback(auth, req.nextUrl?.hostname) && isDatabaseUnavailable(err)) {
+    if (shouldUseLocalSongFallback(auth, requestHost) && isDatabaseUnavailable(err)) {
       const rows = getLocalSongSummariesByUserFallback(userId);
       log("song.list_failed", {
         reason: "database_unavailable",
@@ -95,7 +106,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
-  const auth = await resolveRequestAuth(req);
+  const requestHost = getRequestHostname(req);
+  const auth = await resolveRequestAuth(req, {
+    allowGuestPreview: shouldAllowLocalPreviewFallback(req),
+  });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const rateLimit = await checkApiRateLimit({
@@ -149,7 +163,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const skipBilling =
-      shouldBypassBillingInDevelopment({ host: req.nextUrl?.hostname })
+      shouldBypassBillingInDevelopment({ host: requestHost })
       || COST.save === 0
       || shouldSkipNotesBilling(auth);
     if (skipBilling) {
@@ -164,7 +178,7 @@ export async function POST(req: NextRequest) {
           return handleSongIdConflict(songInput.id, userId, requestId);
         }
         if (
-          shouldUseLocalSongFallback(auth, req.nextUrl?.hostname)
+          shouldUseLocalSongFallback(auth, requestHost)
           && isDatabaseUnavailable(dbError)
         ) {
           const fallbackSong = createLocalSongFallback(songInput);
@@ -251,7 +265,7 @@ export async function POST(req: NextRequest) {
       headers: { "X-Request-Id": requestId },
     });
   } catch (err) {
-    if (shouldUseLocalSongFallback(auth, req.nextUrl?.hostname) && isDatabaseUnavailable(err)) {
+    if (shouldUseLocalSongFallback(auth, requestHost) && isDatabaseUnavailable(err)) {
       const fallbackSong = createLocalSongFallback(songInput);
       log("song.create_failed", {
         reason: "database_unavailable",
@@ -330,6 +344,10 @@ function buildSongInput(body: SongPayload, userId: string): SongInput {
     editCount,
     editDepth,
     mp3DataUrl: body.mp3DataUrl ?? null,
+    mp3Url: body.mp3Url ?? null,
+    inputKind: body.inputKind ?? "hum",
+    lyrics: body.lyrics ?? null,
+    generationProvider: body.generationProvider ?? null,
     visualConfig: body.visualConfig,
     arrangementState: body.arrangementState,
     tags: body.tags,
@@ -433,7 +451,6 @@ function shouldUseLocalSongFallback(auth: OkAuth, host?: string | null): boolean
     && shouldBypassBillingInDevelopment({ host })
   );
 }
-
 
 function isMelodySelectionKind(value: unknown): value is MelodySelectionKind {
   return typeof value === "string" && MELODY_SELECTION_KINDS.has(value as MelodySelectionKind);

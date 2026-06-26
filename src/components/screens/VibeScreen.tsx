@@ -34,6 +34,7 @@ import {
   regenerateVersionAudio,
   shouldUseMagentaEngine,
 } from "@/modules/magenta/generate-magenta-versions";
+import { regenerateMiniMaxVoiceAudio } from "@/modules/minimax/generate-voice-version";
 import { buildDemoFlowState, buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import {
   getVersionReadinessBlockReason,
@@ -142,6 +143,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     setCurrentVersion,
     setCurrentDraftId,
     setCurrentFlowId,
+    setActiveCreationRoute,
     currentDraftId,
     currentFlowId,
     auditioningVersionId,
@@ -149,6 +151,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     resetFlow,
     humStyleBlob,
     setHumStyleBlob,
+    restoredDraftAt,
   } = useMurmurStore();
 
   const [phase, setPhase] = useState<Phase>("closing");
@@ -157,6 +160,13 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const sourceVersion = vibeVersions[0] ?? null;
   const fromSavedSong = sourceVersion?.sourceType === "library";
   const demoEnabled = initialDemo;
+  const restoredRegenerationRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (vibeVersions.length > 0) {
+      setActiveCreationRoute("/vibe");
+    }
+  }, [setActiveCreationRoute, vibeVersions.length]);
 
   /* ── Arrival sequence ─────────────────────────────────────────── */
   useEffect(() => {
@@ -196,6 +206,27 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     }
   }, [demoEnabled, phase, vibeVersions.length, router]);
 
+  useEffect(() => {
+    if (!restoredDraftAt || restoredRegenerationRef.current === restoredDraftAt) {
+      return;
+    }
+    const needsRegeneration = vibeVersions.filter(
+      (version) =>
+        version.generation &&
+        version.generation.status === "pending" &&
+        !version.generation.audioUrl,
+    );
+    if (needsRegeneration.length === 0) return;
+    restoredRegenerationRef.current = restoredDraftAt;
+    for (const version of needsRegeneration) {
+      if (version.generation?.engine === "minimax") {
+        regenerateMiniMaxVoiceAudio(version);
+      } else {
+        regenerateVersionAudio(version);
+      }
+    }
+  }, [restoredDraftAt, vibeVersions]);
+
   /* ── Stop preview on unmount ──────────────────────────────────── */
   useEffect(() => {
     return () => {
@@ -217,7 +248,11 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       }
       versionPreview.stop();
       setAuditioning(null);
-      regenerateVersionAudio(version);
+      if (version.generation.engine === "minimax") {
+        regenerateMiniMaxVoiceAudio(version);
+      } else {
+        regenerateVersionAudio(version);
+      }
       toast(t("vibe.gen.retrying") || "Brewing this one again…");
     },
     [setAuditioning, t],
@@ -294,6 +329,10 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const handleReroll = useCallback(async () => {
     if (vibeVersions.length === 0) return;
     const first = vibeVersions[0]!;
+    if (first.generation?.engine === "minimax") {
+      toast(t("vibe.voice.single") || "Voice takes generate one full song at a time.");
+      return;
+    }
     versionPreview.stop();
     setAuditioning(null);
     const common = {
@@ -336,7 +375,11 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     versionPreview.stop();
     setAuditioning(null);
     for (const version of failedVersions) {
-      regenerateVersionAudio(version);
+      if (version.generation?.engine === "minimax") {
+        regenerateMiniMaxVoiceAudio(version);
+      } else {
+        regenerateVersionAudio(version);
+      }
     }
     toast(t("vibe.gen.retrying_all") || "Brewing the whole set again…");
   }, [setAuditioning, t, vibeVersions]);

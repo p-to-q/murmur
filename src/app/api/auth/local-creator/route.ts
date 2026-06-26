@@ -19,6 +19,7 @@ import {
 import { createSession } from "@/lib/db/queries/sessions";
 import { createLocalCreatorUser } from "@/lib/db/queries/users";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
+import { errorSummary } from "@/lib/observability/error-summary";
 import { log } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
@@ -99,8 +100,8 @@ export async function POST(request: NextRequest) {
     await refundConsumedLimits(consumedLimits);
     log(
       "auth.local_creator_failed",
-      { error: error instanceof Error ? error.message : String(error) },
-      { route: ROUTE, level: "error" },
+      errorSummary(error),
+      { route: ROUTE, requestId, level: "error" },
     );
     return NextResponse.json(
       {

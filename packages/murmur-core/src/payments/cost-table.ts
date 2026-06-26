@@ -15,6 +15,7 @@
 export type CostKey =
   | "hum"
   | "music_generate"
+  | "voice_generate"
   | "llm_edit"
   | "save"
   | "export_webm";
@@ -24,6 +25,7 @@ export type NotesReason =
   // Spends
   | "spend:hum"
   | "spend:music_generate"
+  | "spend:voice_generate"
   | "spend:llm_edit"
   | "spend:save"
   | "spend:export_webm"
@@ -53,6 +55,7 @@ export type NotesReason =
 export const COST: Readonly<Record<CostKey, number>> = Object.freeze({
   hum:          1,
   music_generate: 1,
+  voice_generate: 4,
   llm_edit:     1,
   save:         0,
   export_webm:  0,
@@ -247,6 +250,7 @@ export function getRegionalPrice(
 export function asCostKey(value: string): CostKey | null {
   return value === "hum"
       || value === "music_generate"
+      || value === "voice_generate"
       || value === "llm_edit"
       || value === "save"
       || value === "export_webm"

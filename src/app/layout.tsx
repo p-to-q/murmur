@@ -5,6 +5,7 @@ import Script from "next/script";
 // Simplified Chinese face available only as missing-glyph fallback.
 import "@fontsource/lxgw-wenkai-tc/300.css";
 import "@fontsource/lxgw-wenkai-tc/400.css";
+import "./fonts/datatype.css";
 import "./fonts/lxgw-wenkai-gb-screen-300.css";
 import { Instrument_Serif } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
@@ -24,7 +25,9 @@ import { AuthProvider } from "@/components/auth/auth-provider";
 import { FontHydrator } from "@/components/murmur/font-hydrator";
 import { MobileTopBar } from "@/components/murmur/mobile-top-bar";
 import { ShareReferralTracker } from "@/components/murmur/share-referral-tracker";
+import { MobileMeDock } from "@/components/murmur/mobile-me-dock";
 import { getSiteUrl } from "@/lib/site-url";
+import { FONT_PRELOAD_ASSETS } from "@/lib/fonts/font-assets";
 
 const SITE_URL = getSiteUrl();
 
@@ -127,6 +130,18 @@ export default async function RootLayout({
         instrumentalSerif.variable,
       )}
     >
+      <head>
+        {FONT_PRELOAD_ASSETS.map((asset) => (
+          <link
+            key={asset.href}
+            rel="preload"
+            href={asset.href}
+            as="font"
+            type={asset.type}
+            crossOrigin="anonymous"
+          />
+        ))}
+      </head>
       <body
         suppressHydrationWarning
         className="min-h-svh flex flex-col bg-[#F5F1EB]"
@@ -143,6 +158,9 @@ export default async function RootLayout({
             <SideNav />
             {/* Mobile top bar — logo + language toggle */}
             <MobileTopBar />
+            <div className="pointer-events-none fixed right-3 top-[calc(env(safe-area-inset-top,0px)+8px)] z-50 md:hidden">
+              <MobileMeDock />
+            </div>
             {/* Main content area:
                 - mobile  → reserves bottom for nav (with safe-area)
                 - desktop → reserves left 232px for sidebar */}

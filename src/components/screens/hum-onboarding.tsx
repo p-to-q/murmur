@@ -189,7 +189,7 @@ export function HumOnboardingOverlay({
                   <motion.p
                     key={line}
                     className={[
-                      "hero-serif whitespace-pre-line text-[#1A1A1A]/80 tracking-normal",
+                      "font-critical hero-serif whitespace-pre-line text-[#1A1A1A]/80 tracking-normal",
                       COPY_CLASS,
                     ].join(" ")}
                     initial={{ opacity: 0, y: 5 }}

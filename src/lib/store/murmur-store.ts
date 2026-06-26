@@ -1,7 +1,23 @@
 import { create } from "zustand";
-import type { VibeVersion } from "@/modules/shared/types";
+import type { VibeVersion, VersionGeneration } from "@/modules/shared/types";
 
 export type RecordingState = "idle" | "recording" | "processing" | "done" | "error";
+export type CreationRoute = "/vibe" | "/studio" | "/studio/name";
+
+const DRAFT_STORAGE_KEY = "murmur-creation-draft-v1";
+const DRAFT_STORAGE_VERSION = 1;
+
+type PersistedDraftPayload = {
+  version: typeof DRAFT_STORAGE_VERSION;
+  state: {
+    vibeVersions: VibeVersion[];
+    currentVersion: VibeVersion | null;
+    currentDraftId: string | null;
+    currentFlowId: string | null;
+    activeCreationRoute: CreationRoute | null;
+    draftUpdatedAt: number | null;
+  };
+};
 
 interface MurmurStore {
   // Recording flow
@@ -26,6 +42,10 @@ interface MurmurStore {
   setCurrentDraftId: (id: string | null) => void;
   currentFlowId: string | null;
   setCurrentFlowId: (id: string | null) => void;
+  activeCreationRoute: CreationRoute | null;
+  setActiveCreationRoute: (route: CreationRoute | null) => void;
+  draftUpdatedAt: number | null;
+  restoredDraftAt: number | null;
 
   // Playback state — which version/song is currently playing audio
   isPlaying: boolean;
@@ -42,46 +62,204 @@ interface MurmurStore {
   resetFlow: () => void;
 }
 
-export const useMurmurStore = create<MurmurStore>((set) => ({
-  recordingState: "idle",
-  setRecordingState: (s) => set({ recordingState: s }),
-  processingMessage: "",
-  setProcessingMessage: (m) => set({ processingMessage: m }),
+export type CreationRouteState = Pick<
+  MurmurStore,
+  "activeCreationRoute" | "currentVersion" | "vibeVersions"
+>;
 
-  vibeVersions: [],
-  setVibeVersions: (v) => set({ vibeVersions: v }),
+function isCreationRoute(value: unknown): value is CreationRoute {
+  return value === "/vibe" || value === "/studio" || value === "/studio/name";
+}
 
-  humStyleBlob: null,
-  setHumStyleBlob: (b) => set({ humStyleBlob: b }),
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
-  currentVersion: null,
-  setCurrentVersion: (v) => set({ currentVersion: v }),
-  currentDraftId: null,
-  setCurrentDraftId: (id) => set({ currentDraftId: id }),
-  currentFlowId: null,
-  setCurrentFlowId: (id) => set({ currentFlowId: id }),
+function stripSessionAudio(
+  generation: VersionGeneration | undefined,
+): VersionGeneration | undefined {
+  if (!generation) return undefined;
+  if (generation.engine === "minimax") return generation;
+  const hasSessionAudio =
+    typeof generation.audioUrl === "string" && generation.audioUrl.length > 0;
+  return {
+    ...generation,
+    audioUrl: undefined,
+    status:
+      generation.status === "ready" && hasSessionAudio
+        ? "pending"
+        : generation.status === "ready"
+          ? "pending"
+          : generation.status,
+    error:
+      generation.status === "ready" && hasSessionAudio
+        ? undefined
+        : generation.error,
+  };
+}
 
-  isPlaying: false,
-  playingSongId: null,
-  auditioningVersionId: null,
-  setPlaying: (id) => set({ isPlaying: !!id, playingSongId: id, auditioningVersionId: null }),
-  setAuditioning: (versionId) =>
-    set({ auditioningVersionId: versionId, isPlaying: false, playingSongId: null }),
+export function prepareVersionForDraftStorage(version: VibeVersion): VibeVersion {
+  return {
+    ...version,
+    generation: stripSessionAudio(version.generation),
+  };
+}
 
-  radioStationId: null,
-  setRadioStationId: (id) => set({ radioStationId: id }),
+function hasDraftContent(state: CreationRouteState): boolean {
+  return state.vibeVersions.length > 0 || state.currentVersion !== null;
+}
 
-  resetFlow: () =>
-    set({
-      recordingState: "idle",
-      vibeVersions: [],
-      humStyleBlob: null,
-      currentVersion: null,
-      currentDraftId: null,
-      currentFlowId: null,
-      processingMessage: "",
-      auditioningVersionId: null,
-      isPlaying: false,
-      playingSongId: null,
-    }),
-}));
+export function resolveRecoverableCreationRoute(
+  state: CreationRouteState,
+): CreationRoute | null {
+  if (!hasDraftContent(state)) return null;
+  if (
+    state.activeCreationRoute &&
+    (state.activeCreationRoute === "/vibe" || state.currentVersion)
+  ) {
+    return state.activeCreationRoute;
+  }
+  if (state.currentVersion) return "/studio";
+  return "/vibe";
+}
+
+function buildPersistedDraft(state: MurmurStore): PersistedDraftPayload | null {
+  if (!hasDraftContent(state)) return null;
+  const draftUpdatedAt = Date.now();
+  return {
+    version: DRAFT_STORAGE_VERSION,
+    state: {
+      vibeVersions: state.vibeVersions.map(prepareVersionForDraftStorage),
+      currentVersion: state.currentVersion
+        ? prepareVersionForDraftStorage(state.currentVersion)
+        : null,
+      currentDraftId: state.currentDraftId,
+      currentFlowId: state.currentFlowId,
+      activeCreationRoute: resolveRecoverableCreationRoute(state),
+      draftUpdatedAt,
+    },
+  };
+}
+
+function writeDraftSnapshot(state: MurmurStore) {
+  if (typeof window === "undefined") return;
+  try {
+    const payload = buildPersistedDraft(state);
+    if (!payload) {
+      window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Storage can be unavailable in private modes; keep the in-memory flow alive.
+  }
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function readStoredDraft(): Partial<MurmurStore> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isRecord(parsed) || parsed.version !== DRAFT_STORAGE_VERSION) {
+      return {};
+    }
+    const state = parsed.state;
+    if (!isRecord(state)) return {};
+    const vibeVersions = Array.isArray(state.vibeVersions)
+      ? (state.vibeVersions as VibeVersion[]).map(prepareVersionForDraftStorage)
+      : [];
+    const currentVersion = isRecord(state.currentVersion)
+      ? prepareVersionForDraftStorage(state.currentVersion as VibeVersion)
+      : null;
+    if (vibeVersions.length === 0 && !currentVersion) return {};
+    const activeCreationRoute = isCreationRoute(state.activeCreationRoute)
+      ? state.activeCreationRoute
+      : resolveRecoverableCreationRoute({
+          activeCreationRoute: null,
+          currentVersion,
+          vibeVersions,
+        });
+
+    return {
+      vibeVersions,
+      currentVersion,
+      currentDraftId: stringOrNull(state.currentDraftId),
+      currentFlowId: stringOrNull(state.currentFlowId),
+      activeCreationRoute,
+      draftUpdatedAt:
+        typeof state.draftUpdatedAt === "number" ? state.draftUpdatedAt : null,
+      restoredDraftAt: Date.now(),
+    };
+  } catch {
+    return {};
+  }
+}
+
+const restoredDraft = readStoredDraft();
+
+export const useMurmurStore = create<MurmurStore>((set, get) => {
+  const setDraftState = (patch: Partial<MurmurStore>) => {
+    set({ ...patch, draftUpdatedAt: Date.now() });
+    writeDraftSnapshot(get());
+  };
+
+  return {
+    recordingState: "idle",
+    setRecordingState: (s) => set({ recordingState: s }),
+    processingMessage: "",
+    setProcessingMessage: (m) => set({ processingMessage: m }),
+
+    vibeVersions: restoredDraft.vibeVersions ?? [],
+    setVibeVersions: (v) => setDraftState({ vibeVersions: v }),
+
+    humStyleBlob: null,
+    setHumStyleBlob: (b) => set({ humStyleBlob: b }),
+
+    currentVersion: restoredDraft.currentVersion ?? null,
+    setCurrentVersion: (v) => setDraftState({ currentVersion: v }),
+    currentDraftId: restoredDraft.currentDraftId ?? null,
+    setCurrentDraftId: (id) => setDraftState({ currentDraftId: id }),
+    currentFlowId: restoredDraft.currentFlowId ?? null,
+    setCurrentFlowId: (id) => setDraftState({ currentFlowId: id }),
+    activeCreationRoute: restoredDraft.activeCreationRoute ?? null,
+    setActiveCreationRoute: (route) =>
+      setDraftState({ activeCreationRoute: route }),
+    draftUpdatedAt: restoredDraft.draftUpdatedAt ?? null,
+    restoredDraftAt: restoredDraft.restoredDraftAt ?? null,
+
+    isPlaying: false,
+    playingSongId: null,
+    auditioningVersionId: null,
+    setPlaying: (id) =>
+      set({ isPlaying: !!id, playingSongId: id, auditioningVersionId: null }),
+    setAuditioning: (versionId) =>
+      set({ auditioningVersionId: versionId, isPlaying: false, playingSongId: null }),
+
+    radioStationId: null,
+    setRadioStationId: (id) => set({ radioStationId: id }),
+
+    resetFlow: () => {
+      set({
+        recordingState: "idle",
+        vibeVersions: [],
+        humStyleBlob: null,
+        currentVersion: null,
+        currentDraftId: null,
+        currentFlowId: null,
+        activeCreationRoute: null,
+        draftUpdatedAt: null,
+        restoredDraftAt: null,
+        processingMessage: "",
+        auditioningVersionId: null,
+        isPlaying: false,
+        playingSongId: null,
+      });
+      writeDraftSnapshot(get());
+    },
+  };
+});

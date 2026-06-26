@@ -10,6 +10,8 @@ import Image from "next/image";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
+import { regenerateVersionAudio } from "@/modules/magenta/generate-magenta-versions";
+import { regenerateMiniMaxVoiceAudio } from "@/modules/minimax/generate-voice-version";
 import { generateStrummerCode } from "@/modules/strummer/generate-code";
 import {
   applyEdit,
@@ -52,8 +54,36 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
   const setVibeVersions = useMurmurStore((state) => state.setVibeVersions);
   const setCurrentDraftId = useMurmurStore((state) => state.setCurrentDraftId);
   const setCurrentFlowId = useMurmurStore((state) => state.setCurrentFlowId);
+  const setActiveCreationRoute = useMurmurStore(
+    (state) => state.setActiveCreationRoute,
+  );
+  const restoredDraftAt = useMurmurStore((state) => state.restoredDraftAt);
   const demoSeededRef = useRef(false);
   const demoEnabled = initialDemo;
+  const restoredRegenerationRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (currentVersion) {
+      setActiveCreationRoute("/studio");
+    }
+  }, [currentVersion, setActiveCreationRoute]);
+
+  useEffect(() => {
+    if (!restoredDraftAt || restoredRegenerationRef.current === restoredDraftAt) {
+      return;
+    }
+    if (
+      currentVersion?.generation?.status === "pending" &&
+      !currentVersion.generation.audioUrl
+    ) {
+      restoredRegenerationRef.current = restoredDraftAt;
+      if (currentVersion.generation.engine === "minimax") {
+        regenerateMiniMaxVoiceAudio(currentVersion);
+      } else {
+        regenerateVersionAudio(currentVersion);
+      }
+    }
+  }, [currentVersion, restoredDraftAt]);
 
   useEffect(() => {
     if (!demoEnabled || currentVersion || demoSeededRef.current) {
@@ -318,7 +348,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
   const artworkPath = artwork?.backgroundImagePath ?? artwork?.imagePath;
   const meshStyle = buildMeshGradient(currentVersion.visualConfig.gradient, artwork?.palette);
 
-  // Magenta versions are whole generated clips — the per-track mixer and
+  // Generated versions are whole clips/songs — the per-track mixer and
   // arrangement edits below don't apply to them.
   const magenta = currentVersion.generation;
   const canSave = canSaveHeardVersion(currentVersion);
@@ -452,8 +482,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
             <div style={{ height: "14px" }} />
 
           {magenta ? (
-            /* Magenta panel — the clip is one generated whole; show its
-               prompt instead of arrangement controls. */
+            /* Whole-song panel — show prompt/lyrics instead of arrangement controls. */
             <div className="px-5 pt-2 pb-3">
               <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4">
                 <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.24em] text-white/45">
@@ -463,6 +492,13 @@ function StudioContent({ version }: { version: VibeVersion }) {
                 <p className="mt-2 text-[13px] leading-relaxed text-white/85">
                   {magenta.prompt}
                 </p>
+                {magenta.engine === "minimax" && magenta.lyrics && (
+                  <div className="mt-4 max-h-44 overflow-y-auto rounded-xl border border-white/10 bg-black/10 px-3 py-3">
+                    <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-white/80">
+                      {magenta.lyrics}
+                    </p>
+                  </div>
+                )}
                 <p className="mt-3 text-[11px] leading-relaxed text-white/40">
                   {magenta.status === "pending" ? (
                     <span className="inline-flex items-center gap-1.5">

@@ -16,7 +16,8 @@ export async function getSongsByUser(userId: string) {
 // base64 data URL (often multiple MB) and `arrangementState` is a fat jsonb
 // blob with per-track version histories; pulling either into a list response
 // dwarfs everything else on the wire. Project them out here so switching to
-// the gallery stays cheap. Detail playback still uses the full-row queries.
+// the gallery stays cheap. Stable `mp3Url` is small and remains useful for
+// whole-song voice playback. Detail playback still uses the full-row queries.
 export async function getSongSummariesByUser(userId: string) {
   return db
     .select({
@@ -35,6 +36,10 @@ export async function getSongSummariesByUser(userId: string) {
       sourceMelodyKind: songs.sourceMelodyKind,
       editCount: songs.editCount,
       editDepth: songs.editDepth,
+      inputKind: songs.inputKind,
+      lyrics: songs.lyrics,
+      generationProvider: songs.generationProvider,
+      mp3Url: songs.mp3Url,
       visibility: songs.visibility,
       shareCode: songs.shareCode,
       visualConfig: songs.visualConfig,
@@ -100,6 +105,10 @@ export async function getPublicSongSummaries(input: {
       sourceMelodyKind: songs.sourceMelodyKind,
       editCount: songs.editCount,
       editDepth: songs.editDepth,
+      inputKind: songs.inputKind,
+      lyrics: songs.lyrics,
+      generationProvider: songs.generationProvider,
+      mp3Url: songs.mp3Url,
       visibility: songs.visibility,
       shareCode: songs.shareCode,
       visualConfig: songs.visualConfig,

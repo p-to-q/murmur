@@ -666,7 +666,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.24, duration: 0.5 }}
-              className="eyebrow font-ui-label mt-12 text-[#FF8A5C]"
+              className="eyebrow mt-12 text-[#FF8A5C]"
             >
               {t("song.export.eyebrow") || "EXPORT"}
             </motion.p>
@@ -799,7 +799,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               onClick={(e) => e.stopPropagation()}
               className="mm-card w-full max-w-sm px-6 py-7 text-center"
             >
-              <p className="eyebrow font-ui-label text-[#FF8A5C] mb-3">{t("song.delete.eyebrow") || "REMOVE"}</p>
+              <p className="eyebrow mb-3 text-[#FF8A5C]">{t("song.delete.eyebrow") || "REMOVE"}</p>
               <h3 className="font-serif text-[24px] text-[#1A1A1A] leading-tight">
                 {t("song.delete.title") || "Delete this little song?"}
               </h3>

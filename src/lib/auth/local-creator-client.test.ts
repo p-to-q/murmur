@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+
 import {
   __resetLocalCreatorBootstrapForTesting,
+  ensureLocalCreatorSession,
   hasTriedLocalCreatorBootstrap,
-} from "@/lib/auth/local-creator-client";
+} from "./local-creator-client";
 import { __resetCurrentAccountCacheForTesting } from "@/lib/hooks/use-current-account";
 import { __resetUserBalanceCacheForTesting } from "@/lib/hooks/use-user-balance";
-import { loadGallerySongsOnce } from "./GalleryScreen";
 
 const originalFetch = globalThis.fetch;
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
-const BOOTSTRAP_STORAGE_KEY = "murmur.local-creator.bootstrapped";
 
 class MemoryStorage {
   private readonly values = new Map<string, string>();
@@ -39,13 +39,11 @@ class MemoryStorage {
   }
 }
 
-function installBrowserStorage(): MemoryStorage {
-  const sessionStorage = new MemoryStorage();
+function installBrowserStorage(): void {
   Object.defineProperty(globalThis, "window", {
     configurable: true,
-    value: { sessionStorage },
+    value: { sessionStorage: new MemoryStorage() },
   });
-  return sessionStorage;
 }
 
 function restoreWindow(): void {
@@ -69,11 +67,9 @@ function requestPath(input: RequestInfo | URL): string {
   return input.url;
 }
 
-describe("loadGallerySongsOnce", () => {
-  let sessionStorage: MemoryStorage;
-
+describe("ensureLocalCreatorSession", () => {
   beforeEach(() => {
-    sessionStorage = installBrowserStorage();
+    installBrowserStorage();
     __resetLocalCreatorBootstrapForTesting();
     __resetCurrentAccountCacheForTesting();
     __resetUserBalanceCacheForTesting();
@@ -87,73 +83,29 @@ describe("loadGallerySongsOnce", () => {
     restoreWindow();
   });
 
-  it("uses the existing bootstrap flag for a normal gallery load", async () => {
-    sessionStorage.setItem(BOOTSTRAP_STORAGE_KEY, "1");
+  it("returns true only after the account refresh resolves a Local Creator", async () => {
     const calls: string[] = [];
     globalThis.fetch = (async (input) => {
-      calls.push(requestPath(input));
-      return jsonResponse([
-        { id: "song_ok", title: "Still Here", vibe: "soft", createdAt: "2026-06-20T10:00:00.000Z" },
-      ]);
-    }) as typeof fetch;
-
-    const songs = await loadGallerySongsOnce();
-
-    expect(songs?.map((song) => song.id)).toEqual(["song_ok"]);
-    expect(calls).toEqual(["/api/songs"]);
-    expect(hasTriedLocalCreatorBootstrap()).toBe(true);
-  });
-
-  it("clears a stale bootstrap flag and retries songs once after 401", async () => {
-    sessionStorage.setItem(BOOTSTRAP_STORAGE_KEY, "1");
-    let songFetches = 0;
-    let bootstrapFetches = 0;
-    let clearedBeforeBootstrap = false;
-
-    globalThis.fetch = (async (input, init) => {
       const path = requestPath(input);
-      if (path === "/api/songs") {
-        songFetches += 1;
-        return songFetches === 1
-          ? jsonResponse({ error: "unauthorized" }, 401)
-          : jsonResponse([
-              {
-                id: "song_retry",
-                title: "Recovered Session",
-                vibe: "bright",
-                createdAt: "2026-06-20T10:00:00.000Z",
-              },
-            ]);
-      }
-
+      calls.push(path);
       if (path === "/api/auth/local-creator") {
-        bootstrapFetches += 1;
-        clearedBeforeBootstrap = !hasTriedLocalCreatorBootstrap();
-        expect(init?.method).toBe("POST");
-        return jsonResponse({
-          user: { id: "lc_retry", name: "Local Creator", email: null, avatarUrl: null },
-          source: "session",
-          sessionId: "sess_retry",
-          created: true,
-        });
+        return jsonResponse({ ok: true });
       }
-
       if (path === "/api/auth/me") {
         return jsonResponse({
           user: {
-            id: "lc_retry",
+            id: "lc_ready",
             name: "Local Creator",
             email: null,
             avatarUrl: null,
             accountKind: "local_creator",
           },
           source: "session",
-          sessionId: "sess_retry",
+          sessionId: "sess_ready",
           authenticated: true,
           identityProviders: [],
         });
       }
-
       if (path === "/api/user/balance") {
         return jsonResponse({
           notes: 5,
@@ -163,51 +115,36 @@ describe("loadGallerySongsOnce", () => {
           nextRefillAt: null,
         });
       }
-
       throw new Error(`unexpected fetch ${path}`);
     }) as typeof fetch;
 
-    const songs = await loadGallerySongsOnce();
-
-    expect(songs?.map((song) => song.id)).toEqual(["song_retry"]);
-    expect(songFetches).toBe(2);
-    expect(bootstrapFetches).toBe(1);
-    expect(clearedBeforeBootstrap).toBe(true);
+    await expect(ensureLocalCreatorSession()).resolves.toBe(true);
+    expect(calls).toEqual([
+      "/api/auth/local-creator",
+      "/api/auth/me",
+      "/api/user/balance",
+    ]);
     expect(hasTriedLocalCreatorBootstrap()).toBe(true);
   });
 
-  it("does not loop when the retried gallery request is still unauthorized", async () => {
-    sessionStorage.setItem(BOOTSTRAP_STORAGE_KEY, "1");
-    let songFetches = 0;
-    let bootstrapFetches = 0;
-
+  it("does not report success when the refreshed account is still guest", async () => {
     globalThis.fetch = (async (input) => {
       const path = requestPath(input);
-      if (path === "/api/songs") {
-        songFetches += 1;
-        return jsonResponse({ error: "unauthorized" }, 401);
-      }
       if (path === "/api/auth/local-creator") {
-        bootstrapFetches += 1;
-        return jsonResponse({
-          user: { id: "lc_retry", name: "Local Creator", email: null, avatarUrl: null },
-          source: "session",
-          sessionId: "sess_retry",
-          created: true,
-        });
+        return jsonResponse({ ok: true });
       }
       if (path === "/api/auth/me") {
         return jsonResponse({
           user: {
-            id: "lc_retry",
+            id: "guest",
             name: "Local Creator",
             email: null,
             avatarUrl: null,
-            accountKind: "local_creator",
+            accountKind: null,
           },
-          source: "session",
-          sessionId: "sess_retry",
-          authenticated: true,
+          source: "guest",
+          sessionId: null,
+          authenticated: false,
           identityProviders: [],
         });
       }
@@ -223,10 +160,19 @@ describe("loadGallerySongsOnce", () => {
       throw new Error(`unexpected fetch ${path}`);
     }) as typeof fetch;
 
-    const songs = await loadGallerySongsOnce();
+    await expect(ensureLocalCreatorSession()).resolves.toBe(false);
+    expect(hasTriedLocalCreatorBootstrap()).toBe(true);
+  });
 
-    expect(songs).toBeNull();
-    expect(songFetches).toBe(2);
-    expect(bootstrapFetches).toBe(1);
+  it("clears the bootstrap flag after a rejected Local Creator request", async () => {
+    globalThis.fetch = (async (input) => {
+      if (requestPath(input) === "/api/auth/local-creator") {
+        return jsonResponse({ error: "rate_limited" }, 429);
+      }
+      throw new Error(`unexpected fetch ${requestPath(input)}`);
+    }) as typeof fetch;
+
+    await expect(ensureLocalCreatorSession()).resolves.toBe(false);
+    expect(hasTriedLocalCreatorBootstrap()).toBe(false);
   });
 });

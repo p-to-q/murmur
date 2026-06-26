@@ -107,7 +107,7 @@ export function MeScreen() {
 
         {/* Notes balance + Top up */}
         <Card>
-          <SectionLabel className="font-ui-label-caps">{t("me.notes.title") || "MURMUR NOTES"}</SectionLabel>
+          <SectionLabel className="font-ui-label-caps">{t("me.notes.title") || "NOTES"}</SectionLabel>
           <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px] mb-2">
             {isLoading
               ? "—"
@@ -184,7 +184,7 @@ export function MeScreen() {
       {/* ── Manifesto (keep — best copy in the product) ────────────── */}
       <div className="relative z-10 px-5 md:px-12 max-w-3xl mx-auto pb-10">
         <div className="mm-manifesto">
-          <p className="eyebrow font-ui-label-caps text-[#FF8A5C] mb-5">{t("me.manifesto.eyebrow") || "A QUIET PLACE"}</p>
+          <p className="eyebrow mb-5 text-[#FF8A5C]">{t("me.manifesto.eyebrow") || "A QUIET PLACE"}</p>
           <p className="font-serif text-[28px] md:text-[34px] leading-[1.15] text-[#F5F1EB]">
             No <span className="mm-strike">ads</span>, no{" "}
             <span className="mm-strike">feeds</span>, no{" "}
@@ -377,7 +377,7 @@ function useRefillCopy(nextRefillAtIso?: string | null): string {
   const t = useTranslator();
   if (!nextRefillAtIso) {
     return (
-      t("me.notes.refill_default") || "Local Creator gets 5 free notes once. Sign in to continue after that."
+      t("me.notes.refill_default") || "Guest mode gets 5 free notes once. Sign in to continue after that."
     );
   }
   const next = new Date(nextRefillAtIso);

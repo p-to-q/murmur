@@ -158,14 +158,14 @@ describe("getRateLimitStore (env-driven factory)", () => {
     expect(a).toBe(b);
   });
 
-  it("throws on redis / postgres drivers until adapters land", () => {
+  it("falls back to memory for planned shared drivers until adapters land", () => {
     resetCachedRateLimitStore();
     process.env.MURMUR_RATE_LIMIT_DRIVER = "redis";
-    expect(() => getRateLimitStore()).toThrow(RateLimitError);
+    expect(getRateLimitStore().driver).toBe("memory");
 
     resetCachedRateLimitStore();
     process.env.MURMUR_RATE_LIMIT_DRIVER = "postgres";
-    expect(() => getRateLimitStore()).toThrow(RateLimitError);
+    expect(getRateLimitStore().driver).toBe("memory");
   });
 
   it("throws on unknown driver", () => {

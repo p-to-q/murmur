@@ -40,10 +40,11 @@ export async function ensureLocalCreatorSession(
           import("@/lib/hooks/use-current-account"),
           import("@/lib/hooks/use-user-balance"),
         ]);
-        await refreshCurrentAccount();
+        const accountResult = await refreshCurrentAccount();
         await fetchUserBalance({ force: true });
-        return true;
+        return accountResult.account?.user?.accountKind === "local_creator";
       }
+      clearLocalCreatorBootstrapFlag();
       return false;
     } catch (error) {
       if (!options.background) {

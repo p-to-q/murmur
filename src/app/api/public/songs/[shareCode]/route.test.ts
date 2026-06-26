@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
 
 let nextSong: Record<string, unknown> | null = null;
 let getSongError: unknown = null;
 let nextFallbackSong: Record<string, unknown> | null = null;
+let previousRateLimitDriver: string | undefined;
 const getSongByShareCodeMock = mock(async () => {
   if (getSongError) throw getSongError;
   return nextSong;
@@ -45,6 +46,8 @@ function ctx(shareCode = "abc234defg") {
 }
 
 beforeEach(async () => {
+  previousRateLimitDriver = process.env.MURMUR_RATE_LIMIT_DRIVER;
+  delete process.env.MURMUR_RATE_LIMIT_DRIVER;
   resetCachedRateLimitStore();
   await getRateLimitStore().resetAll();
   nextSong = {
@@ -77,6 +80,15 @@ beforeEach(async () => {
   nextFallbackSong = null;
   getSongByShareCodeMock.mockClear();
   getLocalSongByShareCodeFallbackMock.mockClear();
+});
+
+afterEach(() => {
+  resetCachedRateLimitStore();
+  if (previousRateLimitDriver === undefined) {
+    delete process.env.MURMUR_RATE_LIMIT_DRIVER;
+  } else {
+    process.env.MURMUR_RATE_LIMIT_DRIVER = previousRateLimitDriver;
+  }
 });
 
 describe("GET /api/public/songs/[shareCode]", () => {
@@ -167,5 +179,17 @@ describe("GET /api/public/songs/[shareCode]", () => {
     const body = await response.json() as Record<string, unknown>;
     expect(body.shareCode).toBe("demo-1");
     expect(body.mp3Url).toBe("/demo/weightless-dnb.mp3");
+  });
+
+  it("does not fail demo playback when a planned shared rate-limit driver is configured", async () => {
+    process.env.MURMUR_RATE_LIMIT_DRIVER = "redis";
+    resetCachedRateLimitStore();
+
+    const response = await GET(request(), ctx("demo-1"));
+
+    expect(response.status).toBe(200);
+    expect(getSongByShareCodeMock).not.toHaveBeenCalled();
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.shareCode).toBe("demo-1");
   });
 });

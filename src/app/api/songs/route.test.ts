@@ -151,6 +151,52 @@ describe("POST /api/songs", () => {
     expect(createSongWithSpendMock).toHaveBeenCalledTimes(0);
   });
 
+  it("accepts stable voice audio and lyrics metadata", async () => {
+    const response = await POST(buildRequest({
+      id: "song_voice",
+      title: "Sung Window",
+      vibe: "voice_song",
+      vibeEn: "voice song",
+      bpm: 84,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 42,
+      sourceMelodyKind: "corrected",
+      inputKind: "voice",
+      lyrics: "I can sing this line",
+      generationProvider: "minimax:music-2.6",
+      mp3Url: "https://cdn.example.com/songs/master/usr/song_voice.mp3",
+      mp3DataUrl: null,
+      visualConfig: {
+        preset: "voice_song",
+        gradient: "linear-gradient(135deg, #18313F, #4A9B8E)",
+        particleDensity: 0.5,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:voice", currentPattern: "gen:voice", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: true, intensity: 0.4, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: true, intensity: 0.3, originalPattern: "brush", currentPattern: "brush", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: ["voice"],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(createdSongs).toHaveLength(1);
+    expect(createdSongs[0]?.inputKind).toBe("voice");
+    expect(createdSongs[0]?.lyrics).toBe("I can sing this line");
+    expect(createdSongs[0]?.generationProvider).toBe("minimax:music-2.6");
+    expect(createdSongs[0]?.mp3Url).toBe("https://cdn.example.com/songs/master/usr/song_voice.mp3");
+    expect(createdSongs[0]?.mp3DataUrl).toBeNull();
+
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.inputKind).toBe("voice");
+    expect(body.mp3Url).toBe("https://cdn.example.com/songs/master/usr/song_voice.mp3");
+  });
+
   it("preserves curated artwork metadata inside the saved visual config", async () => {
     const artwork = {
       id: "tidal_mineral-met-11129",

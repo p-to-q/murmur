@@ -1,8 +1,35 @@
-import type { songs } from "@/lib/db/schema/songs";
+import type {
+  ArrangementState,
+  EditDepth,
+  MelodySelectionKind,
+  VisualConfig,
+} from "@/modules/shared/types";
 
-type SongRow = typeof songs.$inferSelect;
-
-export type DemoSong = Omit<SongRow, "mp3DataUrl"> & { mp3Url: string };
+export type DemoSong = {
+  id: string;
+  userId: string;
+  title: string;
+  vibe: string;
+  vibeEn: string;
+  bpm: number;
+  keySignature: string;
+  scaleType: string;
+  duration: number;
+  parentSongId: string | null;
+  rootSongId: string | null;
+  lineageDepth: number;
+  sourceMelodyKind: MelodySelectionKind;
+  editCount: number;
+  editDepth: EditDepth;
+  visibility: "private" | "unlisted" | "public";
+  shareCode: string;
+  mp3Url: string;
+  visualConfig: VisualConfig;
+  arrangementState: ArrangementState;
+  tags: string[];
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 export const DEMO_SONG_IDS = ["demo-1", "demo-2", "demo-3"] as const;
 

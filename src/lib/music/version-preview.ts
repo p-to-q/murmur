@@ -19,7 +19,7 @@ class VersionPreview {
       const url = version.generation.audioUrl;
       if (!url) return false;
       const el = new Audio(url);
-      el.loop = true;
+      el.loop = version.generation.loop ?? version.generation.engine !== "minimax";
       void el.play().catch(() => {});
       this.audio = el;
       return true;

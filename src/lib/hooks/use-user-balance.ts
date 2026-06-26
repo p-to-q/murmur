@@ -119,10 +119,16 @@ export async function fetchUserBalance(
 }
 
 /** Test-only escape hatch for the module-scoped cache. */
-export function __resetUserBalanceCacheForTesting(): void {
+export function clearUserBalanceCache(): void {
   cachedBalance = null;
   cachedAt = 0;
   inflight = null;
+  publish();
+}
+
+/** Test-only escape hatch for the module-scoped cache. */
+export function __resetUserBalanceCacheForTesting(): void {
+  clearUserBalanceCache();
   subscribers.clear();
 }
 

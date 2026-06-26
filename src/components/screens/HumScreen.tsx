@@ -12,7 +12,10 @@ import { EmailLoginForm } from "@/components/auth/email-login-form";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import { HumOnboardingOverlay } from "@/components/screens/hum-onboarding";
-import { useMurmurStore } from "@/lib/store/murmur-store";
+import {
+  resolveRecoverableCreationRoute,
+  useMurmurStore,
+} from "@/lib/store/murmur-store";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import {
   createMagentaVersions,
@@ -43,6 +46,7 @@ import {
   TranscribeRequestError,
   type TranscribeRequestErrorCode,
 } from "@/lib/api/transcribe";
+import { analyzeRecording, CaptureAnalyzeError } from "@/lib/api/capture";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 import { formatHumSupportCode } from "@/lib/observability/support-code";
@@ -50,6 +54,7 @@ import {
   hasSeenHumOnboarding,
   writeHumOnboardingSeen,
 } from "@/lib/onboarding";
+import { createMiniMaxVoiceVersion } from "@/modules/minimax/generate-voice-version";
 
 const MAX_DURATION = 15;
 const IDLE_ROTATE_INTERVAL = 9000;
@@ -189,6 +194,9 @@ export function HumScreen() {
     setProcessingMessage,
     processingMessage,
     resetFlow,
+    vibeVersions,
+    currentVersion,
+    activeCreationRoute,
   } = useMurmurStore();
   const repairBias = usePreferencesStore((state) => state.repairBias);
   const t = useTranslator();
@@ -298,6 +306,15 @@ export function HumScreen() {
 
   useEffect(() => {
     unmountingRef.current = false;
+    const recoverableRoute = resolveRecoverableCreationRoute({
+      activeCreationRoute,
+      currentVersion,
+      vibeVersions,
+    });
+    if (recoverableRoute) {
+      router.replace(recoverableRoute);
+      return;
+    }
     resetFlow();
 
     return () => {
@@ -436,13 +453,87 @@ export function HumScreen() {
     setRecordingState("processing");
     tickMessages();
     try {
-      // Overlap Magenta routing with transcription. When the deployment is
-      // configured for a worker we never silently downgrade to Tone.js.
-      const magentaPathPromise = shouldUseMagentaEngine();
       const preparedBlob = blob ? await prepareAudioBlob(blob) : undefined;
-      const result = await transcribeWithStainer({ audioBlob: preparedBlob });
       const draftId = crypto.randomUUID();
       const flowId = crypto.randomUUID();
+
+      if (preparedBlob) {
+        const analyzed = await analyzeRecording(preparedBlob);
+        if (analyzed.kind === "voice") {
+          const version = createMiniMaxVoiceVersion({
+            lyrics: analyzed.lyrics,
+            language: analyzed.language,
+            draftId,
+            originFlowId: flowId,
+          });
+          setHumStyleBlob(null);
+          setVibeVersions([version]);
+          setCurrentDraftId(draftId);
+          setCurrentFlowId(flowId);
+          memory
+            .reportAction({
+              content: `Voice capture → ${analyzed.language} lyrics → MiniMax version`,
+              event_type: "create",
+              page: "hum",
+              metadata: {
+                type: "voice_capture",
+                language: analyzed.language,
+                confidence: analyzed.confidence,
+                lyric_chars: analyzed.lyrics.length,
+              },
+            })
+            .catch(() => {});
+          if (isGuest) spendLocalNotes(COST.hum);
+          void refreshBalance();
+          setRecordingState("done");
+          router.push("/vibe");
+          return;
+        }
+
+        const result = analyzed.transcription;
+        const selectedMelody = selectGenerationMelody(result, { repairBias });
+        const useMagenta = await shouldUseMagentaEngine();
+        if (!useMagenta) {
+          throw new MusicEngineUnavailableError();
+        }
+        setHumStyleBlob(preparedBlob);
+        const versions = createMagentaVersions(selectedMelody.melody, {
+          draftId,
+          originFlowId: flowId,
+          sourceType: "hum",
+          sourceMelodyKind: selectedMelody.kind,
+          batchIndex: 0,
+          humBlob: preparedBlob,
+        });
+        setVibeVersions(versions);
+        setCurrentDraftId(draftId);
+        setCurrentFlowId(flowId);
+        memory
+          .reportAction({
+            content: `Capture analyzer hum → ${result.provider} → ${selectedMelody.kind} ${selectedMelody.melody.notes.length} notes → ${versions.length} versions`,
+            event_type: "create",
+            page: "hum",
+            metadata: {
+              type: "hum_transcribe",
+              provider: result.provider,
+              selected_melody_kind: selectedMelody.kind,
+              bpm: selectedMelody.melody.bpm,
+              key: selectedMelody.melody.key,
+              notes: selectedMelody.melody.notes.length,
+            },
+          })
+          .catch(() => {});
+        writeFixtureRescueState(noteLiveSuccess(readFixtureRescueState()));
+        if (isGuest) spendLocalNotes(COST.hum);
+        void refreshBalance();
+        setRecordingState("done");
+        router.push("/vibe");
+        return;
+      }
+
+      // Fixture/demo path: keep the original Stainer + Magenta route.
+      const magentaPathPromise = shouldUseMagentaEngine();
+      const result = await transcribeWithStainer({ audioBlob: preparedBlob });
       const selectedMelody = selectGenerationMelody(result, { repairBias });
       // Magenta is the only music engine. If the worker is unreachable after
       // all health-probe retries we stop with an honest error card — never
@@ -492,13 +583,13 @@ export function HumScreen() {
       const fixtureStateBefore = readFixtureRescueState();
       const rescueEligible =
         blob &&
-        e instanceof TranscribeRequestError &&
+        isHumCaptureError(e) &&
         shouldAutoRescueWithFixture({
           state: fixtureStateBefore,
           code: e.code,
         });
       let fixtureStateAfterFailure = fixtureStateBefore;
-      if (blob && e instanceof TranscribeRequestError) {
+      if (blob && isHumCaptureError(e)) {
         fixtureStateAfterFailure = noteLiveFailure(
           fixtureStateBefore,
           e.code,
@@ -507,7 +598,7 @@ export function HumScreen() {
       }
       const errorState = mapErrorToHumState(e, fixtureStateAfterFailure);
       const errorLogLevel =
-        e instanceof TranscribeRequestError
+        isHumCaptureError(e)
           ? humErrorLogLevel(e.code)
           : "error";
       log("transcribe.failed", {
@@ -579,7 +670,7 @@ export function HumScreen() {
         showSupportCode: false,
       };
     }
-    if (error instanceof TranscribeRequestError) {
+    if (isHumCaptureError(error)) {
       return {
         variant: variantForCode(error.code),
         code: error.code,
@@ -599,6 +690,11 @@ export function HumScreen() {
       showSupportCode: true,
     };
   };
+
+  const isHumCaptureError = (
+    error: unknown,
+  ): error is TranscribeRequestError | CaptureAnalyzeError =>
+    error instanceof TranscribeRequestError || error instanceof CaptureAnalyzeError;
 
   const prepareAudioBlob = async (blob: Blob): Promise<Blob> => {
     try {
@@ -921,7 +1017,7 @@ export function HumScreen() {
                     ease: "easeInOut",
                   }}
                   className={[
-                    "hero-serif text-[#1A1A1A] text-[37px] md:text-[49px] lg:text-[57px] xl:text-[56px] whitespace-pre-line leading-[1.1]",
+                    "font-critical hero-serif text-[#1A1A1A] text-[37px] md:text-[49px] lg:text-[57px] xl:text-[56px] whitespace-pre-line leading-[1.1]",
                     idleIndex === 3 || idleIndex === 4 ? "break-keep" : "",
                   ].join(" ")}
                 >
@@ -937,7 +1033,7 @@ export function HumScreen() {
                   exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : undefined}
                   transition={{ duration: 0.4 }}
                 >
-                  <h1 className="hero-serif text-[#1A1A1A] text-[37px] md:text-[49px] lg:text-[57px] xl:text-[56px] leading-[1.1]">
+                  <h1 className="font-critical hero-serif text-[#1A1A1A] text-[37px] md:text-[49px] lg:text-[57px] xl:text-[56px] leading-[1.1]">
                     {t("hum.recording")}
                   </h1>
                   <div className="flex items-center justify-center xl:justify-start gap-2 mt-4">
@@ -992,7 +1088,7 @@ export function HumScreen() {
                       animate={{ opacity: 1 }}
                       exit={ENABLE_HUM_ENTRANCE_MOTION ? { opacity: 0 } : undefined}
                       transition={{ duration: 0.3 }}
-                      className="hero-serif text-[#1A1A1A] text-[30px] md:text-[42px] lg:text-[49px] xl:text-[48px] leading-[1.15]"
+                      className="font-critical hero-serif text-[#1A1A1A] text-[30px] md:text-[42px] lg:text-[49px] xl:text-[48px] leading-[1.15]"
                     >
                       {processingMessage}
                     </motion.h1>
