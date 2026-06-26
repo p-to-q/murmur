@@ -162,7 +162,7 @@ function BadgeTrigger({ user, onClick }: { user: AppUser; onClick: () => void })
     >
       <Avatar user={user} size={24} />
       <span className="max-w-[120px] truncate font-medium text-foreground">
-        {displayUserName(user)}
+        {user.name ?? user.email ?? user.id}
       </span>
     </button>
   );
@@ -206,7 +206,7 @@ function DropdownPanel({
         <div className="flex items-center gap-3">
           <Avatar user={user} size={40} />
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{displayUserName(user)}</p>
+            <p className="truncate text-sm font-semibold">{user.name ?? "—"}</p>
             {user.email && (
               <p className="truncate text-xs text-muted-foreground">{user.email}</p>
             )}
@@ -320,7 +320,7 @@ function InitialsAvatar({
 function Avatar({ user, size }: { user: AppUser; size: number }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const seed = user.id ?? user.email ?? user.name ?? "murmur";
-  const initial = userInitial(displayUserName(user), user.email);
+  const initial = userInitial(user.name, user.email);
   const avatarSrc = user.avatarUrl
     ? user.avatarUrl.startsWith("//")
       ? `https:${user.avatarUrl}`
@@ -332,7 +332,7 @@ function Avatar({ user, size }: { user: AppUser; size: number }) {
     return (
       <Image
         src={avatarSrc}
-        alt={displayUserName(user)}
+        alt={user.name ?? "avatar"}
         width={size}
         height={size}
         className="rounded-full object-cover ring-2 ring-border"
@@ -370,11 +370,4 @@ function accountLabelKey(provider: string | undefined, user: AppUser): string {
   return user.accountKind === "registered"
     ? "auth.account_registered"
     : "auth.account_local";
-}
-
-function displayUserName(user: AppUser): string {
-  if (user.accountKind === "local_creator" || user.name === "Local Creator") {
-    return "Guest";
-  }
-  return user.name ?? user.email ?? user.id;
 }

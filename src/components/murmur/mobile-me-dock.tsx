@@ -47,10 +47,11 @@ export function MobileMeDock() {
   const alertOn = permission === "granted" && browserAlertsEnabled;
   const refillCopy = useRefillCopy(balance?.nextRefillAt);
   const accountLabel =
-    displayAccountName(user) ??
-    (isLocalCreator ? (t("auth.local_creator") || "Guest") : null) ??
+    user?.name ??
+    user?.email ??
+    (isLocalCreator ? (t("auth.local_creator") || "Local Creator") : null) ??
     (isRegistered ? (t("auth.account_registered") || "Registered") : null) ??
-    (t("auth.account_local") || "Guest");
+    (t("auth.account_local") || "Local Creator");
 
   useEffect(() => {
     if (!open) return;
@@ -366,14 +367,14 @@ function useRefillCopy(nextRefillAtIso?: string | null): string {
 
   return useMemo(() => {
     if (now === null) {
-      return t("me.notes.refill_default") || "Guest mode gets 5 free notes once.";
+      return t("me.notes.refill_default") || "Local Creator gets 5 free notes once.";
     }
     if (!nextRefillAtIso) {
-      return t("me.notes.refill_default") || "Guest mode gets 5 free notes once.";
+      return t("me.notes.refill_default") || "Local Creator gets 5 free notes once.";
     }
     const nextRefillAt = new Date(nextRefillAtIso);
     if (Number.isNaN(nextRefillAt.getTime())) {
-      return t("me.notes.refill_default") || "Guest mode gets 5 free notes once.";
+      return t("me.notes.refill_default") || "Local Creator gets 5 free notes once.";
     }
     const diffMs = nextRefillAt.getTime() - now;
     if (diffMs <= 0) {
@@ -407,12 +408,4 @@ function useNow(intervalMs: number): number | null {
   }, [intervalMs]);
 
   return now;
-}
-
-function displayAccountName(user: { name?: string | null; email?: string | null; accountKind?: string | null } | null | undefined): string | null {
-  if (!user) return null;
-  if (user.accountKind === "local_creator" || user.name === "Local Creator") {
-    return "Guest";
-  }
-  return user.name ?? user.email ?? null;
 }

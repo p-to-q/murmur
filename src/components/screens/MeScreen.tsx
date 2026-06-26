@@ -107,7 +107,7 @@ export function MeScreen() {
 
         {/* Notes balance + Top up */}
         <Card>
-          <SectionLabel className="font-ui-label-caps">{t("me.notes.title") || "NOTES"}</SectionLabel>
+          <SectionLabel className="font-ui-label-caps">{t("me.notes.title") || "MURMUR NOTES"}</SectionLabel>
           <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px] mb-2">
             {isLoading
               ? "—"
@@ -377,7 +377,7 @@ function useRefillCopy(nextRefillAtIso?: string | null): string {
   const t = useTranslator();
   if (!nextRefillAtIso) {
     return (
-      t("me.notes.refill_default") || "Guest mode gets 5 free notes once. Sign in to continue after that."
+      t("me.notes.refill_default") || "Local Creator gets 5 free notes once. Sign in to continue after that."
     );
   }
   const next = new Date(nextRefillAtIso);

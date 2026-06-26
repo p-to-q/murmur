@@ -840,7 +840,7 @@ function packageLabel(purchase: CheckoutPurchase, t: (key: string) => string): s
   if (purchase.kind === "custom") {
     return t("checkout.custom_topup") || "Custom top-up";
   }
-  return t("checkout.murmur_notes") || "Notes";
+  return t("checkout.murmur_notes") || "Murmur Notes";
 }
 
 function snapshotCheckoutBalance(
