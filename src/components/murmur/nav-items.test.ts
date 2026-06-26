@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
-import { computeTrail } from "./nav-items";
+import {
+  computeTrail,
+  resolveMobileJourneyStage,
+} from "./nav-items";
 
 describe("computeTrail", () => {
   it("keeps Me landing free of exposed child rows", () => {
@@ -32,5 +35,17 @@ describe("computeTrail", () => {
     expect(trail?.rootHref).toBe("/gallery");
     expect(trail?.steps.map((step) => step.step.match)).toEqual(["/song"]);
     expect(trail?.steps.map((step) => step.isActive)).toEqual([true]);
+  });
+});
+
+describe("resolveMobileJourneyStage", () => {
+  it("maps the compact journey rail stages", () => {
+    expect(resolveMobileJourneyStage("/")).toBe(0);
+    expect(resolveMobileJourneyStage("/vibe")).toBe(1);
+    expect(resolveMobileJourneyStage("/studio")).toBe(2);
+    expect(resolveMobileJourneyStage("/studio/name")).toBe(3);
+    expect(resolveMobileJourneyStage("/gallery")).toBe(4);
+    expect(resolveMobileJourneyStage("/song/song_123")).toBe(4);
+    expect(resolveMobileJourneyStage("/me")).toBe(-1);
   });
 });
