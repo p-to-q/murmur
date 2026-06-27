@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
-import { Fragment, useMemo } from "react";
+import { Fragment, useEffect, useMemo, useRef } from "react";
 import type { MouseEvent } from "react";
 
 import {
@@ -33,6 +33,7 @@ export function BottomNav() {
   const reduceMotion = useReducedMotion();
   const recordingState = useMurmurStore((state) => state.recordingState);
   const isProcessing = recordingState === "processing";
+  const railTrackRef = useRef<HTMLDivElement>(null);
 
   const goHome = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -53,6 +54,21 @@ export function BottomNav() {
   const activeIndex = resolveMobileActiveIndex(stage, visibleSteps.length);
   const activeBridgeIndex = resolveActiveBridgeIndex(activeIndex, visibleSteps.length);
 
+  useEffect(() => {
+    const track = railTrackRef.current;
+    const activeItem = track?.querySelector<HTMLElement>(
+      "[data-mobile-rail-active='true']",
+    );
+    if (!track || !activeItem) return;
+
+    const activeCenter = activeItem.offsetLeft + activeItem.offsetWidth / 2;
+    const scrollLeft = activeCenter - track.clientWidth / 2;
+    track.scrollTo({
+      left: Math.max(0, scrollLeft),
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  }, [activeIndex, pathname, reduceMotion, visibleSteps.length]);
+
   return (
     <motion.nav
       initial={reduceMotion ? false : { y: 12, opacity: 0 }}
@@ -64,7 +80,10 @@ export function BottomNav() {
     >
       <div className="pointer-events-auto relative w-full max-w-[288px] px-0.5">
         <div className="mobile-rail-shell mobile-rail-shell--compact relative isolate overflow-hidden rounded-[18px] border border-[#E6DED3]">
-          <div className="mobile-rail-track relative overflow-x-auto overflow-y-hidden snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <div
+            ref={railTrackRef}
+            className="mobile-rail-track relative overflow-x-auto overflow-y-hidden snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          >
             <LayoutGroup id="mobile-journey-rail">
               <div className="mobile-rail-inner flex w-full min-w-[332px] items-center px-1 py-[4px]">
                 {visibleSteps.map((step, index) => (
@@ -198,6 +217,7 @@ function RailStep({
         onClick={onHomeClick}
         aria-label={label}
         aria-current={isCurrent ? "page" : undefined}
+        data-mobile-rail-active={isCurrent ? "true" : undefined}
         className={cls}
       >
         {content}
@@ -210,6 +230,7 @@ function RailStep({
       href={href}
       aria-label={label}
       aria-current={isCurrent ? "page" : undefined}
+      data-mobile-rail-active={isCurrent ? "true" : undefined}
       className={cls}
       suppressHydrationWarning
     >

@@ -12,10 +12,7 @@ import { EmailLoginForm } from "@/components/auth/email-login-form";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import { HumOnboardingOverlay } from "@/components/screens/hum-onboarding";
-import {
-  getRecoverableCreationRoute,
-  useMurmurStore,
-} from "@/lib/store/murmur-store";
+import { useMurmurStore } from "@/lib/store/murmur-store";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import {
   createMagentaVersions,
@@ -300,13 +297,11 @@ export function HumScreen() {
   );
 
   useEffect(() => {
-    const recoverableRoute = getRecoverableCreationRoute();
-    if (recoverableRoute) {
-      router.replace(recoverableRoute);
-      return;
-    }
+    // A direct visit to `/` is an explicit request for a fresh Create surface.
+    // Draft recovery still lives in the nav controls, where the user is asking
+    // to resume the creation journey rather than load the public home route.
     resetFlow();
-  }, [resetFlow, router]);
+  }, [resetFlow]);
 
   useEffect(() => {
     unmountingRef.current = false;
@@ -1310,7 +1305,6 @@ export function HumScreen() {
         revealRadius={revealRadius}
         rippling={onboardingRippling}
         line={onboardingLine}
-        onAdvance={handleOnboardingPress}
       />
     </div>
   );

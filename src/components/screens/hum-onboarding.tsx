@@ -21,7 +21,6 @@ interface HumOnboardingOverlayProps {
   revealRadius: MotionValue<number>;
   rippling: boolean;
   line: string;
-  onAdvance: () => void;
 }
 
 const MYMIND_EASE = [0.22, 1, 0.36, 1] as const;
@@ -45,7 +44,6 @@ export function HumOnboardingOverlay({
   revealRadius,
   rippling,
   line,
-  onAdvance,
 }: HumOnboardingOverlayProps) {
   const reduceMotion = useReducedMotion();
   const canRender = visible && orbCenter.y > 0;
@@ -68,13 +66,7 @@ export function HumOnboardingOverlay({
         <motion.div
           key="hum-onboarding"
           aria-hidden="true"
-          className={[
-            "fixed inset-0 z-[60]",
-            rippling ? "pointer-events-none" : "pointer-events-auto cursor-pointer",
-          ].join(" ")}
-          onClick={() => {
-            if (!rippling) onAdvance();
-          }}
+          className="fixed inset-0 z-[60] pointer-events-none"
           exit={{ opacity: 0 }}
           transition={{ duration: reduceMotion ? 0.15 : 0.28 }}
         >
