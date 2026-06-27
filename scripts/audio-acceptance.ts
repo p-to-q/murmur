@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { accessSync, constants, mkdirSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -83,13 +83,14 @@ const acceptanceJsonPath = resolve(reportDir, "audio-acceptance.json");
 
 const includeLint = process.argv.includes("--with-lint");
 const includeBuild = process.argv.includes("--with-build");
+const pythonCommand = resolveAudioPythonCommand();
 
 const steps: StepConfig[] = [
   {
     name: "audio_eval_workspace",
     cwd: workerRoot,
     command: [
-      "./.venv/bin/python",
+      pythonCommand,
       "tools/scaffold_audio_eval_workspace.py",
       "--pretty",
     ],
@@ -98,7 +99,7 @@ const steps: StepConfig[] = [
     name: "seed_murmur_golden",
     cwd: workerRoot,
     command: [
-      "./.venv/bin/python",
+      pythonCommand,
       "tools/seed_murmur_golden.py",
       "--pretty",
     ],
@@ -122,7 +123,7 @@ const steps: StepConfig[] = [
     name: "worker_audio_tests",
     cwd: workerRoot,
     command: [
-      "./.venv/bin/python",
+      pythonCommand,
       "-m",
       "unittest",
       "tests.test_detectors",
@@ -140,7 +141,7 @@ const steps: StepConfig[] = [
     name: "audio_closure_report",
     cwd: workerRoot,
     command: [
-      "./.venv/bin/python",
+      pythonCommand,
       "tools/audio_eval_closure.py",
       "--config",
       "tools/audio_eval_closure.report.json",
@@ -451,6 +452,20 @@ function round1(value: number): number {
 
 function dedupe(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function resolveAudioPythonCommand(): string {
+  const configuredPython =
+    process.env.AUDIO_ACCEPTANCE_PYTHON ?? process.env.AUDIO_WORKER_PYTHON;
+  if (configuredPython) return configuredPython;
+
+  const localVenvPython = resolve(workerRoot, ".venv/bin/python");
+  try {
+    accessSync(localVenvPython, constants.X_OK);
+    return localVenvPython;
+  } catch {
+    return process.env.PYTHON ?? "python";
+  }
 }
 
 await main();
