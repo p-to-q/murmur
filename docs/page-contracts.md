@@ -107,6 +107,16 @@ Compatibility note:
 - `/privacy` remains a public compatibility URL, but it redirects to
   `/me/privacy` so in-app navigation has one canonical personal-center path.
 
+## Mobile rail notes
+
+On narrow mobile screens, the bottom navigation now reads as a compact
+journey rail: text steps separated by a narrow soundwave bar field, with the
+active step carrying a single orange underline that slides between stages.
+Idle bars stay nearly flat; processing and transition states make the bar
+field taller and more varied. The rail stays visually lighter and narrower
+than the desktop sidebar, and the `Me` entry remains a separate top-right
+pocket drawer.
+
 ## Public song share contract notes
 
 `/s/[shareCode]` is the listener-facing playback page for a song that the owner

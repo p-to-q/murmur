@@ -447,14 +447,14 @@ function SortToggle({
     <div className="flex shrink-0 items-center gap-3 text-[12px] tracking-[0.04em]">
       <button
         onClick={() => onChange("newest")}
-        className={`transition-colors ${sort === "newest" ? "text-[#1A1A1A] font-medium" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
+        className={`font-ui-label transition-colors ${sort === "newest" ? "text-[#1A1A1A]" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
       >
         ↑ {t("gallery.sort.newest") || "newest"}
       </button>
       <span className="text-[#D2C9B6]">·</span>
       <button
         onClick={() => onChange("alpha")}
-        className={`transition-colors ${sort === "alpha" ? "text-[#1A1A1A] font-medium" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
+        className={`font-ui-label transition-colors ${sort === "alpha" ? "text-[#1A1A1A]" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
       >
         a–z
       </button>
