@@ -147,7 +147,7 @@ export function NotificationsScreen() {
 function SummaryTile({ label, value, lang }: { label: string; value: string; lang: "zh" | "en" }) {
   return (
     <div className="rounded-[8px] border border-white/65 bg-white/55 px-4 py-3 shadow-[0_14px_35px_rgba(92,72,45,0.06)]">
-      <p className="font-ui-label text-[#B7AEA1]">{label}</p>
+      <p className="text-[11px] uppercase tracking-[0.14em] text-[#B7AEA1]">{label}</p>
       <p
         className={`mt-1 text-[24px] leading-none text-[#1A1A1A] tabular-nums ${
           lang === "zh" ? "font-chinese-title" : "font-serif"

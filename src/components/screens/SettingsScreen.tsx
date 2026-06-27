@@ -310,7 +310,7 @@ function SettingsCard({
         <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A] text-[#F5F1EB]">
           {icon}
         </span>
-        <p className="eyebrow font-ui-label text-[#8C8780]">{label}</p>
+        <p className="eyebrow text-[#8C8780]">{label}</p>
       </div>
       {children}
     </section>
@@ -352,7 +352,9 @@ function DeveloperPanel({
     <div className="rounded-md border border-[#E7DCCB] bg-[#FFFCF7] p-4">
       <div className="mb-3 flex items-center gap-2">
         <Gauge className="h-4 w-4 text-[#FF5924]" />
-        <p className="font-ui-label text-[#8C8780]">Runtime diagnostics</p>
+        <p className="text-[11px] uppercase tracking-[0.16em] text-[#8C8780]">
+          Runtime diagnostics
+        </p>
       </div>
       <div className="grid gap-2 text-[12px] md:grid-cols-2">
         <Metric label="Web" value={qaHealth?.web?.status ?? qaHealth?.status ?? "loading"} />
@@ -399,7 +401,9 @@ function I18nPanel({ audit }: { audit: I18nAuditResponse | null }) {
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Languages className="h-4 w-4 text-[#FF5924]" />
-          <p className="font-ui-label text-[#8C8780]">i18n tokens</p>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-[#8C8780]">
+            i18n tokens
+          </p>
         </div>
         <span className="font-mono text-[11px] text-[#8C8780]">{status}</span>
       </div>

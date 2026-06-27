@@ -34,50 +34,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/me",      icon: MeNavIcon,      labelKey: "nav.me",      fallback: "Me" },
 ];
 
-export type MobileJourneyStep = {
-  href: string;
-  labelKey: TKey;
-  fallback: string;
-  /** `0` keeps the step visible on the landing rail. */
-  unlockAt: number;
-  emphasis: "start" | "mid" | "end";
-};
-
-/**
- * Narrow-screen journey rail.
- *
- * The line always starts with Create and ends with Gallery. Middle stops
- * appear as the user advances through the flow so the strip reads as both a
- * progress line and a set of tappable waypoints.
- */
-export const MOBILE_JOURNEY_STEPS: MobileJourneyStep[] = [
-  { href: "/",        labelKey: "nav.create",       fallback: "Create",  unlockAt: 0, emphasis: "start" },
-  { href: "/vibe",    labelKey: "nav.flow.vibe",   fallback: "Vibe",    unlockAt: 1, emphasis: "mid"   },
-  { href: "/studio",  labelKey: "nav.flow.studio", fallback: "Studio",  unlockAt: 2, emphasis: "mid"   },
-  { href: "/studio/name", labelKey: "nav.flow.name", fallback: "Name it", unlockAt: 3, emphasis: "mid"   },
-  { href: "/gallery", labelKey: "nav.gallery",     fallback: "Gallery", unlockAt: 0, emphasis: "end"   },
-];
-
-/**
- * Resolve the deepest mobile journey stage represented by a pathname.
- *
- * Returns:
- *   - `-1` for routes outside the create/gallery rail
- *   - `0` for the landing/home stage
- *   - `1` for Vibe
- *   - `2` for Studio
- *   - `3` for Name it
- *   - `4` for Gallery / Song detail
- */
-export function resolveMobileJourneyStage(pathname: string | null | undefined): number {
-  if (!pathname) return -1;
-  if (pathname === "/" || pathname.startsWith("/vibe")) return pathname === "/" ? 0 : 1;
-  if (pathname.startsWith("/studio/name")) return 3;
-  if (pathname.startsWith("/studio")) return 2;
-  if (pathname.startsWith("/gallery") || pathname.startsWith("/song")) return 4;
-  return -1;
-}
-
 /* ── Nested nav model ────────────────────────────────────────────────
  *
  * The side nav grows like a small document outline. Sub-steps are

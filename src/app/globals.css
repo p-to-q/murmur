@@ -73,9 +73,6 @@
   --murmur-font-serif: var(--font-instrument-serif), Georgia, "Iowan Old Style", "Times New Roman", Times, serif;
   --murmur-font-chinese-system: "PingFang SC", "PingFang TC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --murmur-font-chinese: "LXGW WenKai TC", "LXGW WenKai GB Screen 300", var(--murmur-font-chinese-system);
-  --murmur-font-ui: "Murmur Datatype", var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --murmur-ui-font-weight: 600;
-  --murmur-ui-letter-spacing: 0;
   --radius: 0.625rem; /* mymind cards are tight — 10px feels right */
   --background: #F5F1EB;
   --foreground: #1A1A1A;
@@ -121,18 +118,10 @@
     touch-action: manipulation;
     overscroll-behavior: none;
     font-feature-settings: "kern", "ss01";
-    font-variation-settings: "wght" 400;
   }
   html {
     @apply font-sans;
     min-height: -webkit-fill-available;
-  }
-  html[data-fonts="loading"] .font-critical {
-    opacity: 0;
-  }
-  html[data-fonts="ready"] .font-critical {
-    opacity: 1;
-    transition: opacity 0.18s ease;
   }
   ::selection {
     background: var(--color-murmur-accent);
@@ -164,20 +153,6 @@
     font-family: var(--font-serif);
     font-style: italic;
     letter-spacing: -0.005em;
-  }
-  .font-ui {
-    font-family: var(--murmur-font-ui);
-    font-weight: var(--murmur-ui-font-weight);
-    letter-spacing: 0;
-  }
-  .font-ui-label {
-    font-family: var(--murmur-font-ui);
-    font-weight: 600;
-    letter-spacing: 0;
-  }
-  .font-ui-label-caps {
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
   }
   .underline-mm {
     text-decoration: underline;
@@ -283,7 +258,7 @@
   .eyebrow {
     text-transform: uppercase;
     letter-spacing: 0.32em;
-    font-weight: var(--murmur-ui-font-weight);
+    font-weight: 500;
     font-size: 0.6875rem;
     color: var(--color-murmur-mute);
   }
@@ -298,8 +273,8 @@
     background: var(--color-murmur-bg-warm);
     color: var(--color-murmur-ink);
     font-size: 0.75rem;
-    font-weight: var(--murmur-ui-font-weight);
-    letter-spacing: var(--murmur-ui-letter-spacing);
+    font-weight: 500;
+    letter-spacing: 0.02em;
   }
 
   /* ── Accent button — vivid coral, no shadow, hover scale ───── */
@@ -623,42 +598,6 @@
     0 12px 30px rgba(26, 26, 26, 0.10);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-}
-
-.mobile-rail-shell {
-  background:
-    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.54), transparent 0 20%),
-    linear-gradient(180deg, rgba(255, 255, 253, 0.985), rgba(249, 245, 239, 0.97));
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-}
-
-.mobile-rail-shell::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 18%, rgba(210, 201, 182, 0.035) 100%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.12'/%3E%3C/svg%3E");
-  background-size: auto, 300px 300px;
-  mix-blend-mode: multiply;
-  opacity: 0.3;
-}
-
-.mobile-rail-shell--compact {
-  box-shadow:
-    0 1px 2px rgba(26, 26, 26, 0.025),
-    0 8px 20px rgba(26, 26, 26, 0.06);
-}
-
-.mobile-rail-track {
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 10px), transparent);
-  mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 10px), transparent);
-}
-
-.mobile-rail-inner {
-  isolation: isolate;
 }
 
 /* Share invite photo treatment — reusable for future background swaps.
