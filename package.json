@@ -86,7 +86,7 @@
     "react-dom": "19.2.7",
     "react-intersection-observer": "^10.0.3",
     "resend": "^6.14.0",
-    "shadcn": "^4.10.0",
+    "shadcn": "^4.12.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "tone": "^14.7.77",
