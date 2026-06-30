@@ -212,6 +212,7 @@ export function HumScreen() {
     !accountLoading &&
     !hasServerAccount;
   const [showLoginWall, setShowLoginWall] = useState(false);
+  const [orbHovered, setOrbHovered] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
   // Onboarding: first visit gently focuses the already-visible stage.
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -513,7 +514,9 @@ export function HumScreen() {
       const errorLogLevel =
         e instanceof TranscribeRequestError
           ? humErrorLogLevel(e.code)
-          : "error";
+          : e instanceof MusicEngineUnavailableError
+            ? "warn"
+            : "error";
       log("transcribe.failed", {
         error_code: errorState.code,
         variant: errorState.variant,
@@ -1099,10 +1102,14 @@ export function HumScreen() {
                     beginIdleCapture();
                   }
                 }}
+                onMouseEnter={() => setOrbHovered(true)}
+                onMouseMove={() => setOrbHovered(true)}
+                onMouseLeave={() => setOrbHovered(false)}
+                onPointerEnter={() => setOrbHovered(true)}
+                onPointerMove={() => setOrbHovered(true)}
+                onPointerLeave={() => setOrbHovered(false)}
+                onBlur={() => setOrbHovered(false)}
                 disabled={isProcessing}
-                // Keep the button, glow, and progress ring on one fixed
-                // geometry; interaction feedback lives in light, not size.
-                animate={{ scale: 1 }}
                 whileHover={
                   isIdle
                     ? {
@@ -1118,12 +1125,14 @@ export function HumScreen() {
                 }}
                 className={[
                   "relative z-10 w-full h-full rounded-full flex items-center justify-center",
-                  "bg-white cursor-pointer select-none",
+                  "bg-white cursor-pointer select-none transition-transform duration-200 ease-out",
+                  isIdle ? "hover:scale-[1.03]" : "",
                   isProcessing ? "opacity-80 cursor-wait" : "",
                 ].join(" ")}
                 style={{
                   boxShadow:
                     "0 4px 40px rgba(255,255,255,0.6), 0 0 0 1px rgba(255,255,255,0.8)",
+                  transform: orbHovered && isIdle ? "scale(1.03)" : undefined,
                 }}
                 aria-label={orbAriaLabel}
               >

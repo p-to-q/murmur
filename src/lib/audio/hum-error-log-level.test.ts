@@ -3,6 +3,7 @@ import { humErrorLogLevel } from "./hum-error-log-level";
 
 describe("humErrorLogLevel", () => {
   it("keeps handled transient failures at warn level", () => {
+    expect(humErrorLogLevel("unauthorized")).toBe("warn");
     expect(humErrorLogLevel("worker_unavailable")).toBe("warn");
     expect(humErrorLogLevel("network_error")).toBe("warn");
     expect(humErrorLogLevel("billing_unavailable")).toBe("warn");
