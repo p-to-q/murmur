@@ -199,10 +199,10 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   ]);
 
   useEffect(() => {
-    if (phase === "cards" && vibeVersions.length === 0 && !demoEnabled) {
+    if (vibeVersions.length === 0 && !demoEnabled) {
       router.replace("/");
     }
-  }, [demoEnabled, phase, vibeVersions.length, router]);
+  }, [demoEnabled, vibeVersions.length, router]);
 
   useEffect(() => {
     if (!restoredDraftAt || restoredRegenerationRef.current === restoredDraftAt) {
