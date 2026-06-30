@@ -2,6 +2,7 @@
 
 import { useAuthProviders, type OAuthProvider } from "@/lib/hooks/use-auth-providers";
 import { useTranslator } from "@/lib/i18n";
+import { authClient } from "@/lib/platform/auth-client";
 
 interface AuthButtonsProps {
   callbackUrl?: string;
@@ -38,6 +39,9 @@ export function AuthButtons({
   ];
 
   const visibleOAuth = oauthProviders.filter((p) => p.available !== false);
+  const hasVisibleProvider =
+    visibleOAuth.length > 0 || Boolean(providers.email && onEmailClick);
+  const showLocalFallback = !loading && !hasVisibleProvider;
 
   return (
     <div className={`flex flex-col gap-2.5 ${className}`}>
@@ -60,6 +64,18 @@ export function AuthButtons({
         >
           <EmailIcon />
           {t("auth.continue_email")}
+        </button>
+      )}
+
+      {showLocalFallback && (
+        <button
+          type="button"
+          onClick={() => {
+            authClient.login().catch(() => undefined);
+          }}
+          className="flex w-full items-center justify-center gap-2.5 rounded-full border border-[#E0DDD5] bg-[#F5F1EB] px-5 py-2.5 text-[14px] font-medium text-[#8C8780] shadow-sm transition-all hover:shadow-md"
+        >
+          {t("auth.local_creator")}
         </button>
       )}
     </div>
