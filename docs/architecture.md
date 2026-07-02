@@ -111,9 +111,12 @@ flowchart TB
   paired `notes_ledger` grant rows, so an existing registered user cannot later
   claim invite credit by opening someone else's link.
 - Local-header identity is local/demo only.
-- Remote notification delivery is intentionally stubbed until a real push
-  backend is chosen. The client owns a local in-app notification inbox plus
-  browser alert opt-in for demo-safe save / generation feedback.
+- Browser notification delivery uses a Web Push adapter behind
+  `src/lib/platform/notifications-server.ts`. The client still owns a local
+  in-app notification inbox and foreground browser-alert fallback; when VAPID
+  keys are configured, service-worker push delivery reaches the operating
+  system while the page is hidden or closed. When keys are absent, publish calls
+  skip cleanly so local demos remain usable.
 - Memory events are stored locally for now, which keeps user flows non-blocking.
 - Language is negotiated before first paint from the explicit `murmur.lang`
   cookie first, then the request `Accept-Language` header, then the product
@@ -128,9 +131,12 @@ flowchart TB
 
 - The platform layer is local-first, but production identity is now
   session-backed rather than header-backed.
-- Remote push notification delivery is a stub, useful for wiring but not for
-  delivery guarantees. Local in-app notifications are persisted in browser
-  storage and browser alerts depend on the user's Notification permission.
+- Web Push requires `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, HTTPS
+  (localhost is accepted by browsers for development), browser notification
+  permission, and a registered `push_subscriptions` row. Music generation is
+  still client-orchestrated clip-by-clip, so fully durable "batch finished
+  after browser exit" notifications require a future server-side generation
+  job queue.
 - AI editing depends on `OPENAI_API_KEY` or an equivalent gateway key.
 - Some UI files are still larger than the final target shape and can be split as
   the product stabilizes.

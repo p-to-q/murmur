@@ -22,7 +22,11 @@ export async function POST(request: NextRequest) {
     const result = await notifications.publish({
       title: `Hello, ${callerLabel} 👋`,
       body: "This is a local notification preflight from Murmur.",
+      userId: auth.user.id,
       data: {
+        kind: "system",
+        tag: "murmur-notification-test",
+        href: "/me/notifications",
         source: "test-button",
         triggeredByUserId: auth.user.id,
       },

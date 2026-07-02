@@ -134,6 +134,13 @@
       "when": 1782518400000,
       "tag": "0018_rate_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1782961221301,
+      "tag": "0019_kind_fantastic_four",
+      "breakpoints": true
     }
   ]
 }

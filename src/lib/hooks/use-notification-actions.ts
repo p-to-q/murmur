@@ -38,12 +38,20 @@ export function useNotificationActions() {
 
     try {
       const nextPermission = await setBrowserAlertsEnabled(true);
-      void request("/api/notifications/test", {
+      const serverPush = await request("/api/notifications/test", {
         method: "POST",
         headers: { accept: "application/json" },
-      }).catch(() => {});
+      })
+        .then(async (response) => {
+          if (!response.ok) return { delivered: 0 };
+          return (await response.json().catch(() => ({ delivered: 0 }))) as {
+            delivered?: number;
+          };
+        })
+        .catch(() => ({ delivered: 0 }));
 
       const canShowBrowserAlert = nextPermission === "granted";
+      const serverDelivered = (serverPush.delivered ?? 0) > 0;
       addNotification({
         kind: "system",
         id: testId,
@@ -53,11 +61,13 @@ export function useNotificationActions() {
       });
 
       if (canShowBrowserAlert) {
-        sendBrowserNotification(title, {
-          body: enabledBody,
-          tag: "murmur-notification-test",
-          showWhileVisible: true,
-        });
+        if (!serverDelivered) {
+          sendBrowserNotification(title, {
+            body: enabledBody,
+            tag: "murmur-notification-test",
+            showWhileVisible: true,
+          });
+        }
         toast.success(t("nav.notify.test.sent") || "Test notification sent.");
       } else if (nextPermission === "unsupported") {
         toast(t("nav.notify.unsupported") || "System alerts are not supported here.");
