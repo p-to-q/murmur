@@ -1,4 +1,5 @@
 import webpush from "web-push";
+import { randomUUID } from "crypto";
 
 import {
   disablePushSubscriptionByEndpoint,
@@ -48,10 +49,11 @@ type WebPushErrorLike = Error & {
 };
 
 const DEFAULT_PUSH_LIMIT = 1000;
+const PUSH_SEND_CONCURRENCY = 25;
 
 export const notifications = {
   async publish(input: NotificationPublishInput): Promise<NotificationPublishResult> {
-    const publishId = `push-${Date.now()}`;
+    const publishId = createPublishId();
     const config = getWebPushConfig();
     if (!config.ok) {
       return {
@@ -103,8 +105,10 @@ export const notifications = {
     let failed = 0;
     let removed = 0;
 
-    await Promise.all(
-      subscriptions.map(async (subscription) => {
+    await mapWithConcurrency(
+      subscriptions,
+      PUSH_SEND_CONCURRENCY,
+      async (subscription) => {
         try {
           await webpush.sendNotification(toWebPushSubscription(subscription), payload, {
             TTL: 60 * 60 * 24,
@@ -130,7 +134,7 @@ export const notifications = {
             level: "warn",
           });
         }
-      }),
+      },
     );
 
     return {
@@ -181,6 +185,26 @@ function toWebPushSubscription(subscription: PushSubscriptionRecord) {
       auth: subscription.auth,
     },
   };
+}
+
+function createPublishId(): string {
+  return `push-${randomUUID()}`;
+}
+
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  const workers = Array.from(
+    { length: Math.min(Math.max(concurrency, 1), items.length) },
+    async (_, workerIndex) => {
+      for (let index = workerIndex; index < items.length; index += concurrency) {
+        await task(items[index]);
+      }
+    },
+  );
+  await Promise.all(workers);
 }
 
 function isGonePushEndpoint(error: unknown): boolean {
