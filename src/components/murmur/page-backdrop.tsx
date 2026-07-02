@@ -8,6 +8,11 @@
  * no audio reactivity — HumScreen keeps its own audio-reactive backdrop because
  * it has different requirements (amplitude-driven scale + opacity).
  *
+ * Layout contract: this layer belongs to the *main content column*, not the full
+ * viewport. On desktop it starts at `--side-nav-w` and clips overflow so aurora
+ * blobs never drift under SideNav. SideNav keeps its own paper treatment and must
+ * not rely on this layer for masking.
+ *
  * Use as the first child inside any screen container:
  *
  *   <div className="relative min-h-svh bg-[var(--color-murmur-bg)]">
@@ -30,17 +35,20 @@ export function PageBackdrop({ variant = "default", className = "" }: PageBackdr
   const o = variant === "soft" ? 0.55 : 1;
   return (
     <div
-      className={`pointer-events-none fixed inset-0 overflow-hidden ${className}`}
+      className={`pointer-events-none fixed bottom-0 right-0 top-0 left-[var(--side-nav-w)] z-0 overflow-hidden ${className}`}
       aria-hidden
-      style={{ opacity: o }}
+      style={{
+        opacity: o,
+        transition: "left 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
+      }}
     >
-      {/* Pink — bottom-left */}
+      {/* Pink — bottom-left (kept inside the content column; drift anim stays clipped) */}
       <div
         className="aurora-blob-1 absolute rounded-full"
         style={{
           width: "min(60vw, 560px)",
           height: "min(52vw, 480px)",
-          left: "-6%",
+          left: "0%",
           bottom: "8%",
           background:
             "radial-gradient(ellipse at center, rgba(255,105,210,0.32) 0%, rgba(255,80,180,0.10) 50%, transparent 75%)",

@@ -6,7 +6,7 @@
  * Throws out the icon list, the card surface, the right-side border, and the
  * floating active-dot. Replaces them with a manuscript-style page edge:
  *
- *   - Transparent background; PageBackdrop drifts under it.
+ *   - Opaque paper rail; page backdrops stay in the main content column.
  *   - Three destinations stacked vertically, separated by hairline rules.
  *   - Active destination gets a 1.5 px coral vertical line at the row's left
  *     edge (the "margin marker" of an old book) and shifts to serif italic.
