@@ -54,9 +54,10 @@
 
 ### Optional upgrades (off by default)
 - [ ] PYIN audio worker — set server-only `AUDIO_WORKER_URL`
-- [x] Browser Web Push notifications — set `WEB_PUSH_PUBLIC_KEY`,
-  `WEB_PUSH_PRIVATE_KEY`, and `WEB_PUSH_SUBJECT` to enable OS-level alerts from
-  registered browsers
+- [x] Browser Web Push notifications — set `WEB_PUSH_PUBLIC_KEY` and
+  `WEB_PUSH_PRIVATE_KEY` to enable OS-level alerts from registered browsers.
+  `WEB_PUSH_SUBJECT` is optional and defaults to `mailto:ops@example.com` when
+  absent.
 
 ### Known limitations
 - Metadata URLs default to `https://murmur.ptoq.io` when `MURMUR_APP_URL` and

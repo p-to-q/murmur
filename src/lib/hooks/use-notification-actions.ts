@@ -40,7 +40,11 @@ export function useNotificationActions() {
       const nextPermission = await setBrowserAlertsEnabled(true);
       const serverPush = await request("/api/notifications/test", {
         method: "POST",
-        headers: { accept: "application/json" },
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ notificationId: testId }),
       })
         .then(async (response) => {
           if (!response.ok) return { delivered: 0 };
@@ -52,7 +56,11 @@ export function useNotificationActions() {
 
       const canShowBrowserAlert = nextPermission === "granted";
       const serverDelivered = (serverPush.delivered ?? 0) > 0;
-      if (!serverDelivered) {
+      const serverVisible = serverDelivered
+        ? await waitForNotification(testId, 1_200)
+        : false;
+
+      if (!serverVisible) {
         addNotification({
           kind: "system",
           id: testId,
@@ -63,7 +71,7 @@ export function useNotificationActions() {
       }
 
       if (canShowBrowserAlert) {
-        if (!serverDelivered) {
+        if (!serverVisible) {
           sendBrowserNotification(title, {
             body: enabledBody,
             tag: "murmur-notification-test",
@@ -89,4 +97,30 @@ export function useNotificationActions() {
     sendTestNotification,
     setBrowserAlertsEnabled,
   };
+}
+
+function waitForNotification(id: string, timeoutMs: number): Promise<boolean> {
+  if (hasNotification(id)) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    let stop = () => {};
+    const timer = window.setTimeout(() => {
+      stop();
+      resolve(hasNotification(id));
+    }, timeoutMs);
+    stop = useNotificationStore.subscribe((state) => {
+      if (!state.items.some((item) => item.id === id || item.sourceId === id)) {
+        return;
+      }
+      clearTimeout(timer);
+      stop();
+      resolve(true);
+    });
+  });
+}
+
+function hasNotification(id: string): boolean {
+  return useNotificationStore
+    .getState()
+    .items.some((item) => item.id === id || item.sourceId === id);
 }

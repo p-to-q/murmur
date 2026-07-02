@@ -9,7 +9,7 @@ import {
 import { log } from "@/lib/observability/log";
 
 const subscriptionSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z.url(),
   expirationTime: z.number().nullable().optional(),
   keys: z.object({
     p256dh: z.string().min(1),
@@ -24,7 +24,7 @@ const subscribeSchema = z.object({
 });
 
 const unsubscribeSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z.url(),
 });
 
 export async function POST(request: NextRequest) {

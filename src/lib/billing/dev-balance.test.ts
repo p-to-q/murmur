@@ -90,4 +90,24 @@ describe("shouldUseDevBalanceFallback", () => {
       else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prev;
     }
   });
+
+  it("keeps loopback fallback available in test for local route fixtures", () => {
+    const prevNode = process.env.NODE_ENV;
+    const prev = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    const prevVercel = process.env.VERCEL;
+    process.env.NODE_ENV = "test";
+    delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    delete process.env.VERCEL;
+
+    try {
+      expect(shouldUseDevBalanceFallback({ host: "localhost" })).toBe(true);
+    } finally {
+      if (prevNode === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = prevNode;
+      if (prev === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+      else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prev;
+      if (prevVercel === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = prevVercel;
+    }
+  });
 });

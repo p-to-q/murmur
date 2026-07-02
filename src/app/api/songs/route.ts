@@ -468,12 +468,13 @@ async function publishSongSavedNotification(input: {
   acceptLanguage: string | null;
 }) {
   const zh = input.acceptLanguage?.toLowerCase().startsWith("zh") ?? false;
+  const title = truncateNotificationText(input.title, 80);
   await notifications
     .publish({
       title: zh ? "已保存到藏歌" : "Saved to Gallery",
       body: zh
-        ? `《${input.title}》已经收好，可以随时打开。`
-        : `"${input.title}" is ready to reopen from your Gallery.`,
+        ? `《${title}》已经收好，可以随时打开。`
+        : `"${title}" is ready to reopen from your Gallery.`,
       userId: input.userId,
       data: {
         kind: "song_saved",
@@ -497,6 +498,11 @@ async function publishSongSavedNotification(input: {
     });
 }
 
+function truncateNotificationText(value: string, maxLength: number): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
 
 function isMelodySelectionKind(value: unknown): value is MelodySelectionKind {
   return typeof value === "string" && MELODY_SELECTION_KINDS.has(value as MelodySelectionKind);
