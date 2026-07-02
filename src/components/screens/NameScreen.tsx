@@ -35,6 +35,11 @@ import { renderAudio } from "@/modules/export/render-mp3";
 import { canSaveHeardVersion, getSaveBlockReason } from "@/modules/music/version-contract";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { buildNameSaveMetadata } from "./name-save-metadata";
+import {
+  getInitialNameTitleState,
+  resolveNameDisplayTitle,
+  type NameTitleMode,
+} from "./name-title";
 import { useRestoredVersionAudio } from "./use-restored-version-audio";
 
 const PROCESSING_INTERVAL_MS = 900;
@@ -55,11 +60,13 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const demoEnabled = initialDemo;
 
   const [title, setTitle] = useState("");
-  const [titleMode, setTitleMode] = useState<"suggested" | "custom">("suggested");
+  const [titleMode, setTitleMode] = useState<NameTitleMode>("suggested");
+  const [titleVersionId, setTitleVersionId] = useState<string | null>(null);
   const [suggestionBatch, setSuggestionBatch] = useState({ key: "", index: 0 });
   const [isSaving, setIsSaving] = useState(false);
   const [processingIdx, setProcessingIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const currentVersionId = currentVersion?.id ?? null;
 
   useEffect(() => {
     if (currentVersion) {
@@ -97,12 +104,16 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     if (!currentVersion) return buildFallbackTitleSuggestionBatch(lang, suggestionBatchIndex);
     return buildVersionTitleSuggestionBatch(currentVersion, lang, suggestionBatchIndex);
   }, [currentVersion, lang, suggestionBatchIndex]);
+  const initialTitleState = useMemo(
+    () => getInitialNameTitleState(currentVersion?.title, suggestions),
+    [currentVersion?.title, suggestions],
+  );
+  const activeTitleState =
+    titleVersionId === currentVersionId
+      ? { title, titleMode }
+      : initialTitleState;
   const displayTitle =
-    titleMode === "custom"
-      ? title
-      : suggestions.includes(title)
-        ? title
-        : suggestions[0] ?? title;
+    resolveNameDisplayTitle(activeTitleState, suggestions);
 
   /* ── Rotating processing copy ─────────────────────────────────── */
   const PROCESSING_COPY = useMemo(
@@ -116,11 +127,11 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   );
 
   useEffect(() => {
-    if (!currentVersion) return;
+    if (!currentVersionId) return;
     synth.stop();
     inputRef.current?.focus();
     inputRef.current?.select();
-  }, [currentVersion]);
+  }, [currentVersionId]);
 
   useEffect(() => {
     if (!isSaving) return;
@@ -320,6 +331,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
               type="text"
               value={displayTitle}
               onChange={(e) => {
+                setTitleVersionId(currentVersionId);
                 setTitleMode("custom");
                 setTitle(e.target.value);
               }}
@@ -370,6 +382,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                   <span key={s} className="inline-flex items-baseline gap-3">
                     <button
                       onClick={() => {
+                        setTitleVersionId(currentVersionId);
                         setTitleMode("suggested");
                         setTitle(s);
                         inputRef.current?.focus();
