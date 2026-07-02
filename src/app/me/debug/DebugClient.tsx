@@ -16,6 +16,7 @@ const EVENT_FILTERS = [
   "transcribe.failed",
   "capture.failed",
   "capture.prepared",
+  "capture.stopped",
   "arrangement.generated",
 ] as const;
 
