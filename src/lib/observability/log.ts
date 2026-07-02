@@ -54,6 +54,8 @@ export type LogEvent =
   | "purchases.restore_failed"
   | "user.profile_failed"
   | "notifications.publish_failed"
+  | "notifications.subscribe_failed"
+  | "notifications.unsubscribe_failed"
   | "billing.checkout_failed"
   | "billing.zpay_checkout_failed"
   | "billing.zpay_notify_failed"

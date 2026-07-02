@@ -1,10 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+
 import { resolveRequestAuth } from "@/lib/auth";
 import {
   NotificationPublishError,
   notifications,
 } from "@/lib/platform/notifications-server";
 import { log } from "@/lib/observability/log";
+
+const testNotificationSchema = z.object({
+  notificationId: z.string().min(1).max(120).optional(),
+});
 
 /**
  * Sends a test notification through the local platform adapter.
@@ -15,15 +21,39 @@ export async function POST(request: NextRequest) {
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
 
+  let body: z.infer<typeof testNotificationSchema> = {};
+  try {
+    const contentType = request.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      body = testNotificationSchema.parse(await request.json());
+    }
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: "validation_error",
+        message: "Invalid test notification payload",
+        issues: error instanceof z.ZodError ? error.issues : undefined,
+      },
+      { status: 400 },
+    );
+  }
+
   const callerLabel =
     auth.user.name?.trim() || auth.user.email?.split("@")[0] || "there";
+  const notificationId = body.notificationId;
 
   try {
     const result = await notifications.publish({
       title: `Hello, ${callerLabel} 👋`,
       body: "This is a local notification preflight from Murmur.",
+      userId: auth.user.id,
       data: {
+        kind: "system",
+        tag: "murmur-notification-test",
+        href: "/me/notifications",
         source: "test-button",
+        sourceId: notificationId,
+        notificationId,
         triggeredByUserId: auth.user.id,
       },
     });

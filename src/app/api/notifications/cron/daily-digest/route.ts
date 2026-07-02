@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await notifications.publish({
+    const result = await notifications.publishBroadcast({
       title: "Daily reminder",
       body: "Don't forget to review your tasks today.",
       data: { source: "cron-daily-digest" },

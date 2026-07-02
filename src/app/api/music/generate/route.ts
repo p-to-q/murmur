@@ -11,6 +11,8 @@ import {
   getMusicServerlessConfig,
   getMusicWorkerUrl,
 } from "@/lib/platform/music-worker";
+import { notifications } from "@/lib/platform/notifications-server";
+import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { RunpodError, runJob } from "@/lib/platform/runpod-serverless";
 import { COST } from "@murmur/core";
 
@@ -249,6 +251,13 @@ export async function POST(request: NextRequest) {
       route: ROUTE, requestId, userId, sessionId: auth.sessionId,
       durationMs: Math.round(performance.now() - startedAt),
     });
+    scheduleAfterResponse(() => publishMusicGeneratedNotification({
+      userId,
+      sessionId: auth.sessionId,
+      requestId,
+      prompt,
+      acceptLanguage: request.headers.get("accept-language"),
+    }));
 
     return new NextResponse(result.audio, {
       headers: {
@@ -287,6 +296,44 @@ export async function POST(request: NextRequest) {
       },
     });
   }
+}
+
+async function publishMusicGeneratedNotification(input: {
+  userId: string;
+  sessionId: string | null;
+  requestId: string;
+  prompt: string;
+  acceptLanguage: string | null;
+}) {
+  const zh = input.acceptLanguage?.toLowerCase().startsWith("zh") ?? false;
+  await notifications
+    .publish({
+      title: zh ? "版本已酿好" : "Vibe ready",
+      body: zh
+        ? "一个新版本已经生成好，可以回到谱室听听。"
+        : "A new vibe is ready in Studio.",
+      userId: input.userId,
+      data: {
+        kind: "song_generated",
+        tag: `murmur-generation-${input.requestId}`,
+        href: "/studio",
+        source: "music-generate",
+        requestId: input.requestId,
+        prompt: input.prompt.slice(0, 120),
+      },
+    })
+    .catch((error) => {
+      log("notifications.publish_failed", {
+        source: "music_generate",
+        requestId: input.requestId,
+        error: error instanceof Error ? error.message : String(error),
+      }, {
+        route: ROUTE,
+        userId: input.userId,
+        sessionId: input.sessionId,
+        level: "warn",
+      });
+    });
 }
 
 async function prepareMusicGenerationBilling(options: {

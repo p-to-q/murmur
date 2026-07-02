@@ -155,7 +155,33 @@ The token itself is **never stored**; only its SHA-256 hash. The
 opaque token leaves the server once (in the `Set-Cookie` or login
 response) and is provided by the client thereafter.
 
-### 3.4 `notes_ledger` (NEW)
+### 3.4 `push_subscriptions`
+
+[push-subscriptions.ts](../src/lib/db/schema/push-subscriptions.ts): browser
+Web Push subscriptions for OS-level notifications.
+
+Important fields:
+
+- `user_id → users.id` — subscriptions are account-scoped and cascade on hard
+  delete.
+- `session_id` — best-effort link to the web session that registered the
+  device. Auth.js-only sessions may leave this null.
+- `endpoint` — unique push service endpoint; upserts move a browser
+  subscription to the latest signed-in user.
+- `p256dh`, `auth` — Web Push encryption keys.
+- `shell` — currently `web`; native shells should use their own token tables
+  or extend this only after a platform decision.
+- `metadata` — small client hints such as locale and timezone.
+- `disabled_at` — set when the user turns browser alerts off or a push service
+  returns 404/410.
+
+Indexes:
+
+- `push_subscriptions_user_idx ON (user_id)`
+- `push_subscriptions_active_user_idx ON (user_id, disabled_at)`
+- `push_subscriptions_endpoint_idx ON (endpoint)` — unique
+
+### 3.5 `notes_ledger` (NEW)
 
 ```ts
 export const notesLedger = pgTable(
@@ -572,8 +598,8 @@ A downstream agent has shipped the v2 data model when:
 - `teams`, `orgs` — never (or v∞).
 - `embeddings` for songs / melodies — v3 if recommendation work
   starts.
-- Anything specific to Capacitor / MP push tokens — `notifications` is
-  still a stub; the table arrives with the publisher.
+- Anything specific to Capacitor / MP push tokens — Web Push covers the web
+  shell; native push tokens should arrive with the native shell adapter.
 
 Sibling docs: `user-model.md`, `payment-topup-feature.md`,
 `audio-pipeline-redesign.md`, `api-conventions.md`,

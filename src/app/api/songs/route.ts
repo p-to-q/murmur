@@ -19,6 +19,8 @@ import {
   getLocalSongSummariesByUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
 import { log } from "@/lib/observability/log";
+import { notifications } from "@/lib/platform/notifications-server";
+import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { COST } from "@murmur/core";
 import { deriveEditDepth, normalizeEditCount } from "@/modules/music/edit-depth";
 import { normalizeLineageDepth, resolveParentSongId, resolveRootSongId } from "@/modules/music/lineage";
@@ -165,6 +167,13 @@ export async function POST(req: NextRequest) {
     if (skipBilling) {
       try {
         const song = await createSong(songInput);
+        scheduleAfterResponse(() => publishSongSavedNotification({
+          userId,
+          sessionId: auth.sessionId,
+          songId: song.id,
+          title: song.title,
+          acceptLanguage: req.headers.get("accept-language"),
+        }));
 
         return NextResponse.json(song, {
           headers: { "X-Request-Id": requestId },
@@ -256,6 +265,13 @@ export async function POST(req: NextRequest) {
       userId,
       sessionId: auth.sessionId,
     });
+    scheduleAfterResponse(() => publishSongSavedNotification({
+      userId,
+      sessionId: auth.sessionId,
+      songId: result.song.id,
+      title: result.song.title,
+      acceptLanguage: req.headers.get("accept-language"),
+    }));
 
     return NextResponse.json(result.song, {
       headers: { "X-Request-Id": requestId },
@@ -444,6 +460,49 @@ function shouldUseLocalSongFallback(auth: OkAuth, host?: string | null): boolean
   );
 }
 
+async function publishSongSavedNotification(input: {
+  userId: string;
+  sessionId: string | null;
+  songId: string;
+  title: string;
+  acceptLanguage: string | null;
+}) {
+  const zh = input.acceptLanguage?.toLowerCase().startsWith("zh") ?? false;
+  const title = truncateNotificationText(input.title, 80);
+  await notifications
+    .publish({
+      title: zh ? "已保存到藏歌" : "Saved to Gallery",
+      body: zh
+        ? `《${title}》已经收好，可以随时打开。`
+        : `"${title}" is ready to reopen from your Gallery.`,
+      userId: input.userId,
+      data: {
+        kind: "song_saved",
+        tag: `murmur-song-saved-${input.songId}`,
+        href: `/song/${input.songId}`,
+        source: "song-save",
+        songId: input.songId,
+      },
+    })
+    .catch((error) => {
+      log("notifications.publish_failed", {
+        source: "song_saved",
+        songId: input.songId,
+        error: error instanceof Error ? error.message : String(error),
+      }, {
+        route: ROUTE,
+        userId: input.userId,
+        sessionId: input.sessionId,
+        level: "warn",
+      });
+    });
+}
+
+function truncateNotificationText(value: string, maxLength: number): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
 
 function isMelodySelectionKind(value: unknown): value is MelodySelectionKind {
   return typeof value === "string" && MELODY_SELECTION_KINDS.has(value as MelodySelectionKind);

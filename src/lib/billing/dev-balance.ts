@@ -25,6 +25,10 @@ export function shouldUseDevBalanceFallback(options: {
     return true;
   }
 
+  if (process.env.NODE_ENV === "test") {
+    return false;
+  }
+
   if (process.env.NODE_ENV === "development") {
     return true;
   }
