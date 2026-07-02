@@ -32,6 +32,8 @@ import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { useNotificationActions } from "@/lib/hooks/use-notification-actions";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import { useNotificationStore } from "@/lib/store/notification-store";
+import type { MurmurNotification } from "@/lib/store/notification-store";
+import { resolveNotificationCopy } from "@/lib/notifications/notification-copy";
 
 export function MeScreen() {
   const [songCount, setSongCount] = useState(0);
@@ -413,13 +415,7 @@ function NotificationPanel({
   onMarkAllRead,
   onSendTest,
 }: {
-  notifications: Array<{
-    id: string;
-    title: string;
-    body: string;
-    readAt?: number;
-    createdAt: number;
-  }>;
+  notifications: MurmurNotification[];
   isTesting: boolean;
   onMarkAllRead: () => void;
   onSendTest: () => void;
@@ -442,7 +438,9 @@ function NotificationPanel({
             {t("me.notifications.placeholder") || "Notifications will appear here."}
           </p>
         ) : (
-          preview.map((item) => (
+          preview.map((item) => {
+            const copy = resolveNotificationCopy(item, lang);
+            return (
             <Link
               key={item.id}
               href="/me/notifications"
@@ -457,17 +455,18 @@ function NotificationPanel({
               />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[12px] font-medium leading-snug text-[#1A1A1A]">
-                  {item.title}
+                  {copy.title}
                 </span>
                 <span className="mt-0.5 block truncate text-[11px] leading-snug text-[#8C8780]">
-                  {item.body}
+                  {copy.body}
                 </span>
               </span>
               <span className="shrink-0 text-[10px] leading-snug text-[#B6B0A4]">
                 {formatNotificationTime(item.createdAt, lang)}
               </span>
             </Link>
-          ))
+          );
+          })
         )}
       </div>
 

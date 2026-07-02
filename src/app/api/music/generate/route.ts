@@ -12,6 +12,10 @@ import {
   getMusicWorkerUrl,
 } from "@/lib/platform/music-worker";
 import { notifications } from "@/lib/platform/notifications-server";
+import {
+  langFromAcceptLanguage,
+  songGeneratedNotificationCopy,
+} from "@/lib/notifications/notification-copy";
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { RunpodError, runJob } from "@/lib/platform/runpod-serverless";
 import { COST } from "@murmur/core";
@@ -305,13 +309,15 @@ async function publishMusicGeneratedNotification(input: {
   prompt: string;
   acceptLanguage: string | null;
 }) {
-  const zh = input.acceptLanguage?.toLowerCase().startsWith("zh") ?? false;
+  const lang = langFromAcceptLanguage(input.acceptLanguage);
+  const copy = songGeneratedNotificationCopy(lang, {
+    readyCount: 1,
+    totalCount: 1,
+  });
   await notifications
     .publish({
-      title: zh ? "版本已酿好" : "Vibe ready",
-      body: zh
-        ? "一个新版本已经生成好，可以回到谱室听听。"
-        : "A new vibe is ready in Studio.",
+      title: copy.title,
+      body: copy.body,
       userId: input.userId,
       data: {
         kind: "song_generated",

@@ -6,6 +6,7 @@ import { ArrowLeft, BellRing, CheckCheck, Trash2 } from "lucide-react";
 
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
+import { resolveNotificationCopy } from "@/lib/notifications/notification-copy";
 import { useNotificationActions } from "@/lib/hooks/use-notification-actions";
 import {
   useNotificationStore,
@@ -110,7 +111,9 @@ export function NotificationsScreen() {
                 {t("nav.notify.empty") || "No notifications yet."}
               </div>
             ) : (
-              notifications.map((item) => (
+              notifications.map((item) => {
+                const copy = resolveNotificationCopy(item, lang);
+                return (
                 <button
                   key={item.id}
                   type="button"
@@ -125,17 +128,18 @@ export function NotificationsScreen() {
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[13px] font-medium leading-snug text-[#1A1A1A]">
-                      {item.title}
+                      {copy.title}
                     </span>
                     <span className="mt-1 block text-[12px] leading-[1.5] text-[#8C8780]">
-                      {item.body}
+                      {copy.body}
                     </span>
                   </span>
                   <span className="shrink-0 text-[10px] leading-snug text-[#B6B0A4]">
                     {formatNotificationTime(item.createdAt, lang)}
                   </span>
                 </button>
-              ))
+              );
+              })
             )}
           </div>
         </main>

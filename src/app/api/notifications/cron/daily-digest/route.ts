@@ -4,6 +4,7 @@ import {
   notifications,
 } from "@/lib/platform/notifications-server";
 import { log } from "@/lib/observability/log";
+import { dailyDigestNotificationCopy } from "@/lib/notifications/notification-copy";
 
 /** Scheduled by `vercel.json#crons`. Authenticated via `CRON_SECRET`. */
 export async function GET(request: NextRequest) {
@@ -20,9 +21,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const copy = dailyDigestNotificationCopy("zh");
     const result = await notifications.publishBroadcast({
-      title: "Daily reminder",
-      body: "Don't forget to review your tasks today.",
+      title: copy.title,
+      body: copy.body,
       data: { source: "cron-daily-digest" },
     });
     return NextResponse.json(result);

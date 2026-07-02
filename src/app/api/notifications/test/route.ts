@@ -7,6 +7,10 @@ import {
   notifications,
 } from "@/lib/platform/notifications-server";
 import { log } from "@/lib/observability/log";
+import {
+  langFromAcceptLanguage,
+  pushTestNotificationCopy,
+} from "@/lib/notifications/notification-copy";
 
 const testNotificationSchema = z.object({
   notificationId: z.string().min(1).max(120).optional(),
@@ -41,11 +45,13 @@ export async function POST(request: NextRequest) {
   const callerLabel =
     auth.user.name?.trim() || auth.user.email?.split("@")[0] || "there";
   const notificationId = body.notificationId;
+  const lang = langFromAcceptLanguage(request.headers.get("accept-language"));
+  const copy = pushTestNotificationCopy(lang, callerLabel);
 
   try {
     const result = await notifications.publish({
-      title: `Hello, ${callerLabel} 👋`,
-      body: "This is a local notification preflight from Murmur.",
+      title: copy.title,
+      body: copy.body,
       userId: auth.user.id,
       data: {
         kind: "system",

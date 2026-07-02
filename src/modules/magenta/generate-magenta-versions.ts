@@ -12,7 +12,7 @@ import { pickArtworkSelection, gradientFromPalette } from "@/presets/artworks/ar
 import { sendBrowserNotification } from "@/lib/hooks/use-browser-notification";
 import { addMurmurNotification } from "@/lib/store/notification-store";
 import { useI18nStore } from "@/lib/i18n";
-import { renderTranslationToken } from "@/lib/i18n/translate";
+import { songGeneratedNotificationCopy } from "@/lib/notifications/notification-copy";
 
 /**
  * Magenta RealTime version flow.
@@ -405,14 +405,10 @@ function notifyIfBatchComplete(): void {
   if (readyCount === 0) return;
   const sourceId = currentFlowId ?? currentDraftId ?? withGen.map((v) => v.id).join(":");
   const lang = useI18nStore.getState().lang;
-  const title = renderTranslationToken("nav.notify.song_generated.title", lang, "product")
-    || "Vibes ready";
-  const body = readyCount === withGen.length
-    ? (renderTranslationToken("nav.notify.song_generated.body_all", lang, "product")
-      || `All ${readyCount} vibes are ready.`)
-    : (lang === "zh"
-      ? `${withGen.length} 个版本里有 ${readyCount} 个已经酿好，可以去谱室听听。`
-      : `${readyCount} of ${withGen.length} vibes are ready in Studio.`);
+  const { title, body } = songGeneratedNotificationCopy(lang, {
+    readyCount,
+    totalCount: withGen.length,
+  });
   addMurmurNotification({
     kind: "song_generated",
     id: `song_generated:${sourceId}`,
@@ -420,6 +416,10 @@ function notifyIfBatchComplete(): void {
     body,
     href: "/studio",
     sourceId,
+    meta: {
+      readyCount,
+      totalCount: withGen.length,
+    },
   });
   sendBrowserNotification("Murmur", {
     body,

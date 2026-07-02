@@ -8,11 +8,13 @@ import {
   sendBrowserNotification,
   useBrowserNotification,
 } from "@/lib/hooks/use-browser-notification";
-import { useTranslator } from "@/lib/i18n";
+import { useCurrentLang, useTranslator } from "@/lib/i18n";
+import { resolveNotificationCopy } from "@/lib/notifications/notification-copy";
 import { useNotificationStore } from "@/lib/store/notification-store";
 
 export function useNotificationActions() {
   const t = useTranslator();
+  const lang = useCurrentLang();
   const {
     permission,
     browserAlertsEnabled,
@@ -27,14 +29,34 @@ export function useNotificationActions() {
     if (isTesting) return;
 
     setIsTesting(true);
-    const title = t("nav.notify.test.title") || "Test notification";
-    const enabledBody =
-      t("nav.notify.test.body") ||
-      "Murmur notifications are working on this device.";
-    const blockedBody =
-      t("nav.notify.test.blocked") ||
-      "Browser alerts are blocked, but in-app notifications are working.";
     const testId = `system:test:${Date.now()}`;
+    const testCopy = resolveNotificationCopy(
+      {
+        kind: "system",
+        title: "",
+        body: "",
+        sourceId: testId,
+        meta: {
+          testVariant: "enabled",
+        },
+      },
+      lang,
+    );
+    const blockedCopy = resolveNotificationCopy(
+      {
+        kind: "system",
+        title: "",
+        body: "",
+        sourceId: testId,
+        meta: {
+          testVariant: "blocked",
+        },
+      },
+      lang,
+    );
+    const title = testCopy.title;
+    const enabledBody = testCopy.body;
+    const blockedBody = blockedCopy.body;
 
     try {
       const nextPermission = await setBrowserAlertsEnabled(true);
@@ -67,6 +89,9 @@ export function useNotificationActions() {
           title,
           body: canShowBrowserAlert ? enabledBody : blockedBody,
           sourceId: testId,
+          meta: {
+            testVariant: canShowBrowserAlert ? "enabled" : "blocked",
+          },
         });
       }
 
@@ -87,7 +112,7 @@ export function useNotificationActions() {
     } finally {
       setIsTesting(false);
     }
-  }, [addNotification, isTesting, setBrowserAlertsEnabled, t]);
+  }, [addNotification, isTesting, lang, setBrowserAlertsEnabled, t]);
 
   return {
     permission,

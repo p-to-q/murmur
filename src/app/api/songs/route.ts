@@ -19,6 +19,10 @@ import {
   getLocalSongSummariesByUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
 import { log } from "@/lib/observability/log";
+import {
+  langFromAcceptLanguage,
+  songSavedNotificationCopy,
+} from "@/lib/notifications/notification-copy";
 import { notifications } from "@/lib/platform/notifications-server";
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { COST } from "@murmur/core";
@@ -467,14 +471,13 @@ async function publishSongSavedNotification(input: {
   title: string;
   acceptLanguage: string | null;
 }) {
-  const zh = input.acceptLanguage?.toLowerCase().startsWith("zh") ?? false;
+  const lang = langFromAcceptLanguage(input.acceptLanguage);
   const title = truncateNotificationText(input.title, 80);
+  const copy = songSavedNotificationCopy(lang, title);
   await notifications
     .publish({
-      title: zh ? "已保存到藏歌" : "Saved to Gallery",
-      body: zh
-        ? `《${title}》已经收好，可以随时打开。`
-        : `"${title}" is ready to reopen from your Gallery.`,
+      title: copy.title,
+      body: copy.body,
       userId: input.userId,
       data: {
         kind: "song_saved",

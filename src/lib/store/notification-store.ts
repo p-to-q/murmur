@@ -3,21 +3,12 @@
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 
-export type MurmurNotificationKind =
-  | "song_generated"
-  | "song_saved"
-  | "system";
+import type {
+  MurmurNotification,
+  MurmurNotificationKind,
+} from "@/lib/notifications/types";
 
-export type MurmurNotification = {
-  id: string;
-  kind: MurmurNotificationKind;
-  title: string;
-  body: string;
-  href?: string;
-  createdAt: number;
-  readAt?: number;
-  sourceId?: string;
-};
+export type { MurmurNotification, MurmurNotificationKind } from "@/lib/notifications/types";
 
 type NotificationInput = Omit<MurmurNotification, "id" | "createdAt"> & {
   id?: string;
