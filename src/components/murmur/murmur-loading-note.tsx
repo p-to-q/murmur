@@ -13,7 +13,7 @@ export function MurmurLoadingNote({
 }: MurmurLoadingNoteProps) {
   return (
     <FloatingMusicNotes
-      className={`opacity-20 ${className}`.trim()}
+      className={`opacity-70 ${className}`.trim()}
       color="#FF5924"
       decorative={decorative}
       size={116}

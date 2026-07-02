@@ -17,8 +17,8 @@ export function FloatingMusicNotes({
 }: FloatingMusicNotesProps) {
   const reduceMotion = useReducedMotion();
   const pulseAnimation = reduceMotion
-    ? { scale: 1, opacity: 0.42 }
-    : { scale: 1, opacity: 0.5 };
+    ? { scale: 1, opacity: 0.5 }
+    : { scale: 1, opacity: 0.68 };
   const pulseTransition = reduceMotion
     ? { duration: 0 }
     : {
@@ -48,7 +48,7 @@ export function FloatingMusicNotes({
       focusable="false"
     >
       <motion.circle
-        initial={reduceMotion ? false : { scale: 0.75, opacity: 0.15 }}
+        initial={reduceMotion ? false : { scale: 0.75, opacity: 0.36 }}
         animate={pulseAnimation}
         transition={pulseTransition}
         cx="60"
@@ -57,7 +57,7 @@ export function FloatingMusicNotes({
         fill={color}
       />
       <motion.path
-        initial={reduceMotion ? false : { pathLength: 0 }}
+        initial={reduceMotion ? false : { pathLength: 0.35 }}
         animate={pathAnimation}
         transition={pathTransition}
         d="M 72 80 L 72 30 Q 72 20 82 22 L 100 26"
