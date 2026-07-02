@@ -52,13 +52,15 @@ export function useNotificationActions() {
 
       const canShowBrowserAlert = nextPermission === "granted";
       const serverDelivered = (serverPush.delivered ?? 0) > 0;
-      addNotification({
-        kind: "system",
-        id: testId,
-        title,
-        body: canShowBrowserAlert ? enabledBody : blockedBody,
-        sourceId: testId,
-      });
+      if (!serverDelivered) {
+        addNotification({
+          kind: "system",
+          id: testId,
+          title,
+          body: canShowBrowserAlert ? enabledBody : blockedBody,
+          sourceId: testId,
+        });
+      }
 
       if (canShowBrowserAlert) {
         if (!serverDelivered) {

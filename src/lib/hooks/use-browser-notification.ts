@@ -210,19 +210,23 @@ async function disablePushSubscription(): Promise<void> {
   if (typeof window === "undefined") return;
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
-  const registration = await navigator.serviceWorker.getRegistration("/");
-  const subscription = await registration?.pushManager.getSubscription();
-  if (!subscription) return;
+  try {
+    const registration = await navigator.serviceWorker.getRegistration("/");
+    const subscription = await registration?.pushManager.getSubscription();
+    if (!subscription) return;
 
-  await request("/api/notifications/push/subscribe", {
-    method: "DELETE",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ endpoint: subscription.endpoint }),
-  }).catch(() => {});
-  await subscription.unsubscribe().catch(() => false);
+    await request("/api/notifications/push/subscribe", {
+      method: "DELETE",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ endpoint: subscription.endpoint }),
+    }).catch(() => {});
+    await subscription.unsubscribe().catch(() => false);
+  } catch {
+    // Browser push cleanup is best-effort when a user turns alerts off.
+  }
 }
 
 function urlBase64ToArrayBuffer(value: string): ArrayBuffer {

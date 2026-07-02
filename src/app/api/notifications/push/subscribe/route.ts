@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import { resolveRequestAuth } from "@/lib/auth";
 import {
-  disablePushSubscriptionForUser,
-  upsertPushSubscription,
-} from "@/lib/db/queries/push-subscriptions";
+  notifications,
+  safeEndpointHost,
+} from "@/lib/platform/notifications-server";
 import { log } from "@/lib/observability/log";
 
 const subscriptionSchema = z.object({
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const row = await upsertPushSubscription({
+    const row = await notifications.subscribeDevice({
       userId: auth.user.id,
       sessionId: auth.sessionId,
       subscription: body.subscription,
@@ -95,14 +95,26 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  await disablePushSubscriptionForUser(body.endpoint, auth.user.id);
-  return NextResponse.json({ ok: true });
-}
-
-function safeEndpointHost(endpoint: string): string | null {
   try {
-    return new URL(endpoint).host;
-  } catch {
-    return null;
+    await notifications.unsubscribeDevice({
+      endpoint: body.endpoint,
+      userId: auth.user.id,
+    });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    log("notifications.unsubscribe_failed", {
+      phase: "unsubscribe",
+      endpointHost: safeEndpointHost(body.endpoint),
+      error: error instanceof Error ? error.message : String(error),
+    }, {
+      route: "/api/notifications/push/subscribe",
+      userId: auth.user.id,
+      sessionId: auth.sessionId,
+      level: "error",
+    });
+    return NextResponse.json(
+      { error: "push_unsubscribe_failed" },
+      { status: 500 },
+    );
   }
 }

@@ -15,26 +15,24 @@ self.addEventListener("push", (event) => {
     renotify: false,
     data: payload.data && typeof payload.data === "object" ? payload.data : {},
   };
+  const sourceId = sourceIdFromData(options.data);
+  const publishId = typeof options.data.publishId === "string" ? options.data.publishId : undefined;
 
   event.waitUntil((async () => {
-    await notifyOpenClients({
-      title,
-      body: options.body,
-      href: typeof options.data.href === "string" ? options.data.href : undefined,
-      kind: typeof options.data.kind === "string" ? options.data.kind : "system",
-      sourceId:
-        typeof options.data.sourceId === "string"
-          ? options.data.sourceId
-          : typeof options.data.songId === "string"
-            ? options.data.songId
-            : typeof options.data.requestId === "string"
-              ? options.data.requestId
-              : typeof options.data.publishId === "string"
-                ? options.data.publishId
-                : undefined,
-      publishId: typeof options.data.publishId === "string" ? options.data.publishId : undefined,
-      createdAt: Date.now(),
-    });
+    try {
+      await notifyOpenClients({
+        id: notificationIdFromData(options.data, sourceId, publishId),
+        title,
+        body: options.body,
+        href: typeof options.data.href === "string" ? options.data.href : undefined,
+        kind: typeof options.data.kind === "string" ? options.data.kind : "system",
+        sourceId,
+        publishId,
+        createdAt: Date.now(),
+      });
+    } catch {
+      // Client inbox sync is best-effort; a visible OS notification is required.
+    }
     await self.registration.showNotification(title, options);
   })());
 });
@@ -83,4 +81,19 @@ function safeSameOriginUrl(target) {
   } catch {
     return self.location.origin + "/";
   }
+}
+
+function sourceIdFromData(data) {
+  if (typeof data.sourceId === "string") return data.sourceId;
+  if (typeof data.songId === "string") return data.songId;
+  if (typeof data.requestId === "string") return data.requestId;
+  if (typeof data.publishId === "string") return data.publishId;
+  return undefined;
+}
+
+function notificationIdFromData(data, sourceId, publishId) {
+  if (typeof data.notificationId === "string") return data.notificationId;
+  if (typeof sourceId === "string") return `push:${sourceId}`;
+  if (typeof publishId === "string") return `push:${publishId}`;
+  return undefined;
 }

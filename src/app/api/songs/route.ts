@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
@@ -166,13 +166,13 @@ export async function POST(req: NextRequest) {
     if (skipBilling) {
       try {
         const song = await createSong(songInput);
-        await publishSongSavedNotification({
+        after(() => publishSongSavedNotification({
           userId,
           sessionId: auth.sessionId,
           songId: song.id,
           title: song.title,
           acceptLanguage: req.headers.get("accept-language"),
-        });
+        }));
 
         return NextResponse.json(song, {
           headers: { "X-Request-Id": requestId },
@@ -264,13 +264,13 @@ export async function POST(req: NextRequest) {
       userId,
       sessionId: auth.sessionId,
     });
-    await publishSongSavedNotification({
+    after(() => publishSongSavedNotification({
       userId,
       sessionId: auth.sessionId,
       songId: result.song.id,
       title: result.song.title,
       acceptLanguage: req.headers.get("accept-language"),
-    });
+    }));
 
     return NextResponse.json(result.song, {
       headers: { "X-Request-Id": requestId },
@@ -467,7 +467,7 @@ async function publishSongSavedNotification(input: {
   acceptLanguage: string | null;
 }) {
   const zh = input.acceptLanguage?.toLowerCase().startsWith("zh") ?? false;
-  const publish = notifications
+  await notifications
     .publish({
       title: zh ? "已保存到藏歌" : "Saved to Gallery",
       body: zh
@@ -494,12 +494,6 @@ async function publishSongSavedNotification(input: {
         level: "warn",
       });
     });
-
-  await Promise.race([publish, shortNotificationWait()]);
-}
-
-function shortNotificationWait() {
-  return new Promise((resolve) => setTimeout(resolve, 250));
 }
 
 

@@ -141,6 +141,13 @@
       "when": 1782961221301,
       "tag": "0019_kind_fantastic_four",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1782971623194,
+      "tag": "0020_loud_tiger_shark",
+      "breakpoints": true
     }
   ]
 }

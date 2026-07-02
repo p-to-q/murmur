@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
@@ -250,13 +250,13 @@ export async function POST(request: NextRequest) {
       route: ROUTE, requestId, userId, sessionId: auth.sessionId,
       durationMs: Math.round(performance.now() - startedAt),
     });
-    await publishMusicGeneratedNotification({
+    after(() => publishMusicGeneratedNotification({
       userId,
       sessionId: auth.sessionId,
       requestId,
       prompt,
       acceptLanguage: request.headers.get("accept-language"),
-    });
+    }));
 
     return new NextResponse(result.audio, {
       headers: {
@@ -305,7 +305,7 @@ async function publishMusicGeneratedNotification(input: {
   acceptLanguage: string | null;
 }) {
   const zh = input.acceptLanguage?.toLowerCase().startsWith("zh") ?? false;
-  const publish = notifications
+  await notifications
     .publish({
       title: zh ? "版本已酿好" : "Vibe ready",
       body: zh
@@ -333,12 +333,6 @@ async function publishMusicGeneratedNotification(input: {
         level: "warn",
       });
     });
-
-  await Promise.race([publish, shortNotificationWait()]);
-}
-
-function shortNotificationWait() {
-  return new Promise((resolve) => setTimeout(resolve, 250));
 }
 
 async function prepareMusicGenerationBilling(options: {

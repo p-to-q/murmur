@@ -3,8 +3,11 @@ import { randomUUID } from "crypto";
 
 import {
   disablePushSubscriptionByEndpoint,
+  disablePushSubscriptionForUser,
   getActivePushSubscriptions,
   getActivePushSubscriptionsForUser,
+  upsertPushSubscription,
+  type WebPushSubscriptionJSON,
 } from "@/lib/db/queries/push-subscriptions";
 import type { PushSubscriptionRecord } from "@/lib/db/schema/push-subscriptions";
 import { log } from "@/lib/observability/log";
@@ -22,7 +25,6 @@ export class NotificationPublishError extends Error {
 export interface NotificationPublishInput {
   title: string;
   body: string;
-  userId?: string;
   data?: {
     href?: string;
     url?: string;
@@ -31,6 +33,19 @@ export interface NotificationPublishInput {
     source?: string;
     [key: string]: unknown;
   };
+}
+
+export type NotificationUserPublishInput = NotificationPublishInput & {
+  userId: string;
+};
+
+export interface NotificationSubscribeDeviceInput {
+  userId: string;
+  sessionId?: string | null;
+  subscription: WebPushSubscriptionJSON;
+  userAgent?: string | null;
+  locale?: string | null;
+  timezone?: string | null;
 }
 
 export type NotificationPublishResult = {
@@ -52,100 +67,121 @@ const DEFAULT_PUSH_LIMIT = 1000;
 const PUSH_SEND_CONCURRENCY = 25;
 
 export const notifications = {
-  async publish(input: NotificationPublishInput): Promise<NotificationPublishResult> {
-    const publishId = createPublishId();
-    const config = getWebPushConfig();
-    if (!config.ok) {
-      return {
-        delivered: 0,
-        failed: 0,
-        removed: 0,
-        publishId,
-        title: input.title,
-        skipped: true,
-        reason: config.reason,
-      };
-    }
+  subscribeDevice(input: NotificationSubscribeDeviceInput) {
+    return upsertPushSubscription(input);
+  },
 
-    webpush.setVapidDetails(
-      config.subject,
-      config.publicKey,
-      config.privateKey,
+  unsubscribeDevice(input: { endpoint: string; userId: string }) {
+    return disablePushSubscriptionForUser(input.endpoint, input.userId);
+  },
+
+  publish(input: NotificationUserPublishInput): Promise<NotificationPublishResult> {
+    return publishToSubscriptions(input, () =>
+      getActivePushSubscriptionsForUser(input.userId),
     );
+  },
 
-    const subscriptions = input.userId
-      ? await getActivePushSubscriptionsForUser(input.userId)
-      : await getActivePushSubscriptions(DEFAULT_PUSH_LIMIT);
-
-    if (subscriptions.length === 0) {
-      return {
-        delivered: 0,
-        failed: 0,
-        removed: 0,
-        publishId,
-        title: input.title,
-        skipped: true,
-        reason: "No active browser push subscriptions are registered.",
-      };
-    }
-
-    const payload = JSON.stringify({
-      title: input.title,
-      body: input.body,
-      icon: "/icon.png",
-      badge: "/brand/murmur-app-icon-120-rounded.png",
-      tag: input.data?.tag ?? input.data?.kind ?? "murmur-notification",
-      data: {
-        ...input.data,
-        publishId,
-      },
-    });
-
-    let delivered = 0;
-    let failed = 0;
-    let removed = 0;
-
-    await mapWithConcurrency(
-      subscriptions,
-      PUSH_SEND_CONCURRENCY,
-      async (subscription) => {
-        try {
-          await webpush.sendNotification(toWebPushSubscription(subscription), payload, {
-            TTL: 60 * 60 * 24,
-            timeout: 5000,
-            urgency: "normal",
-          });
-          delivered += 1;
-        } catch (error) {
-          failed += 1;
-          if (isGonePushEndpoint(error)) {
-            await disablePushSubscriptionByEndpoint(subscription.endpoint);
-            removed += 1;
-            return;
-          }
-
-          log("notifications.publish_failed", {
-            endpointHost: safeEndpointHost(subscription.endpoint),
-            statusCode: statusCodeFromPushError(error),
-            error: error instanceof Error ? error.message : String(error),
-          }, {
-            userId: subscription.userId,
-            sessionId: subscription.sessionId,
-            level: "warn",
-          });
-        }
-      },
+  publishBroadcast(input: NotificationPublishInput): Promise<NotificationPublishResult> {
+    return publishToSubscriptions(input, () =>
+      getActivePushSubscriptions(DEFAULT_PUSH_LIMIT),
     );
-
-    return {
-      delivered,
-      failed,
-      removed,
-      publishId,
-      title: input.title,
-    };
   },
 };
+
+async function publishToSubscriptions(
+  input: NotificationPublishInput,
+  loadSubscriptions: () => Promise<PushSubscriptionRecord[]>,
+): Promise<NotificationPublishResult> {
+  const publishId = createPublishId();
+  const config = getWebPushConfig();
+  if (!config.ok) {
+    return {
+      delivered: 0,
+      failed: 0,
+      removed: 0,
+      publishId,
+      title: input.title,
+      skipped: true,
+      reason: config.reason,
+    };
+  }
+
+  webpush.setVapidDetails(
+    config.subject,
+    config.publicKey,
+    config.privateKey,
+  );
+
+  const subscriptions = await loadSubscriptions();
+
+  if (subscriptions.length === 0) {
+    return {
+      delivered: 0,
+      failed: 0,
+      removed: 0,
+      publishId,
+      title: input.title,
+      skipped: true,
+      reason: "No active browser push subscriptions are registered.",
+    };
+  }
+
+  const payload = JSON.stringify({
+    title: input.title,
+    body: input.body,
+    icon: "/icon.png",
+    badge: "/brand/murmur-app-icon-120-rounded.png",
+    tag: input.data?.tag ?? input.data?.kind ?? "murmur-notification",
+    data: {
+      ...input.data,
+      publishId,
+    },
+  });
+
+  let delivered = 0;
+  let failed = 0;
+  let removed = 0;
+
+  await mapWithConcurrency(
+    subscriptions,
+    PUSH_SEND_CONCURRENCY,
+    async (subscription) => {
+      try {
+        await webpush.sendNotification(toWebPushSubscription(subscription), payload, {
+          TTL: 60 * 60 * 24,
+          timeout: 5000,
+          urgency: "normal",
+        });
+        delivered += 1;
+      } catch (error) {
+        failed += 1;
+        if (isGonePushEndpoint(error)) {
+          await disablePushSubscriptionByEndpoint(subscription.endpoint);
+          removed += 1;
+          return;
+        }
+
+        log("notifications.publish_failed", {
+          endpointHost: safeEndpointHost(subscription.endpoint),
+          statusCode: statusCodeFromPushError(error),
+          error: error instanceof Error ? error.message : String(error),
+        }, {
+          userId: subscription.userId,
+          sessionId: subscription.sessionId,
+          level: "warn",
+        });
+      }
+    },
+  );
+
+  return {
+    delivered,
+    failed,
+    removed,
+    publishId,
+    title: input.title,
+  };
+}
 
 export function getPublicWebPushKey() {
   const config = getWebPushConfig();
@@ -218,7 +254,7 @@ function statusCodeFromPushError(error: unknown): number | null {
   return typeof statusCode === "number" ? statusCode : null;
 }
 
-function safeEndpointHost(endpoint: string): string | null {
+export function safeEndpointHost(endpoint: string): string | null {
   try {
     return new URL(endpoint).host;
   } catch {
