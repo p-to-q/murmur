@@ -25,6 +25,13 @@ import { selectGenerationMelody } from "@/modules/music/humming-engine";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { memory } from "@/lib/platform/memory";
 import { log } from "@/lib/observability/log";
+import {
+  HUM_RECORDING_LIMIT_MS,
+  HUM_RECORDING_LIMIT_SECONDS,
+  clampRecordingElapsedMs,
+  formatRecordingElapsedSeconds,
+  recordingProgressFromElapsed,
+} from "@/lib/audio/recording-progress";
 import { trimRecordingForUpload } from "@/lib/audio/recording-trim";
 import { inputLevelLabelKey, nextInputLevelDecision } from "@/lib/audio/input-level";
 import {
@@ -51,7 +58,6 @@ import {
   writeHumOnboardingSeen,
 } from "@/lib/onboarding";
 
-const MAX_DURATION = 15;
 const IDLE_ROTATE_INTERVAL = 9000;
 const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
 const ENABLE_HUM_ENTRANCE_MOTION = true;
@@ -132,6 +138,13 @@ function clearTimeoutRef(
   }
 }
 
+function clearAnimationFrameRef(ref: { current: number | null }) {
+  if (ref.current !== null) {
+    cancelAnimationFrame(ref.current);
+    ref.current = null;
+  }
+}
+
 function stopMediaStream(stream: MediaStream | null) {
   stream?.getTracks().forEach((track) => track.stop());
 }
@@ -195,7 +208,7 @@ export function HumScreen() {
   const i18nHydrated = useI18nStore((state) => state.hydrated);
   const router = useRouter();
 
-  const [recordingTime, setRecordingTime] = useState(0);
+  const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [humError, setHumError] = useState<HumErrorState | null>(null);
   const [levelState, setLevelState] = useState<"idle" | "quiet" | "heard">("idle");
   const [showHeardMessage, setShowHeardMessage] = useState(false);
@@ -229,7 +242,8 @@ export function HumScreen() {
   const unmountingRef = useRef(false);
   const activeStreamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressRafRef = useRef<number | null>(null);
+  const recordingDeadlineRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const msgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const msgIdxRef = useRef(0);
@@ -245,6 +259,8 @@ export function HumScreen() {
   const quietSinceRef = useRef<number | null>(null);
   const heardSignalRef = useRef(false);
   const recordingStartedAtRef = useRef<number | null>(null);
+  const recordingElapsedMsRef = useRef(0);
+  const stopReasonRef = useRef<"manual" | "limit" | null>(null);
   const levelStateRef = useRef<"idle" | "quiet" | "heard">("idle");
   // Adaptive gain — tracks user's voice range and normalizes to 0-1
   const maxRmsRef = useRef(0.08); // start with a low baseline
@@ -317,7 +333,8 @@ export function HumScreen() {
         mediaRecorderRef.current = null;
       }
       cancelAnimationFrame(rafRef.current);
-      clearIntervalRef(timerRef);
+      clearAnimationFrameRef(progressRafRef);
+      clearTimeoutRef(recordingDeadlineRef);
       clearIntervalRef(msgTimerRef);
       clearIntervalRef(idleTimerRef);
       clearTimeoutRef(heardTimeoutRef);
@@ -399,16 +416,63 @@ export function HumScreen() {
     };
   }, [recordingState, humError, IDLE_HEADLINES.length]);
 
-  const stopRecording = useCallback(() => {
+  const updateRecordingElapsed = useCallback((elapsedMs: number) => {
+    const clamped = clampRecordingElapsedMs(elapsedMs);
+    recordingElapsedMsRef.current = clamped;
+    setRecordingElapsedMs(clamped);
+    return clamped;
+  }, []);
+
+  const refreshRecordingElapsed = useCallback((now: number) => {
+    const startedAt = recordingStartedAtRef.current;
+    if (startedAt === null) return recordingElapsedMsRef.current;
+    return updateRecordingElapsed(now - startedAt);
+  }, [updateRecordingElapsed]);
+
+  const stopRecording = useCallback((reason: "manual" | "limit" = "manual") => {
+    stopReasonRef.current = reason;
+    if (reason === "limit") {
+      updateRecordingElapsed(HUM_RECORDING_LIMIT_MS);
+    } else {
+      refreshRecordingElapsed(performance.now());
+    }
+    clearAnimationFrameRef(progressRafRef);
+    clearTimeoutRef(recordingDeadlineRef);
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
     }
-    clearIntervalRef(timerRef);
-  }, []);
+  }, [refreshRecordingElapsed, updateRecordingElapsed]);
 
-  useEffect(() => {
-    if (recordingTime >= MAX_DURATION) stopRecording();
-  }, [recordingTime, stopRecording]);
+  const startRecordingProgress = useCallback(() => {
+    stopReasonRef.current = null;
+
+    const start = (startedAt: number) => {
+      recordingStartedAtRef.current = startedAt;
+      updateRecordingElapsed(0);
+
+      clearTimeoutRef(recordingDeadlineRef);
+      recordingDeadlineRef.current = setTimeout(
+        () => stopRecording("limit"),
+        HUM_RECORDING_LIMIT_MS,
+      );
+
+      const tick = (now: number) => {
+        if (mediaRecorderRef.current?.state !== "recording") return;
+        const elapsedMs = refreshRecordingElapsed(now);
+        if (elapsedMs >= HUM_RECORDING_LIMIT_MS) {
+          stopRecording("limit");
+          return;
+        }
+        progressRafRef.current = requestAnimationFrame(tick);
+      };
+
+      progressRafRef.current = requestAnimationFrame(tick);
+    };
+
+    clearAnimationFrameRef(progressRafRef);
+    clearTimeoutRef(recordingDeadlineRef);
+    progressRafRef.current = requestAnimationFrame(start);
+  }, [refreshRecordingElapsed, stopRecording, updateRecordingElapsed]);
 
   const tickMessages = () => {
     clearIntervalRef(msgTimerRef);
@@ -656,7 +720,7 @@ export function HumScreen() {
     startAudioContext();
     setHumError(null);
     setInputLevelState("idle");
-    setRecordingTime(0);
+    updateRecordingElapsed(0);
     chunksRef.current = [];
     quietSinceRef.current = null;
     heardSignalRef.current = false;
@@ -720,20 +784,28 @@ export function HumScreen() {
           chunksRef.current = [];
           return;
         }
+        clearAnimationFrameRef(progressRafRef);
+        clearTimeoutRef(recordingDeadlineRef);
         stopMediaStream(activeStreamRef.current);
         activeStreamRef.current = null;
         stopAudioAnalyser();
         mediaRecorderRef.current = null;
         const blob = new Blob(chunksRef.current, { type: recordingType });
+        log("capture.stopped", {
+          durationMs: Math.round(recordingElapsedMsRef.current),
+          stopReason: stopReasonRef.current ?? "unknown",
+          chunks: chunksRef.current.length,
+          bytes: blob.size,
+          type: recordingType,
+        });
         await transcribeAndGenerate(blob);
       };
       recorder.start(100);
+      startRecordingProgress();
       setRecordingState("recording");
-      timerRef.current = setInterval(
-        () => setRecordingTime((v) => v + 1),
-        1000,
-      );
     } catch (err) {
+      clearAnimationFrameRef(progressRafRef);
+      clearTimeoutRef(recordingDeadlineRef);
       stopMediaStream(activeStreamRef.current);
       activeStreamRef.current = null;
       mediaRecorderRef.current = null;
@@ -833,8 +905,10 @@ export function HumScreen() {
   // Ring progress SVG values
   const ringRadius = 140;
   const ringCircumference = 2 * Math.PI * ringRadius;
+  const recordingProgress = recordingProgressFromElapsed(recordingElapsedMs);
+  const recordingElapsedLabel = formatRecordingElapsedSeconds(recordingElapsedMs);
   const ringOffset =
-    ringCircumference - (recordingTime / MAX_DURATION) * ringCircumference;
+    ringCircumference - recordingProgress * ringCircumference;
 
   return (
     <div className="relative overflow-hidden bg-[#F5F1EB]" style={{ minHeight: 'var(--content-h)' }}>
@@ -950,8 +1024,8 @@ export function HumScreen() {
                   <div className="flex items-center justify-center xl:justify-start gap-2 mt-4">
                     <span className="w-2 h-2 rounded-full bg-[#FF5924] animate-pulse" />
                     <span className="text-[#8C8780] text-[13px] tabular-nums tracking-[0.12em] font-mono">
-                      {String(recordingTime).padStart(2, "0")}s /{" "}
-                      {MAX_DURATION}s
+                      {recordingElapsedLabel}s /{" "}
+                      {HUM_RECORDING_LIMIT_SECONDS}s
                     </span>
                   </div>
                   <div className="mt-3 min-h-[18px] text-center xl:text-left">

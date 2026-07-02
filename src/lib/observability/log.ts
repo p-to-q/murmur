@@ -26,6 +26,7 @@ export type LogEvent =
   | "account.delete_failed"
   | "capture.failed"
   | "capture.prepared"
+  | "capture.stopped"
   | "transcribe.requested"
   | "transcribe.completed"
   | "transcribe.failed"

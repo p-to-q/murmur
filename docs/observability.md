@@ -84,6 +84,9 @@ Free-form `console.log` is **deprecated** in v2; the lint warns on it.
 | `transcribe.requested` | request received | `format`, `bytes`, `targetInstrument` |
 | `transcribe.completed` | 200 emitted | `provider`, `noteCount`, `denoiseMs`, `pitchMs`, `polishMs`, `snr`, `voicedRatio` |
 | `transcribe.failed` | 4xx/5xx emitted | `error_code`, `phase` |
+| `capture.stopped` | browser recorder stopped | `durationMs`, `stopReason`, `chunks`, `bytes`, `type` |
+| `capture.prepared` | captured blob trimmed / encoded for upload | `originalBytes`, `uploadBytes`, `originalDurationMs`, `trimmedDurationMs`, `trimmed` |
+| `capture.failed` | browser capture or preparation failed | `error_code`, `message` |
 | `arrangement.generated` | new vibe versions | `melodyId`, `seed` |
 | `studio.edit_token_applied` | applyEdit run | `tokens`, `via: "rule" | "llm" | "scene"` |
 | `song.created` | save success | `songId`, `vibe`, `bpm`, `duration` |

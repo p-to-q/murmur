@@ -17,6 +17,7 @@ const TRACKED_EVENTS = new Set([
   "transcribe.failed",
   "capture.failed",
   "capture.prepared",
+  "capture.stopped",
   "arrangement.generated",
 ]);
 
