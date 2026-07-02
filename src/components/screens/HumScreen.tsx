@@ -28,6 +28,7 @@ import { log } from "@/lib/observability/log";
 import {
   HUM_RECORDING_LIMIT_MS,
   HUM_RECORDING_LIMIT_SECONDS,
+  clampRecordingElapsedMs,
   formatRecordingElapsedSeconds,
   recordingProgressFromElapsed,
 } from "@/lib/audio/recording-progress";
@@ -416,7 +417,7 @@ export function HumScreen() {
   }, [recordingState, humError, IDLE_HEADLINES.length]);
 
   const updateRecordingElapsed = useCallback((elapsedMs: number) => {
-    const clamped = Math.min(Math.max(elapsedMs, 0), HUM_RECORDING_LIMIT_MS);
+    const clamped = clampRecordingElapsedMs(elapsedMs);
     recordingElapsedMsRef.current = clamped;
     setRecordingElapsedMs(clamped);
     return clamped;
@@ -433,14 +434,14 @@ export function HumScreen() {
     if (reason === "limit") {
       updateRecordingElapsed(HUM_RECORDING_LIMIT_MS);
     } else {
-      updateRecordingElapsed(recordingElapsedMsRef.current);
+      refreshRecordingElapsed(performance.now());
     }
     clearAnimationFrameRef(progressRafRef);
     clearTimeoutRef(recordingDeadlineRef);
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
     }
-  }, [updateRecordingElapsed]);
+  }, [refreshRecordingElapsed, updateRecordingElapsed]);
 
   const startRecordingProgress = useCallback(() => {
     stopReasonRef.current = null;
@@ -449,7 +450,14 @@ export function HumScreen() {
       recordingStartedAtRef.current = startedAt;
       updateRecordingElapsed(0);
 
+      clearTimeoutRef(recordingDeadlineRef);
+      recordingDeadlineRef.current = setTimeout(
+        () => stopRecording("limit"),
+        HUM_RECORDING_LIMIT_MS,
+      );
+
       const tick = (now: number) => {
+        if (mediaRecorderRef.current?.state !== "recording") return;
         const elapsedMs = refreshRecordingElapsed(now);
         if (elapsedMs >= HUM_RECORDING_LIMIT_MS) {
           stopRecording("limit");
@@ -463,10 +471,6 @@ export function HumScreen() {
 
     clearAnimationFrameRef(progressRafRef);
     clearTimeoutRef(recordingDeadlineRef);
-    recordingDeadlineRef.current = setTimeout(
-      () => stopRecording("limit"),
-      HUM_RECORDING_LIMIT_MS,
-    );
     progressRafRef.current = requestAnimationFrame(start);
   }, [refreshRecordingElapsed, stopRecording, updateRecordingElapsed]);
 

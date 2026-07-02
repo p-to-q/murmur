@@ -41,6 +41,26 @@ describe("recent events ring buffer", () => {
     expect(events[1]?.event).toBe("transcribe.requested");
   });
 
+  it("stores capture.stopped with capture metadata", () => {
+    recordRecentEvent(
+      baseEvent({
+        event: "capture.stopped",
+        route: "/",
+        ext: {
+          durationMs: 15_000,
+          stopReason: "limit",
+          chunks: 3,
+          bytes: 12_000,
+          type: "audio/webm",
+        },
+      }),
+    );
+    const [event] = getRecentEvents();
+    expect(event?.event).toBe("capture.stopped");
+    expect(event?.ext.durationMs).toBe(15_000);
+    expect(event?.ext.stopReason).toBe("limit");
+  });
+
   it("caps the buffer at 32 entries", () => {
     for (let i = 0; i < 40; i += 1) {
       recordRecentEvent(baseEvent({ event: "transcribe.completed" }));
