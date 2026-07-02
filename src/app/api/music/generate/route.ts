@@ -1,4 +1,4 @@
-import { after, NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
@@ -12,6 +12,7 @@ import {
   getMusicWorkerUrl,
 } from "@/lib/platform/music-worker";
 import { notifications } from "@/lib/platform/notifications-server";
+import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { RunpodError, runJob } from "@/lib/platform/runpod-serverless";
 import { COST } from "@murmur/core";
 
@@ -250,7 +251,7 @@ export async function POST(request: NextRequest) {
       route: ROUTE, requestId, userId, sessionId: auth.sessionId,
       durationMs: Math.round(performance.now() - startedAt),
     });
-    after(() => publishMusicGeneratedNotification({
+    scheduleAfterResponse(() => publishMusicGeneratedNotification({
       userId,
       sessionId: auth.sessionId,
       requestId,

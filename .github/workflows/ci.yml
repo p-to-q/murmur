@@ -51,7 +51,7 @@ jobs:
         run: bun run check:links
 
       - name: Test
-        run: bun test
+        run: NODE_ENV=test bun test
 
       - name: Audio worker tests
         run: bun run test:audio

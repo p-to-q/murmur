@@ -1,4 +1,4 @@
-import { after, NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
@@ -20,6 +20,7 @@ import {
 } from "@/lib/db/queries/local-song-fallback";
 import { log } from "@/lib/observability/log";
 import { notifications } from "@/lib/platform/notifications-server";
+import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { COST } from "@murmur/core";
 import { deriveEditDepth, normalizeEditCount } from "@/modules/music/edit-depth";
 import { normalizeLineageDepth, resolveParentSongId, resolveRootSongId } from "@/modules/music/lineage";
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest) {
     if (skipBilling) {
       try {
         const song = await createSong(songInput);
-        after(() => publishSongSavedNotification({
+        scheduleAfterResponse(() => publishSongSavedNotification({
           userId,
           sessionId: auth.sessionId,
           songId: song.id,
@@ -264,7 +265,7 @@ export async function POST(req: NextRequest) {
       userId,
       sessionId: auth.sessionId,
     });
-    after(() => publishSongSavedNotification({
+    scheduleAfterResponse(() => publishSongSavedNotification({
       userId,
       sessionId: auth.sessionId,
       songId: result.song.id,
