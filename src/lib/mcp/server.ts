@@ -4,10 +4,12 @@ import { registerGetSong } from "./tools/get-song";
 import { registerDeleteSong } from "./tools/delete-song";
 import { registerGetStats } from "./tools/get-stats";
 
+import { getAppVersionParts } from "@/lib/app-version";
+
 export function buildMcpServer(userId: string): McpServer {
   const server = new McpServer({
     name: "murmur",
-    version: "0.1.0",
+    version: getAppVersionParts().semver,
   });
 
   registerListSongs(server, userId);

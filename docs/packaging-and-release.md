@@ -229,6 +229,63 @@ Given the current repository state, the clearest next step is:
    - self-hosted
 4. create a tagged release process only after deployment path is chosen
 
+## App version contract
+
+Murmur uses a hybrid version string with one engineering source of truth and
+two display shapes in the Me screen About card.
+
+### Current release (calibrated 2026-07-04)
+
+- **SemVer**: `0.5.0`
+- **Build**: `110` (merged GitHub PR count at calibration time)
+- **Product display**: `v0.5.0 · 110`
+- **Developer mode display**: `v0.5.0 · build 110 · <git-sha>`
+
+This release reflects milestones since the earlier `v0.2.0` hackathon label:
+
+- `0.2.0` — core creation loop and music engine v2 foundation
+- `0.3.0` — auth, persistence, and deployment readiness
+- `0.4.0` — billing, public share, and launch hardening
+- `0.5.0` — notification delivery and post-launch polish
+
+### Source of truth
+
+| Field | Source | Where it lives |
+|-------|--------|----------------|
+| SemVer | `package.json` `version` | injected as `NEXT_PUBLIC_APP_VERSION` in `next.config.ts` |
+| Build | release-time merged PR count | `src/lib/release-metadata.ts` (`APP_BUILD`) and `NEXT_PUBLIC_APP_BUILD` |
+| Git SHA | Vercel deploy SHA or local `git rev-parse HEAD` | `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA` |
+
+Implementation:
+
+- formatter: `src/lib/app-version.ts`
+- Me UI: `src/components/screens/MeScreen.tsx`
+- logs already use commit SHA as `release` in `src/lib/observability/log.ts`
+
+Do not hardcode the version in i18n copy.
+
+### Bump rules
+
+On each **product release** (production deploy with a visible milestone or
+release note):
+
+1. bump `package.json` `version` using SemVer pre-1.0 rules
+2. update `APP_BUILD` in `src/lib/release-metadata.ts` to the current merged PR
+   count
+3. add a short entry to `CHANGELOG.md` and update "Current release" in this
+   document
+4. create a git tag `vX.Y.Z`
+
+| Change type | Version bump | Build bump |
+|-------------|--------------|------------|
+| bug fix / polish | PATCH | yes |
+| new user-visible capability | MINOR, reset PATCH to 0 | yes |
+| export or saved-song incompatibility | MINOR + migration note | yes |
+| declared production-stable product | MAJOR to `1.0.0` | yes |
+
+Between releases, production deploys may advance the git SHA without changing
+SemVer or build.
+
 ## Minimum release checklist
 
 - `main` is green locally

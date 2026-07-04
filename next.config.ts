@@ -1,6 +1,30 @@
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { APP_BUILD } from "./src/lib/release-metadata";
 import type { NextConfig } from "next";
 
+const packageJson = JSON.parse(
+  readFileSync(path.join(__dirname, "package.json"), "utf8"),
+) as { version: string };
+
+function resolveGitCommitSha(): string {
+  if (process.env.VERCEL_GIT_COMMIT_SHA) {
+    return process.env.VERCEL_GIT_COMMIT_SHA;
+  }
+  try {
+    return execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+  } catch {
+    return "local";
+  }
+}
+
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_APP_VERSION: packageJson.version,
+    NEXT_PUBLIC_APP_BUILD: process.env.NEXT_PUBLIC_APP_BUILD ?? APP_BUILD,
+    NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA: resolveGitCommitSha(),
+  },
   turbopack: {
     root: __dirname,
   },

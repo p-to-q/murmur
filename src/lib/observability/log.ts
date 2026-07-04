@@ -1,3 +1,4 @@
+import { formatReleaseIdentifier } from "@/lib/app-version";
 import { recordRecentEvent } from "./recent-events";
 
 type LogLevel = "info" | "warn" | "error";
@@ -96,7 +97,7 @@ export function log(
     msg: event,
     service: "web",
     region: context.region ?? "intl",
-    release: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? "local",
+    release: formatReleaseIdentifier(),
     requestId: context.requestId ?? null,
     userId: context.userId ?? null,
     sessionId: context.sessionId ?? null,

@@ -611,7 +611,6 @@ export const DICT = {
   "me.status.export":      { zh: "导出格式", en: "Export" },
   "me.about.title":        { zh: "关于",   en: "About" },
   "me.about.desc":         { zh: "把你哼出来的旋律，变成一首可以听、可以留的小歌。", en: "Turn your hummed melody into a little song you can keep and share." },
-  "me.about.version":      { zh: "v0.2.0", en: "v0.2.0" },
   "me.language.title":     { zh: "语言",   en: "Language" },
   "me.language.zh":        { zh: "中文",   en: "中文" },
   "me.language.en":        { zh: "English", en: "English" },

@@ -33,6 +33,7 @@ import { useNotificationActions } from "@/lib/hooks/use-notification-actions";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import { useNotificationStore } from "@/lib/store/notification-store";
 import type { MurmurNotification } from "@/lib/store/notification-store";
+import { formatAppVersion } from "@/lib/app-version";
 import { resolveNotificationCopy } from "@/lib/notifications/notification-copy";
 
 export function MeScreen() {
@@ -210,8 +211,8 @@ export function MeScreen() {
           <p className="text-[#3A3A3A] text-[14px] leading-[1.55]">
             {t("me.about.desc")}
           </p>
-          <p className="font-ui-label-caps text-[#B6B0A4] mt-4">
-            {t("me.about.version")}
+          <p className="font-ui-label-caps text-[#B6B0A4] mt-4" suppressHydrationWarning>
+            {formatAppVersion(developerMode)}
           </p>
         </Card>
       </div>
