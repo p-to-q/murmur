@@ -51,6 +51,7 @@ export type MusicEngineStatus = {
 let healthCache: { at: number; status: MusicEngineStatus } | null = null;
 let inflightStatusProbe: Promise<MusicEngineStatus> | null = null;
 let activeAbort: AbortController | null = null;
+let activeBatchId: string | null = null;
 let liveObjectUrls: string[] = [];
 
 export function invalidateMusicEngineCache(): void {
@@ -255,20 +256,26 @@ export function regenerateVersionAudio(version: VibeVersion): void {
     cost: undefined,
   });
   const humBlob = useMurmurStore.getState().humStyleBlob;
-  void requestClip(version, humBlob, activeAbort?.signal ?? null);
+  activeBatchId ??= crypto.randomUUID();
+  void requestClip(version, humBlob, activeAbort?.signal ?? null, activeBatchId);
 }
 
 function startBatchGeneration(versions: VibeVersion[], humBlob: Blob | null): void {
   activeAbort?.abort();
   const controller = new AbortController();
   activeAbort = controller;
+  // One id per fan-out. The server threads it through logs and web-push
+  // identity, so the three sibling clips land as a single OS notification
+  // and inbox entry instead of one alert per clip.
+  const batchId = crypto.randomUUID();
+  activeBatchId = batchId;
 
   // Clips from a superseded batch are unreachable from the UI — release them.
   for (const url of liveObjectUrls) URL.revokeObjectURL(url);
   liveObjectUrls = [];
 
   for (const version of versions) {
-    void requestClip(version, humBlob, controller.signal);
+    void requestClip(version, humBlob, controller.signal, batchId);
   }
 }
 
@@ -276,6 +283,7 @@ async function requestClip(
   version: VibeVersion,
   humBlob: Blob | null,
   signal: AbortSignal | null,
+  batchId: string,
 ): Promise<void> {
   const generation = version.generation!;
   const startedAt = performance.now();
@@ -294,6 +302,7 @@ async function requestClip(
     const res = await fetch("/api/music/generate", {
       method: "POST",
       body: form,
+      headers: { "x-generation-batch-id": batchId },
       signal: withGenerateTimeout(signal),
     });
     if (!res.ok) {
@@ -454,7 +463,10 @@ function notifyIfBatchComplete(): void {
   });
   addMurmurNotification({
     kind: "song_generated",
-    id: `song_generated:${sourceId}`,
+    // Batch-scoped id: the service worker mirrors each clip's push under the
+    // same id, so this accurate final count replaces those entries instead of
+    // piling up next to them.
+    id: `song_generated:${activeBatchId ?? sourceId}`,
     title,
     body,
     href: "/studio",
@@ -466,7 +478,9 @@ function notifyIfBatchComplete(): void {
   });
   sendBrowserNotification("Murmur", {
     body,
-    tag: "murmur-generation",
+    // Same tag as the per-clip pushes: the OS slot they collapsed into gets
+    // replaced by this batch summary rather than joined by it.
+    tag: activeBatchId ? `murmur-generation-${activeBatchId}` : "murmur-generation",
   });
 }
 
