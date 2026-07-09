@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 
+import { formatStudioSupportCode } from "@/lib/observability/support-code";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { addMurmurNotification } from "@/lib/store/notification-store";
 import { songSavedNotificationCopy } from "@/lib/notifications/notification-copy";
@@ -279,7 +280,9 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       router.push(`/song/${savedSongId}`);
     } catch (error) {
       console.error("[Name] save failed:", error);
-      toast.error(t("studio.save_err"));
+      toast.error(t("studio.save_err"), {
+        description: formatStudioSupportCode({ code: "save_failed", requestId: null }),
+      });
       setIsSaving(false);
     }
   };

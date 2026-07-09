@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { motion, useSpring, useTransform, animate } from "framer-motion";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { formatSupportCode } from "@/lib/observability/support-code";
 import {
   CUSTOM_TOPUP_ID,
   CUSTOM_TOPUP_MAX_USD,
@@ -286,6 +287,7 @@ export function TopupScreen() {
       console.error("[restore-purchases] Error:", error);
       toast.error(
         error instanceof Error ? error.message : t("topup.restore.failed"),
+        { description: formatSupportCode({ area: "BILLING", error: "restore_failed", requestId: null }) },
       );
     } finally {
       setIsRestoring(false);

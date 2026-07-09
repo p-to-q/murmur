@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { formatShareSupportCode } from "@/lib/observability/support-code";
 import { memory } from "@/lib/platform/memory";
 import {
   clearLocalCreatorBootstrapFlag,
@@ -213,7 +214,9 @@ export function GalleryScreen() {
         .catch(() => {});
       toast.success(t("gallery.delete.done") || "Deleted.");
     } catch {
-      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?");
+      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?", {
+        description: formatShareSupportCode({ code: "delete_failed", requestId: null }),
+      });
     } finally {
       setIsDeleting(false);
     }

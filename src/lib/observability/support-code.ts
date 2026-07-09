@@ -46,3 +46,36 @@ export function formatHumSupportCode(args: {
     requestId: args.requestId,
   });
 }
+
+export function formatVibeSupportCode(args: {
+  code: string;
+  requestId: string | null;
+}): string {
+  return formatSupportCode({
+    area: "VIBE",
+    error: args.code,
+    requestId: args.requestId,
+  });
+}
+
+export function formatStudioSupportCode(args: {
+  code: string;
+  requestId: string | null;
+}): string {
+  return formatSupportCode({
+    area: "STUDIO",
+    error: args.code,
+    requestId: args.requestId,
+  });
+}
+
+export function formatShareSupportCode(args: {
+  code: string;
+  requestId: string | null;
+}): string {
+  return formatSupportCode({
+    area: "SHARE",
+    error: args.code,
+    requestId: args.requestId,
+  });
+}

@@ -55,6 +55,7 @@ import {
   type SongShareRequestErrorCode,
 } from "@/lib/api/song-share";
 import { hasSongShareAudio } from "@/lib/share/song-share";
+import { formatShareSupportCode } from "@/lib/observability/support-code";
 import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
@@ -200,7 +201,9 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       await player.play(melodyNotes, song.arrangementState, chords, bpm);
     } catch (err) {
       console.error("[SongDetail] tone play error:", err);
-      toast.error(t("song.export.err"));
+      toast.error(t("song.export.err"), {
+        description: formatShareSupportCode({ code: "export_failed", requestId: null }),
+      });
       setIsPlaying(false);
     }
   }, [song, isPlaying, t]);
@@ -292,7 +295,9 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         .catch(() => {});
     } catch (e) {
       console.error(e);
-      toast.error(t("song.export.err"));
+      toast.error(t("song.export.err"), {
+        description: formatShareSupportCode({ code: "export_failed", requestId: null }),
+      });
     } finally {
       setBusy(null);
     }
@@ -345,7 +350,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         error instanceof SongShareRequestError
           ? error.code
           : "server_error";
-      toast.error(shareLinkErrorMessage(code, t));
+      const reqId = error instanceof SongShareRequestError ? error.requestId : null;
+      toast.error(shareLinkErrorMessage(code, t), {
+        description: formatShareSupportCode({ code, requestId: reqId }),
+      });
     } finally {
       setBusy(null);
     }
@@ -369,7 +377,9 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       router.push("/gallery");
     } catch (e) {
       console.error(e);
-      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?");
+      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?", {
+        description: formatShareSupportCode({ code: "delete_failed", requestId: null }),
+      });
     }
   };
 
@@ -779,7 +789,9 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         }}
         onImageDownloadError={(error) => {
           console.error(error);
-          toast.error(t("song.export.err"));
+          toast.error(t("song.export.err"), {
+            description: formatShareSupportCode({ code: "export_failed", requestId: null }),
+          });
         }}
         onDownloadVideo={exportVideo}
         videoExporting={busy === "video"}

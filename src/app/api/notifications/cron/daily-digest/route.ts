@@ -8,16 +8,20 @@ import { dailyDigestNotificationCopy } from "@/lib/notifications/notification-co
 
 /** Scheduled by `vercel.json#crons`. Authenticated via `CRON_SECRET`. */
 export async function GET(request: NextRequest) {
+  const requestId = crypto.randomUUID();
   const expected = process.env.CRON_SECRET;
   if (!expected) {
     return NextResponse.json(
-      { error: "CRON_SECRET is not configured" },
+      { error: "server_error", message: "CRON_SECRET is not configured", requestId },
       { status: 500 },
     );
   }
   const auth = request.headers.get("authorization");
   if (auth !== `Bearer ${expected}`) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "unauthorized", message: "Invalid or missing authorization", requestId },
+      { status: 401 },
+    );
   }
 
   try {
@@ -31,8 +35,8 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     if (err instanceof NotificationPublishError) {
       return NextResponse.json(
-        { error: err.message, code: err.code },
-        { status: err.code >= 400 && err.code < 600 ? err.code : 500 },
+        { error: err.code, message: err.message, requestId },
+        { status: err.status >= 400 && err.status < 600 ? err.status : 500 },
       );
     }
     log("notifications.publish_failed", {
@@ -42,6 +46,9 @@ export async function GET(request: NextRequest) {
       route: "/api/notifications/cron/daily-digest",
       level: "error",
     });
-    return NextResponse.json({ error: "publish failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: "server_error", message: "publish failed", requestId },
+      { status: 500 },
+    );
   }
 }

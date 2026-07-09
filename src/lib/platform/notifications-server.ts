@@ -12,10 +12,13 @@ import {
 import type { PushSubscriptionRecord } from "@/lib/db/schema/push-subscriptions";
 import { log } from "@/lib/observability/log";
 
+export type NotificationErrorCode = "publish_failed" | "unauthorized" | "server_error";
+
 export class NotificationPublishError extends Error {
   constructor(
     message: string,
-    public readonly code: number,
+    public readonly code: NotificationErrorCode,
+    public readonly status: number,
   ) {
     super(message);
     this.name = "NotificationPublishError";

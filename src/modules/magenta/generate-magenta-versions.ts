@@ -485,9 +485,14 @@ function notifyIfBatchComplete(): void {
 }
 
 /** Patch a version's generation in the store; false if it's no longer there. */
+type VersionGenerationPatch =
+  | Partial<Pick<VersionGeneration, "audioUrl" | "currentBalance" | "cost">> &
+    ({ status: "pending" | "ready"; error?: undefined; errorCode?: undefined }
+    | { status: "error"; error: string; errorCode: VersionGenerationErrorCode });
+
 function patchGeneration(
   versionId: string,
-  patch: Partial<VersionGeneration>,
+  patch: VersionGenerationPatch,
 ): boolean {
   const store = useMurmurStore.getState();
   const target = store.vibeVersions.find((v) => v.id === versionId);
@@ -497,7 +502,7 @@ function patchGeneration(
 
   const next: VibeVersion = {
     ...base,
-    generation: { ...base.generation, ...patch },
+    generation: { ...base.generation, ...patch } as VersionGeneration,
   };
   if (target) {
     store.setVibeVersions(
