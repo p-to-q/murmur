@@ -26,6 +26,7 @@ import {
 } from "@/lib/notifications/notification-copy";
 import { notifications } from "@/lib/platform/notifications-server";
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
+import { ulid } from "ulid";
 import { COST } from "@murmur/core";
 import { deriveEditDepth, normalizeEditCount } from "@/modules/music/edit-depth";
 import { normalizeLineageDepth, resolveParentSongId, resolveRootSongId } from "@/modules/music/lineage";
@@ -39,7 +40,7 @@ const SONG_CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
 const MELODY_SELECTION_KINDS = new Set<MelodySelectionKind>(["intent", "corrected", "musical"]);
 
 const songPayloadSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().min(1).optional(),  // ignored — server generates the id
   title: z.string().min(1),
   vibe: z.string().min(1),
   vibeEn: z.string().min(1),
@@ -335,17 +336,19 @@ export async function POST(req: NextRequest) {
 }
 
 function buildSongInput(body: SongPayload, userId: string): SongInput {
+  // Always generate the song id server-side; any client-supplied id is ignored.
+  const id = `song_${ulid()}`;
   const editCount = normalizeEditCount(body.editCount);
   const lineageDepth = normalizeLineageDepth(body.lineageDepth);
   const sourceMelodyKind = isMelodySelectionKind(body.sourceMelodyKind)
     ? body.sourceMelodyKind
     : "corrected";
   const editDepth = deriveEditDepth(editCount);
-  const parentSongId = resolveParentSongId({ id: body.id, parentSongId: body.parentSongId });
-  const rootSongId = resolveRootSongId({ id: body.id, rootSongId: body.rootSongId });
+  const parentSongId = resolveParentSongId({ id, parentSongId: body.parentSongId });
+  const rootSongId = resolveRootSongId({ id, rootSongId: body.rootSongId });
 
   return {
-    id: body.id,
+    id,
     userId,
     title: body.title,
     vibe: body.vibe,

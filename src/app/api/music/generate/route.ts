@@ -575,6 +575,8 @@ async function refundMusicGenerateSpendIfNeeded(options: {
     log("notes.refund_failed", {
       requestLedgerId: options.spend.ledgerId,
       reason: refund.reason,
+      reconciliation: "MANUAL_REFUND_REQUIRED",
+      trigger: options.trigger,
     }, {
       route: ROUTE,
       requestId: options.requestId,
@@ -587,6 +589,8 @@ async function refundMusicGenerateSpendIfNeeded(options: {
     log("notes.refund_failed", {
       requestLedgerId: options.spend.ledgerId,
       reason: error instanceof Error ? error.message : String(error),
+      reconciliation: "MANUAL_REFUND_REQUIRED",
+      trigger: options.trigger,
     }, {
       route: ROUTE,
       requestId: options.requestId,
@@ -607,7 +611,7 @@ function safeHostnameFromUrl(url: string): string | null {
 }
 
 function createSpendReference(kind: "music_generate"): string {
-  return `${kind}:${crypto.randomUUID()}`;
+  return `spend_${kind}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
 }
 
 /** Production path: invoke the RunPod Serverless endpoint (JSON + base64). */
