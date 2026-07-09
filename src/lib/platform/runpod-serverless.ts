@@ -299,3 +299,46 @@ export async function endpointHealth(
   const body = await safeJson(res);
   return { ok: res.ok, status: res.status, body };
 }
+
+export interface QueueDepth {
+  inQueue: number;
+  inProgress: number;
+  workers: { idle: number; running: number; total: number };
+}
+
+/**
+ * Read the endpoint's current queue depth from the /health response.
+ *
+ * RunPod's health body shape:
+ *   { jobs: { completed, failed, inProgress, inQueue, retried },
+ *     workers: { idle, initializing, ready, running, throttled } }
+ *
+ * Returns null if the health endpoint is unreachable or the shape is
+ * unexpected — callers should treat null as "allow the request" (fail open).
+ */
+export async function getQueueDepth(
+  config: MusicServerlessConfig,
+): Promise<QueueDepth | null> {
+  try {
+    const { ok, body } = await endpointHealth(config, AbortSignal.timeout(5_000));
+    if (!ok || !body || typeof body !== "object") return null;
+
+    const b = body as Record<string, unknown>;
+    const jobs = b.jobs as Record<string, unknown> | undefined;
+    const workers = b.workers as Record<string, unknown> | undefined;
+
+    const inQueue = typeof jobs?.inQueue === "number" ? jobs.inQueue : 0;
+    const inProgress = typeof jobs?.inProgress === "number" ? jobs.inProgress : 0;
+    const idle = typeof workers?.idle === "number" ? workers.idle : 0;
+    const running = typeof workers?.running === "number" ? workers.running : 0;
+    const initializing = typeof workers?.initializing === "number" ? workers.initializing : 0;
+
+    return {
+      inQueue,
+      inProgress,
+      workers: { idle, running, total: idle + running + initializing },
+    };
+  } catch {
+    return null;
+  }
+}

@@ -19,7 +19,7 @@ import {
   songGeneratedNotificationCopy,
 } from "@/lib/notifications/notification-copy";
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
-import { RunpodError, runJob } from "@/lib/platform/runpod-serverless";
+import { RunpodError, runJob, getQueueDepth } from "@/lib/platform/runpod-serverless";
 import { COST } from "@murmur/core";
 
 export const runtime = "nodejs";
@@ -42,6 +42,9 @@ const MAX_HUM_BYTES = 4 * 1024 * 1024;
 const MIN_DURATION = 2;
 const MAX_DURATION = 20;
 
+const LOAD_SHED_QUEUE_THRESHOLD = 5;
+const LOAD_SHED_RETRY_AFTER_MS = 15_000;
+
 type MusicRouteError =
   | "prompt_required"
   | "validation_error"
@@ -50,6 +53,7 @@ type MusicRouteError =
   | "worker_unconfigured"
   | "worker_unauthorized"
   | "worker_http_error"
+  | "worker_overloaded"
   | "client_closed_request"
   | "server_error";
 
@@ -145,6 +149,39 @@ export async function POST(request: NextRequest) {
     return fail("worker_unconfigured", "music worker is not configured", 503, {
       requestId, userId, startedAt,
     });
+  }
+
+  if (mode === "serverless" && auth.user.accountKind === "local_creator") {
+    const serverlessConfig = getMusicServerlessConfig();
+    if (serverlessConfig) {
+      const depth = await getQueueDepth(serverlessConfig);
+      if (depth && depth.inQueue > LOAD_SHED_QUEUE_THRESHOLD) {
+        log("music.generate_failed", {
+          error_code: "worker_overloaded",
+          inQueue: depth.inQueue,
+          inProgress: depth.inProgress,
+          loadShed: true,
+        }, {
+          route: ROUTE, requestId, userId, level: "warn",
+          durationMs: Math.round(performance.now() - startedAt),
+        });
+        return NextResponse.json(
+          {
+            error: "worker_overloaded" as const,
+            message: "Music generation is busy. Please try again shortly.",
+            retryAfterMs: LOAD_SHED_RETRY_AFTER_MS,
+            requestId,
+          },
+          {
+            status: 503,
+            headers: {
+              "X-Request-Id": requestId,
+              "Retry-After": String(Math.ceil(LOAD_SHED_RETRY_AFTER_MS / 1000)),
+            },
+          },
+        );
+      }
+    }
   }
 
   try {

@@ -6,7 +6,7 @@ import {
   getMusicWorkerUrl,
   isMusicWorkerConfigured,
 } from "@/lib/platform/music-worker";
-import { endpointHealth } from "@/lib/platform/runpod-serverless";
+import { endpointHealth, getQueueDepth } from "@/lib/platform/runpod-serverless";
 
 export const runtime = "nodejs";
 
@@ -16,6 +16,7 @@ type PublicMusicHealth = {
   mode?: "serverless" | "http" | null;
   requestedMode?: "serverless" | "http" | "auto";
   reason: "unconfigured" | "unauthorized" | "unreachable" | "degraded" | `http_${number}` | null;
+  estimatedWaitMs?: number | null;
 };
 
 /**
@@ -73,12 +74,17 @@ async function serverlessHealth() {
         reason: unauthorized ? "unauthorized" : `http_${status}`,
       });
     }
+    const depth = await getQueueDepth(config);
+    const estimatedWaitMs = depth
+      ? estimateWaitFromQueue(depth.inQueue, depth.inProgress, depth.workers.total)
+      : null;
     return publicHealth({
       available: true,
       configured: true,
       mode: "serverless",
       requestedMode: getRequestedMusicEngineMode(),
       reason: null,
+      estimatedWaitMs,
     });
   } catch {
     return publicHealth({
@@ -151,6 +157,23 @@ async function httpHealth() {
       reason: "unreachable",
     });
   }
+}
+
+const AVG_GENERATION_MS = 30_000;
+const COLD_START_MS = 45_000;
+
+function estimateWaitFromQueue(
+  inQueue: number,
+  inProgress: number,
+  totalWorkers: number,
+): number | null {
+  if (inQueue === 0 && inProgress === 0) return 0;
+  const effectiveWorkers = Math.max(1, totalWorkers);
+  const coldStartPenalty = totalWorkers === 0 ? COLD_START_MS : 0;
+  const pendingJobs = inQueue + inProgress;
+  return Math.round(
+    coldStartPenalty + (pendingJobs / effectiveWorkers) * AVG_GENERATION_MS,
+  );
 }
 
 function publicHealth(body: PublicMusicHealth): NextResponse {
