@@ -82,7 +82,7 @@ function publicSongResponse(
     "X-Request-Id": requestId,
     "Cache-Control":
       song.visibility === "public"
-        ? "public, max-age=60, s-maxage=300"
+        ? "public, max-age=60, s-maxage=3600, stale-while-revalidate=86400"
         : "private, no-store",
     ...extraHeaders,
   };

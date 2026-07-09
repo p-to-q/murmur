@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { SongCard } from "./SongCard";
 import type { VisualArtwork } from "@/modules/shared/types";
 
@@ -54,6 +54,7 @@ export function ActivityHeatmap({
   onSongClick,
 }: ActivityHeatmapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = useReducedMotion();
   const [numWeeks, setNumWeeks] = useState(20);
   const [isDesktop, setIsDesktop] = useState(false);
 
@@ -150,9 +151,9 @@ export function ActivityHeatmap({
       <div ref={containerRef}>
         {/* ── Heatmap grid ───────────────────────────────────────────────── */}
         <motion.div
-          initial={{ opacity: 0 }}
+          initial={{ opacity: reduceMotion ? 1 : 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.12, duration: 0.5 }}
+          transition={reduceMotion ? { duration: 0 } : { delay: 0.12, duration: 0.5 }}
           className="flex justify-between w-full"
           style={{ gap: CELL_GAP, height: gridHeight }}
         >
@@ -225,9 +226,9 @@ export function ActivityHeatmap({
         {/* ── Recent songs showcase ──────────────────────────────────────── */}
         {displaySongs.length > 0 && !displaySongs[0]?.id.startsWith("demo-") && (
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            transition={reduceMotion ? { duration: 0 } : { delay: 0.3, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           >
             <div className="mb-4 md:mb-5">
               <p className="text-[11px] md:text-[12px] uppercase tracking-[0.16em] text-[#B7AEA1]">
