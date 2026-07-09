@@ -79,10 +79,10 @@ Batch generation is **foreground-orchestrated with hybrid notifications**:
 - Notifications are batch-level from the user's point of view (shared batch
   tag plus the client's final batch summary), even though delivery stays
   per-clip best effort underneath.
-- Closing the browser is **not** promised to finish work: a disconnected clip
-  request is cancelled on the worker and refunded, so nothing completes — and
-  nothing notifies — after the tab dies. Web push only bridges the
-  hidden/suspended-tab gap while the requests stay alive.
+- Closing the browser is **not** promised to finish work: outstanding clip
+  requests are cancelled on the worker and refunded, so the batch does not
+  complete and no final batch summary is posted after the tab dies. Web push
+  only bridges the hidden/suspended-tab gap while the requests stay alive.
 - A durable server-side queue (`POST /api/music/batches`, durable clip
   storage, resume via `/studio?batch=...`) is deliberately deferred. If added,
   it would replace the collapsed per-clip pushes with a single durable
