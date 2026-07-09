@@ -134,9 +134,11 @@ flowchart TB
 - Web Push requires `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, HTTPS
   (localhost is accepted by browsers for development), browser notification
   permission, and a registered `push_subscriptions` row. Music generation is
-  still client-orchestrated clip-by-clip, so fully durable "batch finished
-  after browser exit" notifications require a future server-side generation
-  job queue.
+  still client-orchestrated clip-by-clip; sibling clips share a browser-minted
+  generation batch id (`x-generation-batch-id`) so their pushes and inbox
+  entries collapse to one per batch (see "Generation Batch Semantics" in
+  `docs/notifications.md`). Fully durable "batch finished after browser exit"
+  notifications still require a future server-side generation job queue.
 - AI editing depends on `OPENAI_API_KEY` or an equivalent gateway key.
 - Some UI files are still larger than the final target shape and can be split as
   the product stabilizes.

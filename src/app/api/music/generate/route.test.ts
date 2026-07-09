@@ -120,6 +120,36 @@ class TestRunpodError extends Error {
   }
 }
 
+interface PublishedNotification {
+  title: string;
+  body: string;
+  userId: string;
+  data?: Record<string, unknown>;
+}
+
+const publishedNotifications: PublishedNotification[] = [];
+
+mock.module("@/lib/platform/notifications-server", () => ({
+  notifications: {
+    publish: async (input: PublishedNotification) => {
+      publishedNotifications.push(input);
+      return {
+        delivered: 1,
+        failed: 0,
+        removed: 0,
+        publishId: "push-test",
+        title: input.title,
+      };
+    },
+  },
+}));
+
+// Publish is scheduled via scheduleAfterResponse, which falls back to a
+// microtask outside a Next request scope — flush it before asserting.
+async function flushScheduledPublishes(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 mock.module("@/lib/platform/runpod-serverless", () => ({
   RunpodError: TestRunpodError,
   endpointHealth: async () => ({
@@ -187,6 +217,7 @@ beforeEach(async () => {
   lastSpendInputs.length = 0;
   lastRefundInputs.length = 0;
   runJobCallCount = 0;
+  publishedNotifications.length = 0;
 });
 
 describe("POST /api/music/generate", () => {
@@ -366,6 +397,69 @@ describe("POST /api/music/generate", () => {
     const body = await response.json() as { error: string; message: string };
     expect(body.error).toBe("billing_unavailable");
     expect(body.message).toBe("Music generation refund failed");
+  });
+
+  it("collapses sibling clips of one batch under a shared push identity", async () => {
+    nextEngineMode = "serverless";
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_batch", email: null, name: "Batch", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_batch",
+    };
+    const batchHeaders = { "x-generation-batch-id": "batch_abc-123" };
+
+    const first = await POST(buildRequest("req_batch_clip_1", batchHeaders));
+    const second = await POST(buildRequest("req_batch_clip_2", batchHeaders));
+    await flushScheduledPublishes();
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(publishedNotifications).toHaveLength(2);
+    for (const published of publishedNotifications) {
+      expect(published.userId).toBe("usr_batch");
+      expect(published.data).toMatchObject({
+        kind: "song_generated",
+        tag: "murmur-generation-batch_abc-123",
+        sourceId: "batch_abc-123",
+        notificationId: "song_generated:batch_abc-123",
+        batchId: "batch_abc-123",
+      });
+    }
+    expect(publishedNotifications.map((p) => p.data?.requestId)).toEqual([
+      "req_batch_clip_1",
+      "req_batch_clip_2",
+    ]);
+  });
+
+  it("falls back to per-request push identity without a valid batch header", async () => {
+    nextEngineMode = "serverless";
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_nobatch", email: null, name: "NoBatch", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_nobatch",
+    };
+
+    const missing = await POST(buildRequest("req_no_batch"));
+    const malformed = await POST(
+      buildRequest("req_bad_batch", { "x-generation-batch-id": "bad batch!!" }),
+    );
+    await flushScheduledPublishes();
+
+    expect(missing.status).toBe(200);
+    expect(malformed.status).toBe(200);
+    expect(publishedNotifications).toHaveLength(2);
+    expect(publishedNotifications[0]?.data).toMatchObject({
+      tag: "murmur-generation-req_no_batch",
+      sourceId: "req_no_batch",
+      notificationId: "song_generated:req_no_batch",
+      batchId: null,
+    });
+    expect(publishedNotifications[1]?.data).toMatchObject({
+      tag: "murmur-generation-req_bad_batch",
+      batchId: null,
+    });
   });
 
   it("does not use dev billing fallback for Local Creator sessions", async () => {

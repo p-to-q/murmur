@@ -59,11 +59,31 @@ Currently connected events:
 
 - notification test button: publishes to the current user's registered browsers;
 - song save: publishes a Gallery deep link after the save succeeds;
-- music clip generation: publishes a Studio deep link after each server-side
-  clip request succeeds;
+- music clip generation: still publishes after each server-side clip request
+  succeeds, but sibling clips of one Studio fan-out share a generation batch id
+  (the browser sends `x-generation-batch-id` on every clip request). All pushes
+  of a batch carry the same notification tag (`murmur-generation-<batchId>`)
+  and inbox id (`song_generated:<batchId>`), so the OS shows one notification
+  per batch — each clip silently replaces the previous — and the inbox keeps a
+  single entry. When the batch settles, the client posts the final "N of M
+  ready" summary under the same tag and id, replacing the per-clip placeholder;
 - daily digest cron: publishes to active web push subscriptions when configured.
 
-The Studio batch is still orchestrated by browser requests. If the browser
-exits before submitting or keeping those requests alive, Murmur has no durable
-server-side batch job to finish. A future queue can promote the existing music
-publisher call from per-clip best effort to durable batch completion.
+## Generation Batch Semantics (decision 2026-07, issue #166)
+
+Batch generation is **foreground-orchestrated with hybrid notifications**:
+
+- The browser fans one hum out into three parallel `/api/music/generate`
+  requests and audio streams back into the live tab. This stays the primary
+  low-latency creative path; the batch id adds no server state or latency.
+- Notifications are batch-level from the user's point of view (shared batch
+  tag plus the client's final batch summary), even though delivery stays
+  per-clip best effort underneath.
+- Closing the browser is **not** promised to finish work: outstanding clip
+  requests are cancelled on the worker and refunded, so the batch does not
+  complete and no final batch summary is posted after the tab dies. Web push
+  only bridges the hidden/suspended-tab gap while the requests stay alive.
+- A durable server-side queue (`POST /api/music/batches`, durable clip
+  storage, resume via `/studio?batch=...`) is deliberately deferred. If added,
+  it would replace the collapsed per-clip pushes with a single durable
+  batch-completion publish and make the browser-exit promise real.

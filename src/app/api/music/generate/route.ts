@@ -100,6 +100,7 @@ type GenerateResult =
 export async function POST(request: NextRequest) {
   const startedAt = performance.now();
   const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+  const batchId = readGenerationBatchId(request);
   const spendRef = createSpendReference("music_generate");
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
@@ -204,6 +205,7 @@ export async function POST(request: NextRequest) {
 
     log("music.generate_requested", {
       mode,
+      batchId,
       cost: COST.music_generate,
       balanceBefore: billing.balanceBefore,
       billingMode: billing.billingMode,
@@ -249,6 +251,7 @@ export async function POST(request: NextRequest) {
 
     log("music.generate_completed", {
       mode,
+      batchId,
       bytes: result.audio.byteLength,
       cost: COST.music_generate,
       balanceAfter: billing.spend.balanceAfter,
@@ -264,6 +267,7 @@ export async function POST(request: NextRequest) {
       userId,
       sessionId: auth.sessionId,
       requestId,
+      batchId,
       prompt,
       acceptLanguage: request.headers.get("accept-language"),
     }));
@@ -307,10 +311,22 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// The browser groups the sibling clip requests of one Studio fan-out under a
+// shared batch id. It only scopes notification identity and log correlation,
+// so a malformed value must never fail generation — it just falls back to
+// per-request identity.
+const GENERATION_BATCH_ID_PATTERN = /^[A-Za-z0-9_-]{6,64}$/;
+
+function readGenerationBatchId(request: NextRequest): string | null {
+  const raw = request.headers.get("x-generation-batch-id")?.trim();
+  return raw && GENERATION_BATCH_ID_PATTERN.test(raw) ? raw : null;
+}
+
 async function publishMusicGeneratedNotification(input: {
   userId: string;
   sessionId: string | null;
   requestId: string;
+  batchId: string | null;
   prompt: string;
   acceptLanguage: string | null;
 }) {
@@ -319,6 +335,11 @@ async function publishMusicGeneratedNotification(input: {
     readyCount: 1,
     totalCount: 1,
   });
+  // Sibling clips share the batch id, so their pushes collapse into one OS
+  // notification (same tag) and one inbox entry (same notificationId) instead
+  // of stacking one alert per clip. The client replaces this slot with the
+  // final "N of M ready" summary once the whole batch settles.
+  const groupId = input.batchId ?? input.requestId;
   await notifications
     .publish({
       title: copy.title,
@@ -326,10 +347,13 @@ async function publishMusicGeneratedNotification(input: {
       userId: input.userId,
       data: {
         kind: "song_generated",
-        tag: `murmur-generation-${input.requestId}`,
+        tag: `murmur-generation-${groupId}`,
         href: "/studio",
         source: "music-generate",
         requestId: input.requestId,
+        batchId: input.batchId,
+        sourceId: groupId,
+        notificationId: `song_generated:${groupId}`,
         prompt: input.prompt.slice(0, 120),
       },
     })
