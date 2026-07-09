@@ -381,5 +381,3 @@ function isSongShareSchemaUnavailable(error: unknown): boolean {
   return false;
 }
 
-
-

@@ -449,8 +449,6 @@ async function readWorkerError(
   }
 }
 
-
-
 function normalizeNotes(
   notes: Array<z.infer<typeof noteSchema>>,
 ): MelodyNote[] {

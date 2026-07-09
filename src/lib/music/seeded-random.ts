@@ -33,4 +33,3 @@ export function pick<T>(rng: () => number, arr: readonly T[]): T {
   const i = Math.floor(rng() * arr.length);
   return arr[Math.min(i, arr.length - 1)]!;
 }
-

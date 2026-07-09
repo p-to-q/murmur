@@ -48,4 +48,3 @@ function stringField(value: Record<string, unknown>, key: string): string | null
   return typeof field === "string" && field.trim() ? field : null;
 }
 
-
