@@ -220,6 +220,16 @@ export function resolveAuthRuntimeMode(): AuthRuntimeMode {
   if (configured === "local" || configured === "development" || configured === "dev") {
     return "local";
   }
+
+  // In production, MURMUR_AUTH_MODE must be explicitly set to "production" to
+  // prevent accidental auth bypass from an unset or misconfigured variable.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      'MURMUR_AUTH_MODE is not set. In production you must explicitly set MURMUR_AUTH_MODE="production". ' +
+      "This prevents accidental auth bypass from a missing or misconfigured environment variable.",
+    );
+  }
+
   return "production";
 }
 
