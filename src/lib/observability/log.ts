@@ -67,7 +67,11 @@ export type LogEvent =
   | "billing.webhook_received"
   | "billing.webhook_failed"
   | "share.referral_failed"
-  | "storage.local_serve_failed";
+  | "storage.local_serve_failed"
+  | "strummer.edit_completed"
+  | "stage.entered"
+  | "stage.completed"
+  | "stage.dropped";
 
 export interface LogContext {
   requestId?: string;

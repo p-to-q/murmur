@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import Image from "next/image";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { trackStageEntered } from "@/lib/observability/stage-tracking";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
 import { generateStrummerCode } from "@/modules/strummer/generate-code";
@@ -65,6 +66,10 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
       setActiveCreationRoute("/studio");
     }
   }, [currentVersion, setActiveCreationRoute]);
+
+  useEffect(() => {
+    trackStageEntered("studio");
+  }, []);
 
   useRestoredVersionAudio(currentVersion, restoredDraftAt);
 

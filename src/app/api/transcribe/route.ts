@@ -11,7 +11,9 @@ import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
+import { classifyError } from "@/lib/errors/transient";
 import { log } from "@/lib/observability/log";
+import { checkBudget } from "@/lib/observability/latency-budgets";
 import { COST } from "@murmur/core";
 
 export const runtime = "nodejs";
@@ -320,6 +322,8 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
+    const totalDurationMs = Math.round(performance.now() - startedAt);
+    const budget = checkBudget("transcribe", totalDurationMs);
     log("transcribe.completed", {
       provider: result.provider,
       noteCount: result.cleanMelody.notes.length,
@@ -338,24 +342,28 @@ export async function POST(request: NextRequest) {
       cost: COST.hum,
       balanceAfter: spend.balanceAfter,
       billingMode,
+      budget_exceeded: budget.budget_exceeded,
+      budget_p95: budget.budget_p95,
     }, {
       route: ROUTE,
       requestId,
       userId,
       sessionId: auth.sessionId,
-      durationMs: Math.round(performance.now() - startedAt),
+      durationMs: totalDurationMs,
     });
 
     return NextResponse.json(result, {
       headers: { "X-Request-Id": requestId },
     });
   } catch (error) {
+    const classified = classifyError(error);
     if (error instanceof AudioWorkerError) {
       return fail(error.code, error.message, error.status, {
         requestId,
         userId,
         startedAt,
         phase: "worker",
+        ext: { error_class: classified.class },
       });
     }
 
@@ -364,7 +372,7 @@ export async function POST(request: NextRequest) {
       userId,
       startedAt,
       phase: "route",
-      ext: { message: error instanceof Error ? error.message : String(error) },
+      ext: { message: error instanceof Error ? error.message : String(error), error_class: classified.class },
     });
   }
 }

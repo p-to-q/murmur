@@ -5,7 +5,9 @@ import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
+import { classifyError } from "@/lib/errors/transient";
 import { log } from "@/lib/observability/log";
+import { checkBudget } from "@/lib/observability/latency-budgets";
 import {
   getMusicEngineMode,
   getMusicServerlessConfig,
@@ -249,6 +251,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const genDurationMs = Math.round(performance.now() - startedAt);
+    const genBudget = checkBudget("music_generate", genDurationMs);
     log("music.generate_completed", {
       mode,
       batchId,
@@ -259,9 +263,11 @@ export async function POST(request: NextRequest) {
       generationMs: Number(result.generationMs) || null,
       model: result.model,
       styleMix: result.styleMix,
+      budget_exceeded: genBudget.budget_exceeded,
+      budget_p95: genBudget.budget_p95,
     }, {
       route: ROUTE, requestId, userId, sessionId: auth.sessionId,
-      durationMs: Math.round(performance.now() - startedAt),
+      durationMs: genDurationMs,
     });
     scheduleAfterResponse(() => publishMusicGeneratedNotification({
       userId,
@@ -302,10 +308,12 @@ export async function POST(request: NextRequest) {
         },
       });
     }
+    const classified = classifyError(error);
     return fail("server_error", "Music generation failed", 500, {
       requestId, userId, startedAt,
       ext: {
         message: error instanceof Error ? error.message : String(error),
+        error_class: classified.class,
       },
     });
   }

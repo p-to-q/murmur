@@ -5,8 +5,10 @@ import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
+import { checkBudget } from "@/lib/observability/latency-budgets";
 import { ai } from "@/lib/platform/ai-server";
-import { ALL_EDIT_TOKENS, type EditToken } from "@/modules/strummer/apply-edit";
+import { type EditToken, ALL_EDIT_TOKENS } from "@/modules/strummer/apply-edit";
+import { STRUMMER_EDIT_SYSTEM_PROMPT } from "@/modules/strummer/edit-system-prompt";
 import { COST } from "@murmur/core";
 
 // Strummer prompt → EditToken classifier.
@@ -23,6 +25,7 @@ const STRUMMER_EDIT_RATE_LIMIT = { capacity: 10, refillWindowMs: 60_000 };
 type RequestBody = { prompt?: string };
 
 export async function POST(req: NextRequest) {
+  const startedAt = performance.now();
   const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
   const spendRef = createSpendReference("llm_edit");
   const auth = await resolveRequestAuth(req);
@@ -101,23 +104,6 @@ export async function POST(req: NextRequest) {
       { status: 402, headers: { "X-Request-Id": requestId } },
     );
   }
-
-  const system = [
-    "You are the Strummer edit classifier for MURMUR, a tiny app that turns a",
-    "user's hum into a short song. The user is sitting in an arrangement editor",
-    "and types a freeform request to tweak the song. Your only job: map that",
-    "request to at most 3 EditToken strings from the allowlist below. Return",
-    "JSON only — no prose, no markdown.",
-    "",
-    "Allowed tokens:",
-    ...ALL_EDIT_TOKENS.map((t) => `- ${t}`),
-    "",
-    "Response shape:",
-    '{ "tokens": ["warmer", "less_drums"], "reason": "..." }',
-    "",
-    "Pick 1–3 tokens that best capture the user's intent. Prefer fewer tokens.",
-    'If nothing in the allowlist applies, return { "tokens": [], "reason": "no match" }.',
-  ].join("\n");
 
   let spend:
     | Awaited<ReturnType<typeof spendNotes>>
@@ -201,7 +187,7 @@ export async function POST(req: NextRequest) {
       ai.chat({
         model: "deepseek.v3.1",
         messages: [
-          { role: "system", content: system },
+          { role: "system", content: STRUMMER_EDIT_SYSTEM_PROMPT },
           { role: "user", content: prompt },
         ],
         temperature: 0.1,
@@ -214,6 +200,21 @@ export async function POST(req: NextRequest) {
 
     const text = completion.choices[0]?.message?.content ?? "";
     const tokens = extractTokens(text);
+    const editDurationMs = Math.round(performance.now() - startedAt);
+    const editBudget = checkBudget("llm_edit", editDurationMs);
+    if (editBudget.budget_exceeded) {
+      log("strummer.edit_completed", {
+        budget_exceeded: true,
+        budget_p95: editBudget.budget_p95,
+        tokenCount: tokens.length,
+      }, {
+        route: ROUTE,
+        requestId,
+        userId,
+        durationMs: editDurationMs,
+        level: "warn",
+      });
+    }
 
     return NextResponse.json(
       { tokens, raw: text.slice(0, 400), requestId },

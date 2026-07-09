@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { trackStageEntered } from "@/lib/observability/stage-tracking";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
 import {
@@ -165,6 +166,10 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       setActiveCreationRoute("/vibe");
     }
   }, [setActiveCreationRoute, vibeVersions.length]);
+
+  useEffect(() => {
+    trackStageEntered("vibe", { flowId: currentFlowId ?? undefined, draftId: currentDraftId ?? undefined });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Arrival sequence ─────────────────────────────────────────── */
   useEffect(() => {
