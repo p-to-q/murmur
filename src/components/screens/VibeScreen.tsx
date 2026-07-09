@@ -789,6 +789,13 @@ function generationErrorRecovery(version: VibeVersion): {
         detailKey: "vibe.gen.worker_unconfigured",
         detailFallback: "Music engine is not connected yet.",
       };
+    case "worker_overloaded":
+      return {
+        ctaKey: "vibe.retry",
+        ctaFallback: "Retry",
+        detailKey: "vibe.gen.worker_overloaded",
+        detailFallback: "Music engine is busy — please try again shortly.",
+      };
     default:
       return {
         ctaKey: "vibe.retry",

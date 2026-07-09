@@ -303,6 +303,7 @@ export const DICT = {
   "vibe.gen.rate_limited_toast": { zh: "酿得太频繁了，稍等一下再试。", en: "Too many generations in a row. Try again shortly." },
   "vibe.gen.billing_unavailable": { zh: "音磅账本暂时不可用，稍后再试。", en: "Notes ledger unavailable — try again in a bit." },
   "vibe.gen.worker_unconfigured": { zh: "曲子引擎还没接上。", en: "Music engine is not connected yet." },
+  "vibe.gen.worker_overloaded": { zh: "曲子引擎正忙，请稍后重试。", en: "Music engine is busy — please try again shortly." },
   "vibe.gen.retrying": { zh: "重新酿造这一版…", en: "Brewing this one again…" },
   "vibe.gen.retrying_all": { zh: "重新酿造这一批…", en: "Brewing the whole set again…" },
   "vibe.gen.engine_warming": { zh: "曲子引擎正在热机，过一会儿再换一批。", en: "Music engine is warming up — try again in a moment." },

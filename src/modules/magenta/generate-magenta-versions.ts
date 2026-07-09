@@ -436,6 +436,8 @@ function mapMusicGenerateErrorCode(
     case "worker_http_error":
     case "worker_unauthorized":
       return "worker_unavailable";
+    case "worker_overloaded":
+      return "worker_overloaded";
     case "server_error":
       return "server_error";
     default:
