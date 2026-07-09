@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { getRequestHostname } from "@/lib/auth/local-preview";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
+import { isObject } from "@/lib/utils/is-object";
 
 /**
  * Shared DB-outage detection for the song routes (collection, item, share).
@@ -51,6 +52,4 @@ export function shouldUseGuestSongFallback(req: NextRequest, userId: string): bo
   });
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+

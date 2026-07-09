@@ -18,6 +18,7 @@ import {
   objectFieldAsString,
   shouldUseGuestSongFallback,
 } from "@/app/api/songs/db-fallback";
+import { isObject } from "@/lib/utils/is-object";
 import { log } from "@/lib/observability/log";
 import { getSiteUrlForRequest } from "@/lib/site-url";
 import {
@@ -381,6 +382,4 @@ function isSongShareSchemaUnavailable(error: unknown): boolean {
 }
 
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+

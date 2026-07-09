@@ -34,7 +34,3 @@ export function pick<T>(rng: () => number, arr: readonly T[]): T {
   return arr[Math.min(i, arr.length - 1)]!;
 }
 
-/** Float in [min, max). */
-export function range(rng: () => number, min: number, max: number): number {
-  return min + rng() * (max - min);
-}
