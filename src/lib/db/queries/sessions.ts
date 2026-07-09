@@ -19,6 +19,11 @@ export interface CreatedSession {
 }
 
 const SESSION_TTL_DAYS = 30;
+// lastSeenAt is "recently active" telemetry with no sub-minute consumer.
+// Refreshing it on every authenticated request would add a write round trip
+// to the hottest paths (the 10s account poll, balance reads), so it only
+// refreshes once it has aged past this threshold.
+const LAST_SEEN_REFRESH_MS = 5 * 60 * 1000;
 
 export async function createSession(input: {
   userId: string;
@@ -48,6 +53,7 @@ export async function getSessionByToken(
   const [row] = await db
     .select({
       sessionId: sessions.id,
+      lastSeenAt: sessions.lastSeenAt,
       userId: users.id,
       email: users.email,
       name: users.name,
@@ -69,10 +75,15 @@ export async function getSessionByToken(
 
   if (!row) return null;
 
-  await db
-    .update(sessions)
-    .set({ lastSeenAt: now })
-    .where(eq(sessions.id, row.sessionId));
+  // abs(): a DB-authored default on a non-UTC dev server can read back ahead
+  // of the JS clock; treating that skew as stale rewrites it once with a
+  // JS-authored value, after which the throttle behaves normally.
+  if (Math.abs(now.getTime() - row.lastSeenAt.getTime()) >= LAST_SEEN_REFRESH_MS) {
+    await db
+      .update(sessions)
+      .set({ lastSeenAt: now })
+      .where(eq(sessions.id, row.sessionId));
+  }
 
   return {
     sessionId: row.sessionId,

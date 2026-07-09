@@ -216,7 +216,6 @@ export type VibeVersion = {
   strummerCode: string;
   arrangementState: ArrangementState;
   visualConfig: VisualConfig;
-  previewAudioUrl?: string;
   generation?: VersionGeneration;
 };
 

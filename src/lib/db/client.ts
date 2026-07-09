@@ -23,6 +23,15 @@ if (
 const connectionString =
   configured ?? "postgresql://postgres:password@localhost:5432/myapp";
 
-const client = postgres(connectionString);
+// Explicit pool bounds for serverless: the postgres-js defaults (max 10,
+// idle connections held forever) let every warm lambda instance pin ten
+// connections against the Neon pooler. A single instance rarely needs more
+// than a few, and idle ones should be released instead of held for the
+// instance's lifetime.
+const client = postgres(connectionString, {
+  max: 5,
+  idle_timeout: 20,
+  connect_timeout: 10,
+});
 
 export const db = drizzle(client);

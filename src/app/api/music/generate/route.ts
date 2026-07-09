@@ -48,6 +48,7 @@ type MusicRouteError =
   | "worker_unconfigured"
   | "worker_unauthorized"
   | "worker_http_error"
+  | "client_closed_request"
   | "server_error";
 
 type BillingMode = "ledger" | "dev_fallback";
@@ -214,10 +215,14 @@ export async function POST(request: NextRequest) {
       route: ROUTE, requestId, userId, sessionId: auth.sessionId,
     });
 
+    // The browser aborts superseded clip requests on reroll/navigation; wire
+    // that signal through so an abandoned generation is cancelled on the
+    // worker and its note refunded, instead of billing for audio nobody can
+    // ever hear while it blocks the queue for the replacement batch.
     const result =
       mode === "serverless"
-        ? await generateViaServerless(params, requestId)
-        : await generateViaHttp(params, requestId);
+        ? await generateViaServerless(params, requestId, request.signal)
+        : await generateViaHttp(params, requestId, request.signal);
 
     if (!result.ok) {
       const refunded = await refundMusicGenerateSpendIfNeeded({
@@ -585,6 +590,7 @@ function createSpendReference(kind: "music_generate"): string {
 async function generateViaServerless(
   params: GenerateParams,
   requestId: string,
+  signal?: AbortSignal,
 ): Promise<GenerateResult> {
   const config = getMusicServerlessConfig();
   if (!config) {
@@ -604,9 +610,17 @@ async function generateViaServerless(
 
   let output: Record<string, unknown>;
   try {
-    output = await runJob(config, input, { budgetMs: WORKER_TIMEOUT_MS });
+    output = await runJob(config, input, { budgetMs: WORKER_TIMEOUT_MS, signal });
   } catch (error) {
     if (error instanceof RunpodError) {
+      if (error.kind === "aborted") {
+        return {
+          ok: false,
+          error: "client_closed_request",
+          message: "Client aborted the generation request",
+          status: 499,
+        };
+      }
       return {
         ok: false,
         error: error.kind === "unauthorized" ? "worker_unauthorized" : "worker_http_error",
@@ -660,6 +674,7 @@ async function generateViaServerless(
 async function generateViaHttp(
   params: GenerateParams,
   requestId: string,
+  signal?: AbortSignal,
 ): Promise<GenerateResult> {
   const workerBase = getMusicWorkerUrl();
   if (!workerBase) {
@@ -681,15 +696,24 @@ async function generateViaHttp(
   const token = process.env.MUSIC_WORKER_TOKEN?.trim();
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
+  const timeoutSignal = AbortSignal.timeout(WORKER_TIMEOUT_MS);
   let workerRes: Response;
   try {
     workerRes = await fetch(`${workerBase.replace(/\/+$/, "")}/generate`, {
       method: "POST",
       body: workerForm,
       headers,
-      signal: AbortSignal.timeout(WORKER_TIMEOUT_MS),
+      signal: signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal,
     });
   } catch (error) {
+    if (signal?.aborted) {
+      return {
+        ok: false,
+        error: "client_closed_request",
+        message: "Client aborted the generation request",
+        status: 499,
+      };
+    }
     return {
       ok: false,
       error: "worker_http_error",

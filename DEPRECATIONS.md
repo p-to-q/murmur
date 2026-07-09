@@ -38,6 +38,15 @@ the removal commit.
 | `src/lib/music/stainer.ts` | Legacy facade no longer had source callers | `src/modules/stainer/transcribe.ts` | Removed in local cleanup; route still uses the server-side audio pipeline. |
 | `src/lib/music/providers/*` | Browser-side provider shim no longer participated in transcription | `src/modules/stainer/providers/fixture.ts` for explicit demo fixture | Removed in local cleanup. |
 | `src/modules/stainer/providers/basic-pitch.d.ts` | Orphan type shim for the deleted browser Basic Pitch provider | server SwiftF0 / audio worker | Removed in local cleanup. |
+| `src/lib/http/deadline.ts` | Built-out timeout library with zero production consumers; misled audits into thinking external calls had timeout wiring | per-call `AbortSignal.timeout` at the call sites | Removed in optimization pass (2026-07-09). |
+| `src/modules/export/render-poster.ts`, `render-share-html.ts` | Superseded share pipeline; live paths are `ShareTicketCard.tsx` + `export-video.ts` | `src/components/song-detail/ShareTicketCard.tsx` | Removed in optimization pass (2026-07-09). |
+| `requireAuth` / `resolveUserId` (legacy header-auth exports) | Guest-returning auth beside `resolveRequestAuth` was a footgun; zero callers | `resolveRequestAuth(req)` | Removed in optimization pass (2026-07-09); `getRequestUser` stays internal to the resolver. |
+| `upsertGoogleUser` + `GoogleProfileInput` | Deprecated shim over the provider-agnostic upsert | `upsertOAuthUser` | Removed in optimization pass (2026-07-09). |
+| `deleteUser` (hard delete) | Product policy is soft-delete only; a hard-delete helper beside it was an invariant hazard | `requestAccountDeletion` | Removed in optimization pass (2026-07-09). |
+| `getCloudBalance` / `hasEnoughBalance` | Deprecated client balance fetch | `hasLocalNotes` (guests) / server ledger via `/api/auth/me` | Removed in optimization pass (2026-07-09). |
+| `rateLimitOrThrow` | No route callers; routes use `checkApiRateLimit` + `rateLimitedResponse` | `checkApiRateLimit` | Removed in optimization pass (2026-07-09). |
+| `buildSavedSongVibeVersions` | Superseded by the Magenta remix path | `buildSavedSongRemixVersions` | Removed in optimization pass (2026-07-09). |
+| Store `isPlaying`/`playingSongId`/`setPlaying`, `radioStationId`, `VibeVersion.previewAudioUrl` | Retired gallery-playback design; `setPlaying` had zero call sites so the flags were permanently false | component-local playback state + `auditioningVersionId` | Removed in optimization pass (2026-07-09). |
 
 ## Process
 

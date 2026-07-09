@@ -9,7 +9,7 @@ import {
 } from "@/lib/auth/local-preview";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import {
-  getSongByIdForCreateConflict,
+  getSongById,
   getSongSummariesByUser,
   createSong,
   createSongWithSpend,
@@ -18,6 +18,7 @@ import {
   createLocalSongFallback,
   getLocalSongSummariesByUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
+import { isDatabaseUnavailable, objectFieldAsString } from "@/app/api/songs/db-fallback";
 import { log } from "@/lib/observability/log";
 import {
   langFromAcceptLanguage,
@@ -366,27 +367,6 @@ function buildSongInput(body: SongPayload, userId: string): SongInput {
   };
 }
 
-function isDatabaseUnavailable(error: unknown): boolean {
-  if (!isObject(error)) return false;
-
-  const code = "code" in error ? error.code : null;
-  if (code === "ECONNREFUSED") return true;
-
-  const message = "message" in error ? String(error.message) : "";
-  if (message.includes("ECONNREFUSED") || message.includes("connection refused")) {
-    return true;
-  }
-
-  const cause = "cause" in error ? error.cause : null;
-  if (cause && isDatabaseUnavailable(cause)) return true;
-
-  const nestedErrors = "errors" in error ? error.errors : null;
-  if (Array.isArray(nestedErrors)) {
-    return nestedErrors.some((nestedError) => isDatabaseUnavailable(nestedError));
-  }
-
-  return false;
-}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -423,7 +403,7 @@ function isSongIdUniqueConstraintViolation(error: unknown): boolean {
 }
 
 async function handleSongIdConflict(songId: string, userId: string, requestId: string) {
-  const existing = await getSongByIdForCreateConflict(songId);
+  const existing = await getSongById(songId);
   if (existing?.userId === userId) {
     return NextResponse.json(existing, {
       headers: {
@@ -447,11 +427,6 @@ function songIdConflictResponse(requestId: string) {
   );
 }
 
-function objectFieldAsString(value: unknown, key: string): string | undefined {
-  if (!isObject(value) || !(key in value)) return undefined;
-  const field = value[key];
-  return typeof field === "string" ? field : String(field);
-}
 
 function shouldUseLocalSongFallback(auth: OkAuth, host?: string | null): boolean {
   if (auth.source === "guest" || auth.source === "local_header") {

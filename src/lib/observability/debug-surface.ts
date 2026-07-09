@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getRequestHostname } from "@/lib/auth/local-preview";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
 type OkAuth = Extract<ResolvedRequestAuth, { ok: true }>;
@@ -23,16 +24,6 @@ export function allowsGuestDebugInLocalPreview(request: Request): boolean {
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
-export function getRequestHostname(request: Request): string | null {
-  const nextUrl = (request as { nextUrl?: { hostname?: string } }).nextUrl;
-  if (nextUrl?.hostname) return nextUrl.hostname;
-
-  try {
-    return new URL(request.url).hostname;
-  } catch {
-    return null;
-  }
-}
 
 export function debugSurfaceDisabledResponse(): NextResponse {
   return NextResponse.json(

@@ -47,18 +47,11 @@ interface MurmurStore {
   draftUpdatedAt: number | null;
   restoredDraftAt: number | null;
 
-  // Playback state — which version/song is currently playing audio
-  isPlaying: boolean;
-  playingSongId: string | null;         // gallery song id
+  // Playback state — which version card is being previewed
   auditioningVersionId: string | null;  // version card id being previewed
-  setPlaying: (id: string | null) => void;
   setAuditioning: (versionId: string | null) => void;
 
-  // Radio — which station is streaming (or null)
-  radioStationId: string | null;
-  setRadioStationId: (id: string | null) => void;
-
-  // Reset the recording flow (keeps gallery + radio)
+  // Reset the recording flow (keeps gallery)
   resetFlow: () => void;
 }
 
@@ -237,16 +230,8 @@ export const useMurmurStore = create<MurmurStore>((set, get) => {
     draftUpdatedAt: restoredDraft.draftUpdatedAt ?? null,
     restoredDraftAt: restoredDraft.restoredDraftAt ?? null,
 
-    isPlaying: false,
-    playingSongId: null,
     auditioningVersionId: null,
-    setPlaying: (id) =>
-      set({ isPlaying: !!id, playingSongId: id, auditioningVersionId: null }),
-    setAuditioning: (versionId) =>
-      set({ auditioningVersionId: versionId, isPlaying: false, playingSongId: null }),
-
-    radioStationId: null,
-    setRadioStationId: (id) => set({ radioStationId: id }),
+    setAuditioning: (versionId) => set({ auditioningVersionId: versionId }),
 
     resetFlow: () => {
       set({
@@ -261,8 +246,6 @@ export const useMurmurStore = create<MurmurStore>((set, get) => {
         restoredDraftAt: null,
         processingMessage: "",
         auditioningVersionId: null,
-        isPlaying: false,
-        playingSongId: null,
       });
       writeDraftSnapshot(get());
     },

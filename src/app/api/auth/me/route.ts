@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getRequestHostname } from "@/lib/auth/local-preview";
 import { resolveRequestAuth } from "@/lib/auth";
 import { buildAuthMePayload } from "@/lib/auth/me-payload";
 import { getDevBalanceFallback, shouldUseDevBalanceFallback } from "@/lib/billing/dev-balance";
@@ -88,13 +89,3 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function getRequestHostname(request: NextRequest): string | null {
-  const nextUrl = (request as { nextUrl?: { hostname?: string } }).nextUrl;
-  if (nextUrl?.hostname) return nextUrl.hostname;
-
-  try {
-    return new URL(request.url).hostname;
-  } catch {
-    return null;
-  }
-}

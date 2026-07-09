@@ -1,22 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveRequestAuth } from "@/lib/auth";
-import {
-  getRequestHostname,
-  shouldAllowLocalPreviewFallback,
-} from "@/lib/auth/local-preview";
+import { shouldAllowLocalPreviewFallback } from "@/lib/auth/local-preview";
 import {
   deleteSongForUser,
   getSongByIdForUser,
+  getSongSummaryByIdForUser,
   updateSongForUser,
 } from "@/lib/db/queries/songs";
 import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
-import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import {
   deleteLocalSongForUserFallback,
   getLocalSongByIdForUserFallback,
   updateLocalSongForUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
+import {
+  isDatabaseUnavailable,
+  shouldUseGuestSongFallback,
+} from "@/app/api/songs/db-fallback";
 import { log } from "@/lib/observability/log";
 import { strictArrangementStateSchema, strictVisualConfigSchema } from "../schema";
 
@@ -61,13 +62,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const userId = auth.user.id;
 
   try {
-    const song = await getSongByIdForUser(id, userId);
+    // ?view=summary serves metadata-only consumers (e.g. the lineage trail)
+    // without the multi-MB mp3DataUrl / arrangementState payload. The default
+    // full view is unchanged.
+    const song =
+      requestedView(req) === "summary"
+        ? await getSongSummaryByIdForUser(id, userId)
+        : await getSongByIdForUser(id, userId);
     if (!song) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     return NextResponse.json(song);
   } catch (err) {
-    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+    if (shouldUseGuestSongFallback(req, userId) && isDatabaseUnavailable(err)) {
       const fallbackSong = getLocalSongByIdForUserFallback(id, userId);
       if (!fallbackSong) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -135,7 +142,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     return NextResponse.json(updated);
   } catch (err) {
-    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+    if (shouldUseGuestSongFallback(req, userId) && isDatabaseUnavailable(err)) {
       const updated = updateLocalSongForUserFallback(id, userId, body);
       if (!updated) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -172,7 +179,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
     return NextResponse.json({ success: true });
   } catch (err) {
-    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+    if (shouldUseGuestSongFallback(req, userId) && isDatabaseUnavailable(err)) {
       const deleted = deleteLocalSongForUserFallback(id, userId);
       if (!deleted) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -195,35 +202,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
 }
 
-function shouldUseLocalSongFallback(req: NextRequest, userId: string): boolean {
-  if (userId !== "guest") return false;
-  return shouldBypassBillingInDevelopment({
-    host: getRequestHostname(req),
-  });
-}
+function requestedView(req: NextRequest): string | null {
+  const nextUrl = (req as { nextUrl?: { searchParams?: URLSearchParams } }).nextUrl;
+  if (nextUrl?.searchParams) return nextUrl.searchParams.get("view");
 
-function isDatabaseUnavailable(error: unknown): boolean {
-  if (!isObject(error)) return false;
-
-  const code = "code" in error ? error.code : null;
-  if (code === "ECONNREFUSED") return true;
-
-  const message = "message" in error ? String(error.message) : "";
-  if (message.includes("ECONNREFUSED") || message.includes("connection refused")) {
-    return true;
+  try {
+    return new URL(req.url).searchParams.get("view");
+  } catch {
+    return null;
   }
-
-  const cause = "cause" in error ? error.cause : null;
-  if (cause && isDatabaseUnavailable(cause)) return true;
-
-  const nestedErrors = "errors" in error ? error.errors : null;
-  if (Array.isArray(nestedErrors)) {
-    return nestedErrors.some((nestedError) => isDatabaseUnavailable(nestedError));
-  }
-
-  return false;
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+

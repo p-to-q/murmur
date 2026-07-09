@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   accountNotesFromTotal,
   dailyFreeAfterGrant,
+  decideBillingAccountMaintenance,
   decideGrant,
   decideRefund,
   decideRefundPoolsForOriginalSpend,
@@ -248,5 +249,83 @@ describe("daily-free pool decisions", () => {
       grantAmount: 5,
       maxDailyFreeBalance: 10,
     })).toBe(3);
+  });
+});
+
+describe("decideBillingAccountMaintenance", () => {
+  const windowStart = new Date("2026-07-08T16:00:00.000Z");
+  const settledSnapshot = {
+    notesBalance: 12,
+    accountKind: "registered",
+    freeNotesGrantedAt: new Date("2026-07-08T16:00:00.001Z"),
+    hasLedgerRows: true,
+  };
+
+  it("skips both transactions for a settled account (the hot path)", () => {
+    expect(decideBillingAccountMaintenance({
+      userId: "usr_1",
+      snapshot: settledSnapshot,
+      windowStart,
+    })).toEqual({ needsInitialLedger: false, needsDailyFreeRefill: false });
+  });
+
+  it("skips both transactions for an unknown user", () => {
+    expect(decideBillingAccountMaintenance({
+      userId: "usr_missing",
+      snapshot: null,
+      windowStart,
+    })).toEqual({ needsInitialLedger: false, needsDailyFreeRefill: false });
+  });
+
+  it("requests the initial-ledger backfill only for a positive balance with no ledger rows", () => {
+    expect(decideBillingAccountMaintenance({
+      userId: "usr_1",
+      snapshot: { ...settledSnapshot, hasLedgerRows: false },
+      windowStart,
+    }).needsInitialLedger).toBe(true);
+
+    expect(decideBillingAccountMaintenance({
+      userId: "usr_1",
+      snapshot: { ...settledSnapshot, notesBalance: 0, hasLedgerRows: false },
+      windowStart,
+    }).needsInitialLedger).toBe(false);
+  });
+
+  it("requests the daily refill when the last grant predates the current window", () => {
+    expect(decideBillingAccountMaintenance({
+      userId: "usr_1",
+      snapshot: {
+        ...settledSnapshot,
+        freeNotesGrantedAt: new Date("2026-07-07T16:00:00.000Z"),
+      },
+      windowStart,
+    }).needsDailyFreeRefill).toBe(true);
+  });
+
+  it("treats a grant timestamp equal to the window start as already refilled", () => {
+    expect(decideBillingAccountMaintenance({
+      userId: "usr_1",
+      snapshot: { ...settledSnapshot, freeNotesGrantedAt: windowStart },
+      windowStart,
+    }).needsDailyFreeRefill).toBe(false);
+  });
+
+  it("never requests the daily refill for guests or local creators", () => {
+    const stale = new Date("2026-07-01T16:00:00.000Z");
+    expect(decideBillingAccountMaintenance({
+      userId: "guest",
+      snapshot: { ...settledSnapshot, freeNotesGrantedAt: stale },
+      windowStart,
+    }).needsDailyFreeRefill).toBe(false);
+
+    expect(decideBillingAccountMaintenance({
+      userId: "usr_1",
+      snapshot: {
+        ...settledSnapshot,
+        accountKind: "local_creator",
+        freeNotesGrantedAt: stale,
+      },
+      windowStart,
+    }).needsDailyFreeRefill).toBe(false);
   });
 });

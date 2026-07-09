@@ -136,14 +136,13 @@ Export is not just file download plumbing. It is one of the visible outputs of
 the system, so it has its own design/engineering layer:
 
 - audio export
-- share HTML export with reusable preset visuals
-- poster image export
+- share ticket image export
 - real shareable video export with the existing audio embedded
 
 See:
 
 - [src/components/murmur/share-card-modal.tsx](../src/components/murmur/share-card-modal.tsx)
-- [src/modules/export/render-share-html.ts](../src/modules/export/render-share-html.ts)
+- [src/components/song-detail/ShareTicketCard.tsx](../src/components/song-detail/ShareTicketCard.tsx)
 - [src/modules/export/export-video.ts](../src/modules/export/export-video.ts)
 
 ## 5. Granularity We Want Reviewers To Notice

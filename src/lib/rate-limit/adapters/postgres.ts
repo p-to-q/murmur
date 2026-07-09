@@ -17,11 +17,16 @@ export function createPostgresRateLimitStore(): RateLimitStore {
     driver: "postgres",
 
     async hit(key: string, opts: RateLimitOptions, now?: Date): Promise<RateLimitResult> {
-      return db.transaction((tx) => mutateBucket(tx, key, opts, now ?? new Date(), "hit"));
+      const at = now ?? new Date();
+      const result = await db.transaction((tx) => mutateBucket(tx, key, opts, at, "hit"));
+      maybeSweepExpired(at);
+      return result;
     },
 
     async refund(key: string, opts: RateLimitOptions, now?: Date): Promise<void> {
-      await db.transaction((tx) => mutateBucket(tx, key, opts, now ?? new Date(), "refund"));
+      const at = now ?? new Date();
+      await db.transaction((tx) => mutateBucket(tx, key, opts, at, "refund"));
+      maybeSweepExpired(at);
     },
 
     async reset(key: string): Promise<void> {
@@ -50,6 +55,9 @@ async function mutateBucket(
   const nowMs = now.getTime();
   await lockBucket(tx, key);
 
+  // The advisory xact lock above already serializes every mutation of this
+  // bucket key (all writers go through lockBucket), so a FOR UPDATE row lock
+  // here would only add a second lock acquisition per request.
   const [row] = await tx
     .select({
       tokens: rateLimits.tokens,
@@ -57,7 +65,6 @@ async function mutateBucket(
     })
     .from(rateLimits)
     .where(eq(rateLimits.bucketKey, key))
-    .for("update")
     .limit(1);
 
   const prevState: RateLimitState | null = row
@@ -89,13 +96,23 @@ async function mutateBucket(
       },
     });
 
-  if (Math.random() < 0.01) {
-    await tx
-      .delete(rateLimits)
-      .where(sql`${rateLimits.expiresAt} < ${now}`);
-  }
-
   return result.result;
+}
+
+/**
+ * Lottery cleanup of expired buckets, run OUTSIDE the hit/refund transaction
+ * so a table sweep never extends how long a request holds its bucket's
+ * advisory lock. Best-effort by design: a missed sweep just re-rolls on a
+ * later request, and `rate_limits_expires_at_idx` keeps the delete cheap.
+ */
+function maybeSweepExpired(now: Date): void {
+  if (Math.random() >= 0.01) return;
+  void db
+    .delete(rateLimits)
+    .where(sql`${rateLimits.expiresAt} < ${now}`)
+    .catch(() => {
+      // Sweep failures must never surface into the request path.
+    });
 }
 
 async function lockBucket(tx: RateLimitTransaction, key: string): Promise<void> {

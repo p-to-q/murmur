@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
 import type { InferSelectModel } from "drizzle-orm";
 
 // ─── These types MUST stay in sync with src/modules/shared/types.ts ───────────
@@ -86,7 +86,9 @@ export type SongVisibility = "private" | "unlisted" | "public";
 
 // ─── Drizzle table ─────────────────────────────────────────────────────────────
 
-export const songs = pgTable("songs", {
+export const songs = pgTable(
+  "songs",
+  {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull(),
   title: text("title").notNull(),
@@ -112,6 +114,14 @@ export const songs = pgTable("songs", {
   tags: text("tags").array().notNull().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+  },
+  (t) => ({
+    // Every owner-scoped song query (gallery list, detail, update, delete,
+    // share publish/revoke) filters by user_id; the list additionally orders
+    // by created_at DESC. Without this index each of those is a sequential
+    // scan over a table whose rows carry multi-MB audio/arrangement blobs.
+    byUserCreated: index("songs_user_created_idx").on(t.userId, t.createdAt.desc()),
+  }),
+);
 
 export type Song = InferSelectModel<typeof songs>;

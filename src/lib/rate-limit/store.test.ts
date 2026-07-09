@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, beforeEach } from "bun:test";
 
 import { createMemoryRateLimitStore } from "./adapters/memory";
-import { getRateLimitStore, rateLimitOrThrow, resetCachedRateLimitStore } from "./index";
+import { getRateLimitStore, resetCachedRateLimitStore } from "./index";
 import { RateLimitError, type RateLimitStore } from "./types";
 
 /**
@@ -102,32 +102,6 @@ for (const adapter of adapters) {
   });
 }
 
-describe("rateLimitOrThrow", () => {
-  it("returns the result when allowed", async () => {
-    const store = createMemoryRateLimitStore();
-    const result = await rateLimitOrThrow(store, "user:x", {
-      capacity: 1,
-      refillWindowMs: 60_000,
-    });
-    expect(result.allowed).toBe(true);
-  });
-
-  it("throws RateLimitError when blocked, attaching the rejection result", async () => {
-    const store = createMemoryRateLimitStore();
-    await rateLimitOrThrow(store, "user:y", { capacity: 1, refillWindowMs: 60_000 });
-    try {
-      await rateLimitOrThrow(store, "user:y", { capacity: 1, refillWindowMs: 60_000 });
-      throw new Error("expected throw");
-    } catch (err) {
-      expect(err).toBeInstanceOf(RateLimitError);
-      const result = (err as RateLimitError & { result?: unknown }).result as
-        | { allowed: boolean; retryAfterMs: number }
-        | undefined;
-      expect(result?.allowed).toBe(false);
-      expect(result?.retryAfterMs).toBeGreaterThan(0);
-    }
-  });
-});
 
 describe("getRateLimitStore (env-driven factory)", () => {
   let previousDriver: string | undefined;

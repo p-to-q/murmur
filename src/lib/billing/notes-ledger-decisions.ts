@@ -213,6 +213,52 @@ export function decideRefundPoolsForOriginalSpend(
   };
 }
 
+export interface BillingAccountSnapshot {
+  notesBalance: number;
+  accountKind: string;
+  freeNotesGrantedAt: Date;
+  hasLedgerRows: boolean;
+}
+
+export interface BillingAccountMaintenance {
+  needsInitialLedger: boolean;
+  needsDailyFreeRefill: boolean;
+}
+
+/**
+ * Decide which billing-account maintenance transactions actually have work
+ * to do, from a single non-locking snapshot of the user row.
+ *
+ * `ensureBillingAccount` runs before every balance read and spend, but its
+ * two maintenance steps are no-ops on virtually every request (the initial
+ * ledger exists after the first call ever; the daily refill lands at most
+ * once per refill window). Deciding from a plain read lets the orchestrator
+ * skip both SELECT ... FOR UPDATE transactions on the hot path.
+ *
+ * Race safety: both transactions re-check their invariants under the row
+ * lock, so a stale snapshot can only cause a harmless extra no-op
+ * transaction — never a missed grant. The answer only moves one way: a
+ * ledger row never disappears and `freeNotesGrantedAt` only advances.
+ */
+export function decideBillingAccountMaintenance(input: {
+  userId: string;
+  snapshot: BillingAccountSnapshot | null;
+  windowStart: Date;
+}): BillingAccountMaintenance {
+  const { userId, snapshot, windowStart } = input;
+  if (!snapshot) {
+    // Unknown user: downstream queries surface user_not_found themselves.
+    return { needsInitialLedger: false, needsDailyFreeRefill: false };
+  }
+  return {
+    needsInitialLedger: snapshot.notesBalance > 0 && !snapshot.hasLedgerRows,
+    needsDailyFreeRefill:
+      userId !== "guest"
+      && snapshot.accountKind === "registered"
+      && snapshot.freeNotesGrantedAt < windowStart,
+  };
+}
+
 function objectField(
   value: Record<string, unknown>,
   key: string,

@@ -50,28 +50,6 @@ export function hasLocalNotes(amount: number = COST.hum): boolean {
   return getLocalBalance().notes >= amount;
 }
 
-/**
- * @deprecated Guests use local balance; signed-in users fetch the server ledger.
- */
-export async function getCloudBalance(): Promise<BalanceInfo> {
-  const response = await fetch("/api/user/balance");
-  if (!response.ok) {
-    throw new Error("Failed to fetch balance");
-  }
-  return response.json();
-}
-
-/**
- * @deprecated Use hasLocalNotes for guests; signed-in users check server balance.
- */
-export async function hasEnoughBalance(
-  amount: number,
-  usesServerLedger: boolean,
-): Promise<boolean> {
-  if (usesServerLedger) return (await getCloudBalance()).notes >= amount;
-  return getLocalBalance().notes >= amount;
-}
-
 function readLocalBalance(): number | null {
   try {
     localStorage.removeItem(LEGACY_LOCAL_BALANCE_DATE_KEY);

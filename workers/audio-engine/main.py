@@ -8,6 +8,7 @@ so algorithm changes do not leak into the Next.js /api/transcribe route.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import hmac
 import logging
@@ -16,13 +17,16 @@ import os
 import tempfile
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
+from functools import partial
 from typing import Annotated
 
 import librosa
 import numpy as np
 import soundfile as sf
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 
 from audio_engine.denoise import (
     DenoiseConfig,
@@ -51,6 +55,14 @@ async def _lifespan(_app: FastAPI):
 
 app = FastAPI(title="Murmur Audio Engine", version="0.3.0", lifespan=_lifespan)
 
+# Pitch detection is CPU-bound and can run for tens of seconds. Running it on
+# the event loop would freeze every other connection — including /health, whose
+# 5s Fly check times out mid-transcription and pulls the only machine out of
+# routing. One dedicated worker thread keeps transcriptions serialized exactly
+# as before (bounded memory on the shared-cpu-1x box) while the loop stays
+# responsive. numpy/onnxruntime release the GIL during the heavy kernels.
+_TRANSCRIBE_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="transcribe")
+
 SR = 22050
 FMIN = 75
 FMAX = 1050
@@ -62,6 +74,20 @@ MAX_AUDIO_BYTES = 2 * 1024 * 1024
 MAX_AUDIO_SECONDS = 30
 
 
+# Startup warm-up outcome per provider ("ok" | error string). /health folds
+# this into a readiness verdict so a machine whose whole detector stack failed
+# to load (corrupt model, ONNX runtime breakage) reports unhealthy and gets
+# restarted by Fly instead of green-lighting 503s forever. Empty until the
+# lifespan preload has run (unit tests calling handlers directly stay green).
+_preload_outcomes: dict[str, str] = {}
+
+
+def _detectors_ready() -> bool:
+    if not _preload_outcomes:
+        return True
+    return any(outcome == "ok" for outcome in _preload_outcomes.values())
+
+
 def _preload_pitch_model() -> None:
     """Warm the pitch detector at startup.
 
@@ -69,7 +95,8 @@ def _preload_pitch_model() -> None:
     to the first hum after a deploy or restart. In auto mode, warm each product
     candidate independently so a weak RMVPE result does not push SwiftF0 cold
     start cost onto a user request. Best-effort: preload failures never stop the
-    worker from serving because auto can still fall through the remaining stack.
+    worker from serving because auto can still fall through the remaining stack;
+    only a stack with zero usable providers flips /health to 503.
     """
     warm_seconds = 1.0
     t = np.linspace(0, warm_seconds, int(SR * warm_seconds), endpoint=False)
@@ -91,8 +118,10 @@ def _preload_pitch_model() -> None:
                     hop_length=HOP_LEN,
                 ),
             )
+            _preload_outcomes[provider] = "ok"
             logger.info("audio engine: %s pitch model preloaded at startup", provider)
         except Exception as exc:  # noqa: BLE001 - best-effort warm, never fatal
+            _preload_outcomes[provider] = str(exc)
             logger.warning("audio engine: %s pitch model preload skipped: %s", provider, exc)
 
     if configured_provider == "auto":
@@ -1386,14 +1415,15 @@ def choose_ensemble_candidate(
     return best, ranked, "highest_score"
 
 
-def should_use_swiftf0_fast_path(
-    detection,
+def _passes_fast_path_thresholds(
     acceptance: dict[str, float | int | str],
     candidate_score: float,
 ) -> bool:
-    if detection.provider != "swiftf0":
-        return False
+    """Shared quality bar for the per-provider ensemble fast paths.
 
+    One tuned threshold set on purpose: retunes land here once instead of
+    silently diverging between the rmvpe and swiftf0 copies.
+    """
     acceptance_score = float(acceptance["score"])
     music_feel = float(acceptance["musicFeelScore"])
     first_onset_lag = float(acceptance["firstOnsetLag"])
@@ -1410,6 +1440,16 @@ def should_use_swiftf0_fast_path(
     )
 
 
+def should_use_swiftf0_fast_path(
+    detection,
+    acceptance: dict[str, float | int | str],
+    candidate_score: float,
+) -> bool:
+    if detection.provider != "swiftf0":
+        return False
+    return _passes_fast_path_thresholds(acceptance, candidate_score)
+
+
 def should_use_rmvpe_fast_path(
     detection,
     acceptance: dict[str, float | int | str],
@@ -1417,20 +1457,42 @@ def should_use_rmvpe_fast_path(
 ) -> bool:
     if detection.provider != "rmvpe":
         return False
+    return _passes_fast_path_thresholds(acceptance, candidate_score)
 
+
+def _passes_long_take_fast_path_thresholds(
+    detection,
+    acceptance: dict[str, float | int | str],
+    candidate_score: float,
+) -> bool:
+    """Shared long-take quality bar (see _passes_fast_path_thresholds)."""
+    contour_duration = (
+        (len(detection.f0) * detection.hop_length) / detection.sample_rate
+        if len(detection.f0)
+        else 0.0
+    )
+    voiced_ratio = (
+        float(np.count_nonzero(detection.voiced)) / len(detection.voiced)
+        if len(detection.voiced)
+        else float(detection.diagnostics.get("voicedRatio", 0.0) or 0.0)
+    )
     acceptance_score = float(acceptance["score"])
     music_feel = float(acceptance["musicFeelScore"])
     first_onset_lag = float(acceptance["firstOnsetLag"])
     onset_fragmentation = float(acceptance["onsetFragmentation"])
     interior_hold = float(acceptance.get("interiorHoldRatio", 0.0))
+    excessive_hold = float(acceptance.get("excessiveHoldRatio", 0.0))
 
     return (
-        candidate_score >= 3.32
-        and acceptance_score >= 0.82
-        and music_feel >= 0.74
-        and first_onset_lag <= 0.12
-        and onset_fragmentation <= 0.32
-        and interior_hold <= 0.24
+        contour_duration >= 8.0
+        and candidate_score >= 3.45
+        and acceptance_score >= 0.78
+        and music_feel >= 0.68
+        and first_onset_lag <= 0.04
+        and onset_fragmentation <= 0.24
+        and interior_hold <= 0.14
+        and excessive_hold <= 0.08
+        and voiced_ratio >= 0.64
     )
 
 
@@ -1441,35 +1503,7 @@ def should_use_swiftf0_long_take_fast_path(
 ) -> bool:
     if detection.provider != "swiftf0":
         return False
-
-    contour_duration = (
-        (len(detection.f0) * detection.hop_length) / detection.sample_rate
-        if len(detection.f0)
-        else 0.0
-    )
-    voiced_ratio = (
-        float(np.count_nonzero(detection.voiced)) / len(detection.voiced)
-        if len(detection.voiced)
-        else float(detection.diagnostics.get("voicedRatio", 0.0) or 0.0)
-    )
-    acceptance_score = float(acceptance["score"])
-    music_feel = float(acceptance["musicFeelScore"])
-    first_onset_lag = float(acceptance["firstOnsetLag"])
-    onset_fragmentation = float(acceptance["onsetFragmentation"])
-    interior_hold = float(acceptance.get("interiorHoldRatio", 0.0))
-    excessive_hold = float(acceptance.get("excessiveHoldRatio", 0.0))
-
-    return (
-        contour_duration >= 8.0
-        and candidate_score >= 3.45
-        and acceptance_score >= 0.78
-        and music_feel >= 0.68
-        and first_onset_lag <= 0.04
-        and onset_fragmentation <= 0.24
-        and interior_hold <= 0.14
-        and excessive_hold <= 0.08
-        and voiced_ratio >= 0.64
-    )
+    return _passes_long_take_fast_path_thresholds(detection, acceptance, candidate_score)
 
 
 def should_use_rmvpe_long_take_fast_path(
@@ -1479,35 +1513,7 @@ def should_use_rmvpe_long_take_fast_path(
 ) -> bool:
     if detection.provider != "rmvpe":
         return False
-
-    contour_duration = (
-        (len(detection.f0) * detection.hop_length) / detection.sample_rate
-        if len(detection.f0)
-        else 0.0
-    )
-    voiced_ratio = (
-        float(np.count_nonzero(detection.voiced)) / len(detection.voiced)
-        if len(detection.voiced)
-        else float(detection.diagnostics.get("voicedRatio", 0.0) or 0.0)
-    )
-    acceptance_score = float(acceptance["score"])
-    music_feel = float(acceptance["musicFeelScore"])
-    first_onset_lag = float(acceptance["firstOnsetLag"])
-    onset_fragmentation = float(acceptance["onsetFragmentation"])
-    interior_hold = float(acceptance.get("interiorHoldRatio", 0.0))
-    excessive_hold = float(acceptance.get("excessiveHoldRatio", 0.0))
-
-    return (
-        contour_duration >= 8.0
-        and candidate_score >= 3.45
-        and acceptance_score >= 0.78
-        and music_feel >= 0.68
-        and first_onset_lag <= 0.04
-        and onset_fragmentation <= 0.24
-        and interior_hold <= 0.14
-        and excessive_hold <= 0.08
-        and voiced_ratio >= 0.64
-    )
+    return _passes_long_take_fast_path_thresholds(detection, acceptance, candidate_score)
 
 
 def should_use_light_alternate_review(
@@ -1938,8 +1944,6 @@ async def transcribe(
     pitchProvider: Annotated[str, Form()] = "",
 ):
     started = time.perf_counter()
-    decode_ms = 0
-    trim_ms = 0
 
     try:
         data = await audio.read()
@@ -1948,99 +1952,20 @@ async def transcribe(
         if len(data) > MAX_AUDIO_BYTES:
             raise HTTPException(status_code=413, detail="audio file too large")
 
-        _capture_hum(data, audio.filename or "hum.webm", targetInstrument)
-
-        phase = time.perf_counter()
-        y = decode_audio(data, audio.filename or "hum.webm")
-        decode_ms = round((time.perf_counter() - phase) * 1000)
-        if y.size == 0:
-            raise HTTPException(status_code=422, detail="audio decoded empty")
-
-        duration = len(y) / SR
-        if duration > MAX_AUDIO_SECONDS:
-            raise HTTPException(status_code=413, detail="audio duration too long")
-
-        phase = time.perf_counter()
-        y = trim_silence(y)
-        trim_ms = round((time.perf_counter() - phase) * 1000)
-
-        denoise_result = denoise_audio(
-            y,
-            DenoiseConfig(
-                provider=configured_denoise_provider(),
-                sample_rate=SR,
+        # Decode + denoise + pitch detection are CPU-bound for tens of
+        # seconds; run them on the dedicated worker thread so the event loop
+        # keeps serving /health (and new connections) mid-transcription.
+        return await asyncio.get_running_loop().run_in_executor(
+            _TRANSCRIBE_EXECUTOR,
+            partial(
+                _transcribe_sync,
+                data,
+                audio.filename or "hum.webm",
+                targetInstrument,
+                pitchProvider,
+                started,
             ),
         )
-        y = np.asarray(denoise_result.audio, dtype=np.float32)
-        rms_dbfs = estimate_rms_dbfs(y)
-        peak_dbfs = estimate_peak_dbfs(y)
-        clipping_ratio = estimate_clipping_ratio(y)
-
-        configured_provider = resolve_requested_pitch_provider(pitchProvider)
-        detection, notes = detect_with_optional_ensemble(y, configured_provider)
-
-        voiced_ratio = (
-            float(np.count_nonzero(detection.voiced)) / len(detection.voiced)
-            if len(detection.voiced)
-            else 0.0
-        )
-        diagnostics = {
-            "duration": round(len(y) / SR, 3),
-            "snr": estimate_snr(y),
-            "rmsDbfs": rms_dbfs,
-            "peakDbfs": peak_dbfs,
-            "clippingRatio": clipping_ratio,
-            "voicedRatio": round(voiced_ratio, 3),
-            "frameCount": int(len(detection.f0)),
-            "decodeMs": decode_ms,
-            "trimMs": trim_ms,
-            **denoise_result.diagnostics,
-            "pitchMs": detection.diagnostics.get("pitchMs", 0),
-            "polishMs": 0,
-            "totalMs": round((time.perf_counter() - started) * 1000),
-            **detection.diagnostics,
-        }
-
-        if not notes:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "error": "no_voiced_frames",
-                    "diagnostics": diagnostics,
-                },
-            )
-
-        logger.info(
-            "%s detected %s notes from %s frames for target %s",
-            detection.provider,
-            len(notes),
-            len(detection.f0),
-            targetInstrument,
-        )
-        return {
-            "provider": detection.provider,
-            "requestedProvider": configured_provider,
-            "rawNotes": notes,
-            "contour": build_contour_payload(
-                timestamps=detection.timestamps,
-                f0=detection.f0,
-                confidence=detection.confidence,
-                voiced=detection.voiced,
-                sample_rate=detection.sample_rate,
-                hop_length=detection.hop_length,
-            ),
-            "warnings": [
-                *collect_input_quality_warnings(
-                    rms_dbfs=rms_dbfs,
-                    peak_dbfs=peak_dbfs,
-                    clipping_ratio=clipping_ratio,
-                    snr=diagnostics["snr"],
-                ),
-                *denoise_result.warnings,
-                *detection.warnings,
-            ],
-            "diagnostics": diagnostics,
-        }
     except HTTPException:
         raise
     except DetectorUnavailable as exc:
@@ -2056,6 +1981,114 @@ async def transcribe(
     except Exception as exc:
         logger.exception("transcription error")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+
+
+def _transcribe_sync(
+    data: bytes,
+    filename: str,
+    target_instrument: str,
+    pitch_provider: str,
+    started: float,
+) -> dict:
+    """Blocking transcription pipeline; runs on _TRANSCRIBE_EXECUTOR."""
+    decode_ms = 0
+    trim_ms = 0
+
+    _capture_hum(data, filename, target_instrument)
+
+    phase = time.perf_counter()
+    y = decode_audio(data, filename)
+    decode_ms = round((time.perf_counter() - phase) * 1000)
+    if y.size == 0:
+        raise HTTPException(status_code=422, detail="audio decoded empty")
+
+    duration = len(y) / SR
+    if duration > MAX_AUDIO_SECONDS:
+        raise HTTPException(status_code=413, detail="audio duration too long")
+
+    phase = time.perf_counter()
+    y = trim_silence(y)
+    trim_ms = round((time.perf_counter() - phase) * 1000)
+
+    denoise_result = denoise_audio(
+        y,
+        DenoiseConfig(
+            provider=configured_denoise_provider(),
+            sample_rate=SR,
+        ),
+    )
+    y = np.asarray(denoise_result.audio, dtype=np.float32)
+    rms_dbfs = estimate_rms_dbfs(y)
+    peak_dbfs = estimate_peak_dbfs(y)
+    clipping_ratio = estimate_clipping_ratio(y)
+
+    configured_provider = resolve_requested_pitch_provider(pitch_provider)
+    detection, notes = detect_with_optional_ensemble(y, configured_provider)
+
+    voiced_ratio = (
+        float(np.count_nonzero(detection.voiced)) / len(detection.voiced)
+        if len(detection.voiced)
+        else 0.0
+    )
+    diagnostics = {
+        "duration": round(len(y) / SR, 3),
+        "snr": estimate_snr(y),
+        "rmsDbfs": rms_dbfs,
+        "peakDbfs": peak_dbfs,
+        "clippingRatio": clipping_ratio,
+        "voicedRatio": round(voiced_ratio, 3),
+        "frameCount": int(len(detection.f0)),
+        "decodeMs": decode_ms,
+        "trimMs": trim_ms,
+        **denoise_result.diagnostics,
+        "pitchMs": detection.diagnostics.get("pitchMs", 0),
+        "polishMs": 0,
+        "totalMs": round((time.perf_counter() - started) * 1000),
+        **detection.diagnostics,
+    }
+
+    if not notes:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "no_voiced_frames",
+                "diagnostics": diagnostics,
+            },
+        )
+
+    logger.info(
+        "%s detected %s notes from %s frames for target %s",
+        detection.provider,
+        len(notes),
+        len(detection.f0),
+        target_instrument,
+    )
+    return {
+        "provider": detection.provider,
+        "requestedProvider": configured_provider,
+        "rawNotes": notes,
+        "contour": build_contour_payload(
+            timestamps=detection.timestamps,
+            f0=detection.f0,
+            confidence=detection.confidence,
+            voiced=detection.voiced,
+            sample_rate=detection.sample_rate,
+            hop_length=detection.hop_length,
+        ),
+        "warnings": [
+            *collect_input_quality_warnings(
+                rms_dbfs=rms_dbfs,
+                peak_dbfs=peak_dbfs,
+                clipping_ratio=clipping_ratio,
+                snr=diagnostics["snr"],
+            ),
+            *denoise_result.warnings,
+            *detection.warnings,
+        ],
+        "diagnostics": diagnostics,
+    }
 
 
 def resolve_requested_pitch_provider(requested: str) -> str:
@@ -2078,12 +2111,21 @@ def resolve_requested_pitch_provider(requested: str) -> str:
 
 @app.get("/health")
 def health():
-    return {
-        "status": "ok",
+    ready = _detectors_ready()
+    payload = {
+        "status": "ok" if ready else "degraded",
         "service": "murmur-audio-engine",
         "provider": configured_pitch_provider(),
         "denoiseProvider": configured_denoise_provider(),
+        "detectorsReady": ready,
+        "detectors": dict(_preload_outcomes) or None,
     }
+    if not ready:
+        # No provider in the configured stack warmed up — every /transcribe
+        # would 503. Reporting unhealthy lets Fly restart/route away instead
+        # of keeping a broken machine in service.
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @app.get("/")
