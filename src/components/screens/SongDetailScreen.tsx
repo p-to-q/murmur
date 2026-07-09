@@ -67,6 +67,10 @@ type Song = SongCard & {
   shareCode?: string | null;
 };
 
+// Lineage trail cards only render id/title/vibe/tags, so related songs are
+// fetched as summaries (?view=summary) — never their audio or arrangement.
+type RelatedSong = Pick<Song, "id" | "title" | "vibe" | "tags">;
+
 type ExportKey = "audio" | "video" | "share" | "link";
 type ShareCardMode = "image" | "video";
 const CJK_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
@@ -81,8 +85,8 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const setCurrentFlowId = useMurmurStore((state) => state.setCurrentFlowId);
 
   const [song, setSong] = useState<Song | null>(null);
-  const [parentSong, setParentSong] = useState<Song | null>(null);
-  const [rootSong, setRootSong] = useState<Song | null>(null);
+  const [parentSong, setParentSong] = useState<RelatedSong | null>(null);
+  const [rootSong, setRootSong] = useState<RelatedSong | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -829,12 +833,12 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   );
 }
 
-async function fetchRelatedSong(songId: string | null): Promise<Song | null> {
+async function fetchRelatedSong(songId: string | null): Promise<RelatedSong | null> {
   if (!songId) return null;
   try {
-    const response = await fetch(`/api/songs/${songId}`);
+    const response = await fetch(`/api/songs/${songId}?view=summary`);
     if (!response.ok) return null;
-    return await response.json() as Song;
+    return await response.json() as RelatedSong;
   } catch {
     return null;
   }
@@ -918,8 +922,8 @@ function LineagePanel({
   onOpenSong,
 }: {
   song: Song;
-  parentSong: Song | null;
-  rootSong: Song | null;
+  parentSong: RelatedSong | null;
+  rootSong: RelatedSong | null;
   t: (key: string) => string;
   lang: Lang;
   onOpenSong: (id: string) => void;
@@ -1080,7 +1084,7 @@ function LineageTrailCard({
   onOpenSong,
 }: {
   label: string;
-  song: Song;
+  song: RelatedSong;
   current: boolean;
   lang: Lang;
   onOpenSong: (id: string) => void;

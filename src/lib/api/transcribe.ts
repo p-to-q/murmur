@@ -85,10 +85,14 @@ export async function transcribeRecording(
 
   let response: Response;
   try {
+    // Must outlive the server side end to end: the route holds a 40s worker
+    // retry budget under its 60s maxDuration (audio-worker.ts), and a success
+    // on the 2nd/3rd attempt can land after 40s. Aborting earlier throws away
+    // a transcription the user already paid a note for.
     response = await request("/api/transcribe", {
       method: "POST",
       body: form,
-      signal: AbortSignal.timeout(35_000),
+      signal: AbortSignal.timeout(55_000),
     });
   } catch (cause) {
     throw new TranscribeRequestError({

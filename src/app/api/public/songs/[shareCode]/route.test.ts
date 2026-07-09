@@ -6,7 +6,7 @@ let nextSong: Record<string, unknown> | null = null;
 let getSongError: unknown = null;
 let nextFallbackSong: Record<string, unknown> | null = null;
 let previousRateLimitDriver: string | undefined;
-const getSongByShareCodeMock = mock(async () => {
+const getPublicSongByShareCodeMock = mock(async () => {
   if (getSongError) throw getSongError;
   return nextSong;
 });
@@ -15,14 +15,19 @@ const getLocalSongByShareCodeFallbackMock = mock(() => nextFallbackSong);
 mock.module("@/lib/db/queries/songs", () => ({
   createSong: mock(async () => null),
   createSongWithSpend: mock(async () => null),
+  deleteSong: mock(async () => false),
   deleteSongForUser: mock(async () => false),
+  getPublicSongByShareCode: getPublicSongByShareCodeMock,
   getPublicSongSummaries: mock(async () => []),
-  getSongByIdForCreateConflict: mock(async () => null),
+  getSongById: mock(async () => null),
   getSongByIdForUser: mock(async () => null),
-  getSongByShareCode: getSongByShareCodeMock,
+  getSongByShareCode: mock(async () => null),
+  getSongShareMetaByShareCode: mock(async () => null),
   getSongSummariesByUser: mock(async () => []),
+  getSongSummaryByIdForUser: mock(async () => null),
   publishSongShareForUser: mock(async () => null),
   revokeSongShareForUser: mock(async () => null),
+  updateSong: mock(async () => null),
   updateSongForUser: mock(async () => null),
 }));
 
@@ -78,7 +83,7 @@ beforeEach(async () => {
   };
   getSongError = null;
   nextFallbackSong = null;
-  getSongByShareCodeMock.mockClear();
+  getPublicSongByShareCodeMock.mockClear();
   getLocalSongByShareCodeFallbackMock.mockClear();
 });
 
@@ -155,7 +160,7 @@ describe("GET /api/public/songs/[shareCode]", () => {
     const response = await GET(request(), ctx("bad-code"));
 
     expect(response.status).toBe(400);
-    expect(getSongByShareCodeMock).not.toHaveBeenCalled();
+    expect(getPublicSongByShareCodeMock).not.toHaveBeenCalled();
     const body = await response.json() as Record<string, unknown>;
     expect(body.error).toBe("validation_error");
   });
@@ -175,7 +180,7 @@ describe("GET /api/public/songs/[shareCode]", () => {
     const response = await GET(request(), ctx("demo-1"));
 
     expect(response.status).toBe(200);
-    expect(getSongByShareCodeMock).not.toHaveBeenCalled();
+    expect(getPublicSongByShareCodeMock).not.toHaveBeenCalled();
     const body = await response.json() as Record<string, unknown>;
     expect(body.shareCode).toBe("demo-1");
     expect(body.mp3Url).toBe("/demo/weightless-dnb.mp3");
@@ -188,7 +193,7 @@ describe("GET /api/public/songs/[shareCode]", () => {
     const response = await GET(request(), ctx("demo-1"));
 
     expect(response.status).toBe(200);
-    expect(getSongByShareCodeMock).not.toHaveBeenCalled();
+    expect(getPublicSongByShareCodeMock).not.toHaveBeenCalled();
     const body = await response.json() as Record<string, unknown>;
     expect(body.shareCode).toBe("demo-1");
   });

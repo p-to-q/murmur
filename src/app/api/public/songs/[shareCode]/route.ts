@@ -41,8 +41,8 @@ export async function GET(
   }
 
   try {
-    const { getSongByShareCode } = await import("@/lib/db/queries/songs");
-    const song = await getSongByShareCode(shareCode!);
+    const { getPublicSongByShareCode } = await import("@/lib/db/queries/songs");
+    const song = await getPublicSongByShareCode(shareCode!);
     if (!song || !hasSongShareAudio(song)) {
       return errorResponse("not_found", 404, requestId);
     }

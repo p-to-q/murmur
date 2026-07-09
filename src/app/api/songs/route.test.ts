@@ -42,7 +42,7 @@ const createSongWithSpendMock = mock(async (data: Record<string, unknown>) => {
   };
 });
 let existingConflictSong: Record<string, unknown> | null = null;
-const getSongByIdForCreateConflictMock = mock(async () => existingConflictSong);
+const getSongByIdMock = mock(async () => existingConflictSong);
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
@@ -51,15 +51,19 @@ mock.module("@/lib/auth", () => ({
 mock.module("@/lib/db/queries/songs", () => ({
   createSong: createSongMock,
   createSongWithSpend: createSongWithSpendMock,
+  deleteSong: mock(async () => false),
   deleteSongForUser: mock(async () => false),
+  getPublicSongByShareCode: mock(async () => null),
   getPublicSongSummaries: mock(async () => []),
-  getSongByIdForCreateConflict: getSongByIdForCreateConflictMock,
+  getSongById: getSongByIdMock,
   getSongByIdForUser: mock(async () => null),
   getSongByShareCode: mock(async () => null),
+  getSongShareMetaByShareCode: mock(async () => null),
   getSongSummariesByUser: mock(async () => []),
-  getSongsByUser: mock(async () => []),
-  revokeSongShareForUser: mock(async () => null),
+  getSongSummaryByIdForUser: mock(async () => null),
   publishSongShareForUser: mock(async () => null),
+  revokeSongShareForUser: mock(async () => null),
+  updateSong: mock(async () => null),
   updateSongForUser: mock(async () => null),
 }));
 
@@ -94,7 +98,7 @@ beforeEach(async () => {
   createdSongs.length = 0;
   createSongMock.mockClear();
   createSongWithSpendMock.mockClear();
-  getSongByIdForCreateConflictMock.mockClear();
+  getSongByIdMock.mockClear();
   createSongError = null;
   createSongWithSpendError = null;
   existingConflictSong = null;
@@ -326,7 +330,7 @@ describe("POST /api/songs", () => {
     const body = await response.json() as { error: string };
     expect(body.error).toBe("song_id_conflict");
     expect(response.headers.get("X-Request-Id")).toBe("req_song");
-    expect(getSongByIdForCreateConflictMock).toHaveBeenCalledTimes(1);
+    expect(getSongByIdMock).toHaveBeenCalledTimes(1);
   });
 
   it("replays the existing song when a same-user create is retried", async () => {
@@ -409,7 +413,7 @@ describe("POST /api/songs", () => {
     expect(response.status).toBe(500);
     const body = await response.json() as { error: string };
     expect(body.error).toBe("Failed to save song");
-    expect(getSongByIdForCreateConflictMock).toHaveBeenCalledTimes(0);
+    expect(getSongByIdMock).toHaveBeenCalledTimes(0);
   });
 
   it("does not report another table primary-key collision as a song id conflict", async () => {
@@ -449,7 +453,7 @@ describe("POST /api/songs", () => {
     expect(response.status).toBe(500);
     const body = await response.json() as { error: string };
     expect(body.error).toBe("Failed to save song");
-    expect(getSongByIdForCreateConflictMock).toHaveBeenCalledTimes(0);
+    expect(getSongByIdMock).toHaveBeenCalledTimes(0);
   });
 
   it("uses a local guest song fallback when the dev database is unavailable", async () => {

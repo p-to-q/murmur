@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { resolveRequestAuth } from "@/lib/auth";
-import {
-  getRequestHostname,
-  shouldAllowLocalPreviewFallback,
-} from "@/lib/auth/local-preview";
+import { shouldAllowLocalPreviewFallback } from "@/lib/auth/local-preview";
 import {
   getSongByIdForUser,
   publishSongShareForUser,
@@ -15,8 +12,12 @@ import {
   publishLocalSongShareForUserFallback,
   revokeLocalSongShareForUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
-import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { errorSummary } from "@/lib/observability/error-summary";
+import {
+  isDatabaseUnavailable,
+  objectFieldAsString,
+  shouldUseGuestSongFallback,
+} from "@/app/api/songs/db-fallback";
 import { log } from "@/lib/observability/log";
 import { getSiteUrlForRequest } from "@/lib/site-url";
 import {
@@ -105,7 +106,7 @@ export async function POST(
       url: buildSongShareUrl(shareOrigin, song.shareCode),
     }, requestId);
   } catch (err) {
-    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+    if (shouldUseGuestSongFallback(req, userId) && isDatabaseUnavailable(err)) {
       const existing = getLocalSongByIdForUserFallback(id, userId);
       if (!existing) {
         return errorResponse("not_found", 404, requestId);
@@ -202,7 +203,7 @@ export async function DELETE(
       { headers: { "X-Request-Id": requestId } },
     );
   } catch (err) {
-    if (shouldUseLocalSongFallback(req, userId) && isDatabaseUnavailable(err)) {
+    if (shouldUseGuestSongFallback(req, userId) && isDatabaseUnavailable(err)) {
       const song = revokeLocalSongShareForUserFallback(id, userId);
       if (!song) {
         return errorResponse("not_found", 404, requestId);
@@ -339,34 +340,7 @@ async function readJsonObject(req: NextRequest): Promise<Record<string, unknown>
   }
 }
 
-function shouldUseLocalSongFallback(req: NextRequest, userId: string): boolean {
-  if (userId !== "guest") return false;
-  return shouldBypassBillingInDevelopment({
-    host: getRequestHostname(req),
-  });
-}
 
-function isDatabaseUnavailable(error: unknown): boolean {
-  if (!isObject(error)) return false;
-
-  const code = "code" in error ? error.code : null;
-  if (code === "ECONNREFUSED") return true;
-
-  const message = "message" in error ? String(error.message) : "";
-  if (message.includes("ECONNREFUSED") || message.includes("connection refused")) {
-    return true;
-  }
-
-  const cause = "cause" in error ? error.cause : null;
-  if (cause && isDatabaseUnavailable(cause)) return true;
-
-  const nestedErrors = "errors" in error ? error.errors : null;
-  if (Array.isArray(nestedErrors)) {
-    return nestedErrors.some((nestedError) => isDatabaseUnavailable(nestedError));
-  }
-
-  return false;
-}
 
 function isUniqueShareCodeConflict(error: unknown): boolean {
   if (!isObject(error)) return false;
@@ -406,11 +380,6 @@ function isSongShareSchemaUnavailable(error: unknown): boolean {
   return false;
 }
 
-function objectFieldAsString(value: unknown, key: string): string | undefined {
-  if (!isObject(value) || !(key in value)) return undefined;
-  const field = value[key];
-  return typeof field === "string" ? field : String(field);
-}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

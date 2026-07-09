@@ -114,8 +114,10 @@ mock.module("@/lib/platform/music-worker", () => ({
 }));
 
 class TestRunpodError extends Error {
-  readonly kind = "server_error";
   readonly detail = null;
+  constructor(readonly kind: string = "server_error") {
+    super(`runpod ${kind}`);
+  }
 }
 
 mock.module("@/lib/platform/runpod-serverless", () => ({
@@ -248,6 +250,26 @@ describe("POST /api/music/generate", () => {
     expect(body.error).toBe("rate_limited");
     expect(body.requestId).toBe("req_daily_blocked");
     expect(response.headers.get("X-RateLimit-Limit")).toBe("48");
+  });
+
+  it("refunds the note and reports client_closed_request when the browser disconnects mid-generation", async () => {
+    nextEngineMode = "serverless";
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_aborted", email: null, name: "Aborted", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_aborted",
+    };
+    nextRunJobThrows = new TestRunpodError("aborted");
+
+    const response = await POST(buildRequest("req_music_aborted"));
+
+    expect(response.status).toBe(499);
+    const body = await response.json() as { error: string };
+    expect(body.error).toBe("client_closed_request");
+    expect(lastSpendInputs).toHaveLength(1);
+    expect(lastRefundInputs).toHaveLength(1);
+    expect(lastRefundInputs[0]).toMatchObject({ originalLedgerId: "nle_music_generate" });
   });
 
   it("spends one note before handing work to RunPod", async () => {

@@ -1,27 +1,31 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 
-let nextSong: {
+let nextSongMeta: {
   visibility: "private" | "unlisted" | "public";
-  mp3DataUrl?: string | null;
-  mp3Url?: string | null;
+  hasAudio: boolean;
 } | null = null;
 let getSongError: unknown = null;
-const getSongByShareCodeMock = mock(async () => {
+const getSongShareMetaByShareCodeMock = mock(async () => {
   if (getSongError) throw getSongError;
-  return nextSong;
+  return nextSongMeta;
 });
 
 mock.module("@/lib/db/queries/songs", () => ({
   createSong: mock(async () => null),
   createSongWithSpend: mock(async () => null),
+  deleteSong: mock(async () => false),
   deleteSongForUser: mock(async () => false),
+  getPublicSongByShareCode: mock(async () => null),
   getPublicSongSummaries: mock(async () => []),
-  getSongByIdForCreateConflict: mock(async () => null),
+  getSongById: mock(async () => null),
   getSongByIdForUser: mock(async () => null),
-  getSongByShareCode: getSongByShareCodeMock,
+  getSongByShareCode: mock(async () => null),
+  getSongShareMetaByShareCode: getSongShareMetaByShareCodeMock,
   getSongSummariesByUser: mock(async () => []),
+  getSongSummaryByIdForUser: mock(async () => null),
   publishSongShareForUser: mock(async () => null),
   revokeSongShareForUser: mock(async () => null),
+  updateSong: mock(async () => null),
   updateSongForUser: mock(async () => null),
 }));
 
@@ -36,15 +40,15 @@ function props(shareCode: string) {
 }
 
 beforeEach(() => {
-  nextSong = null;
+  nextSongMeta = null;
   getSongError = null;
-  getSongByShareCodeMock.mockClear();
+  getSongShareMetaByShareCodeMock.mockClear();
   resetLocalSongFallbackForTests();
 });
 
 describe("generateMetadata for public song share pages", () => {
   it("marks unlisted share pages noindex", async () => {
-    nextSong = { visibility: "unlisted", mp3DataUrl: "data:audio/mpeg;base64,abc" };
+    nextSongMeta = { visibility: "unlisted", hasAudio: true };
 
     const metadata = await generateMetadata(props("abc234defg"));
 
@@ -53,7 +57,7 @@ describe("generateMetadata for public song share pages", () => {
   });
 
   it("allows public share pages to be indexed", async () => {
-    nextSong = { visibility: "public", mp3DataUrl: "data:audio/mpeg;base64,abc" };
+    nextSongMeta = { visibility: "public", hasAudio: true };
 
     const metadata = await generateMetadata(props("abc234defg"));
 
@@ -61,7 +65,7 @@ describe("generateMetadata for public song share pages", () => {
   });
 
   it("marks no-audio public share pages noindex", async () => {
-    nextSong = { visibility: "public", mp3DataUrl: null, mp3Url: null };
+    nextSongMeta = { visibility: "public", hasAudio: false };
 
     const metadata = await generateMetadata(props("abc234defg"));
 
@@ -69,7 +73,7 @@ describe("generateMetadata for public song share pages", () => {
   });
 
   it("marks missing share pages noindex", async () => {
-    nextSong = null;
+    nextSongMeta = null;
 
     const metadata = await generateMetadata(props("abc234defg"));
 
@@ -116,7 +120,7 @@ describe("generateMetadata for public song share pages", () => {
   it("marks demo share pages noindex", async () => {
     const metadata = await generateMetadata(props("demo-1"));
 
-    expect(getSongByShareCodeMock).not.toHaveBeenCalled();
+    expect(getSongShareMetaByShareCodeMock).not.toHaveBeenCalled();
     expect(metadata.robots).toEqual({ index: false, follow: false });
   });
 });

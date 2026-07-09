@@ -46,7 +46,9 @@ export function getLineageLabel(
   return (t("lineage.branch_n") || "Branch {n}").replace("{n}", String(depth));
 }
 
-export function buildLineageTrail<T extends SongCard>(
+// Only `id` is read here; the loose constraint lets callers pass summary
+// projections (no audio/arrangement payload) for the related songs.
+export function buildLineageTrail<T extends { id: string }>(
   currentSong: T,
   related: { parentSong?: T | null; rootSong?: T | null },
 ): Array<LineageTrailNode<T>> {

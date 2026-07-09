@@ -23,6 +23,7 @@ let nextDeleteResult = true;
 let updateSongError: unknown = null;
 
 const getSongByIdForUserMock = mock(async () => nextSong);
+const getSongSummaryByIdForUserMock = mock(async () => nextSong);
 const updateSongForUserMock = mock(async () => {
   if (updateSongError) throw updateSongError;
   return nextUpdatedSong;
@@ -36,13 +37,19 @@ mock.module("@/lib/auth", () => ({
 mock.module("@/lib/db/queries/songs", () => ({
   createSong: mock(async () => null),
   createSongWithSpend: mock(async () => null),
+  deleteSong: mock(async () => false),
   deleteSongForUser: deleteSongForUserMock,
+  getPublicSongByShareCode: mock(async () => null),
   getPublicSongSummaries: mock(async () => []),
+  getSongById: mock(async () => null),
   getSongByIdForUser: getSongByIdForUserMock,
   getSongByShareCode: mock(async () => null),
+  getSongShareMetaByShareCode: mock(async () => null),
   getSongSummariesByUser: mock(async () => []),
+  getSongSummaryByIdForUser: getSongSummaryByIdForUserMock,
   publishSongShareForUser: mock(async () => null),
   revokeSongShareForUser: mock(async () => null),
+  updateSong: mock(async () => null),
   updateSongForUser: updateSongForUserMock,
 }));
 
@@ -88,6 +95,7 @@ beforeEach(() => {
   nextDeleteResult = true;
   updateSongError = null;
   getSongByIdForUserMock.mockClear();
+  getSongSummaryByIdForUserMock.mockClear();
   updateSongForUserMock.mockClear();
   deleteSongForUserMock.mockClear();
   resetLocalSongFallbackForTests();
@@ -101,6 +109,17 @@ describe("GET /api/songs/[id]", () => {
     expect(getSongByIdForUserMock).toHaveBeenCalledWith("song_owner", "usr_owner");
     const body = await response.json() as Record<string, unknown>;
     expect(body.userId).toBe("usr_owner");
+  });
+
+  it("serves ?view=summary through the projection query", async () => {
+    const response = await GET(
+      request("GET", undefined, "http://test.local/api/songs/song_owner?view=summary"),
+      ctx("song_owner"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(getSongSummaryByIdForUserMock).toHaveBeenCalledWith("song_owner", "usr_owner");
+    expect(getSongByIdForUserMock).not.toHaveBeenCalled();
   });
 
   it("does not expose guest songs to a different authenticated user", async () => {

@@ -1,4 +1,4 @@
-import type { AppUser, AuthResult } from "./types";
+import type { AppUser } from "./types";
 import { auth as nextAuthSession } from "@/lib/auth/auth";
 import { getSessionByToken, type ResolvedSession } from "@/lib/db/queries/sessions";
 
@@ -72,30 +72,6 @@ export function getRequestUser(request: Request): AppUser {
     name: readHeader(request, "x-murmur-user-name") ?? DEFAULT_USER.name,
     avatarUrl: readHeader(request, "x-murmur-user-avatar"),
   };
-}
-
-export function resolveUserId(request: Request): string {
-  return getRequestUser(request).id;
-}
-
-export function requireAuth(request: Request): AuthResult {
-  if (!areAuthFallbacksAllowed()) {
-    return {
-      ok: false,
-      response: new Response(
-        JSON.stringify({
-          error: "unauthorized",
-          message: "Production routes must use resolveRequestAuth().",
-        }),
-        {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        },
-      ),
-    };
-  }
-
-  return { ok: true, user: getRequestUser(request) };
 }
 
 export type RequestAuthSource = "session" | "local_header" | "guest";
@@ -276,4 +252,4 @@ function authError(
   };
 }
 
-export type { AppUser as User, AuthResult };
+export type { AppUser as User };

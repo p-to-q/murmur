@@ -65,11 +65,6 @@ export async function updateUser(
   return rows[0];
 }
 
-export async function deleteUser(id: string): Promise<boolean> {
-  const rows = await db.delete(users).where(eq(users.id, id)).returning({ id: users.id });
-  return rows.length > 0;
-}
-
 export type AccountDeletionResult =
   | {
       ok: true;
@@ -144,15 +139,6 @@ export function normalizeEmail(email: string): string {
 export interface OAuthProfileInput {
   provider: string;
   externalId: string;
-  email: string;
-  name: string | null;
-  image: string | null;
-  localCreatorUserId?: string | null;
-}
-
-/** @deprecated Use {@link OAuthProfileInput} with {@link upsertOAuthUser}. */
-export interface GoogleProfileInput {
-  googleId: string;
   email: string;
   name: string | null;
   image: string | null;
@@ -355,20 +341,6 @@ export async function upsertOAuthUser(
       throw new Error("identity upsert: conflict fired with no resolvable row");
     }
     return { userId: winner.userId, created: false, registrationKind: "existing_identity" };
-  });
-}
-
-/** @deprecated Use {@link upsertOAuthUser}. */
-export async function upsertGoogleUser(
-  profile: GoogleProfileInput,
-): Promise<{ userId: string; created: boolean; registrationKind: UserRegistrationKind }> {
-  return upsertOAuthUser({
-    provider: "google",
-    externalId: profile.googleId,
-    email: profile.email,
-    name: profile.name,
-    image: profile.image,
-    localCreatorUserId: profile.localCreatorUserId,
   });
 }
 

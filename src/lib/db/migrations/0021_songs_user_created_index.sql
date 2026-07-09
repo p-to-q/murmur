@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS "songs_user_created_idx" ON "songs" USING btree ("user_id","created_at" DESC NULLS LAST);

@@ -89,11 +89,8 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const lang = useCurrentLang();
   const setLang = useI18nStore((s) => s.setLang);
   const { balance } = useUserBalance();
-  const {
-    isPlaying,
-    auditioningVersionId,
-  } = useMurmurStore();
-  const audioActive = isPlaying || auditioningVersionId !== null;
+  const { auditioningVersionId } = useMurmurStore();
+  const audioActive = auditioningVersionId !== null;
   const { isRegistered } = useCurrentAccount();
   const isLoggedIn = isRegistered;
   const {

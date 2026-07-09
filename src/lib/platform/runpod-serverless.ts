@@ -18,6 +18,11 @@ const DEFAULT_POLL_INTERVAL_MS = 1500;
 // an async submit, /status is a cheap read); the overall wait is bounded by the
 // caller's budget, not this.
 const PER_CALL_TIMEOUT_MS = 20_000;
+// /status is an idempotent read polled ~190 times across a cold start, so a
+// transient blip (per-call timeout, egress hiccup, RunPod 5xx/429) must not
+// abandon a job that is still generating on a GPU. Only this many failures in
+// a row count as the API being genuinely unreachable.
+const MAX_CONSECUTIVE_POLL_FAILURES = 5;
 
 // Execution policy attached to every job we submit. RunPod's default job TTL is
 // 24h, so when a caller vanishes — e.g. the Vercel function is killed at its
@@ -51,7 +56,12 @@ function clampEnvInt(name: string, fallback: number, min: number, max: number): 
   return Math.max(min, Math.min(max, Math.trunc(raw)));
 }
 
-export type RunpodErrorKind = "unauthorized" | "http" | "failed" | "timeout";
+export type RunpodErrorKind =
+  | "unauthorized"
+  | "http"
+  | "failed"
+  | "timeout"
+  | "aborted";
 
 /** A failed RunPod invocation, tagged so the route can map it to its error contract. */
 export class RunpodError extends Error {
@@ -76,6 +86,12 @@ export interface RunJobOptions {
   /** Total wall-clock budget for submit + polling, in milliseconds. */
   budgetMs: number;
   pollIntervalMs?: number;
+  /**
+   * Caller-side abort (e.g. the browser disconnected). The wait stops, the
+   * job is cancelled so it stops occupying a worker, and a RunpodError with
+   * kind "aborted" is thrown.
+   */
+  signal?: AbortSignal;
 }
 
 function callTimeoutSignal(deadline: number): AbortSignal {
@@ -158,6 +174,11 @@ async function cancelJob(config: MusicServerlessConfig, jobId: string): Promise<
 /**
  * Submit `input` to the endpoint and wait for the job's output, polling until
  * COMPLETED or the budget runs out. Throws `RunpodError` on failure/timeout.
+ *
+ * Transient /status failures (thrown fetch, 429, 5xx) are retried in place —
+ * the poll is an idempotent read and the job keeps generating regardless —
+ * and every terminal exit that leaves the job possibly alive awaits a
+ * best-effort cancel so it stops occupying one of the few workers.
  */
 export async function runJob(
   config: MusicServerlessConfig,
@@ -166,6 +187,11 @@ export async function runJob(
 ): Promise<Record<string, unknown>> {
   const deadline = Date.now() + options.budgetMs;
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+  const signal = options.signal;
+
+  if (signal?.aborted) {
+    throw new RunpodError("aborted", "Caller aborted before the job was submitted");
+  }
 
   const submitRes = await runpodFetch(config, "/run", {
     method: "POST",
@@ -191,28 +217,70 @@ export async function runJob(
     throw new RunpodError("http", "RunPod /run returned no job id", submitBody);
   }
 
+  let consecutivePollFailures = 0;
   while (Date.now() < deadline) {
     await sleep(Math.min(pollIntervalMs, Math.max(0, deadline - Date.now())));
+    if (signal?.aborted) {
+      await cancelJob(config, jobId);
+      throw new RunpodError("aborted", "Caller aborted while waiting for the job");
+    }
     if (Date.now() >= deadline) break;
 
-    const statusRes = await runpodFetch(config, `/status/${jobId}`, {
-      method: "GET",
-      signal: callTimeoutSignal(deadline),
-    });
+    let statusRes: Response;
+    try {
+      statusRes = await runpodFetch(config, `/status/${jobId}`, {
+        method: "GET",
+        signal: callTimeoutSignal(deadline),
+      });
+    } catch (error) {
+      consecutivePollFailures += 1;
+      if (consecutivePollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+        await cancelJob(config, jobId);
+        throw new RunpodError(
+          "http",
+          `RunPod /status unreachable ${consecutivePollFailures}x in a row`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+      continue;
+    }
+
     const statusBody = await safeJson(statusRes);
-    assertAuthorized(statusRes, statusBody);
+    if (statusRes.status === 401 || statusRes.status === 403) {
+      await cancelJob(config, jobId);
+      throw new RunpodError("unauthorized", "RunPod rejected the API key", statusBody);
+    }
     if (!statusRes.ok) {
+      // 429/5xx are the platform having a moment, not the job failing.
+      if (statusRes.status === 429 || statusRes.status >= 500) {
+        consecutivePollFailures += 1;
+        if (consecutivePollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+          await cancelJob(config, jobId);
+          throw new RunpodError(
+            "http",
+            `RunPod /status returned HTTP ${statusRes.status} ${consecutivePollFailures}x in a row`,
+            statusBody,
+          );
+        }
+        continue;
+      }
+      await cancelJob(config, jobId);
       throw new RunpodError(
         "http",
         `RunPod /status returned HTTP ${statusRes.status}`,
         statusBody,
       );
     }
+
+    consecutivePollFailures = 0;
     const result = readTerminal((statusBody ?? {}) as RunpodJob);
     if (result) return result;
   }
 
-  void cancelJob(config, jobId);
+  // Awaited on purpose: a fire-and-forget cancel is usually killed when the
+  // serverless function freezes right after the response, leaving the job to
+  // squat a worker until its executionTimeout. cancelJob caps itself at 5s.
+  await cancelJob(config, jobId);
   throw new RunpodError("timeout", "RunPod job did not complete within the budget");
 }
 

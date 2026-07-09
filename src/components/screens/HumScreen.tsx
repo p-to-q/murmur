@@ -16,6 +16,7 @@ import { useMurmurStore } from "@/lib/store/murmur-store";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import {
   createMagentaVersions,
+  getCachedMusicEngineStatus,
   prefetchMusicEngineStatus,
   shouldUseMagentaEngine,
 } from "@/modules/magenta/generate-magenta-versions";
@@ -505,6 +506,14 @@ export function HumScreen() {
     setRecordingState("processing");
     tickMessages();
     try {
+      // Fail fast while the engine is known-down (fresh negative health
+      // verdict, ≤10s old): transcription spends a note server-side, and a
+      // hum that can never become a song must not be charged for. The user
+      // sees the same unavailable card they would get after the round-trip.
+      const cachedEngineStatus = getCachedMusicEngineStatus();
+      if (cachedEngineStatus && !cachedEngineStatus.available) {
+        throw new MusicEngineUnavailableError();
+      }
       // Overlap Magenta routing with transcription. When the deployment is
       // configured for a worker we never silently downgrade to Tone.js.
       const magentaPathPromise = shouldUseMagentaEngine();

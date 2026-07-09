@@ -50,9 +50,9 @@ async function resolveShareVisibility(shareCode: string): Promise<string | null>
   // Metadata is best-effort; the client page still fetches through the public
   // API. Keep this path from turning a DB outage into a broken share page.
   try {
-    const { getSongByShareCode } = await import("@/lib/db/queries/songs");
-    const song = await getSongByShareCode(normalized);
-    return song && hasSongShareAudio(song) ? song.visibility : null;
+    const { getSongShareMetaByShareCode } = await import("@/lib/db/queries/songs");
+    const meta = await getSongShareMetaByShareCode(normalized);
+    return meta && meta.hasAudio ? meta.visibility : null;
   } catch {
     const { getLocalSongByShareCodeFallback } = await import(
       "@/lib/db/queries/local-song-fallback"

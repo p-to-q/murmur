@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getSongsByUser } from "@/lib/db/queries/songs";
+import { getSongSummariesByUser } from "@/lib/db/queries/songs";
 
 export function registerListSongs(server: McpServer, userId: string) {
   server.registerTool(
@@ -9,7 +9,9 @@ export function registerListSongs(server: McpServer, userId: string) {
         "List all songs in the user's MURMUR gallery. Returns title, vibe, duration, and creation date for each song.",
     },
     async () => {
-      const songs = await getSongsByUser(userId);
+      // Summaries only — the full rows carry base64 audio and arrangement
+      // blobs that this listing would fetch just to throw away.
+      const songs = await getSongSummariesByUser(userId);
       return {
         content: [
           {

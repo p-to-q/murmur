@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../client";
 import { notesLedger } from "../schema/notes-ledger";
 import { users } from "../schema/users";
@@ -9,6 +9,7 @@ import {
   notesRefillWindowKey,
 } from "@/lib/billing/notes-clock";
 import {
+  decideBillingAccountMaintenance,
   decideGrant,
   decideRefundPoolsForOriginalSpend,
   decideRefund,
@@ -540,8 +541,36 @@ export async function reverseTopupGrant(
 
 export async function ensureBillingAccount(userId: string): Promise<void> {
   await ensureGuestBillingUser(userId);
-  await ensureInitialLedgerForUser(userId);
-  await ensureDailyFreeRefillForUser(userId);
+
+  // One non-locking read decides whether either maintenance transaction has
+  // any work to do. On the hot path (every balance read and spend) both are
+  // no-ops, and this skips their SELECT ... FOR UPDATE round trips — the
+  // transactions still re-check under the row lock when they do run.
+  const [snapshot] = await db
+    .select({
+      notesBalance: users.notesBalance,
+      accountKind: users.accountKind,
+      freeNotesGrantedAt: users.freeNotesGrantedAt,
+      hasLedgerRows: sql<boolean>`exists (
+        select 1 from ${notesLedger} where ${notesLedger.userId} = ${users.id}
+      )`,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  const maintenance = decideBillingAccountMaintenance({
+    userId,
+    snapshot: snapshot ?? null,
+    windowStart: currentNotesRefillWindowStart(),
+  });
+
+  if (maintenance.needsInitialLedger) {
+    await ensureInitialLedgerForUser(userId);
+  }
+  if (maintenance.needsDailyFreeRefill) {
+    await ensureDailyFreeRefillForUser(userId);
+  }
 }
 
 async function ensureGuestBillingUser(userId: string): Promise<void> {

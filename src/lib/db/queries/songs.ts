@@ -1,15 +1,11 @@
 import { db } from "../client";
 import { songs } from "../schema/songs";
-import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import {
   ensureBillingAccount,
   spendNotesInTransaction,
   type SpendNotesResult,
 } from "./notes-ledger";
-
-export async function getSongsByUser(userId: string) {
-  return db.select().from(songs).where(eq(songs.userId, userId)).orderBy(desc(songs.createdAt));
-}
 
 // Gallery / shelf / profile-count listings never touch the audio or the
 // arrangement editor — they only render cover metadata. `mp3DataUrl` is a
@@ -52,14 +48,61 @@ export async function getSongById(songId: string) {
   return rows[0] ?? null;
 }
 
-export async function getSongByIdForCreateConflict(songId: string) {
-  const rows = await db.select().from(songs).where(eq(songs.id, songId)).limit(1);
-  return rows[0] ?? null;
-}
-
 export async function getSongByShareCode(shareCode: string) {
   const rows = await db
     .select()
+    .from(songs)
+    .where(and(
+      eq(songs.shareCode, shareCode),
+      inArray(songs.visibility, ["unlisted", "public"]),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+// Crawler/metadata path for /s/[shareCode]: it only decides indexability, so
+// pull two scalars instead of the multi-MB row (mp3DataUrl + arrangementState)
+// on an unauthenticated route every bot revisits.
+export async function getSongShareMetaByShareCode(shareCode: string) {
+  const rows = await db
+    .select({
+      visibility: songs.visibility,
+      hasAudio: sql<boolean>`(${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> '')`,
+    })
+    .from(songs)
+    .where(and(
+      eq(songs.shareCode, shareCode),
+      inArray(songs.visibility, ["unlisted", "public"]),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+// Public share playback needs the audio but never the arrangement editor
+// state; leaving the fat jsonb in the database roughly halves what this
+// unauthenticated endpoint reads and discards per hit.
+export async function getPublicSongByShareCode(shareCode: string) {
+  const rows = await db
+    .select({
+      id: songs.id,
+      title: songs.title,
+      vibe: songs.vibe,
+      vibeEn: songs.vibeEn,
+      bpm: songs.bpm,
+      keySignature: songs.keySignature,
+      scaleType: songs.scaleType,
+      duration: songs.duration,
+      sourceMelodyKind: songs.sourceMelodyKind,
+      editCount: songs.editCount,
+      editDepth: songs.editDepth,
+      visibility: songs.visibility,
+      shareCode: songs.shareCode,
+      mp3DataUrl: songs.mp3DataUrl,
+      visualConfig: songs.visualConfig,
+      tags: songs.tags,
+      createdAt: songs.createdAt,
+      updatedAt: songs.updatedAt,
+    })
     .from(songs)
     .where(and(
       eq(songs.shareCode, shareCode),
@@ -116,6 +159,39 @@ export async function getPublicSongSummaries(input: {
 export async function getSongByIdForUser(songId: string, userId: string) {
   const rows = await db
     .select()
+    .from(songs)
+    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+// Same column set as getSongSummariesByUser, for single-song metadata reads
+// (e.g. the song-detail lineage trail) that never touch audio or the editor.
+export async function getSongSummaryByIdForUser(songId: string, userId: string) {
+  const rows = await db
+    .select({
+      id: songs.id,
+      userId: songs.userId,
+      title: songs.title,
+      vibe: songs.vibe,
+      vibeEn: songs.vibeEn,
+      bpm: songs.bpm,
+      keySignature: songs.keySignature,
+      scaleType: songs.scaleType,
+      duration: songs.duration,
+      parentSongId: songs.parentSongId,
+      rootSongId: songs.rootSongId,
+      lineageDepth: songs.lineageDepth,
+      sourceMelodyKind: songs.sourceMelodyKind,
+      editCount: songs.editCount,
+      editDepth: songs.editDepth,
+      visibility: songs.visibility,
+      shareCode: songs.shareCode,
+      visualConfig: songs.visualConfig,
+      tags: songs.tags,
+      createdAt: songs.createdAt,
+      updatedAt: songs.updatedAt,
+    })
     .from(songs)
     .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
     .limit(1);

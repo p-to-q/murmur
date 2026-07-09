@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS "songs_user_created_idx";

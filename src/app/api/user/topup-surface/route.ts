@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getRequestHostname } from "@/lib/auth/local-preview";
 
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldUseDevBalanceFallback } from "@/lib/billing/dev-balance";
@@ -64,13 +65,3 @@ function serializeSnapshot(snapshot: SnapshotLike) {
   };
 }
 
-function getRequestHostname(request: NextRequest): string | null {
-  const nextUrl = (request as { nextUrl?: { hostname?: string } }).nextUrl;
-  if (nextUrl?.hostname) return nextUrl.hostname;
-
-  try {
-    return new URL(request.url).hostname;
-  } catch {
-    return null;
-  }
-}

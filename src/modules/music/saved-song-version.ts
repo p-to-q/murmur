@@ -1,8 +1,6 @@
 import type { CleanMelody, MelodySelectionKind, SongCard, VibeVersion } from "@/modules/shared/types";
-import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import { createMagentaVersions, checkMusicEngineAvailable } from "@/modules/magenta/generate-magenta-versions";
 import { deriveEditDepth, normalizeEditCount } from "./edit-depth";
-import { VIBE_PRESETS, type VibeId } from "@/presets/vibes";
 import { buildRemixLineage, normalizeLineageDepth, resolveParentSongId, resolveRootSongId } from "./lineage";
 
 type SavedSong = SongCard & {
@@ -42,26 +40,6 @@ export function hydrateSavedSongToVersion(song: SavedSong): VibeVersion {
     arrangementState: song.arrangementState,
     visualConfig: song.visualConfig,
   };
-}
-
-export function buildSavedSongVibeVersions(song: SavedSong): VibeVersion[] {
-  const version = hydrateSavedSongToVersion(song);
-  const preferredVibeId = resolvePreferredSavedSongVibeId(song);
-  const preferredVibeMode =
-    version.editDepth === "reworked"
-      ? "anchor"
-      : version.editDepth === "shaped"
-        ? "boost"
-        : undefined;
-  const draftContext = buildSavedSongDraftContext(song);
-
-  return generateVibeVersions(version.melody, {
-    ...draftContext,
-    sourceType: "library",
-    sourceMelodyKind: version.sourceMelodyKind,
-    preferredVibeId,
-    preferredVibeMode,
-  });
 }
 
 export function buildSavedSongEditDraft(song: SavedSong): VibeVersion {
@@ -180,13 +158,3 @@ function isMidiPitch(value: number): boolean {
   return Number.isFinite(value) && value >= 21 && value <= 108;
 }
 
-function resolvePreferredSavedSongVibeId(song: SavedSong): VibeId | undefined {
-  const candidate =
-    song.arrangementState.chords.chordsTag ??
-    song.arrangementState.texture.texturePreset;
-
-  if (typeof candidate !== "string") return undefined;
-  return VIBE_PRESETS.some((preset) => preset.id === candidate)
-    ? (candidate as VibeId)
-    : undefined;
-}

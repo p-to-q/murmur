@@ -36,6 +36,11 @@ export const DEFAULT_HUM_STYLE_MIX = 0.35;
 // to the legacy engine for a whole minute.
 const HEALTH_TTL_AVAILABLE_MS = 60_000;
 const HEALTH_TTL_UNAVAILABLE_MS = 10_000;
+// A dead connection would otherwise leave the card pending forever: the
+// server's own ceiling is maxDuration=300s, so anything past that (plus
+// margin) can only be a hung socket — resolve it into the error card's
+// retry affordance instead.
+const GENERATE_FETCH_TIMEOUT_MS = 320_000;
 
 export type MusicEngineStatus = {
   configured: boolean;
@@ -44,6 +49,7 @@ export type MusicEngineStatus = {
 };
 
 let healthCache: { at: number; status: MusicEngineStatus } | null = null;
+let inflightStatusProbe: Promise<MusicEngineStatus> | null = null;
 let activeAbort: AbortController | null = null;
 let liveObjectUrls: string[] = [];
 
@@ -73,36 +79,60 @@ export async function checkMusicEngineAvailable(): Promise<boolean> {
   return status.available;
 }
 
+/**
+ * Read the current health verdict without any network activity. Returns null
+ * when the cache is empty or stale; callers that need a definitive answer
+ * still await fetchMusicEngineStatus.
+ */
+export function getCachedMusicEngineStatus(): MusicEngineStatus | null {
+  if (!healthCache) return null;
+  const ttl = healthCache.status.available
+    ? HEALTH_TTL_AVAILABLE_MS
+    : HEALTH_TTL_UNAVAILABLE_MS;
+  return Date.now() - healthCache.at < ttl ? healthCache.status : null;
+}
+
 export async function fetchMusicEngineStatus(force = false): Promise<MusicEngineStatus> {
-  if (!force && healthCache) {
-    const ttl = healthCache.status.available
-      ? HEALTH_TTL_AVAILABLE_MS
-      : HEALTH_TTL_UNAVAILABLE_MS;
-    if (Date.now() - healthCache.at < ttl) return healthCache.status;
+  if (!force) {
+    const cached = getCachedMusicEngineStatus();
+    if (cached) return cached;
   }
 
-  const retryDelaysMs = [0, 1500, 3000, 5000];
-  let lastStatus: MusicEngineStatus = {
-    configured: false,
-    available: false,
-    reason: "unreachable",
-  };
+  // Concurrent callers (screen-mount prefetch, submit-time gate, remix gate)
+  // share one probe loop instead of each fanning out their own 4-probe
+  // sequence against /api/music/health — which itself calls upstream.
+  if (inflightStatusProbe) return inflightStatusProbe;
 
-  for (const delayMs of retryDelaysMs) {
-    if (delayMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+  inflightStatusProbe = (async () => {
+    const retryDelaysMs = [0, 1500, 3000, 5000];
+    let lastStatus: MusicEngineStatus = {
+      configured: false,
+      available: false,
+      reason: "unreachable",
+    };
+
+    for (const delayMs of retryDelaysMs) {
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+      const status = await probeHealthOnce();
+      if (!status) continue;
+      lastStatus = status;
+      if (status.available) {
+        healthCache = { at: Date.now(), status };
+        return status;
+      }
     }
-    const status = await probeHealthOnce();
-    if (!status) continue;
-    lastStatus = status;
-    if (status.available) {
-      healthCache = { at: Date.now(), status };
-      return status;
-    }
+
+    healthCache = { at: Date.now(), status: lastStatus };
+    return lastStatus;
+  })();
+
+  try {
+    return await inflightStatusProbe;
+  } finally {
+    inflightStatusProbe = null;
   }
-
-  healthCache = { at: Date.now(), status: lastStatus };
-  return lastStatus;
 }
 
 async function probeHealthOnce(): Promise<MusicEngineStatus | null> {
@@ -264,7 +294,7 @@ async function requestClip(
     const res = await fetch("/api/music/generate", {
       method: "POST",
       body: form,
-      signal: signal ?? undefined,
+      signal: withGenerateTimeout(signal),
     });
     if (!res.ok) {
       throw await buildMusicGenerateError(res);
@@ -308,6 +338,19 @@ async function requestClip(
     });
     notifyIfBatchComplete();
   }
+}
+
+/**
+ * Combine the batch's abort signal with the hang guard. Falls back to the
+ * batch signal alone on browsers without AbortSignal.any (pre-2024) — those
+ * simply keep today's uncapped behavior.
+ */
+function withGenerateTimeout(signal: AbortSignal | null): AbortSignal | undefined {
+  if (typeof AbortSignal.any !== "function" || typeof AbortSignal.timeout !== "function") {
+    return signal ?? undefined;
+  }
+  const timeout = AbortSignal.timeout(GENERATE_FETCH_TIMEOUT_MS);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
 class MusicGenerateRequestError extends Error {
