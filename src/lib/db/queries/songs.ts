@@ -13,31 +13,33 @@ import {
 // blob with per-track version histories; pulling either into a list response
 // dwarfs everything else on the wire. Project them out here so switching to
 // the gallery stays cheap. Detail playback still uses the full-row queries.
+const songSummaryColumns = {
+  id: songs.id,
+  userId: songs.userId,
+  title: songs.title,
+  vibe: songs.vibe,
+  vibeEn: songs.vibeEn,
+  bpm: songs.bpm,
+  keySignature: songs.keySignature,
+  scaleType: songs.scaleType,
+  duration: songs.duration,
+  parentSongId: songs.parentSongId,
+  rootSongId: songs.rootSongId,
+  lineageDepth: songs.lineageDepth,
+  sourceMelodyKind: songs.sourceMelodyKind,
+  editCount: songs.editCount,
+  editDepth: songs.editDepth,
+  visibility: songs.visibility,
+  shareCode: songs.shareCode,
+  visualConfig: songs.visualConfig,
+  tags: songs.tags,
+  createdAt: songs.createdAt,
+  updatedAt: songs.updatedAt,
+} as const;
+
 export async function getSongSummariesByUser(userId: string) {
   return db
-    .select({
-      id: songs.id,
-      userId: songs.userId,
-      title: songs.title,
-      vibe: songs.vibe,
-      vibeEn: songs.vibeEn,
-      bpm: songs.bpm,
-      keySignature: songs.keySignature,
-      scaleType: songs.scaleType,
-      duration: songs.duration,
-      parentSongId: songs.parentSongId,
-      rootSongId: songs.rootSongId,
-      lineageDepth: songs.lineageDepth,
-      sourceMelodyKind: songs.sourceMelodyKind,
-      editCount: songs.editCount,
-      editDepth: songs.editDepth,
-      visibility: songs.visibility,
-      shareCode: songs.shareCode,
-      visualConfig: songs.visualConfig,
-      tags: songs.tags,
-      createdAt: songs.createdAt,
-      updatedAt: songs.updatedAt,
-    })
+    .select(songSummaryColumns)
     .from(songs)
     .where(eq(songs.userId, userId))
     .orderBy(desc(songs.createdAt));
@@ -67,6 +69,7 @@ export async function getSongShareMetaByShareCode(shareCode: string) {
   const rows = await db
     .select({
       visibility: songs.visibility,
+      title: songs.title,
       hasAudio: sql<boolean>`(${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> '')`,
     })
     .from(songs)
@@ -165,33 +168,11 @@ export async function getSongByIdForUser(songId: string, userId: string) {
   return rows[0] ?? null;
 }
 
-// Same column set as getSongSummariesByUser, for single-song metadata reads
-// (e.g. the song-detail lineage trail) that never touch audio or the editor.
+// Single-song metadata reads (e.g. the song-detail lineage trail) that
+// never touch audio or the editor. Same projection as getSongSummariesByUser.
 export async function getSongSummaryByIdForUser(songId: string, userId: string) {
   const rows = await db
-    .select({
-      id: songs.id,
-      userId: songs.userId,
-      title: songs.title,
-      vibe: songs.vibe,
-      vibeEn: songs.vibeEn,
-      bpm: songs.bpm,
-      keySignature: songs.keySignature,
-      scaleType: songs.scaleType,
-      duration: songs.duration,
-      parentSongId: songs.parentSongId,
-      rootSongId: songs.rootSongId,
-      lineageDepth: songs.lineageDepth,
-      sourceMelodyKind: songs.sourceMelodyKind,
-      editCount: songs.editCount,
-      editDepth: songs.editDepth,
-      visibility: songs.visibility,
-      shareCode: songs.shareCode,
-      visualConfig: songs.visualConfig,
-      tags: songs.tags,
-      createdAt: songs.createdAt,
-      updatedAt: songs.updatedAt,
-    })
+    .select(songSummaryColumns)
     .from(songs)
     .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
     .limit(1);

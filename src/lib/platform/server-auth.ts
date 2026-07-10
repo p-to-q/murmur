@@ -213,6 +213,8 @@ export async function resolveRequestAuth(
   };
 }
 
+let warnedUnsetAuthMode = false;
+
 export function resolveAuthRuntimeMode(): AuthRuntimeMode {
   const configured = process.env.MURMUR_AUTH_MODE?.trim().toLowerCase();
   if (configured === "production" || configured === "prod") return "production";
@@ -220,6 +222,22 @@ export function resolveAuthRuntimeMode(): AuthRuntimeMode {
   if (configured === "local" || configured === "development" || configured === "dev") {
     return "local";
   }
+
+  // Unset or unrecognized values fall back to "production" — the strictest
+  // mode, so a missing variable can never widen access. Auth bypass requires
+  // an explicit "local"/"dev" value, which the branches above already gate.
+  // Warn (once) instead of throwing: Vercel preview deploys run with
+  // NODE_ENV=production but without the full prod env, and a throw here would
+  // turn a missing variable into a total outage.
+  if (process.env.NODE_ENV === "production" && !warnedUnsetAuthMode) {
+    warnedUnsetAuthMode = true;
+    console.warn(
+      configured
+        ? `[server-auth] Unrecognized MURMUR_AUTH_MODE "${configured}"; defaulting to strict "production" auth mode.`
+        : '[server-auth] MURMUR_AUTH_MODE is not set; defaulting to strict "production" auth mode. Set it explicitly to silence this warning.',
+    );
+  }
+
   return "production";
 }
 
