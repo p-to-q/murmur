@@ -14,9 +14,19 @@ interface Props { params: Promise<{ id: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
+  const displayId = id.startsWith("demo-") ? "Demo Song" : `Song ${id.slice(0, 8)}`;
   return {
-    title: id.startsWith("demo-") ? "Song" : `Song ${id.slice(0, 8)}`,
+    title: displayId,
     description: "Listen, refine, and share your Murmur song.",
+    openGraph: {
+      title: displayId,
+      description: "Listen, refine, and share your Murmur song.",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: displayId,
+      description: "Listen, refine, and share your Murmur song.",
+    },
   };
 }
 

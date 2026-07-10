@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 import { PaymentsScreen } from "@/components/screens/PaymentsScreen";
+
+export const metadata: Metadata = {
+  title: "Payments",
+};
 
 export default function PaymentsPage() {
   return (
