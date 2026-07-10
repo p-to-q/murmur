@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import Image from "next/image";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { trackStageEntered } from "@/lib/observability/stage-tracking";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
 import { generateStrummerCode } from "@/modules/strummer/generate-code";
@@ -65,6 +66,18 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
       setActiveCreationRoute("/studio");
     }
   }, [currentVersion, setActiveCreationRoute]);
+
+  // Track once per mount, but only after a version exists — demo seeding fills
+  // the store asynchronously, and firing earlier would drop the flow context.
+  const stageTrackedRef = useRef(false);
+  useEffect(() => {
+    if (stageTrackedRef.current || !currentVersion) return;
+    stageTrackedRef.current = true;
+    trackStageEntered("studio", {
+      flowId: currentVersion.originFlowId,
+      draftId: currentVersion.draftId,
+    });
+  }, [currentVersion]);
 
   useRestoredVersionAudio(currentVersion, restoredDraftAt);
 

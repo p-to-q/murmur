@@ -23,6 +23,7 @@ import { memory } from "@/lib/platform/memory";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { trackStageEntered, trackStageCompleted } from "@/lib/observability/stage-tracking";
 import { addMurmurNotification } from "@/lib/store/notification-store";
 import { songSavedNotificationCopy } from "@/lib/notifications/notification-copy";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
@@ -74,6 +75,18 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       setActiveCreationRoute("/studio/name");
     }
   }, [currentVersion, setActiveCreationRoute]);
+
+  // Track once per mount, but only after a version exists — demo seeding fills
+  // the store asynchronously, and firing earlier would drop the flow context.
+  const stageTrackedRef = useRef(false);
+  useEffect(() => {
+    if (stageTrackedRef.current || !currentVersion) return;
+    stageTrackedRef.current = true;
+    trackStageEntered("save", {
+      flowId: currentVersion.originFlowId,
+      draftId: currentVersion.draftId,
+    });
+  }, [currentVersion]);
 
   useRestoredVersionAudio(currentVersion, restoredDraftAt);
 
@@ -274,6 +287,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
         meta: { songTitle: savedTitle },
       });
 
+      trackStageCompleted("save", { songId: savedSongId });
       toast.success(t("studio.save_ok"));
       resetFlow();
       router.push(`/song/${savedSongId}`);

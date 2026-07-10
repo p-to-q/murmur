@@ -299,3 +299,62 @@ export async function endpointHealth(
   const body = await safeJson(res);
   return { ok: res.ok, status: res.status, body };
 }
+
+export interface QueueDepth {
+  inQueue: number;
+  inProgress: number;
+  workers: { idle: number; running: number; total: number };
+}
+
+/**
+ * Parse queue depth out of an already-fetched /health response body.
+ *
+ * RunPod's health body shape:
+ *   { jobs: { completed, failed, inProgress, inQueue, retried },
+ *     workers: { idle, initializing, ready, running, throttled } }
+ *
+ * `total` counts every worker that represents live or imminent capacity —
+ * `ready` workers are warm and waiting for jobs, so omitting them would make a
+ * warm pool look cold and trigger a bogus cold-start penalty in wait estimates.
+ *
+ * Returns null when the shape is unexpected — callers should treat null as
+ * "allow the request" (fail open).
+ */
+export function parseQueueDepth(body: unknown): QueueDepth | null {
+  if (!body || typeof body !== "object") return null;
+
+  const b = body as Record<string, unknown>;
+  const jobs = b.jobs as Record<string, unknown> | undefined;
+  const workers = b.workers as Record<string, unknown> | undefined;
+
+  const inQueue = typeof jobs?.inQueue === "number" ? jobs.inQueue : 0;
+  const inProgress = typeof jobs?.inProgress === "number" ? jobs.inProgress : 0;
+  const idle = typeof workers?.idle === "number" ? workers.idle : 0;
+  const ready = typeof workers?.ready === "number" ? workers.ready : 0;
+  const running = typeof workers?.running === "number" ? workers.running : 0;
+  const initializing = typeof workers?.initializing === "number" ? workers.initializing : 0;
+
+  return {
+    inQueue,
+    inProgress,
+    workers: { idle, running, total: idle + ready + running + initializing },
+  };
+}
+
+/**
+ * Fetch the endpoint's /health and read the current queue depth from it.
+ *
+ * Returns null if the health endpoint is unreachable or the shape is
+ * unexpected — callers should treat null as "allow the request" (fail open).
+ */
+export async function getQueueDepth(
+  config: MusicServerlessConfig,
+): Promise<QueueDepth | null> {
+  try {
+    const { ok, body } = await endpointHealth(config, AbortSignal.timeout(5_000));
+    if (!ok) return null;
+    return parseQueueDepth(body);
+  } catch {
+    return null;
+  }
+}

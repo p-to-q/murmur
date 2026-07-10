@@ -11,7 +11,7 @@
  *   bun run scripts/video-gen.ts video --scene 03        # generate video from seed frame
  *   bun run scripts/video-gen.ts video --scene 03 --draft # use 即梦 3.0 (cheaper draft)
  *   bun run scripts/video-gen.ts status --task <id>      # check task status
- *   bun run scripts/video-gen.ts download --task <id>    # download completed video
+ *   bun run scripts/video-gen.ts download --url <video_url> --scene <id>  # download completed video
  */
 
 import { mkdirSync, writeFileSync, readFileSync, readdirSync } from "fs";
@@ -23,8 +23,40 @@ import { fileURLToPath } from "url";
 const _scriptFile = fileURLToPath(import.meta.url);
 const _scriptDir = dirname(_scriptFile);
 
-const API_KEY = process.env.VIDEO_GEN_API_KEY || "sk-VX3g0DFRVLNYhrYt5SsTHhUKI6cOpvo5vJzfBR7abMWk5uu8";
+const API_KEY = process.env.VIDEO_GEN_API_KEY;
 const API_BASE = "https://api.302.ai";
+
+/** All commands that call the 302.ai API require a credential up front. */
+function requireApiKey(): string {
+  if (!API_KEY) {
+    console.error(
+      "❌ VIDEO_GEN_API_KEY is not set. Export your 302.ai API key first:\n" +
+      "   export VIDEO_GEN_API_KEY=sk-...",
+    );
+    process.exit(1);
+  }
+  return API_KEY;
+}
+
+// How long to wait before giving up on an API call vs. an asset download.
+const API_TIMEOUT_MS = 180_000;
+const DOWNLOAD_TIMEOUT_MS = 300_000;
+
+/** `fetch` with a hard timeout so a stuck request cannot hang the CLI forever. */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs: number = API_TIMEOUT_MS,
+): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (err) {
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s: ${url}`);
+    }
+    throw err;
+  }
+}
 const ASSETS_DIR = join(_scriptDir, "..", "docs", "video-assets");
 const SEEDS_DIR = join(ASSETS_DIR, "seeds");
 const CLIPS_DIR = join(ASSETS_DIR, "clips");
@@ -38,7 +70,19 @@ for (const dir of [SEEDS_DIR, CLIPS_DIR, DRAFTS_DIR, TASKS_DIR]) {
 
 // ─── Style Block (appended to every prompt) ──────────────────────────────────
 
-const STYLE_BLOCK = `Cinematic photorealistic, Kodak Vision3 250D film stock, warm highlight roll-off into soft amber, shadows retain detail with muted teal-gray undertone. Subtle organic film grain visible on skin and flat surfaces — not digital noise, analog texture. Shallow depth of field f/1.8, foreground and background naturally separate into bokeh layers. Color palette globally muted with selective warm accents (amber, honey, aged brass). Skin tones natural and untouched — slight imperfections visible. 16:9 aspect ratio. No text, no watermark, no UI, no logos. Lighting motivated by practical sources within the scene (lamps, windows, screens, streetlights) — no unmotivated studio lighting. Atmosphere includes subtle environmental particles (dust in light beams, moisture in air, steam). Overall mood: the quiet weight of an unspoken melody.`;
+const NO_TEXT_RULE = "No text, no watermark, no UI, no logos.";
+// Scenes whose content IS text (Scene 04's wall writing) relax the blanket
+// no-text rule so the trailing style block cannot erase their central subject.
+const SCENE_TEXT_RULE =
+  "No watermark, no UI, no logos. Keep the handwritten text described in the scene exactly as written — do not add any other text.";
+
+const STYLE_BLOCK = `Cinematic photorealistic, Kodak Vision3 250D film stock, warm highlight roll-off into soft amber, shadows retain detail with muted teal-gray undertone. Subtle organic film grain visible on skin and flat surfaces — not digital noise, analog texture. Shallow depth of field f/1.8, foreground and background naturally separate into bokeh layers. Color palette globally muted with selective warm accents (amber, honey, aged brass). Skin tones natural and untouched — slight imperfections visible. 16:9 aspect ratio. ${NO_TEXT_RULE} Lighting motivated by practical sources within the scene (lamps, windows, screens, streetlights) — no unmotivated studio lighting. Atmosphere includes subtle environmental particles (dust in light beams, moisture in air, steam). Overall mood: the quiet weight of an unspoken melody.`;
+
+const STYLE_BLOCK_ALLOW_SCENE_TEXT = STYLE_BLOCK.replace(NO_TEXT_RULE, SCENE_TEXT_RULE);
+
+function styleBlockFor(scene: SceneConfig): string {
+  return scene.allowSceneText ? STYLE_BLOCK_ALLOW_SCENE_TEXT : STYLE_BLOCK;
+}
 
 // ─── Scene Definitions ───────────────────────────────────────────────────────
 
@@ -51,6 +95,7 @@ interface SceneConfig {
   videoPrompt: string;    // motion/action description for i2v
   negativePrompt: string; // --no items
   isCodeAnim?: boolean;   // Scene 09, 11-B: skip AI generation
+  allowSceneText?: boolean; // scene's subject includes text (relaxes the no-text style rule)
 }
 
 const SCENES: SceneConfig[] = [
@@ -86,7 +131,8 @@ const SCENES: SceneConfig[] = [
     name: "Everyone hums.",
     duration: 5,
     clipDuration: 2,
-    prompt: `Medium-close shot, 50mm lens, f/4. Center-symmetrical. The wall fills the entire frame edge to edge — no sky, no ground. An aged concrete wall. On it, handwritten in black marker: "Everyone hums." — the handwriting is casual, slightly tilted, one letter shows ink bleeding where the marker paused. The writing looks like it has been there for weeks. Wall surface: fine hairline cracks forming organic web pattern. A water stain from the upper-left corner — dried, amber-edged. Traces of previous layer of paint (pale sage green) visible where gray surface has chipped. A single small weed sprouts from a crack near bottom of frame. Wall color close to #F5F1EB. Flat, overcast daylight. Monochrome warm gray. ${STYLE_BLOCK}`,
+    allowSceneText: true,
+    prompt: `Medium-close shot, 50mm lens, f/4. Center-symmetrical. The wall fills the entire frame edge to edge — no sky, no ground. An aged concrete wall. On it, handwritten in black marker: "Everyone hums." — the handwriting is casual, slightly tilted, one letter shows ink bleeding where the marker paused. The writing looks like it has been there for weeks. Wall surface: fine hairline cracks forming organic web pattern. A water stain from the upper-left corner — dried, amber-edged. Traces of previous layer of paint (pale sage green) visible where gray surface has chipped. A single small weed sprouts from a crack near bottom of frame. Wall color close to #F5F1EB. Flat, overcast daylight. Monochrome warm gray. ${STYLE_BLOCK_ALLOW_SCENE_TEXT}`,
     videoPrompt: "Completely static camera, 2 seconds. The only movement is barely perceptible: the tiny weed at the bottom sways in a breath of wind. Light shifts imperceptibly as a cloud passes. The wall breathes with micro-changes in shadow.",
     negativePrompt: "people, graffiti art, colorful paint, posters, visible street or sky, perfect wall, clean surface, stencil lettering, neon, any text other than Everyone hums"
   },
@@ -208,16 +254,19 @@ const CODE_ANIM_SCENES = ["09", "09A", "09B", "09C", "11B"];
 async function generateSeedFrame(scene: SceneConfig): Promise<string> {
   console.log(`\n🖼️  Generating seed frame for Scene ${scene.id}: ${scene.name}`);
 
-  const response = await fetch(`${API_BASE}/v1/images/generations`, {
+  const response = await fetchWithTimeout(`${API_BASE}/v1/images/generations`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${API_KEY}`,
+      "Authorization": `Bearer ${requireApiKey()}`,
     },
     body: JSON.stringify({
       model: "gpt-image-2",
+      // 1536x1024 (3:2) is the closest landscape size gpt-image offers — it has
+      // no native 16:9 output. The i2v step requests aspect_ratio 16:9 and the
+      // final 16:9 crop happens in the edit, so the extra height is trim margin.
       prompt: scene.prompt,
-      size: "1536x1024",  // 16:9 landscape
+      size: "1536x1024",
       quality: "high",
       n: 1,
       output_format: "png",
@@ -239,7 +288,10 @@ async function generateSeedFrame(scene: SceneConfig): Promise<string> {
   }
 
   // Download and save
-  const imgResponse = await fetch(resultUrl);
+  const imgResponse = await fetchWithTimeout(resultUrl, {}, DOWNLOAD_TIMEOUT_MS);
+  if (!imgResponse.ok) {
+    throw new Error(`Seed download failed ${imgResponse.status}: ${await imgResponse.text()}`);
+  }
   const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
   const filename = `scene-${scene.id}_seed_v${getNextVersion(SEEDS_DIR, scene.id)}.png`;
   const filepath = join(SEEDS_DIR, filename);
@@ -247,6 +299,7 @@ async function generateSeedFrame(scene: SceneConfig): Promise<string> {
 
   const usage = data.usage as Record<string, unknown> | undefined;
   console.log(`   ✅ Saved: ${filename}`);
+  console.log(`   🔗 Seed URL (pass to video --seed-url): ${resultUrl}`);
   console.log(`   💰 Tokens: input=${usage?.input_tokens}, output=${usage?.output_tokens}, total=${usage?.total_tokens}`);
 
   return resultUrl;
@@ -259,13 +312,13 @@ async function generateVideoKlingO3(
 ): Promise<string> {
   console.log(`\n🎬  Generating video (Kling O3 ${mode}) for Scene ${scene.id}: ${scene.name}`);
 
-  const fullPrompt = `${scene.videoPrompt} ${STYLE_BLOCK}`;
+  const fullPrompt = `${scene.videoPrompt} ${styleBlockFor(scene)}`;
 
-  const response = await fetch(`${API_BASE}/klingai/m2v_omni_3_video`, {
+  const response = await fetchWithTimeout(`${API_BASE}/klingai/m2v_omni_3_video`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${API_KEY}`,
+      "Authorization": `Bearer ${requireApiKey()}`,
     },
     body: JSON.stringify({
       images: [seedImageUrl],
@@ -319,13 +372,13 @@ async function generateVideoDraft(
 ): Promise<string> {
   console.log(`\n🎬  Generating DRAFT video (即梦 3.0) for Scene ${scene.id}: ${scene.name}`);
 
-  const fullPrompt = `${scene.videoPrompt} ${STYLE_BLOCK}`;
+  const fullPrompt = `${scene.videoPrompt} ${styleBlockFor(scene)}`;
 
-  const response = await fetch(`${API_BASE}/doubao/drawing/jimengv30`, {
+  const response = await fetchWithTimeout(`${API_BASE}/doubao/drawing/jimengv30`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${API_KEY}`,
+      "Authorization": `Bearer ${requireApiKey()}`,
     },
     body: JSON.stringify({
       prompt: fullPrompt,
@@ -369,24 +422,73 @@ async function generateVideoDraft(
 
 // ─── Task Status & Download ──────────────────────────────────────────────────
 
+interface TaskMeta {
+  taskId: string;
+  sceneId: string;
+  sceneName: string;
+  model: string;
+  status?: string | number;
+  createdAt: string;
+  updatedAt?: string;
+  seedImageUrl: string;
+}
+
+function readTaskMeta(taskId: string): TaskMeta | null {
+  try {
+    return JSON.parse(readFileSync(join(TASKS_DIR, `${taskId}.json`), "utf-8")) as TaskMeta;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check a task's status via the adapter that matches the model it was created
+ * with (persisted in `.tasks/<id>.json`), and sync the stored status.
+ */
+async function checkTaskStatus(taskId: string): Promise<Record<string, unknown>> {
+  const meta = readTaskMeta(taskId);
+
+  if (meta?.model.includes("jimeng")) {
+    // 302.ai exposes no polling endpoint for 即梦 (Jimeng) draft tasks — the
+    // result is only visible in the 302.ai dashboard. Fail with guidance
+    // instead of querying Kling endpoints with a Jimeng task id.
+    throw new Error(
+      `Task ${taskId} is a 即梦 (Jimeng) draft task; 302.ai has no status API for it. ` +
+      "Check the 302.ai dashboard, or re-generate without --draft to use Kling.",
+    );
+  }
+
+  const result = await checkKlingTaskStatus(taskId);
+
+  if (meta) {
+    const task = (result.data as Record<string, unknown> | undefined)?.task as
+      | Record<string, unknown>
+      | undefined;
+    const status = task?.status;
+    if (typeof status === "string" || typeof status === "number") {
+      meta.status = status;
+      meta.updatedAt = new Date().toISOString();
+      writeFileSync(join(TASKS_DIR, `${taskId}.json`), JSON.stringify(meta, null, 2));
+    }
+  }
+
+  return result;
+}
+
 async function checkKlingTaskStatus(taskId: string): Promise<Record<string, unknown>> {
-  // Kling uses the same endpoint to check — re-fetch with task ID
-  // Actually, 302.ai Kling uses a different query endpoint. Let me check...
-  // The standard pattern is GET /klingai/task/{taskId} or similar.
-  // Based on 302.ai patterns, try:
-  const response = await fetch(`${API_BASE}/klingai/task/${taskId}/fetch`, {
+  const response = await fetchWithTimeout(`${API_BASE}/klingai/task/${taskId}/fetch`, {
     method: "GET",
     headers: {
-      "Authorization": `Bearer ${API_KEY}`,
+      "Authorization": `Bearer ${requireApiKey()}`,
     },
   });
 
   if (!response.ok) {
     // Try alternative endpoint
-    const altResponse = await fetch(`${API_BASE}/klingai/m2v_omni_3_video/${taskId}`, {
+    const altResponse = await fetchWithTimeout(`${API_BASE}/klingai/m2v_omni_3_video/${taskId}`, {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${API_KEY}`,
+        "Authorization": `Bearer ${requireApiKey()}`,
       },
     });
     if (!altResponse.ok) {
@@ -406,7 +508,10 @@ async function downloadVideo(url: string, sceneId: string, model: string): Promi
   const filepath = join(dir, filename);
 
   console.log(`\n📥 Downloading: ${filename}`);
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url, {}, DOWNLOAD_TIMEOUT_MS);
+  if (!response.ok) {
+    throw new Error(`Video download failed ${response.status}: ${await response.text()}`);
+  }
   const buffer = Buffer.from(await response.arrayBuffer());
   writeFileSync(filepath, buffer);
   console.log(`   ✅ Saved: ${filepath}`);
@@ -485,7 +590,7 @@ async function main() {
       if (!imageUrl) {
         // Look for locally saved seed — but we need a URL for the API
         console.error("❌ Need --seed-url <url> (the URL returned from seed generation)");
-        console.log("   Hint: Run 'seed --scene " + sceneId + "' first, then use the image URL from 302.ai");
+        console.log("   Hint: Run 'seed --scene " + sceneId + "' first — it prints '🔗 Seed URL' to pass here");
         process.exit(1);
       }
 
@@ -512,7 +617,7 @@ async function main() {
 
       console.log(`\n⏳ Checking task: ${taskId}`);
       try {
-        const result = await checkKlingTaskStatus(taskId);
+        const result = await checkTaskStatus(taskId);
         console.log(JSON.stringify(result, null, 2));
       } catch (err) {
         console.error("Failed:", err);

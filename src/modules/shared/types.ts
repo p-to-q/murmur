@@ -170,6 +170,7 @@ export type VersionGenerationErrorCode =
   | "billing_unavailable"
   | "worker_unconfigured"
   | "worker_unavailable"
+  | "worker_overloaded"
   | "server_error"
   | "network_error";
 
@@ -251,6 +252,7 @@ export type TranscriptionProvider =
   | "rmvpe"
   | "swiftf0"
   | "pyin"
+  | "client_pyin"
   | "yin"
   | "parselmouth"
   | "fixture";

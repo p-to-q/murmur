@@ -17,6 +17,8 @@ import type { SongCard as SongCardType } from "@/modules/shared/types";
 import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
+import { trackStageEntered } from "@/lib/observability/stage-tracking";
+import { useNotificationStore } from "@/lib/store/notification-store";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
 import { ARTWORK_CATALOG } from "@/presets/artworks/catalog";
 
@@ -146,6 +148,12 @@ export function GalleryScreen() {
   // Use demo songs when user has no real songs
   const displaySongs = songs.length > 0 ? songs : DEMO_SONGS;
   const isShowingDemo = songs.length === 0;
+
+  const markAllRead = useNotificationStore((s) => s.markAllRead);
+  useEffect(() => {
+    trackStageEntered("gallery");
+    markAllRead();
+  }, [markAllRead]);
 
   useEffect(() => {
     let cancelled = false;
