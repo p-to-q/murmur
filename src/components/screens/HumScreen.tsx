@@ -482,7 +482,7 @@ export function HumScreen() {
     msgTimerRef.current = setInterval(() => {
       msgIdxRef.current = (msgIdxRef.current + 1) % PROCESSING_MSGS.length;
       setProcessingMessage(PROCESSING_MSGS[msgIdxRef.current] ?? "");
-    }, 900);
+    }, 2500);
   };
   const stopMessages = () => {
     clearIntervalRef(msgTimerRef);
