@@ -23,7 +23,10 @@ import {
 
 import { detectCurrencyFromHeaders } from "@/lib/geo/region";
 
-export const runtime = "edge";
+// nodejs (not edge): the shared rate limiter's production store is
+// Postgres-backed, and the postgres driver needs Node's net/tls/crypto,
+// which the edge runtime cannot bundle.
+export const runtime = "nodejs";
 
 const ROUTE = "/api/billing/skus";
 const RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };

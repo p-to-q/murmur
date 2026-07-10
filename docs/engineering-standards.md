@@ -85,9 +85,11 @@ class TranscribeError extends Error {
 }
 ```
 
-Catch by class on the route side; switch on `.code` inside. If a shared base
-error or `errorEnvelope()` helper is added later, keep it under `src/lib/api/`
-and update this standard in the same PR.
+Catch by class on the route side; switch on `.code` inside. The shared
+error-envelope helper is `errorResponse()` in
+`src/lib/api/error-response.ts`; if a shared base error class is added
+later, keep it under `src/lib/api/` and update this standard in the
+same PR.
 
 ---
 

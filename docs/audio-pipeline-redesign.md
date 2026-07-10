@@ -200,11 +200,11 @@ Remaining work from the original redesign plan:
 
 1. **Streaming pipeline** — stream transcription results as frames
    arrive instead of batch-after-recording. Enables progressive vibe
-   preview during capture (see `project-streaming-pipeline` memory).
+   preview during capture.
 
 2. **Client-side pYIN fallback** — Essentia.js in the browser as a
    graceful degradation path when the server worker is unavailable or
-   latency is too high (see `project-swift-f0-fallback` memory).
+   latency is too high.
 
 3. **Structured diagnostics API** — expose pipeline diagnostics to a
    `/me/debug` overlay for development and support triage.

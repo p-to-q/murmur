@@ -82,7 +82,9 @@ Stops:
 8. Add diagnostics (snr, voicedRatio, provider) to MeScreen for
    power users, removed from default view.
 
-**Done when:** acceptance list in `audio-pipeline-redesign.md` §9 passes.
+**Done when:** the "Done Checklist" in
+`archive/phase-plans/phase-1-server-transcribe.md` passes (pipeline
+behavior itself is specified in `audio-pipeline-redesign.md` §1–§7).
 
 ---
 
