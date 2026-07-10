@@ -10,6 +10,7 @@ import {
   buildTranscriptionMelodies,
   chooseGenerationMelodyKind,
 } from "@/modules/music/humming-engine";
+import { isObject } from "@/lib/utils/is-object";
 import type {
   CleanMelody,
   MelodyNote,
@@ -447,10 +448,6 @@ async function readWorkerError(
       message: `Audio worker returned HTTP ${response.status}`,
     };
   }
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function normalizeNotes(
