@@ -812,6 +812,9 @@ export const DICT = {
   "topup.restoring":     { zh: "恢复中…", en: "Restoring…" },
   "checkout.confirming_grant": { zh: "正在确认到账…", en: "Confirming your notes…" },
 
+  "topup.balance_unavailable":  { zh: "余额暂时不可用",               en: "Balance unavailable" },
+  "topup.refresh_failed":      { zh: "刷新余额失败，请再试一次。",   en: "Couldn't refresh balance — try again." },
+
   // ── Payment methods ─────────────────────────────────────────────────
   "topup.payment.card":      { zh: "信用卡",                       en: "Card" },
   "topup.payment.wechat":    { zh: "微信支付",                     en: "WeChat Pay" },

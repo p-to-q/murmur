@@ -46,6 +46,13 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
+    groups:
+      pip-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     labels:
       - "dependencies"
       - "python"

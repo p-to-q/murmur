@@ -10,12 +10,19 @@ import {
 } from "@/lib/platform/notifications-server";
 import { log } from "@/lib/observability/log";
 
+// Browser push services only hand out HTTPS endpoints; anything else would
+// point our web-push sender at an arbitrary (possibly internal) target.
+const httpsEndpoint = z.url({
+  protocol: /^https$/,
+  error: "Push endpoint must use HTTPS",
+});
+
 const subscriptionSchema = z.object({
-  endpoint: z.url(),
+  endpoint: httpsEndpoint,
   expirationTime: z.number().nullable().optional(),
   keys: z.object({
-    p256dh: z.string().min(1),
-    auth: z.string().min(1),
+    p256dh: z.string().min(1).max(500),
+    auth: z.string().min(1).max(500),
   }),
 });
 
@@ -26,7 +33,7 @@ const subscribeSchema = z.object({
 });
 
 const unsubscribeSchema = z.object({
-  endpoint: z.url(),
+  endpoint: httpsEndpoint,
 });
 
 const ROUTE = "/api/notifications/push/subscribe";

@@ -18,11 +18,11 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { shareCode } = await params;
-  const visibility = await resolveShareVisibility(shareCode);
+  const { visibility, title } = await resolveShareMeta(shareCode);
   const shouldIndex = visibility === "public";
 
   return {
-    title: "Shared song",
+    title: title ? `${title} – Murmur` : "Shared song",
     description: "Listen to a song made from a hum in Murmur.",
     robots: {
       index: shouldIndex,
@@ -39,28 +39,36 @@ export default async function PublicSongPage({ params }: Props) {
   return <PublicSongScreen shareCode={shareCode} />;
 }
 
-async function resolveShareVisibility(shareCode: string): Promise<string | null> {
+interface ShareMeta {
+  visibility: string | null;
+  title: string | null;
+}
+
+async function resolveShareMeta(shareCode: string): Promise<ShareMeta> {
   if (isDemoSongId(shareCode)) {
-    return getDemoSong(shareCode)?.visibility ?? null;
+    const demo = getDemoSong(shareCode);
+    return { visibility: demo?.visibility ?? null, title: demo?.title ?? null };
   }
 
   const normalized = normalizeSongShareCode(shareCode);
-  if (!normalized) return null;
+  if (!normalized) return { visibility: null, title: null };
 
   // Metadata is best-effort; the client page still fetches through the public
   // API. Keep this path from turning a DB outage into a broken share page.
   try {
     const { getSongShareMetaByShareCode } = await import("@/lib/db/queries/songs");
     const meta = await getSongShareMetaByShareCode(normalized);
-    return meta && meta.hasAudio ? meta.visibility : null;
-  } catch {
+    if (!meta || !meta.hasAudio) return { visibility: null, title: null };
+    return { visibility: meta.visibility, title: meta.title };
+  } catch (err) {
+    console.warn("resolveShareMeta: primary query failed, using fallback", err);
     const { getLocalSongByShareCodeFallback } = await import(
       "@/lib/db/queries/local-song-fallback"
     );
     const fallbackSong = getLocalSongByShareCodeFallback(normalized);
     if (fallbackSong && hasSongShareAudio(fallbackSong)) {
-      return fallbackSong.visibility;
+      return { visibility: fallbackSong.visibility, title: fallbackSong.title ?? null };
     }
-    return null;
+    return { visibility: null, title: null };
   }
 }

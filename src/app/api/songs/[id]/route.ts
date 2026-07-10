@@ -28,15 +28,15 @@ const READ_RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
 const MUTATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
 
 const updateSongSchema = z.object({
-  title: z.string().min(1).optional(),
-  vibe: z.string().min(1).optional(),
-  vibeEn: z.string().min(1).optional(),
+  title: z.string().min(1).max(200).optional(),
+  vibe: z.string().min(1).max(500).optional(),
+  vibeEn: z.string().min(1).max(500).optional(),
   bpm: z.number().int().optional(),
-  keySignature: z.string().min(1).optional(),
-  scaleType: z.string().min(1).optional(),
+  keySignature: z.string().min(1).max(100).optional(),
+  scaleType: z.string().min(1).max(100).optional(),
   duration: z.number().int().nonnegative().optional(),
-  parentSongId: z.string().min(1).nullable().optional(),
-  rootSongId: z.string().min(1).nullable().optional(),
+  parentSongId: z.string().min(1).max(100).nullable().optional(),
+  rootSongId: z.string().min(1).max(100).nullable().optional(),
   lineageDepth: z.number().int().nonnegative().optional(),
   sourceMelodyKind: z.enum(["intent", "corrected", "musical"]).optional(),
   editCount: z.number().int().nonnegative().optional(),

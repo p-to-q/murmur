@@ -92,6 +92,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState<ExportKey | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [shareCardOpen, setShareCardOpen] = useState(false);
   const [shareCardMode, setShareCardMode] = useState<ShareCardMode>("image");
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -311,7 +312,6 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         visibility: "unlisted",
       });
 
-      const copied = await copyTextToClipboard(share.url);
       setSong((current) =>
         current && current.id === song.id
           ? {
@@ -321,16 +321,35 @@ export function SongDetailScreen({ songId }: { songId: string }) {
             }
           : current,
       );
-      if (!copied) {
-        window.open(share.url, "_blank", "noopener,noreferrer");
-        throw new SongShareRequestError({
-          code: "clipboard_unavailable",
-          status: 0,
-          message: "Clipboard unavailable",
-          requestId: share.requestId,
-        });
+
+      let sharedNatively = false;
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        try {
+          // The OS share sheet is its own confirmation — no toast on success.
+          await navigator.share({ title: song.title, url: share.url });
+          sharedNatively = true;
+        } catch (shareError) {
+          // Dismissing the sheet is a normal outcome, not an error.
+          if (shareError instanceof DOMException && shareError.name === "AbortError") {
+            return;
+          }
+          // navigator.share can exist yet reject this payload (platform
+          // quirks); fall through to the clipboard path instead of failing.
+        }
       }
-      toast.success(t("song.share.link_copied") || "Share link copied");
+      if (!sharedNatively) {
+        const copied = await copyTextToClipboard(share.url);
+        if (!copied) {
+          window.open(share.url, "_blank", "noopener,noreferrer");
+          throw new SongShareRequestError({
+            code: "clipboard_unavailable",
+            status: 0,
+            message: "Clipboard unavailable",
+            requestId: share.requestId,
+          });
+        }
+        toast.success(t("song.share.link_copied") || "Share link copied");
+      }
       memory
         .reportAction({
           content: `Copied share link for "${song.title}"`,
@@ -354,7 +373,8 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   /* ── Delete ────────────────────────────────────────────────────────── */
 
   const handleDelete = async () => {
-    if (!song) return;
+    if (!song || isDeleting) return;
+    setIsDeleting(true);
     try {
       const res = await fetch(`/api/songs/${song.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`delete HTTP ${res.status}`);
@@ -370,6 +390,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     } catch (e) {
       console.error(e);
       toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?");
+      setIsDeleting(false);
     }
   };
 
@@ -820,7 +841,8 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="flex-1 h-11 rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors"
+                  disabled={isDeleting}
+                  className="flex-1 h-11 rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50"
                 >
                   {t("song.delete.confirm") || "Delete"}
                 </button>
