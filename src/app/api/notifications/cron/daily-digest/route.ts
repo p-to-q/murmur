@@ -13,14 +13,14 @@ export async function GET(request: NextRequest) {
   if (!expected) {
     return NextResponse.json(
       { error: "server_error", message: "CRON_SECRET is not configured", requestId },
-      { status: 500 },
+      { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
   const auth = request.headers.get("authorization");
   if (auth !== `Bearer ${expected}`) {
     return NextResponse.json(
       { error: "unauthorized", message: "Invalid or missing authorization", requestId },
-      { status: 401 },
+      { status: 401, headers: { "X-Request-Id": requestId } },
     );
   }
 
@@ -36,7 +36,10 @@ export async function GET(request: NextRequest) {
     if (err instanceof NotificationPublishError) {
       return NextResponse.json(
         { error: err.code, message: err.message, requestId },
-        { status: err.status >= 400 && err.status < 600 ? err.status : 500 },
+        {
+          status: err.status >= 400 && err.status < 600 ? err.status : 500,
+          headers: { "X-Request-Id": requestId },
+        },
       );
     }
     log("notifications.publish_failed", {
@@ -48,7 +51,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json(
       { error: "server_error", message: "publish failed", requestId },
-      { status: 500 },
+      { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
 }

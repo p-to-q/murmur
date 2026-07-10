@@ -411,8 +411,9 @@ describe("POST /api/songs", () => {
     }));
 
     expect(response.status).toBe(500);
-    const body = await response.json() as { error: string };
-    expect(body.error).toBe("Failed to save song");
+    const body = await response.json() as { error: string; message?: string };
+    expect(body.error).toBe("server_error");
+    expect(body.message).toBe("Failed to save song");
     expect(getSongByIdMock).toHaveBeenCalledTimes(0);
   });
 
@@ -451,8 +452,9 @@ describe("POST /api/songs", () => {
     }));
 
     expect(response.status).toBe(500);
-    const body = await response.json() as { error: string };
-    expect(body.error).toBe("Failed to save song");
+    const body = await response.json() as { error: string; message?: string };
+    expect(body.error).toBe("server_error");
+    expect(body.message).toBe("Failed to save song");
     expect(getSongByIdMock).toHaveBeenCalledTimes(0);
   });
 

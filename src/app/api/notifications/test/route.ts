@@ -70,7 +70,10 @@ export async function POST(request: NextRequest) {
     if (err instanceof NotificationPublishError) {
       return NextResponse.json(
         { error: err.code, message: err.message, requestId },
-        { status: err.status >= 400 && err.status < 600 ? err.status : 500 },
+        {
+          status: err.status >= 400 && err.status < 600 ? err.status : 500,
+          headers: { "X-Request-Id": requestId },
+        },
       );
     }
     log("notifications.publish_failed", {
@@ -83,7 +86,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json(
       { error: "server_error", message: "publish failed", requestId },
-      { status: 500 },
+      { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
 }

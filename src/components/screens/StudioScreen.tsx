@@ -250,7 +250,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
         return;
       }
       toast.error(t("studio.prompt.llm_unavailable"), {
-        description: formatStudioSupportCode({ code: "unknown", requestId: null }),
+        description: formatStudioSupportCode({ code: "prompt_failed", requestId: null }),
       });
     } finally {
       setPromptBusy(false);

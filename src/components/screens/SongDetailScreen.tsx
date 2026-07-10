@@ -55,7 +55,12 @@ import {
   type SongShareRequestErrorCode,
 } from "@/lib/api/song-share";
 import { hasSongShareAudio } from "@/lib/share/song-share";
-import { formatShareSupportCode } from "@/lib/observability/support-code";
+import { formatShareSupportCode, formatSupportCode } from "@/lib/observability/support-code";
+import {
+  ApiEnvelopeError,
+  apiErrorEnvelopeFrom,
+  readApiErrorEnvelope,
+} from "@/lib/api/error-envelope";
 import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
@@ -202,7 +207,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     } catch (err) {
       console.error("[SongDetail] tone play error:", err);
       toast.error(t("song.export.err"), {
-        description: formatShareSupportCode({ code: "export_failed", requestId: null }),
+        description: formatSupportCode({ area: "SONG", error: "playback_failed", requestId: null }),
       });
       setIsPlaying(false);
     }
@@ -365,7 +370,9 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     if (!song) return;
     try {
       const res = await fetch(`/api/songs/${song.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`delete HTTP ${res.status}`);
+      if (!res.ok) {
+        throw new ApiEnvelopeError(await readApiErrorEnvelope(res, "delete_failed"));
+      }
       memory
         .reportAction({
           content: `Deleted "${song.title}"`,
@@ -377,8 +384,13 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       router.push("/gallery");
     } catch (e) {
       console.error(e);
+      const envelope = apiErrorEnvelopeFrom(e);
       toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?", {
-        description: formatShareSupportCode({ code: "delete_failed", requestId: null }),
+        description: formatSupportCode({
+          area: "SONG",
+          error: envelope?.code ?? "delete_failed",
+          requestId: envelope?.requestId ?? null,
+        }),
       });
     }
   };

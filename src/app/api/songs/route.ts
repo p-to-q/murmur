@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
     });
     if (isDatabaseUnavailable(err)) {
       return NextResponse.json(
-        { error: "server_error", message: "Database unavailable", requestId },
+        { error: "songs_unavailable", message: "Database unavailable", requestId },
         { status: 503, headers: { "X-Request-Id": requestId } },
       );
     }
@@ -246,7 +246,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(
         {
-          error: "server_error",
+          error: "billing_unavailable",
           message: "User balance is unavailable",
           requestId,
         },
@@ -323,7 +323,7 @@ export async function POST(req: NextRequest) {
     });
     if (isDatabaseUnavailable(err)) {
       return NextResponse.json(
-        { error: "server_error", message: "Database unavailable", requestId },
+        { error: "save_unavailable", message: "Database unavailable", requestId },
         { status: 503, headers: { "X-Request-Id": requestId } },
       );
     }
@@ -419,7 +419,7 @@ async function handleSongIdConflict(songId: string, userId: string, requestId: s
 function songIdConflictResponse(requestId: string) {
   return NextResponse.json(
     {
-      error: "conflict",
+      error: "song_id_conflict",
       message: "Could not save this draft because its song id already exists.",
       requestId,
     },
