@@ -75,5 +75,9 @@ In order, the healthiest next bets are:
    adapters.
 2. Tighten the hum -> arrangement -> save path so it is predictable and easy to
    demo.
-3. Split large UI files only when doing so reduces confusion around ongoing
+3. Productionize the client-side WASM pitch fallback into a full device-mode
+   execution path for offline-first and privacy-sensitive flows.
+4. Persist repair provenance, melody-choice stance, and edit lineage in
+   saved-song metadata for longitudinal comparison.
+5. Split large UI files only when doing so reduces confusion around ongoing
    product work.

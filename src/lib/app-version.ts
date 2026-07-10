@@ -6,7 +6,7 @@ export function getAppVersionParts() {
   ).slice(0, 7);
 
   return {
-    semver: process.env.NEXT_PUBLIC_APP_VERSION ?? "0.5.0",
+    semver: process.env.NEXT_PUBLIC_APP_VERSION ?? "0.6.0",
     build: process.env.NEXT_PUBLIC_APP_BUILD ?? APP_BUILD,
     gitSha,
   };

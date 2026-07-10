@@ -161,16 +161,17 @@ The control is there to resolve ambiguity, not to blame the singer.
 
 ## 5.4 Local acceptance corpus
 
-Murmur should keep a standing unattended acceptance corpus on one machine.
-That corpus should not only cover happy paths. It should always include:
+Murmur keeps a standing unattended acceptance corpus on one machine.
+That corpus covers not only happy paths. It always includes:
 
 - familiar melody anchors;
 - noisy / quiet / clipped capture variants;
 - overheld interior-note cases;
 - pitch-weak but rhythm-stable cases;
-- urgent, short-gap hook fragments.
-- glide-heavy phrases that should not be oversplit.
-- light vibrato phrases that should not turn into fake extra notes.
+- urgent, short-gap hook fragments;
+- glide-heavy phrases that should not be oversplit;
+- light vibrato phrases that should not turn into fake extra notes;
+- client-side WASM pYIN fallback cases (browser-only pitch path).
 
 The point is to keep product intent grounded in repeatable engineering
 evidence. If a later rewrite scores well on one neat demo but fails this corpus,
@@ -191,8 +192,8 @@ Use when:
 
 Cloud mode is the default path for:
 
-- full denoise;
-- heavier pitch / phrase analysis;
+- full denoise (DeepFilterNet);
+- heavier pitch / phrase analysis (RMVPE + SwiftF0 ensemble);
 - stronger correction and polish;
 - save/export-grade render decisions.
 
@@ -203,16 +204,22 @@ Use when:
 - the user prefers local processing;
 - the backend is saturated;
 - the device is capable enough;
-- we need immediate feedback.
+- we need immediate feedback;
+- the remote worker is transiently unavailable.
 
-Device mode should support:
+Device mode supports:
 
 - recording quality checks;
 - trim + light denoise;
-- lightweight F0 contour extraction;
+- lightweight F0 contour extraction via Essentia.js WASM pYIN;
 - coarse note segmentation;
-- light correction;
+- light correction through the same humming-engine pipeline;
 - quick piano/guitar preview.
+
+The browser-side WASM pYIN fallback (`src/lib/audio/client-pitch-fallback.ts`)
+is the first production-viable implementation of device-mode pitch detection.
+Future expansions will add SwiftF0 and CREPE WASM ports for richer contour
+truth and multi-detector fusion entirely in the browser.
 
 ### 6.3 Shared contract
 

@@ -55,3 +55,8 @@ docs, the PR, or the handoff note.
   contract.
 - Prefer one-purpose PRs with visible outcomes.
 - Split large files when the split improves reasoning, not just aesthetics.
+- Client-side fallback code (WASM pitch detection, transient error handling)
+  belongs in `src/lib/audio/` and `src/lib/errors/`, not in platform adapters
+  or screen components.
+- Observability infrastructure (latency budgets, stage tracking, structured
+  logging) must be added before new async paths ship, not after.

@@ -234,12 +234,12 @@ Given the current repository state, the clearest next step is:
 Murmur uses a hybrid version string with one engineering source of truth and
 two display shapes in the Me screen About card.
 
-### Current release (calibrated 2026-07-04)
+### Current release (calibrated 2026-07-11)
 
-- **SemVer**: `0.5.0`
-- **Build**: `110` (merged GitHub PR count at calibration time)
-- **Product display**: `v0.5.0 · 110`
-- **Developer mode display**: `v0.5.0 · build 110 · <git-sha>`
+- **SemVer**: `0.6.0`
+- **Build**: `181` (latest merged PR number at calibration time)
+- **Product display**: `v0.6.0 · 181`
+- **Developer mode display**: `v0.6.0 · build 181 · <git-sha>`
 
 This release reflects milestones since the earlier `v0.2.0` hackathon label:
 
@@ -247,13 +247,14 @@ This release reflects milestones since the earlier `v0.2.0` hackathon label:
 - `0.3.0` — auth, persistence, and deployment readiness
 - `0.4.0` — billing, public share, and launch hardening
 - `0.5.0` — notification delivery and post-launch polish
+- `0.6.0` — browser-side transcription fallback, latency budgets, stage tracking, ISR caching, security hardening, and RTE-Dev infrastructure
 
 ### Source of truth
 
 | Field | Source | Where it lives |
 |-------|--------|----------------|
 | SemVer | `package.json` `version` | injected as `NEXT_PUBLIC_APP_VERSION` in `next.config.ts` |
-| Build | release-time merged PR count | `src/lib/release-metadata.ts` (`APP_BUILD`) and `NEXT_PUBLIC_APP_BUILD` |
+| Build | release-time merged PR number | `src/lib/release-metadata.ts` (`APP_BUILD`) and `NEXT_PUBLIC_APP_BUILD` |
 | Git SHA | Vercel deploy SHA or local `git rev-parse HEAD` | `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA` |
 
 Implementation:
@@ -270,8 +271,8 @@ On each **product release** (production deploy with a visible milestone or
 release note):
 
 1. bump `package.json` `version` using SemVer pre-1.0 rules
-2. update `APP_BUILD` in `src/lib/release-metadata.ts` to the current merged PR
-   count
+2. update `APP_BUILD` in `src/lib/release-metadata.ts` to the latest merged PR
+   number
 3. add a short entry to `CHANGELOG.md` and update "Current release" in this
    document
 4. create a git tag `vX.Y.Z`

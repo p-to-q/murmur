@@ -1,6 +1,6 @@
 # Murmur Humming Research Landscape
 
-Last updated: 2026-06-05
+Last updated: 2026-07-11
 
 This note is the practical research map behind Murmur's humming engine work.
 It is not a general MIR reading list. It is a filter for one product goal:
@@ -21,6 +21,7 @@ The practical conclusion is:
 
 - borrow **robustness** from song-ID systems;
 - borrow **pitch/front-end and note proposals** from transcription systems;
+- borrow **browser-side WASM inference** from Essentia.js for device-mode fallback;
 - keep **melody repair, arrangement, and render taste** inside Murmur.
 
 ## 2. Product landscape
@@ -145,8 +146,10 @@ Why it matters:
 
 Best use in Murmur:
 
-- first-pass continuous F0 backbone;
+- first-pass continuous F0 backbone (worker-side);
 - especially good for local/device mode and browser-adjacent experimentation.
+- future WASM port candidate for pure browser-side execution alongside the
+  Essentia.js pYIN path.
 
 ### 3.2 CREPE
 
@@ -206,7 +209,28 @@ Best use in Murmur:
 - pre-clean only;
 - never let denoise become a hidden melody rewrite stage.
 
-### 3.5 DDSP / MIDI-DDSP
+### 3.5 Essentia.js
+
+Reference:
+
+- Repo: <https://github.com/MTG/essentia.js>
+- Docs: <https://mtg.github.io/essentia.js/>
+
+Why it matters:
+
+- mature WASM-compiled audio analysis library;
+- includes pYIN probabilistic pitch detection, onset detection, key estimation;
+- runs entirely in the browser with no server round-trip;
+- ~2.5 MB lazy-loaded WASM payload.
+
+Best use in Murmur:
+
+- client-side pitch fallback when the audio worker is transiently unavailable
+  (`src/lib/audio/client-pitch-fallback.ts`);
+- future device-mode pitch detection for offline-first and privacy-sensitive flows;
+- reference implementation for WASM-porting other Python-based detectors.
+
+### 3.6 DDSP / MIDI-DDSP
 
 Reference:
 
@@ -227,7 +251,7 @@ Best use in Murmur:
 - for timbre/render experimentation after melody confidence and arrangement
   quality are stable.
 
-## 3.6 Public evaluation sets worth actually using
+## 3.7 Public evaluation sets worth actually using
 
 The strongest correction to our earlier research is this:
 
@@ -276,10 +300,12 @@ between research assets and Murmur's real unattended regression loop.
 
 ### 5.2 Pitch layer
 
-- keep current pYIN path as baseline fallback;
+- keep current pYIN path as baseline fallback (both server-side and browser WASM);
 - evaluate SwiftF0 as the preferred fast contour detector;
 - optionally run Basic Pitch server-side on selected takes to compare note
-  segmentation quality.
+  segmentation quality;
+- browser-side WASM pYIN via Essentia.js now provides a third-tier fallback
+  for transient server failures.
 
 ### 5.3 Melody repair layer
 

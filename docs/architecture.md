@@ -55,17 +55,20 @@ flowchart TB
     db["Postgres / Drizzle"]
     ai["OpenAI-compatible AI Gateway"]
     worker["Transcription Worker"]
+    clientPitch["Client-Side Pitch Fallback\nWASM pYIN / Essentia.js"]
     storage["Browser Storage\nlocalStorage"]
 
     user --> app
     app --> ui
     ui --> routes
     ui --> worker
+    ui --> clientPitch
     ui --> storage
     ui --> music
     routes --> platform
     routes --> db
     routes --> ai
+    routes --> clientPitch
     platform --> storage
     music --> storage
 ```
@@ -76,6 +79,8 @@ flowchart TB
 
 - The user records or loads a melody idea in the Hum flow.
 - The audio worker derives note events through the server transcription route.
+- When the remote worker is unavailable, Murmur falls back to browser-side pYIN pitch detection via Essentia.js WASM (`src/lib/audio/client-pitch-fallback.ts`). The result runs through the same melody-polisher + humming-engine pipeline, so the rest of the app sees a normal `TranscriptionResult` regardless of where pitch detection happened.
+- Transient errors are classified centrally (`src/lib/errors/transient.ts`) so retry logic, observability, and UI all agree on what counts as retryable.
 - Murmur normalizes that output before it becomes arrangement input.
 
 ### 2. Arrangement and editing
@@ -118,6 +123,8 @@ flowchart TB
   system while the page is hidden or closed. When keys are absent, publish calls
   skip cleanly so local demos remain usable.
 - Memory events are stored locally for now, which keeps user flows non-blocking.
+- Stage-based funnel tracking (`src/lib/observability/stage-tracking.ts`) records every hum → vibe → studio → save → gallery transition with dwell times, so drop-off rates are observable from structured logs without a separate analytics SDK.
+- Per-component latency budgets (`src/lib/observability/latency-budgets.ts`) define P50/P95 ceilings for transcribe, music_generate, llm_edit, and db query paths. When a component exceeds its P95, structured logs carry a `budget_exceeded` flag.
 - Language is negotiated before first paint from the explicit `murmur.lang`
   cookie first, then the request `Accept-Language` header, then the product
   default (`en`). Client hydration re-checks `localStorage`; if the server only
@@ -131,15 +138,23 @@ flowchart TB
 
 - The platform layer is local-first, but production identity is now
   session-backed rather than header-backed.
+- Client-side pitch fallback requires Essentia.js WASM (`essentia.js` npm package),
+  which is lazy-loaded on first use and never inflates the initial bundle.
 - Web Push requires `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, HTTPS
   (localhost is accepted by browsers for development), browser notification
   permission, and a registered `push_subscriptions` row. Music generation is
   still client-orchestrated clip-by-clip; sibling clips share a browser-minted
   generation batch id (`x-generation-batch-id`) so their pushes and inbox
   entries collapse to one per batch (see "Generation Batch Semantics" in
-  `docs/notifications.md`). Fully durable "batch finished after browser exit"
-  notifications still require a future server-side generation job queue.
+  `docs/notifications.md`). Generation batch pushes are now collapsed per batch
+  (`src/app/api/notifications/cron/route.ts`). Fully durable "batch finished
+  after browser exit" notifications still require a future server-side generation
+  job queue.
 - AI editing depends on `OPENAI_API_KEY` or an equivalent gateway key.
+- ISR caching (`minimumCacheTTL: 3600`) and AVIF/WebP image optimization are
+  configured in `next.config.ts` for gallery artwork and user avatars.
+- CSP headers (`Content-Security-Policy-Report-Only`) are applied globally
+  through Next.js headers configuration for production hardening.
 - Some UI files are still larger than the final target shape and can be split as
   the product stabilizes.
 

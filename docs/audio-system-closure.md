@@ -1,6 +1,6 @@
 # Murmur Audio System Closure
 
-Last updated: 2026-06-05
+Last updated: 2026-07-11
 
 This document closes the loop between product intent, engineering design,
 validation, supportability, and fallback behavior for Murmur's audio system.
@@ -595,11 +595,14 @@ This is the closed loop we should use without user intervention:
 1. `bun test src/lib/audio/fixture-rescue-policy.test.ts`
 2. `bun test src/lib/platform/audio-worker.test.ts src/modules/music/humming-engine.test.ts src/app/api/transcribe/route.test.ts`
 3. `cd workers/audio-engine && ./.venv/bin/python -m unittest tests.test_detectors tests_full.test_pipeline tests_full.test_audio_audit`
-4. `bun run audit:audio:gate`
-5. `bun run audit:audio:closure`
-6. optional external dataset pass via `--manifest`
-7. `bun run lint`
-8. `bun run build`
+4. `bun test src/lib/errors/transient.test.ts` (transient classification)
+5. `bun test src/lib/observability/latency-budgets.test.ts` (budget checks)
+6. `bun test src/lib/observability/stage-tracking.test.ts` (funnel tracking)
+7. `bun run audit:audio:gate`
+8. `bun run audit:audio:closure`
+9. optional external dataset pass via `--manifest`
+10. `bun run lint`
+11. `bun run build`
 
 When we need a faster human review loop instead of raw JSON, generate the
 operator report:
@@ -686,6 +689,10 @@ Still soft:
    bypass its `pYIN` win path;
 3. build a small internal real-humming eval set beside the public datasets, not
    after them;
-4. add capture quality hints before upload;
+4. add capture quality hints before upload (level, clipping, SNR, voiced ratio);
 5. persist repair/provenance diagnostics on saved songs or debug events;
-6. keep tuning rule-based musical repair before adding heavier model complexity.
+6. keep tuning rule-based musical repair before adding heavier model complexity;
+7. expand client-side pitch fallback into a full device-mode execution capability
+   for offline-first and privacy-sensitive flows;
+8. productionize WASM-based transcription for Capacitor and native app shells
+   that need to avoid round-trip latency.
