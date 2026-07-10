@@ -1,7 +1,5 @@
 import dynamic from "next/dynamic";
 import type { Metadata } from "next";
-
-export const revalidate = 3600; // revalidate every hour
 import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 import { hasSongShareAudio, normalizeSongShareCode } from "@/lib/share/song-share";
 import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";

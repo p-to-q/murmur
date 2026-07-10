@@ -52,8 +52,9 @@ const nextConfig: NextConfig = {
   ],
   images: {
     formats: ["image/avif", "image/webp"],
-    deviceSizes: [640, 750, 828, 1080, 1200],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256],
+    // deviceSizes/imageSizes stay at Next defaults: StudioScreen and the song
+    // canvas render full-viewport artwork (sizes="100vw"), so capping the
+    // srcset below 1920/2x would blur retina and large screens.
     minimumCacheTTL: 3600,
     remotePatterns: [
       { protocol: "https", hostname: "lh3.googleusercontent.com", pathname: "/**" },

@@ -4,7 +4,7 @@ import { memo, useMemo, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { motion, useReducedMotion } from "framer-motion";
 import { CanvasCoverArt } from "./CanvasCoverArt";
-import { mulberry32, hashString } from "@/lib/utils/seeded-random";
+import { mulberry32, hashString } from "@/lib/music/seeded-random";
 import type { VisualArtwork } from "@/modules/shared/types";
 
 export interface SongCardProps {
@@ -18,9 +18,11 @@ export interface SongCardProps {
   bpm?: number;
   createdAt: string;
   index: number;
-  onClick: () => void;
+  /** Receives the song id so parents can pass one stable handler to every
+   *  card — inline per-card closures would defeat the React.memo below. */
+  onClick: (id: string) => void;
   /** When provided, shows a corner delete affordance on the cover. */
-  onDelete?: () => void;
+  onDelete?: (id: string) => void;
 }
 
 function makeEntryVariants(reduceMotion: boolean | null) {
@@ -113,7 +115,7 @@ export const SongCard = memo(function SongCard({
       <motion.button
         onHoverStart={() => setIsHovered(true)}
         onHoverEnd={() => setIsHovered(false)}
-        onClick={onClick}
+        onClick={() => onClick(id)}
         whileHover={reduceMotion ? undefined : { y: -6, transition: { type: "spring", stiffness: 400, damping: 25 } }}
         whileTap={reduceMotion ? undefined : { scale: 0.97, transition: { duration: 0.1 } }}
         className="group relative block w-full text-left"
@@ -202,7 +204,7 @@ export const SongCard = memo(function SongCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onDelete();
+            onDelete(id);
           }}
           aria-label={`Delete ${title}`}
           className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A]/35 text-white/90 backdrop-blur-sm transition-all hover:bg-[#1A1A1A]/60 opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"

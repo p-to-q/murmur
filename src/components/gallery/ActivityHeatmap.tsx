@@ -28,6 +28,9 @@ interface DayCell {
   level: number;
 }
 
+// Stable fallback so SongCard's memo isn't defeated when no handler is given.
+const noopSongClick = () => {};
+
 export interface ActivityHeatmapProps {
   dates: string[];
   songCount?: number;
@@ -247,7 +250,7 @@ export function ActivityHeatmap({
                   bpm={song.bpm}
                   createdAt={song.createdAt}
                   index={i}
-                  onClick={() => onSongClick?.(song.id)}
+                  onClick={onSongClick ?? noopSongClick}
                 />
               ))}
             </div>
