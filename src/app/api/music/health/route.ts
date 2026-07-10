@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   getMusicEngineMode,
-  getRequestedMusicEngineMode,
   getMusicServerlessConfig,
   getMusicWorkerUrl,
   isMusicWorkerConfigured,
@@ -14,7 +13,6 @@ type PublicMusicHealth = {
   available: boolean;
   configured: boolean;
   mode?: "serverless" | "http" | null;
-  requestedMode?: "serverless" | "http" | "auto";
   reason: "unconfigured" | "unauthorized" | "unreachable" | "degraded" | `http_${number}` | null;
 };
 
@@ -29,19 +27,16 @@ type PublicMusicHealth = {
  * HTTP (dev/legacy): available also while the model is still warming up;
  * requests queue behind the load instead of failing.
  *
- * The response is intentionally minimal: transport `mode`/`requestedMode` plus a
- * coarse availability `reason`. Worker counts, model names, and raw load-error
- * strings stay server-side so this public endpoint cannot leak deployment shape.
+ * The response is intentionally minimal: transport `mode` plus a coarse
+ * availability `reason`. Worker counts, model names, and raw load-error strings
+ * stay server-side so this public endpoint cannot leak deployment shape.
  */
 export async function GET() {
   const mode = getMusicEngineMode();
   if (!mode) {
-    const requestedMode = getRequestedMusicEngineMode();
     return publicHealth({
       available: false,
       configured: false,
-      mode: requestedMode === "auto" ? null : requestedMode,
-      requestedMode,
       reason: "unconfigured",
     });
   }
@@ -56,7 +51,6 @@ async function serverlessHealth() {
       available: false,
       configured: false,
       mode: "serverless",
-      requestedMode: getRequestedMusicEngineMode(),
       reason: "unconfigured",
     });
   }
@@ -69,7 +63,6 @@ async function serverlessHealth() {
         available: false,
         configured: true,
         mode: "serverless",
-        requestedMode: getRequestedMusicEngineMode(),
         reason: unauthorized ? "unauthorized" : `http_${status}`,
       });
     }
@@ -77,7 +70,6 @@ async function serverlessHealth() {
       available: true,
       configured: true,
       mode: "serverless",
-      requestedMode: getRequestedMusicEngineMode(),
       reason: null,
     });
   } catch {
@@ -85,7 +77,6 @@ async function serverlessHealth() {
       available: false,
       configured: true,
       mode: "serverless",
-      requestedMode: getRequestedMusicEngineMode(),
       reason: "unreachable",
     });
   }
@@ -99,7 +90,6 @@ async function httpHealth() {
       available: false,
       configured: false,
       mode: "http",
-      requestedMode: getRequestedMusicEngineMode(),
       reason: "unconfigured",
     });
   }
@@ -117,7 +107,6 @@ async function httpHealth() {
         available: false,
         configured,
         mode: "http",
-        requestedMode: getRequestedMusicEngineMode(),
         reason: `http_${res.status}`,
       });
     }
@@ -139,7 +128,6 @@ async function httpHealth() {
       available,
       configured,
       mode: "http",
-      requestedMode: getRequestedMusicEngineMode(),
       reason: available ? null : "degraded",
     });
   } catch {
@@ -147,7 +135,6 @@ async function httpHealth() {
       available: false,
       configured,
       mode: "http",
-      requestedMode: getRequestedMusicEngineMode(),
       reason: "unreachable",
     });
   }
