@@ -127,7 +127,7 @@ flowchart LR
     Start(["🎤 Raw Hum"]):::stage
 
     Transcribe["Audio Worker<br/>pYIN · RMVPE · SwiftF0"]:::module
-    Transcribe -->|RawNote[]| Polish
+    Transcribe -->|"RawNote[]"| Polish
 
     Polish["Melody Polisher<br/>denoise · pitch correction · tonal inference"]:::module
     Polish -->|CleanMelody| Intent
