@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
 
 import { reconcileWaffoBilling } from "@/lib/billing/waffo-reconcile";
@@ -18,7 +19,8 @@ export async function GET(request: NextRequest) {
   }
 
   const auth = request.headers.get("authorization");
-  if (auth !== `Bearer ${expected}`) {
+  const token = auth?.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+  if (!timingSafeTokenEqual(token, expected)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -63,6 +65,17 @@ export async function GET(request: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+function timingSafeTokenEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    // Compare against itself to burn constant time, then return false.
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
 }
 
 function parseLimit(request: NextRequest): number | undefined {
