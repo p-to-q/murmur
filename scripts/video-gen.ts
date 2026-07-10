@@ -11,7 +11,7 @@
  *   bun run scripts/video-gen.ts video --scene 03        # generate video from seed frame
  *   bun run scripts/video-gen.ts video --scene 03 --draft # use 即梦 3.0 (cheaper draft)
  *   bun run scripts/video-gen.ts status --task <id>      # check task status
- *   bun run scripts/video-gen.ts download --task <id>    # download completed video
+ *   bun run scripts/video-gen.ts download --url <url> --scene <id>  # download completed video
  */
 
 import { mkdirSync, writeFileSync, readFileSync, readdirSync } from "fs";
@@ -23,7 +23,12 @@ import { fileURLToPath } from "url";
 const _scriptFile = fileURLToPath(import.meta.url);
 const _scriptDir = dirname(_scriptFile);
 
-const API_KEY = process.env.VIDEO_GEN_API_KEY || "sk-VX3g0DFRVLNYhrYt5SsTHhUKI6cOpvo5vJzfBR7abMWk5uu8";
+const API_KEY = process.env.VIDEO_GEN_API_KEY;
+if (!API_KEY) {
+  console.error("ERROR: VIDEO_GEN_API_KEY environment variable is required");
+  console.error("Set it via: export VIDEO_GEN_API_KEY=sk-...");
+  process.exit(1);
+}
 const API_BASE = "https://api.302.ai";
 const ASSETS_DIR = join(_scriptDir, "..", "docs", "video-assets");
 const SEEDS_DIR = join(ASSETS_DIR, "seeds");
@@ -40,6 +45,12 @@ for (const dir of [SEEDS_DIR, CLIPS_DIR, DRAFTS_DIR, TASKS_DIR]) {
 
 const STYLE_BLOCK = `Cinematic photorealistic, Kodak Vision3 250D film stock, warm highlight roll-off into soft amber, shadows retain detail with muted teal-gray undertone. Subtle organic film grain visible on skin and flat surfaces — not digital noise, analog texture. Shallow depth of field f/1.8, foreground and background naturally separate into bokeh layers. Color palette globally muted with selective warm accents (amber, honey, aged brass). Skin tones natural and untouched — slight imperfections visible. 16:9 aspect ratio. No text, no watermark, no UI, no logos. Lighting motivated by practical sources within the scene (lamps, windows, screens, streetlights) — no unmotivated studio lighting. Atmosphere includes subtle environmental particles (dust in light beams, moisture in air, steam). Overall mood: the quiet weight of an unspoken melody.`;
 
+const STYLE_BLOCK_WITH_TEXT = `Cinematic photorealistic, Kodak Vision3 250D film stock, warm highlight roll-off into soft amber, shadows retain detail with muted teal-gray undertone. Subtle organic film grain visible on skin and flat surfaces — not digital noise, analog texture. Shallow depth of field f/1.8, foreground and background naturally separate into bokeh layers. Color palette globally muted with selective warm accents (amber, honey, aged brass). 16:9 aspect ratio. No watermark, no UI, no logos. Lighting motivated by practical sources within the scene (lamps, windows, screens, streetlights) — no unmotivated studio lighting. Atmosphere includes subtle environmental particles (dust in light beams, moisture in air, steam). Overall mood: the quiet weight of an unspoken melody.`;
+
+function resolveStyle(scene: SceneConfig): string {
+  return scene.styleBlock ?? STYLE_BLOCK;
+}
+
 // ─── Scene Definitions ───────────────────────────────────────────────────────
 
 interface SceneConfig {
@@ -50,6 +61,7 @@ interface SceneConfig {
   prompt: string;         // full 7-layer prompt for seed frame
   videoPrompt: string;    // motion/action description for i2v
   negativePrompt: string; // --no items
+  styleBlock?: string;    // overrides DEFAULT_STYLE_BLOCK (e.g. when scene needs text)
   isCodeAnim?: boolean;   // Scene 09, 11-B: skip AI generation
 }
 
@@ -86,7 +98,8 @@ const SCENES: SceneConfig[] = [
     name: "Everyone hums.",
     duration: 5,
     clipDuration: 2,
-    prompt: `Medium-close shot, 50mm lens, f/4. Center-symmetrical. The wall fills the entire frame edge to edge — no sky, no ground. An aged concrete wall. On it, handwritten in black marker: "Everyone hums." — the handwriting is casual, slightly tilted, one letter shows ink bleeding where the marker paused. The writing looks like it has been there for weeks. Wall surface: fine hairline cracks forming organic web pattern. A water stain from the upper-left corner — dried, amber-edged. Traces of previous layer of paint (pale sage green) visible where gray surface has chipped. A single small weed sprouts from a crack near bottom of frame. Wall color close to #F5F1EB. Flat, overcast daylight. Monochrome warm gray. ${STYLE_BLOCK}`,
+    styleBlock: STYLE_BLOCK_WITH_TEXT,
+    prompt: `Medium-close shot, 50mm lens, f/4. Center-symmetrical. The wall fills the entire frame edge to edge — no sky, no ground. An aged concrete wall. On it, handwritten in black marker: "Everyone hums." — the handwriting is casual, slightly tilted, one letter shows ink bleeding where the marker paused. The writing looks like it has been there for weeks. Wall surface: fine hairline cracks forming organic web pattern. A water stain from the upper-left corner — dried, amber-edged. Traces of previous layer of paint (pale sage green) visible where gray surface has chipped. A single small weed sprouts from a crack near bottom of frame. Wall color close to #F5F1EB. Flat, overcast daylight. Monochrome warm gray. ${STYLE_BLOCK_WITH_TEXT}`,
     videoPrompt: "Completely static camera, 2 seconds. The only movement is barely perceptible: the tiny weed at the bottom sways in a breath of wind. Light shifts imperceptibly as a cloud passes. The wall breathes with micro-changes in shadow.",
     negativePrompt: "people, graffiti art, colorful paint, posters, visible street or sky, perfect wall, clean surface, stencil lettering, neon, any text other than Everyone hums"
   },
@@ -208,6 +221,8 @@ const CODE_ANIM_SCENES = ["09", "09A", "09B", "09C", "11B"];
 async function generateSeedFrame(scene: SceneConfig): Promise<string> {
   console.log(`\n🖼️  Generating seed frame for Scene ${scene.id}: ${scene.name}`);
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
   const response = await fetch(`${API_BASE}/v1/images/generations`, {
     method: "POST",
     headers: {
@@ -217,14 +232,16 @@ async function generateSeedFrame(scene: SceneConfig): Promise<string> {
     body: JSON.stringify({
       model: "gpt-image-2",
       prompt: scene.prompt,
-      size: "1536x1024",  // 16:9 landscape
+      size: "1536x864",  // 16:9 landscape
       quality: "high",
       n: 1,
       output_format: "png",
       background: "opaque",
       moderation: "low",
     }),
+    signal: controller.signal,
   });
+  clearTimeout(timeout);
 
   if (!response.ok) {
     const errText = await response.text();
@@ -239,7 +256,11 @@ async function generateSeedFrame(scene: SceneConfig): Promise<string> {
   }
 
   // Download and save
-  const imgResponse = await fetch(resultUrl);
+  const dlController = new AbortController();
+  const dlTimeout = setTimeout(() => dlController.abort(), 120_000);
+  const imgResponse = await fetch(resultUrl, { signal: dlController.signal });
+  clearTimeout(dlTimeout);
+  if (!imgResponse.ok) throw new Error(`Seed download failed: ${imgResponse.status}`);
   const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
   const filename = `scene-${scene.id}_seed_v${getNextVersion(SEEDS_DIR, scene.id)}.png`;
   const filepath = join(SEEDS_DIR, filename);
@@ -259,8 +280,10 @@ async function generateVideoKlingO3(
 ): Promise<string> {
   console.log(`\n🎬  Generating video (Kling O3 ${mode}) for Scene ${scene.id}: ${scene.name}`);
 
-  const fullPrompt = `${scene.videoPrompt} ${STYLE_BLOCK}`;
+  const fullPrompt = `${scene.videoPrompt} ${resolveStyle(scene)}`;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
   const response = await fetch(`${API_BASE}/klingai/m2v_omni_3_video`, {
     method: "POST",
     headers: {
@@ -276,7 +299,9 @@ async function generateVideoKlingO3(
       o1_type: "referImage",
       enable_audio: false,
     }),
+    signal: controller.signal,
   });
+  clearTimeout(timeout);
 
   if (!response.ok) {
     const errText = await response.text();
@@ -319,8 +344,10 @@ async function generateVideoDraft(
 ): Promise<string> {
   console.log(`\n🎬  Generating DRAFT video (即梦 3.0) for Scene ${scene.id}: ${scene.name}`);
 
-  const fullPrompt = `${scene.videoPrompt} ${STYLE_BLOCK}`;
+  const fullPrompt = `${scene.videoPrompt} ${resolveStyle(scene)}`;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
   const response = await fetch(`${API_BASE}/doubao/drawing/jimengv30`, {
     method: "POST",
     headers: {
@@ -334,7 +361,9 @@ async function generateVideoDraft(
       seed: -1,
       frames: scene.duration === 5 ? 121 : 241,  // 121=5s, 241=10s
     }),
+    signal: controller.signal,
   });
+  clearTimeout(timeout);
 
   if (!response.ok) {
     const errText = await response.text();
@@ -374,21 +403,24 @@ async function checkKlingTaskStatus(taskId: string): Promise<Record<string, unkn
   // Actually, 302.ai Kling uses a different query endpoint. Let me check...
   // The standard pattern is GET /klingai/task/{taskId} or similar.
   // Based on 302.ai patterns, try:
+  const c1 = new AbortController();
+  const t1 = setTimeout(() => c1.abort(), 30_000);
   const response = await fetch(`${API_BASE}/klingai/task/${taskId}/fetch`, {
     method: "GET",
-    headers: {
-      "Authorization": `Bearer ${API_KEY}`,
-    },
+    headers: { "Authorization": `Bearer ${API_KEY}` },
+    signal: c1.signal,
   });
+  clearTimeout(t1);
 
   if (!response.ok) {
-    // Try alternative endpoint
+    const c2 = new AbortController();
+    const t2 = setTimeout(() => c2.abort(), 30_000);
     const altResponse = await fetch(`${API_BASE}/klingai/m2v_omni_3_video/${taskId}`, {
       method: "GET",
-      headers: {
-        "Authorization": `Bearer ${API_KEY}`,
-      },
+      headers: { "Authorization": `Bearer ${API_KEY}` },
+      signal: c2.signal,
     });
+    clearTimeout(t2);
     if (!altResponse.ok) {
       const errText = await altResponse.text();
       throw new Error(`Task status check failed ${altResponse.status}: ${errText}`);
@@ -406,7 +438,11 @@ async function downloadVideo(url: string, sceneId: string, model: string): Promi
   const filepath = join(dir, filename);
 
   console.log(`\n📥 Downloading: ${filename}`);
-  const response = await fetch(url);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120_000);
+  const response = await fetch(url, { signal: controller.signal });
+  clearTimeout(timeout);
+  if (!response.ok) throw new Error(`Download failed: ${response.status} ${response.statusText}`);
   const buffer = Buffer.from(await response.arrayBuffer());
   writeFileSync(filepath, buffer);
   console.log(`   ✅ Saved: ${filepath}`);
