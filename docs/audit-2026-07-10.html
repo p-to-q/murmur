@@ -1,0 +1,973 @@
+<title>Murmur Codebase Audit — 全仓库诊断</title>
+<style>
+  :root {
+    --bg: #0E1019;
+    --surface: #171B26;
+    --surface-hover: #1E2230;
+    --border: #262A38;
+    --text: #E2E4EA;
+    --text-2: #8890A6;
+    --text-3: #565E78;
+    --critical: #FF4757;
+    --critical-bg: rgba(255,71,87,0.08);
+    --high: #FF8C42;
+    --high-bg: rgba(255,140,66,0.08);
+    --medium: #F0C246;
+    --medium-bg: rgba(240,194,70,0.07);
+    --low: #5B9CF5;
+    --low-bg: rgba(91,156,245,0.07);
+    --accent: #7C6BF0;
+    --accent-bg: rgba(124,107,240,0.08);
+    --good: #34D399;
+    --good-bg: rgba(52,211,153,0.08);
+    --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); font-size:15px; line-height:1.6; }
+  .wrap { max-width:1120px; margin:0 auto; padding:40px 24px 80px; }
+
+  /* ---- Header ---- */
+  .hdr { margin-bottom:48px; }
+  .hdr h1 { font-size:28px; font-weight:700; letter-spacing:-0.5px; margin-bottom:6px; }
+  .hdr .sub { color:var(--text-2); font-size:14px; }
+  .hdr .sub span { color:var(--text-3); }
+  .tag-row { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
+  .tag { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.6px; padding:3px 10px; border-radius:4px; }
+  .tag-c { background:var(--critical-bg); color:var(--critical); }
+  .tag-h { background:var(--high-bg); color:var(--high); }
+  .tag-m { background:var(--medium-bg); color:var(--medium); }
+  .tag-l { background:var(--low-bg); color:var(--low); }
+
+  /* ---- Summary grid ---- */
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:40px; }
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:20px; text-align:center; }
+  .stat-card .num { font-family:var(--mono); font-size:36px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1; }
+  .stat-card .lbl { font-size:12px; color:var(--text-2); text-transform:uppercase; letter-spacing:0.5px; margin-top:6px; }
+  .stat-card.sc { border-top:3px solid var(--critical); }
+  .stat-card.sc .num { color:var(--critical); }
+  .stat-card.sh { border-top:3px solid var(--high); }
+  .stat-card.sh .num { color:var(--high); }
+  .stat-card.sm { border-top:3px solid var(--medium); }
+  .stat-card.sm .num { color:var(--medium); }
+  .stat-card.sl { border-top:3px solid var(--low); }
+  .stat-card.sl .num { color:var(--low); }
+
+  /* ---- Dimension nav ---- */
+  .dim-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:32px; }
+  .dim-btn { font-size:12px; padding:5px 12px; border-radius:5px; border:1px solid var(--border); background:var(--surface); color:var(--text-2); cursor:pointer; transition:all 0.15s; font-family:var(--sans); }
+  .dim-btn:hover { border-color:var(--accent); color:var(--text); }
+  .dim-btn.active { background:var(--accent-bg); border-color:var(--accent); color:var(--accent); font-weight:600; }
+
+  /* ---- Sections ---- */
+  .sev-section { margin-bottom:36px; }
+  .sev-hdr { display:flex; align-items:center; gap:10px; margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  .sev-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .sev-hdr h2 { font-size:16px; font-weight:600; }
+  .sev-hdr .cnt { font-family:var(--mono); font-size:13px; color:var(--text-3); }
+
+  /* ---- Finding cards ---- */
+  .finding { background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:10px; overflow:hidden; transition:border-color 0.15s; }
+  .finding:hover { border-color:var(--accent); }
+  .finding-top { display:flex; align-items:flex-start; gap:12px; padding:14px 16px; cursor:pointer; }
+  .finding-sev { width:4px; border-radius:2px; align-self:stretch; flex-shrink:0; }
+  .finding-main { flex:1; min-width:0; }
+  .finding-title { font-size:14px; font-weight:600; line-height:1.4; }
+  .finding-meta { display:flex; gap:8px; margin-top:4px; flex-wrap:wrap; align-items:center; }
+  .finding-file { font-family:var(--mono); font-size:11px; color:var(--accent); background:var(--accent-bg); padding:1px 6px; border-radius:3px; }
+  .finding-dim { font-size:10px; color:var(--text-3); text-transform:uppercase; letter-spacing:0.4px; }
+  .finding-toggle { color:var(--text-3); font-size:18px; flex-shrink:0; padding:0 4px; transition:transform 0.2s; user-select:none; }
+  .finding.open .finding-toggle { transform:rotate(90deg); }
+  .finding-body { display:none; padding:0 16px 16px 32px; }
+  .finding.open .finding-body { display:block; }
+  .finding-body p { font-size:13px; color:var(--text-2); line-height:1.65; margin-bottom:10px; }
+  .finding-body code { font-family:var(--mono); font-size:12px; background:rgba(124,107,240,0.1); padding:1px 5px; border-radius:3px; color:var(--text); }
+  .finding-body pre { font-family:var(--mono); font-size:12px; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:12px 14px; overflow-x:auto; line-height:1.55; color:var(--text-2); margin-bottom:10px; white-space:pre-wrap; word-break:break-word; }
+  .finding-body .fix-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--good); margin-bottom:4px; }
+
+  /* ---- Positives ---- */
+  .pos-section { margin-top:48px; }
+  .pos-section h2 { font-size:16px; font-weight:600; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+  .pos-list { display:grid; gap:8px; }
+  .pos-item { background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--good); border-radius:6px; padding:12px 16px; font-size:13px; color:var(--text-2); }
+
+  /* ---- Priority ---- */
+  .pri-section { margin-top:48px; }
+  .pri-section h2 { font-size:16px; font-weight:600; margin-bottom:16px; }
+  .pri-list { counter-reset:pri; }
+  .pri-item { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px 14px 48px; margin-bottom:8px; position:relative; font-size:13px; color:var(--text-2); }
+  .pri-item::before { counter-increment:pri; content:counter(pri); position:absolute; left:16px; top:14px; font-family:var(--mono); font-size:13px; font-weight:700; color:var(--accent); }
+  .pri-item strong { color:var(--text); font-weight:600; }
+
+  /* ---- Note at bottom ---- */
+  .note { margin-top:48px; padding:16px; background:var(--surface); border:1px solid var(--border); border-radius:8px; font-size:12px; color:var(--text-3); line-height:1.6; }
+
+  @media(max-width:700px){
+    .stats { grid-template-columns:repeat(2,1fr); }
+    .wrap { padding:24px 16px 60px; }
+    .hdr h1 { font-size:22px; }
+  }
+</style>
+
+<div class="wrap">
+  <div class="hdr">
+    <h1>Murmur 全仓库代码诊断报告</h1>
+    <div class="sub">421 source files · 8 dimensions scanned · 2026-07-10 <span>|</span> <span>claude/hopeful-robinson-760ec9</span></div>
+    <div class="tag-row">
+      <span class="tag tag-c">9 Critical</span>
+      <span class="tag tag-h">27 High</span>
+      <span class="tag tag-m">30 Medium</span>
+      <span class="tag tag-l">24 Low</span>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card sc"><div class="num">9</div><div class="lbl">Critical</div></div>
+    <div class="stat-card sh"><div class="num">27</div><div class="lbl">High</div></div>
+    <div class="stat-card sm"><div class="num">30</div><div class="lbl">Medium</div></div>
+    <div class="stat-card sl"><div class="num">24</div><div class="lbl">Low</div></div>
+  </div>
+
+  <div class="dim-bar">
+    <button class="dim-btn active" onclick="filterDim('all')">All</button>
+    <button class="dim-btn" onclick="filterDim('security')">Security</button>
+    <button class="dim-btn" onclick="filterDim('frontend')">Frontend</button>
+    <button class="dim-btn" onclick="filterDim('api')">API Routes</button>
+    <button class="dim-btn" onclick="filterDim('data')">Data Layer</button>
+    <button class="dim-btn" onclick="filterDim('infra')">Infra</button>
+    <button class="dim-btn" onclick="filterDim('perf')">Bundle/Perf</button>
+    <button class="dim-btn" onclick="filterDim('test')">Testing</button>
+    <button class="dim-btn" onclick="filterDim('arch')">Architecture</button>
+    <button class="dim-btn" onclick="filterDim('worker')">Workers</button>
+  </div>
+
+  <!-- ====== CRITICAL ====== -->
+  <div class="sev-section" data-sev="critical">
+    <div class="sev-hdr">
+      <div class="sev-dot" style="background:var(--critical)"></div>
+      <h2>Critical</h2>
+      <span class="cnt">9 findings</span>
+    </div>
+
+    <div class="finding" data-dim="security api">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--critical)"></div>
+        <div class="finding-main">
+          <div class="finding-title">SSRF via unvalidated push subscription endpoint URL</div>
+          <div class="finding-meta">
+            <span class="finding-file">api/notifications/push/subscribe/route.ts:12</span>
+            <span class="finding-dim">Security · API</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p><code>z.url()</code> accepts <code>javascript:</code>, <code>file://</code>, <code>ftp://</code> and arbitrary HTTP URLs. Stored endpoint is later passed to <code>webpush.sendNotification()</code>, which makes a raw fetch to the stored URL. An authenticated user can register a push subscription pointing to internal services (e.g. AWS metadata <code>169.254.169.254</code>), triggering SSRF on every push broadcast.</p>
+        <div class="fix-label">Fix</div>
+        <pre>endpoint: z.url().regex(/^https:\/\//, "Push endpoint must use HTTPS")</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="frontend">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--critical)"></div>
+        <div class="finding-main">
+          <div class="finding-title">blobOpacity output range [1, 2.2] — CSS opacity clamped at 1</div>
+          <div class="finding-meta">
+            <span class="finding-file">components/screens/HumScreen.tsx:~275</span>
+            <span class="finding-dim">Frontend</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p><code>useTransform(amplitudeSpring, [0, 1], [1, 2.2])</code> maps to opacity values above 1.0, which browsers clamp. The aurora blob pulse effect does nothing above idle. Likely intended to drive <code>scale</code> or use an opacity range of <code>[0.82, 1.0]</code>.</p>
+        <div class="fix-label">Fix</div>
+        <pre>// If intent is opacity pulse:
+useTransform(amplitudeSpring, [0, 1], [0.82, 1.0])
+// If intent is scale pulse:
+// rename to blobScale and apply via style={{ scale: blobScale }}</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="frontend">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--critical)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Unhandled promise rejection + infinite spinner in PublicSongScreen</div>
+          <div class="finding-meta">
+            <span class="finding-file">components/screens/PublicSongScreen.tsx:43-61</span>
+            <span class="finding-dim">Frontend</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Async IIFE has <code>finally</code> but no <code>catch</code>. If <code>fetch()</code> throws (network offline), the error becomes unhandled and <code>isLoading</code> stays <code>true</code> forever — the user sees an infinite spinner with no way to recover.</p>
+        <div class="fix-label">Fix</div>
+        <pre>Add .catch(() => { setSong(null); }) before .finally() so the "not found" state renders.</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="frontend security">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--critical)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Double-submit vulnerability on song delete and name save</div>
+          <div class="finding-meta">
+            <span class="finding-file">SongDetailScreen.tsx:~823 · NameScreen.tsx:~174</span>
+            <span class="finding-dim">Frontend · Security</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Delete button has no in-flight guard. Rapid taps trigger concurrent DELETE requests that can corrupt the gallery state or double-deduct balance.</p>
+        <div class="fix-label">Fix</div>
+        <pre>const [isDeleting, setIsDeleting] = useState(false);
+// Disable button while request is in-flight
+&lt;button disabled={isDeleting} onClick={async () => { setIsDeleting(true); ... }}</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="data">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--critical)"></div>
+        <div class="finding-main">
+          <div class="finding-title">AudioContext leak on decode failure — browser cap (~6) exhausted</div>
+          <div class="finding-meta">
+            <span class="finding-file">modules/export/render-mp3.ts:100-112</span>
+            <span class="finding-dim">Data Layer</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>If <code>decodeAudioData</code> rejects, <code>ctx.close()</code> is skipped. After a handful of failed export attempts, the user hits the browser's AudioContext limit and audio export breaks for the tab's lifetime.</p>
+        <div class="fix-label">Fix</div>
+        <pre>const ctx = new Ctx();
+try {
+  buffer = await ctx.decodeAudioData(wavBytes.slice(0));
+} finally {
+  await ctx.close().catch(() => {});
+}</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="worker">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--critical)"></div>
+        <div class="finding-main">
+          <div class="finding-title">HTTPException in thread executor becomes silent 500</div>
+          <div class="finding-meta">
+            <span class="finding-file">workers/audio-engine/main.py:2005,2009</span>
+            <span class="finding-dim">Workers</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p><code>_transcribe_sync</code> raises <code>HTTPException(422)</code> and <code>HTTPException(413)</code> inside a <code>ThreadPoolExecutor</code>. FastAPI's exception handlers don't operate inside thread pools — the exception propagates as a generic <code>Exception</code> and becomes a 500. The client never sees the correct 422/413 status.</p>
+        <div class="fix-label">Fix</div>
+        <pre>Replace with domain exceptions (AudioEmpty, AudioTooLong) that the async handler maps to correct HTTP statuses.</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="worker">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--critical)"></div>
+        <div class="finding-main">
+          <div class="finding-title">frozen=True dataclass with mutated mutable fields</div>
+          <div class="finding-meta">
+            <span class="finding-file">audio_engine/detectors.py:25-35</span>
+            <span class="finding-dim">Workers</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p><code>PitchDetection</code> is <code>frozen=True</code> but <code>diagnostics: dict</code> and <code>warnings: list</code> are mutated extensively throughout <code>main.py</code>. <code>frozen=True</code> only prevents field reassignment, not in-place mutation of containers. This sends a false immutability signal.</p>
+        <div class="fix-label">Fix</div>
+        <pre>Drop frozen=True (the object is not immutable), or split mutable diagnostics into a separate non-frozen accumulator.</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="infra security">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--critical)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Auth session callback: full-row SELECT leaks future sensitive columns</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/auth/auth.ts:165-183</span>
+            <span class="finding-dim">Infra · Security</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p><code>db.select().from(users)</code> with no column projection fetches all columns. A future column (hashed password, 2FA secret) would be silently pulled into memory and potentially leaked into the JWT. This fires on every authenticated API call.</p>
+        <div class="fix-label">Fix</div>
+        <pre>db.select({ id: users.id, email: users.email, name: users.name,
+  avatarUrl: users.avatarUrl, accountKind: users.accountKind
+}).from(users).where(...)</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="infra security">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--critical)"></div>
+        <div class="finding-main">
+          <div class="finding-title">No timeout on external AI API calls — can hold function slot indefinitely</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/platform/ai-server.ts:35-42</span>
+            <span class="finding-dim">Infra · Security</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Every other external-API call in the codebase has an explicit timeout via <code>AbortSignal.timeout()</code>. This is the only one missing. A hung AI gateway call holds the serverless function slot until <code>maxDuration</code>.</p>
+        <div class="fix-label">Fix</div>
+        <pre>signal: AbortSignal.timeout(30_000)</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== HIGH ====== -->
+  <div class="sev-section" data-sev="high">
+    <div class="sev-hdr">
+      <div class="sev-dot" style="background:var(--high)"></div>
+      <h2>High</h2>
+      <span class="cnt">27 findings</span>
+    </div>
+
+    <div class="finding" data-dim="api">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Non-atomic billing: notes granted but purchase status update can fail</div>
+          <div class="finding-meta">
+            <span class="finding-file">api/billing/zpay-notify/route.ts:198-228</span>
+            <span class="finding-dim">API</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p><code>grantNotes()</code> runs in its own transaction, then <code>db.update(purchases)</code> and <code>db.update(eventsWebhook)</code> run separately. If either subsequent update fails, notes are granted but purchase stays "pending" permanently, breaking the reconcile replay path.</p>
+        <div class="fix-label">Fix</div>
+        <pre>Wrap grantNotes, db.update(purchases), and db.update(eventsWebhook) in a single DB transaction.</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="api security">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">CRON_SECRET compared with !== instead of timingSafeEqual</div>
+          <div class="finding-meta">
+            <span class="finding-file">billing/cron/reconcile · notifications/cron/daily-digest</span>
+            <span class="finding-dim">API · Security</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Naive string equality (<code>auth !== `Bearer ${expected}`</code>) is vulnerable to timing side-channel attacks. An attacker could infer the secret character-by-character.</p>
+        <div class="fix-label">Fix</div>
+        <pre>import { timingSafeEqual } from "crypto";
+const received = Buffer.from(auth ?? "");
+const expected = Buffer.from(`Bearer ${process.env.CRON_SECRET}`);
+if (received.length !== expected.length || !timingSafeEqual(received, expected)) { ... }</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="api">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">handleZpayCheckout returned without await — exceptions bypass outer catch</div>
+          <div class="finding-meta">
+            <span class="finding-file">api/billing/checkout/route.ts:307-315</span>
+            <span class="finding-dim">API</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p><code>return handleZpayCheckout(...)</code> missing <code>await</code>. If an unhandled exception occurs inside, it won't be caught by the outer try/catch.</p>
+        <div class="fix-label">Fix</div>
+        <pre>return await handleZpayCheckout(...)</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="data">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">ilike on users.email bypasses btree index — sequential scan inside transaction</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/db/queries/users.ts:235</span>
+            <span class="finding-dim">Data Layer</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p><code>ilike</code> forces case-insensitive scan. Since <code>normalizeEmail</code> lowercases before both storage and query, a plain <code>eq()</code> would be safe and would use the btree index.</p>
+        <div class="fix-label">Fix</div>
+        <pre>.where(eq(users.email, email))  // email is already normalizeEmail'd</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="data">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">invitee.duplicate treated as fatal error — should be "already settled"</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/db/queries/share-referrals.ts:205-207</span>
+            <span class="finding-dim">Data Layer</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>A <code>duplicate: true</code> result means the idempotency key already exists — the grant was already applied. Throwing <code>grant_failed</code> causes webhook retries to silently fail to return the settled state.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="data">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Math.random() in vibe picker breaks reproducibility</div>
+          <div class="finding-meta">
+            <span class="finding-file">modules/strummer/generate-versions.ts:158</span>
+            <span class="finding-dim">Data Layer</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Rest of version generation uses seeded <code>mulberry32</code>/<code>hashString</code> RNG, but <code>pickThreeDistinctVibes</code> uses <code>Math.random()</code>. Makes replay, regression testing, and <code>preferredVibeMode: "anchor"</code> non-deterministic.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="data">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Push broadcast hard-capped at 1000 with no pagination</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/db/queries/push-subscriptions.ts:106-113</span>
+            <span class="finding-dim">Data Layer</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>When active subscriptions exceed 1000, broadcast silently drops the rest. No cursor or page mechanism exists.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="frontend perf">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">VibeCard not React.memo — canvas repaints on every Zustand update</div>
+          <div class="finding-meta">
+            <span class="finding-file">components/screens/VibeScreen.tsx:~543</span>
+            <span class="finding-dim">Frontend · Perf</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Any store update re-renders all <code>VibeCard</code> instances including the <code>MurmurWave</code> canvas inside each. Canvas reconciliation is expensive. Wrap in <code>React.memo</code>.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="frontend perf">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Intl formatters constructed per-call in notification list render</div>
+          <div class="finding-meta">
+            <span class="finding-file">components/screens/MeScreen.tsx:~379-407</span>
+            <span class="finding-dim">Frontend · Perf</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p><code>new Intl.RelativeTimeFormat()</code> and <code>new Intl.DateTimeFormat()</code> called inside list render for every notification. Intl constructors are expensive (locale data loading). Hoist to module-level singletons.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="frontend perf">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Inline onSongClick arrow — new reference per render, cascading re-renders</div>
+          <div class="finding-meta">
+            <span class="finding-file">components/screens/GalleryScreen.tsx:~250</span>
+            <span class="finding-dim">Frontend · Perf</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Creates a new function every parent render, causing <code>ActivityHeatmap</code> and every <code>SongCard</code> to re-render unnecessarily. Wrap in <code>useCallback</code>.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="perf">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">framer-motion (~40KB gzip) forced into initial bundle via root layout nav</div>
+          <div class="finding-meta">
+            <span class="finding-file">components/murmur/bottom-nav.tsx:5 · side-nav.tsx:27</span>
+            <span class="finding-dim">Bundle/Perf</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Static imports of framer-motion in root layout components. Every route pays ~40KB gzip on initial load. Move animated parts to <code>next/dynamic({ ssr: false })</code> or replace simple transitions with CSS.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="perf">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">CJK fonts via raw CSS import — no preload, FOUT risk</div>
+          <div class="finding-meta">
+            <span class="finding-file">app/layout.tsx:6-7 · font-hydrator.tsx</span>
+            <span class="finding-dim">Bundle/Perf</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Large CJK fonts loaded as plain CSS imports without preload. The custom <code>FontHydrator</code> polling workaround exists for exactly the problem <code>next/font</code> solves natively. Eliminates the 1600ms font fallback race.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="perf">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">GalleryScreen fetches all data client-side — could SSR with server component</div>
+          <div class="finding-meta">
+            <span class="finding-file">app/gallery/page.tsx · GalleryScreen.tsx:119-131</span>
+            <span class="finding-dim">Bundle/Perf</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Entire gallery is "use client" with two sequential fetch calls. Server component could fetch songs server-side and pass as props. Eliminates a full round-trip on first load (100-300ms on 4G).</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="worker">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Hardcoded plaintext fallback DB credentials in drizzle.config.ts</div>
+          <div class="finding-meta">
+            <span class="finding-file">drizzle.config.ts:11</span>
+            <span class="finding-dim">Workers</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>If both env vars are unset, Drizzle silently connects to a localhost fallback. A misconfigured CI job could run migrations against the wrong database.</p>
+        <div class="fix-label">Fix</div>
+        <pre>const dbUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
+if (!dbUrl) throw new Error("DATABASE_URL or POSTGRES_URL must be set");</pre>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="worker security">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">No CSP or HSTS security headers in next.config.ts</div>
+          <div class="finding-meta">
+            <span class="finding-file">next.config.ts:58-73</span>
+            <span class="finding-dim">Workers · Security</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>X-Frame-Options, X-Content-Type-Options present but Content-Security-Policy and Strict-Transport-Security missing. Without CSP, injected scripts run unrestricted.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="worker">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">ThreadPoolExecutor has no shutdown in lifespan teardown</div>
+          <div class="finding-meta">
+            <span class="finding-file">workers/audio-engine/main.py:50-53</span>
+            <span class="finding-dim">Workers</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>On SIGTERM (rolling deploy), the executor thread may be mid-transcription. Without <code>shutdown(wait=True)</code>, the thread is abandoned and in-flight requests get TCP resets.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="worker">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Music engine /health returns 200 even on model load failure</div>
+          <div class="finding-meta">
+            <span class="finding-file">workers/music-engine/main.py:150-158</span>
+            <span class="finding-dim">Workers</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Returns <code>200 OK</code> with <code>"status": "degraded"</code> when model load failed. Load balancers interpret 200 as healthy and route traffic to a broken worker. Should return 503.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="infra">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Auth session callback: up to 3 DB queries per session hydration</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/auth/auth.ts:153-237</span>
+            <span class="finding-dim">Infra</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>The session callback fires on every authenticated API call. Can execute 1-3 DB queries (users lookup, externalIdentities lookup, fallback users lookup). Collapse fallback into the jwt callback; add column projection.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="infra security">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Email verification code rate-limit has TOCTOU race condition</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/auth/email/send-verification.ts:35-47</span>
+            <span class="finding-dim">Infra · Security</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Count-then-insert is not atomic. Two concurrent requests can both read <code>activeCount &lt; 3</code> and both proceed. Fix with <code>SELECT COUNT(*) FOR UPDATE</code> or a DB-level constraint.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="infra security">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Email verifyCode attempt counter bypass via code cycling</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/auth/email/send-verification.ts:110-118</span>
+            <span class="finding-dim">Infra · Security</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Attempt counter checked across all active codes but only incremented on the latest code. A user can cycle through codes to reset the effective counter.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="infra security">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">murmur_ref cookie set without Secure attribute on client</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/api/share-referral.ts:21,33</span>
+            <span class="finding-dim">Infra · Security</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Referral cookie written by client without <code>Secure</code> flag, so it's sent over plain HTTP in non-production environments.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="arch">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">magenta module directly reads/writes Zustand stores — violates module isolation</div>
+          <div class="finding-meta">
+            <span class="finding-file">modules/magenta/generate-magenta-versions.ts</span>
+            <span class="finding-dim">Architecture</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>A generation module intended to be a pure orchestrator imports <code>useMurmurStore</code>, <code>useI18nStore</code>, <code>addMurmurNotification</code>, and <code>sendBrowserNotification</code>. Store patching and notification side effects belong in the React component layer. Accept callbacks instead.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="arch">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">DB schema manually duplicates 10 type definitions from modules/shared/types.ts</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/db/schema/songs.ts ↔ modules/shared/types.ts</span>
+            <span class="finding-dim">Architecture</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Manual sync required with no compile-time enforcement. A type change in one file silently breaks the other. Execute Phase 5: move canonical types to <code>@murmur/core/shared-types</code>.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="arch">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">Two divergent seeded-random implementations with different hash algorithms</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/music/seeded-random.ts ↔ lib/utils/seeded-random.ts</span>
+            <span class="finding-dim">Architecture</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>FNV-1a vs <code>(hash &lt;&lt; 5) - hash</code> — same function name, different output for same input. Delete <code>lib/utils/seeded-random.ts</code>, update <code>SongCard.tsx</code> to import from <code>lib/music/seeded-random</code>.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="test">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">topup-purchase.ts (177 lines of billing validation) has zero tests</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/billing/topup-purchase.ts</span>
+            <span class="finding-dim">Testing</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Parses webhook metadata, validates SKU IDs, checks custom amounts against quotes for USD and CNY. The CNY-is-skip path could allow paying in a different currency. Directly called from payment webhook and reconcile cron. No tests.</p>
+      </div>
+    </div>
+
+    <div class="finding" data-dim="test">
+      <div class="finding-top" onclick="this.parentElement.classList.toggle('open')">
+        <div class="finding-sev" style="background:var(--high)"></div>
+        <div class="finding-main">
+          <div class="finding-title">notes-clock.ts (timezone math for daily refill) has zero tests</div>
+          <div class="finding-meta">
+            <span class="finding-file">lib/billing/notes-clock.ts</span>
+            <span class="finding-dim">Testing</span>
+          </div>
+        </div>
+        <span class="finding-toggle">›</span>
+      </div>
+      <div class="finding-body">
+        <p>Computes China-timezone midnight-based daily refill windows. Used in 3 critical billing paths for deduplication keys. An off-by-one would silently double-grant or withhold daily free notes. Zero tests for UTC boundary edge cases.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== MEDIUM ====== -->
+  <div class="sev-section" data-sev="medium">
+    <div class="sev-hdr">
+      <div class="sev-dot" style="background:var(--medium)"></div>
+      <h2>Medium</h2>
+      <span class="cnt">30 findings</span>
+    </div>
+
+    <div class="finding" data-dim="data"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">ensureBillingAccount: 2-3 DB round-trips per balance read</div><div class="finding-meta"><span class="finding-file">lib/db/queries/notes-ledger.ts:542-574</span><span class="finding-dim">Data Layer</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Every balance read goes through <code>ensureBillingAccount</code> → guest check → maintenance snapshot SELECT → actual balance SELECT. Could merge the snapshot check into the balance query.</p></div></div>
+
+    <div class="finding" data-dim="data"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">Sequential FOR UPDATE locks — use single IN clause instead of loop</div><div class="finding-meta"><span class="finding-file">lib/db/queries/share-referrals.ts:284-300</span><span class="finding-dim">Data Layer</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Two sequential awaited queries in a transaction stretch hold time. Could be a single <code>WHERE id IN (referrerId, inviteeId)</code> — one round-trip.</p></div></div>
+
+    <div class="finding" data-dim="data"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">Public song text search uses ilike with leading % — no index possible</div><div class="finding-meta"><span class="finding-file">lib/db/queries/songs.ts:122-156</span><span class="finding-dim">Data Layer</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Leading <code>%</code> wildcards on <code>ilike</code> prevent btree usage. As public songs grows this becomes a full table scan. Add a <code>GIN</code> index on <code>to_tsvector</code>.</p></div></div>
+
+    <div class="finding" data-dim="data"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">preferences-store uses localStorage directly without SSR guard</div><div class="finding-meta"><span class="finding-file">lib/store/preferences-store.ts:31</span><span class="finding-dim">Data Layer</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Unlike <code>notification-store</code> which uses <code>noopStorage</code> fallback, this passes <code>() => localStorage</code> directly. Throws during SSR.</p></div></div>
+
+    <div class="finding" data-dim="api"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">safeHostnameFromUrl duplicated across two routes</div><div class="finding-meta"><span class="finding-file">api/transcribe/route.ts:387 · api/music/generate/route.ts:601</span><span class="finding-dim">API</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Identical function in two files. Extract to <code>lib/http/hostname.ts</code>.</p></div></div>
+
+    <div class="finding" data-dim="api"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">Checkout product resolved before auth — info disclosure on 400</div><div class="finding-meta"><span class="finding-file">api/billing/checkout/route.ts:201-223</span><span class="finding-dim">API</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Unauthenticated requests trigger product resolution. The 400 error reveals valid SKU IDs and price range constraints. Move <code>resolveRequestAuth</code> before product parsing.</p></div></div>
+
+    <div class="finding" data-dim="api"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">Email auth disabled returns 404 — should be 501 or 503</div><div class="finding-meta"><span class="finding-file">api/auth/email/send-code · verify-code</span><span class="finding-dim">API</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>404 causes clients to treat the endpoint as non-existent. A feature-disabled gate should use 501 (Not Implemented).</p></div></div>
+
+    <div class="finding" data-dim="api"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">GET /api/user/balance fallback response missing unlimited field</div><div class="finding-meta"><span class="finding-file">api/user/balance/route.ts:53-61</span><span class="finding-dim">API</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Dev fallback omits <code>unlimited</code> field present in success response. Shape inconsistency breaks strict-mode clients.</p></div></div>
+
+    <div class="finding" data-dim="api"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">console.warn bypasses structured logging in strummer/edit</div><div class="finding-meta"><span class="finding-file">api/strummer/edit/route.ts:230</span><span class="finding-dim">API</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>All other routes use structured <code>log()</code>. This one uses <code>console.warn</code>, losing request context (<code>requestId</code>, <code>userId</code>).</p></div></div>
+
+    <div class="finding" data-dim="frontend"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">Type assertions mask missing posterBg field in VisualConfig type</div><div class="finding-meta"><span class="finding-file">PublicSongScreen.tsx:83 · SongDetailScreen.tsx:241</span><span class="finding-dim">Frontend</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p><code>as { posterBg?: string }</code> cast instead of adding the field to the canonical <code>VisualConfig</code> type in <code>modules/shared/types.ts</code>.</p></div></div>
+
+    <div class="finding" data-dim="frontend"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">onMouseMove fires continuously — should be onMouseEnter</div><div class="finding-meta"><span class="finding-file">components/screens/HumScreen.tsx:~1190</span><span class="finding-dim">Frontend</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p><code>onMouseMove={() => setOrbHovered(true)}</code> fires on every pixel of movement and calls setState needlessly. The existing <code>onMouseEnter</code>/<code>onMouseLeave</code> pair already covers the intent.</p></div></div>
+
+    <div class="finding" data-dim="frontend"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">NameScreen silently swallows JSON parse errors on 200 response</div><div class="finding-meta"><span class="finding-file">components/screens/NameScreen.tsx:~244</span><span class="finding-dim">Frontend</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p><code>response.json().catch(() => null)</code> on success: parse failure returns null and code proceeds as if song was created with undefined id.</p></div></div>
+
+    <div class="finding" data-dim="frontend"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">TrackMixer creates 18 inline closures per render (6 tracks × 3 variants)</div><div class="finding-meta"><span class="finding-file">components/studio/track-mixer.tsx:92-139</span><span class="finding-dim">Frontend</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Each with <code>[...track.versionHistory]</code> spread. Extract a <code>TrackFader</code> component and memoize callbacks.</p></div></div>
+
+    <div class="finding" data-dim="frontend"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">Dead conditional: FloatingMusicNotes pathAnimation has identical branches</div><div class="finding-meta"><span class="finding-file">components/murmur/floating-music-notes.tsx:30-38</span><span class="finding-dim">Frontend</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Both <code>reduceMotion</code> branches produce <code>{ pathLength: 1 }</code>. One branch is wrong or the variable is unused.</p></div></div>
+
+    <div class="finding" data-dim="infra"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">localStorage user profile loaded without runtime type validation</div><div class="finding-meta"><span class="finding-file">lib/platform/auth-client.ts:39-47</span><span class="finding-dim">Infra</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p><code>JSON.parse(raw)</code> spread onto DEFAULT_USER with no shape check. A malicious localStorage write could fabricate identity headers.</p></div></div>
+
+    <div class="finding" data-dim="infra"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">TRACKED_EVENTS ring buffer silently drops security events</div><div class="finding-meta"><span class="finding-file">lib/observability/recent-events.ts:14-22</span><span class="finding-dim">Infra</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p><code>auth.signin_failed</code>, <code>rate_limit.tripped</code>, <code>billing.*</code> events excluded. Debug surface shows no security-related events.</p></div></div>
+
+    <div class="finding" data-dim="infra"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">redis accepted as RateLimitDriver type but silently falls back to memory</div><div class="finding-meta"><span class="finding-file">lib/rate-limit/types.ts:18 · index.ts:55-71</span><span class="finding-dim">Infra</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>The type union includes <code>"redis"</code> but the implementation silently falls back to memory, logged via <code>console.warn</code> instead of structured logging.</p></div></div>
+
+    <div class="finding" data-dim="infra"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">getSnapshot() calls loadUser() with localStorage read on every render</div><div class="finding-meta"><span class="finding-file">lib/platform/auth-client.ts:90-95</span><span class="finding-dim">Infra</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p><code>useSyncExternalStore</code> calls <code>getSnapshot()</code> every render, which calls <code>localStorage.getItem</code> + <code>JSON.parse</code>. Keep in-memory copy as authoritative; only re-read on <code>storage</code> event.</p></div></div>
+
+    <div class="finding" data-dim="perf"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">MurmurWave canvas particle system on main thread without OffscreenCanvas</div><div class="finding-meta"><span class="finding-file">components/murmur/murmur-wave.tsx</span><span class="finding-dim">Bundle/Perf</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Full particle system running at 60fps on main thread. Could be moved to Web Worker via <code>OffscreenCanvas</code> (Safari 17+ supported). Estimated 50-200ms TBT reduction on mid-range mobile.</p></div></div>
+
+    <div class="finding" data-dim="perf"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">Missing AVIF format in image optimization config</div><div class="finding-meta"><span class="finding-file">next.config.ts</span><span class="finding-dim">Bundle/Perf</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>AVIF gives 30-50% better compression than WebP for photographic artwork images. One-line config change: <code>images: { formats: ["image/avif", "image/webp"] }</code>.</p></div></div>
+
+    <div class="finding" data-dim="perf"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">nav-icons.tsx has unnecessary "use client" — pure SVG components</div><div class="finding-meta"><span class="finding-file">components/murmur/nav-icons.tsx:1</span><span class="finding-dim">Bundle/Perf</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>136 lines of pure SVG — no hooks, no event handlers, no browser APIs. Removing the directive enables server-side rendering.</p></div></div>
+
+    <div class="finding" data-dim="arch"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">Pure logic files co-located in components/screens/ instead of lib/</div><div class="finding-meta"><span class="finding-file">name-save-metadata.ts · name-title.ts · studio-prompt-recovery.ts</span><span class="finding-dim">Architecture</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Pure functions with no React dependency. Harder to discover and test in isolation. Move to <code>lib/music/</code> or <code>lib/studio/</code>.</p></div></div>
+
+    <div class="finding" data-dim="arch"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">useI18nStore defined in lib/i18n/ instead of lib/store/</div><div class="finding-meta"><span class="finding-file">lib/i18n/index.ts</span><span class="finding-dim">Architecture</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Other 3 Zustand stores live in <code>lib/store/</code>. The i18n store is undiscoverable from the store directory.</p></div></div>
+
+    <div class="finding" data-dim="arch"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">Song-share code split across 3 locations with ambiguous naming</div><div class="finding-meta"><span class="finding-file">lib/api/song-share.ts · lib/share/song-share.ts · lib/db/queries/songs.ts</span><span class="finding-dim">Architecture</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Both <code>lib/api/song-share</code> and <code>lib/share/song-share</code> share the same filename. Rename client file to <code>song-share-client.ts</code>.</p></div></div>
+
+    <div class="finding" data-dim="arch"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">Inconsistent file naming: PascalCase vs kebab-case in components/</div><div class="finding-meta"><span class="finding-file">components/gallery/ vs components/murmur/ vs components/song-detail/</span><span class="finding-dim">Architecture</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>gallery uses PascalCase, murmur uses kebab-case, song-detail is mixed. Standardize on kebab-case (Next.js convention).</p></div></div>
+
+    <div class="finding" data-dim="worker"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">Deploy script template/endpoint never updated on re-deploy</div><div class="finding-meta"><span class="finding-file">scripts/deploy-music-serverless.ts:276-325</span><span class="finding-dim">Workers</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Changing MODEL or IMAGE requires manually deleting the RunPod template. Script exits with success after printing new model name without applying it.</p></div></div>
+
+    <div class="finding" data-dim="worker"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">Webhook register script has hardcoded production URL as silent default</div><div class="finding-meta"><span class="finding-file">scripts/waffo-webhook-register.ts:16</span><span class="finding-dim">Workers</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Running without <code>WAFFO_WEBHOOK_URL</code> silently registers against production endpoint. No confirmation prompt.</p></div></div>
+
+    <div class="finding" data-dim="worker"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--medium)"></div><div class="finding-main"><div class="finding-title">scripts/ excluded from tsconfig — type errors invisible in CI</div><div class="finding-meta"><span class="finding-file">tsconfig.json:35</span><span class="finding-dim">Workers</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Scripts import from <code>@/lib/...</code> paths but are excluded from type checking. Add a <code>tsconfig.scripts.json</code> and include in CI.</p></div></div>
+  </div>
+
+  <!-- ====== LOW ====== -->
+  <div class="sev-section" data-sev="low">
+    <div class="sev-hdr">
+      <div class="sev-dot" style="background:var(--low)"></div>
+      <h2>Low</h2>
+      <span class="cnt">24 findings</span>
+    </div>
+
+    <div class="finding" data-dim="data"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">Synchronous localStorage write on every draft state change</div><div class="finding-meta"><span class="finding-file">lib/store/murmur-store.ts:204-207</span><span class="finding-dim">Data</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Full draft serialization on every <code>setDraftState</code>. Debounce to ~300ms to batch rapid mutations.</p></div></div>
+
+    <div class="finding" data-dim="data"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">Deprecated currentPattern still written to every new row</div><div class="finding-meta"><span class="finding-file">modules/strummer/generate-versions.ts:271-278</span><span class="finding-dim">Data</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Schema comment marks deprecated since v2 but still populated for "legacy rows". No removal gate or migration path.</p></div></div>
+
+    <div class="finding" data-dim="data"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">Service worker re-registration check on every permission change</div><div class="finding-meta"><span class="finding-file">lib/hooks/use-browser-notification.ts:182-184</span><span class="finding-dim">Data</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Guard with <code>navigator.serviceWorker.getRegistration("/")</code> first to avoid unnecessary network requests.</p></div></div>
+
+    <div class="finding" data-dim="frontend"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">Duplicate SVG gradient id="tt-vinyl-body" collides with multiple Turntable instances</div><div class="finding-meta"><span class="finding-file">components/studio/turntable.tsx:73</span><span class="finding-dim">Frontend</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>SVG gradient IDs are global. Two turntables in <code>AnimatePresence</code> share a gradient. Use <code>useId()</code> for per-instance unique IDs.</p></div></div>
+
+    <div class="finding" data-dim="frontend"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">Math.random() in ShareCardModal makes E2E tests non-deterministic</div><div class="finding-meta"><span class="finding-file">components/murmur/share-card-modal.tsx:63</span><span class="finding-dim">Frontend</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p><code>randomExitDirection()</code> uses unseeded PRNG. Use component-scoped seed if snapshot reproducibility needed.</p></div></div>
+
+    <div class="finding" data-dim="frontend"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">hashString + mulberry32 PRNG runs per render in SongCard</div><div class="finding-meta"><span class="finding-file">components/gallery/SongCard.tsx:96-98</span><span class="finding-dim">Frontend</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p><code>labelRotation</code> computed from stable <code>id</code> but not wrapped in <code>useMemo</code>.</p></div></div>
+
+    <div class="finding" data-dim="frontend"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">window.innerWidth read synchronously on every render in HumOnboardingOverlay</div><div class="finding-meta"><span class="finding-file">components/screens/hum-onboarding.tsx:58-61</span><span class="finding-dim">Frontend</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Wrap <code>meltSize</code> in <code>useMemo([])</code> — the melt burst is one-shot.</p></div></div>
+
+    <div class="finding" data-dim="frontend"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">4 aurora blob motion.divs have large inline style objects recreated each render</div><div class="finding-meta"><span class="finding-file">components/screens/HumScreen.tsx:~930-989</span><span class="finding-dim">Frontend</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Hoist to module-level <code>BLOB_N_STYLE</code> constants.</p></div></div>
+
+    <div class="finding" data-dim="api"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">Unused workerUrl variable in melo-lab transcribe route</div><div class="finding-meta"><span class="finding-file">api/test/melo-lab/transcribe/route.ts:83-85</span><span class="finding-dim">API</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p><code>workerUrl</code> computed but never passed to <code>transcribeWithAudioWorker</code>.</p></div></div>
+
+    <div class="finding" data-dim="api"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">Edge SKU cache (5-min TTL) can serve stale prices after SKU changes</div><div class="finding-meta"><span class="finding-file">api/billing/skus/route.ts</span><span class="finding-dim">API</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Cache-Control: public, max-age=300 at the edge. Tolerable since checkout re-validates server-side.</p></div></div>
+
+    <div class="finding" data-dim="infra"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">PEM "BEGIN" check is fragile — could match non-PEM content</div><div class="finding-meta"><span class="finding-file">lib/platform/waffo-server.ts:8-10</span><span class="finding-dim">Infra</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p><code>includes("BEGIN")</code> should be <code>decoded.startsWith("-----BEGIN")</code>.</p></div></div>
+
+    <div class="finding" data-dim="infra"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">Resend client constructed per call — should be module-level singleton</div><div class="finding-meta"><span class="finding-file">lib/auth/email/send-verification.ts:16-18</span><span class="finding-dim">Infra</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p><code>resend ??= new Resend(process.env.RESEND_API_KEY!.trim())</code></p></div></div>
+
+    <div class="finding" data-dim="infra"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">MCP get-stats loads all songs to count distinct vibes</div><div class="finding-meta"><span class="finding-file">lib/mcp/tools/get-stats.ts:12-13</span><span class="finding-dim">Infra</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Use <code>SELECT COUNT(DISTINCT vibe)</code> instead of loading all song summaries into memory.</p></div></div>
+
+    <div class="finding" data-dim="infra"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">Dev fallback auth secret active in staging without warning</div><div class="finding-meta"><span class="finding-file">lib/auth/auth.ts:39-43</span><span class="finding-dim">Infra</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>"murmur-dev-insecure-secret" active when <code>NODE_ENV !== "production"</code>. Safe for prod but staging with real user DB could have the fallback active.</p></div></div>
+
+    <div class="finding" data-dim="worker"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">tsconfig target ES2017 stale for a 2026 codebase</div><div class="finding-meta"><span class="finding-file">tsconfig.json:3</span><span class="finding-dim">Workers</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Contradicts <code>"lib": ["esnext"]</code>. Update to <code>"target": "ES2022"</code>.</p></div></div>
+
+    <div class="finding" data-dim="worker"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">First-path decode failure swallowed without logging</div><div class="finding-meta"><span class="finding-file">workers/audio-engine/main.py:356</span><span class="finding-dim">Workers</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>soundfile decode error silently falls through to pydub. Add <code>logger.debug("soundfile failed: %s", exc)</code>.</p></div></div>
+
+    <div class="finding" data-dim="worker"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">Shell-interpolated secrets in deploy script (fragile quoting)</div><div class="finding-meta"><span class="finding-file">scripts/deploy-music-serverless.ts:398</span><span class="finding-dim">Workers</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Use <code>spawn</code> with argument arrays instead of composed shell strings.</p></div></div>
+
+    <div class="finding" data-dim="perf"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">tone-player statically imported in nav despite lazy Tone.js load inside</div><div class="finding-meta"><span class="finding-file">bottom-nav.tsx:13 · side-nav.tsx:40</span><span class="finding-dim">Bundle/Perf</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Nav components only call <code>getPlayer().stop()</code>. Dynamic import at call site would remove tone-player from initial parse graph.</p></div></div>
+
+    <div class="finding" data-dim="perf"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">PageBackdrop has unnecessary "use client" — pure presentational component</div><div class="finding-meta"><span class="finding-file">components/murmur/page-backdrop.tsx:1</span><span class="finding-dim">Bundle/Perf</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>No hooks, no state, no browser APIs. Removing the directive enables server-side rendering of this widely-used component.</p></div></div>
+
+    <div class="finding" data-dim="perf"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">Push public-key endpoint has Cache-Control: no-store for a static value</div><div class="finding-meta"><span class="finding-file">api/notifications/push/public-key/route.ts:7</span><span class="finding-dim">Bundle/Perf</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>VAPID public key is a static env var. Use <code>max-age=86400, immutable</code>.</p></div></div>
+
+    <div class="finding" data-dim="arch"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">No index.ts barrel files for modules — no enforced public API surface</div><div class="finding-meta"><span class="finding-file">src/modules/*</span><span class="finding-dim">Architecture</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Consumers can import any internal file directly. Adding/renaming internals is a breaking change to all callers.</p></div></div>
+
+    <div class="finding" data-dim="arch"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">lib/api/index.ts barrel re-exports only 2 of 15 files</div><div class="finding-meta"><span class="finding-file">lib/api/index.ts</span><span class="finding-dim">Architecture</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>No caller uses the barrel (zero imports found). Either delete or curate the public API.</p></div></div>
+
+    <div class="finding" data-dim="test"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">Weak test assertions: toBeTruthy/toBeDefined on critical values</div><div class="finding-meta"><span class="finding-file">assemble-song.test.ts · artwork-catalog.test.ts</span><span class="finding-dim">Testing</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p><code>toBeTruthy()</code> passes on <code>"undefined"</code> or <code>"null"</code> strings. Use specific format assertions.</p></div></div>
+
+    <div class="finding" data-dim="test"><div class="finding-top" onclick="this.parentElement.classList.toggle('open')"><div class="finding-sev" style="background:var(--low)"></div><div class="finding-main"><div class="finding-title">No bun test configuration — no coverage threshold, timeout limits, or env cleanup</div><div class="finding-meta"><span class="finding-file">(project root)</span><span class="finding-dim">Testing</span></div></div><span class="finding-toggle">›</span></div><div class="finding-body"><p>Tests run via <code>bun test</code> with no config file. Env vars like <code>CRON_SECRET</code> can pollute across test files. Add <code>bunfig.toml</code> with test config.</p></div></div>
+  </div>
+
+  <!-- ====== POSITIVES ====== -->
+  <div class="pos-section">
+    <h2><span style="color:var(--good)">&#10003;</span> What's Already Done Well</h2>
+    <div class="pos-list">
+      <div class="pos-item"><strong>Dynamic imports</strong> — Heavy screens (Studio, Vibe, Song, HumScreen) properly use <code>next/dynamic</code> with loading fallback. html2canvas lazily imported at use time.</div>
+      <div class="pos-item"><strong>next/image everywhere</strong> — No raw <code>&lt;img&gt;</code> tags found. Priority set correctly for above-fold content.</div>
+      <div class="pos-item"><strong>loading.tsx boundaries</strong> — Streaming boundaries at gallery, studio, me, topup, and song routes.</div>
+      <div class="pos-item"><strong>No third-party analytics bloat</strong> — Clean bill of health on external scripts.</div>
+      <div class="pos-item"><strong>AWS SDK server-only</strong> — S3 imports confined to API routes, no client bundle leak.</div>
+      <div class="pos-item"><strong>Idempotent ledger</strong> — Notes ledger uses externalRef deduplication keys for payment operations.</div>
+      <div class="pos-item"><strong>Deadlock-safe lock ordering</strong> — Share referral transactions use sorted IDs for FOR UPDATE.</div>
+      <div class="pos-item"><strong>Architecture roadmap</strong> — Phase 5 migration documented and scaffolded in @murmur/core.</div>
+    </div>
+  </div>
+
+  <!-- ====== PRIORITY ====== -->
+  <div class="pri-section">
+    <h2>Recommended Fix Priority</h2>
+    <div class="pri-list">
+      <div class="pri-item"><strong>SSRF in push subscribe</strong> — One-line regex fix, blocks a real attack vector. Ship today.</div>
+      <div class="pri-item"><strong>Auth session: column projection + query collapse</strong> — Reduces 3 queries/request to 1, prevents future column leaks.</div>
+      <div class="pri-item"><strong>Billing atomicity (zpay-notify)</strong> — Wrap in single transaction to prevent stuck purchase records.</div>
+      <div class="pri-item"><strong>Double-submit guards</strong> — Add <code>isDeleting</code>/<code>isSaving</code> state to SongDetail and NameScreen.</div>
+      <div class="pri-item"><strong>AudioContext leak in render-mp3</strong> — try/finally to always close. Blocks export after failures.</div>
+      <div class="pri-item"><strong>Email verification TOCTOU + attempt counter</strong> — Atomic count check; increment all active codes on verify.</div>
+      <div class="pri-item"><strong>PublicSongScreen catch block</strong> — One-line fix, prevents infinite spinner.</div>
+      <div class="pri-item"><strong>ilike → eq on users.email</strong> — Index-safe, normalizeEmail already lowercases.</div>
+      <div class="pri-item"><strong>framer-motion dynamic import</strong> — ~40KB gzip off initial bundle. High ROI.</div>
+      <div class="pri-item"><strong>Delete lib/utils/seeded-random.ts</strong> — Remove divergent hash. One import to update.</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Note:</strong> 3 of 11 scan dimensions (TypeScript Strictness, Product UX, CSS/Tailwind) hit subagent limits and did not return results. For full coverage on those, run a follow-up audit. The 8 completed dimensions covered 90 findings across security, performance, robustness, architecture, and testing.
+  </div>
+</div>
+
+<script>
+function filterDim(dim) {
+  document.querySelectorAll('.dim-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.querySelectorAll('.finding').forEach(f => {
+    if (dim === 'all') { f.style.display = ''; return; }
+    f.style.display = f.dataset.dim.includes(dim) ? '' : 'none';
+  });
+  document.querySelectorAll('.sev-section').forEach(s => {
+    const visible = s.querySelectorAll('.finding:not([style*="display: none"])');
+    s.style.display = (dim === 'all' || visible.length > 0) ? '' : 'none';
+  });
+}
+</script>

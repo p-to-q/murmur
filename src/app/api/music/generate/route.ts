@@ -575,6 +575,8 @@ async function refundMusicGenerateSpendIfNeeded(options: {
     log("notes.refund_failed", {
       requestLedgerId: options.spend.ledgerId,
       reason: refund.reason,
+      reconciliation: "MANUAL_REFUND_REQUIRED",
+      trigger: options.trigger,
     }, {
       route: ROUTE,
       requestId: options.requestId,
@@ -587,6 +589,8 @@ async function refundMusicGenerateSpendIfNeeded(options: {
     log("notes.refund_failed", {
       requestLedgerId: options.spend.ledgerId,
       reason: error instanceof Error ? error.message : String(error),
+      reconciliation: "MANUAL_REFUND_REQUIRED",
+      trigger: options.trigger,
     }, {
       route: ROUTE,
       requestId: options.requestId,

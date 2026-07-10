@@ -30,42 +30,43 @@ mock.module("@/lib/billing/zpay", () => ({
   zpayVerifyNotify: () => verifiedNotify,
 }));
 
-mock.module("@/lib/db/client", () => ({
-  db: {
-    insert: () => ({
-      values: (row: Record<string, unknown>) => {
-        eventInserts.push(row);
-        return {
-          onConflictDoNothing: () => ({
-            returning: async () => (eventInsertConflicts ? [] : [{ id: "evw_zpay" }]),
-          }),
-        };
-      },
-    }),
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: async () => {
-            selectCalls += 1;
-            if (eventInsertConflicts && selectCalls === 1) {
-              return reclaimedEvent ? [reclaimedEvent] : [];
-            }
-            return pendingPurchase ? [pendingPurchase] : [];
-          },
+const dbMock = {
+  insert: () => ({
+    values: (row: Record<string, unknown>) => {
+      eventInserts.push(row);
+      return {
+        onConflictDoNothing: () => ({
+          returning: async () => (eventInsertConflicts ? [] : [{ id: "evw_zpay" }]),
         }),
-      }),
-    }),
-    update: () => ({
-      set: (row: Record<string, unknown>) => ({
-        where: async () => {
-          if ("rawPayload" in row || row.status === "succeeded") purchaseUpdates.push(row);
-          else eventUpdates.push(row);
-          return [];
+      };
+    },
+  }),
+  select: () => ({
+    from: () => ({
+      where: () => ({
+        limit: async () => {
+          selectCalls += 1;
+          if (eventInsertConflicts && selectCalls === 1) {
+            return reclaimedEvent ? [reclaimedEvent] : [];
+          }
+          return pendingPurchase ? [pendingPurchase] : [];
         },
       }),
     }),
-  },
-}));
+  }),
+  update: () => ({
+    set: (row: Record<string, unknown>) => ({
+      where: async () => {
+        if ("rawPayload" in row || row.status === "succeeded") purchaseUpdates.push(row);
+        else eventUpdates.push(row);
+        return [];
+      },
+    }),
+  }),
+  transaction: async <T,>(fn: (tx: typeof dbMock) => Promise<T>): Promise<T> => fn(dbMock),
+};
+
+mock.module("@/lib/db/client", () => ({ db: dbMock }));
 
 mock.module("@/lib/db/queries/notes-ledger", () => ({
   grantNotes: mock(async (input: Record<string, unknown>) => {
