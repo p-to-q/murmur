@@ -67,6 +67,7 @@ export async function getSongShareMetaByShareCode(shareCode: string) {
   const rows = await db
     .select({
       visibility: songs.visibility,
+      title: songs.title,
       hasAudio: sql<boolean>`(${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> '')`,
     })
     .from(songs)

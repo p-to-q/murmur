@@ -311,7 +311,6 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         visibility: "unlisted",
       });
 
-      const copied = await copyTextToClipboard(share.url);
       setSong((current) =>
         current && current.id === song.id
           ? {
@@ -321,16 +320,23 @@ export function SongDetailScreen({ songId }: { songId: string }) {
             }
           : current,
       );
-      if (!copied) {
-        window.open(share.url, "_blank", "noopener,noreferrer");
-        throw new SongShareRequestError({
-          code: "clipboard_unavailable",
-          status: 0,
-          message: "Clipboard unavailable",
-          requestId: share.requestId,
-        });
+
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        await navigator.share({ title: song.title, url: share.url });
+        toast.success(t("song.share.link_copied") || "Shared");
+      } else {
+        const copied = await copyTextToClipboard(share.url);
+        if (!copied) {
+          window.open(share.url, "_blank", "noopener,noreferrer");
+          throw new SongShareRequestError({
+            code: "clipboard_unavailable",
+            status: 0,
+            message: "Clipboard unavailable",
+            requestId: share.requestId,
+          });
+        }
+        toast.success(t("song.share.link_copied") || "Share link copied");
       }
-      toast.success(t("song.share.link_copied") || "Share link copied");
       memory
         .reportAction({
           content: `Copied share link for "${song.title}"`,
