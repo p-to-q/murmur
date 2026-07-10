@@ -80,9 +80,11 @@ function publicSongResponse(
 ) {
   const headers: Record<string, string> = {
     "X-Request-Id": requestId,
+    // s-maxage stays short so unsharing a song propagates within ~5 minutes;
+    // stale-while-revalidate only papers over the refresh itself.
     "Cache-Control":
       song.visibility === "public"
-        ? "public, max-age=60, s-maxage=300"
+        ? "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
         : "private, no-store",
     ...extraHeaders,
   };

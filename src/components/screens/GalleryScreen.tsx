@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -23,6 +23,8 @@ import type { SongCard as SongCardType } from "@/modules/shared/types";
 import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
+import { trackStageEntered } from "@/lib/observability/stage-tracking";
+import { useNotificationStore } from "@/lib/store/notification-store";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
 import { ARTWORK_CATALOG } from "@/presets/artworks/catalog";
 
@@ -153,6 +155,12 @@ export function GalleryScreen() {
   const displaySongs = songs.length > 0 ? songs : DEMO_SONGS;
   const isShowingDemo = songs.length === 0;
 
+  const markAllRead = useNotificationStore((s) => s.markAllRead);
+  useEffect(() => {
+    trackStageEntered("gallery");
+    markAllRead();
+  }, [markAllRead]);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -184,21 +192,36 @@ export function GalleryScreen() {
     );
   }, [displaySongs, sort]);
 
+  // Stable id-based handlers keep SongCard's React.memo effective — inline
+  // per-card closures would give every card fresh props on each render.
+  const handleSongClick = useCallback(
+    (id: string) => {
+      const song = displaySongs.find((s) => s.id === id);
+      if (!song) return;
+      memory
+        .reportAction({
+          content: `Opened "${song.title}" from gallery`,
+          event_type: "navigate",
+          page: "gallery",
+          metadata: { type: "open_song", song_id: song.id },
+        })
+        .catch(() => {});
+      router.push(`/song/${song.id}`);
+    },
+    [displaySongs, router],
+  );
+
+  const handleDeleteRequest = useCallback(
+    (id: string) => {
+      const song = displaySongs.find((s) => s.id === id);
+      if (song) setDeleteTarget(song);
+    },
+    [displaySongs],
+  );
+
   if (isLoading) {
     return <GlobalLoadingIndicator />;
   }
-
-  const handleSongClick = (song: SongWithMeta) => {
-    memory
-      .reportAction({
-        content: `Opened "${song.title}" from gallery`,
-        event_type: "navigate",
-        page: "gallery",
-        metadata: { type: "open_song", song_id: song.id },
-      })
-      .catch(() => {});
-    router.push(`/song/${song.id}`);
-  };
 
   const handleConfirmDelete = async () => {
     const target = deleteTarget;
@@ -263,10 +286,7 @@ export function GalleryScreen() {
                 bpm: s.bpm,
                 createdAt: s.createdAt,
               }))}
-              onSongClick={(id) => {
-                const song = displaySongs.find((s) => s.id === id);
-                if (song) handleSongClick(song);
-              }}
+              onSongClick={handleSongClick}
             />
           </motion.div>
         )}
@@ -317,10 +337,8 @@ export function GalleryScreen() {
                 bpm={song.bpm}
                 createdAt={song.createdAt}
                 index={i}
-                onClick={() => handleSongClick(song)}
-                onDelete={
-                  isShowingDemo ? undefined : () => setDeleteTarget(song)
-                }
+                onClick={handleSongClick}
+                onDelete={isShowingDemo ? undefined : handleDeleteRequest}
               />
             ))}
           </div>
