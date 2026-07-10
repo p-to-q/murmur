@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
-import { trackStageEntered } from "@/lib/observability/stage-tracking";
+import { resetStageTracking, trackStageEntered } from "@/lib/observability/stage-tracking";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
 import {
@@ -168,9 +168,18 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     }
   }, [setActiveCreationRoute, vibeVersions.length]);
 
+  // Track once per mount, but wait until the flow/draft ids exist — the demo
+  // seeding and draft restoration effects populate them asynchronously, and a
+  // bare mount effect would emit `stage.entered` with both fields undefined.
+  const stageTrackedRef = useRef(false);
   useEffect(() => {
-    trackStageEntered("vibe", { flowId: currentFlowId ?? undefined, draftId: currentDraftId ?? undefined });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (stageTrackedRef.current) return;
+    const flowId = currentFlowId ?? sourceVersion?.originFlowId;
+    const draftId = currentDraftId ?? sourceVersion?.draftId;
+    if (!flowId && !draftId) return;
+    stageTrackedRef.current = true;
+    trackStageEntered("vibe", { flowId, draftId });
+  }, [currentDraftId, currentFlowId, sourceVersion]);
 
   /* ── Arrival sequence ─────────────────────────────────────────── */
   useEffect(() => {
@@ -404,6 +413,9 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     versionPreview.stop();
     setAuditioning(null);
     resetFlow();
+    // Abandoning the flow here: clear stage state so the next funnel run does
+    // not inherit a stale "vibe" origin.
+    resetStageTracking();
     const sourceSongId = sourceVersion?.parentSongId ?? sourceVersion?.draftId;
     if (fromSavedSong && sourceSongId) {
       router.push(`/song/${sourceSongId}`);

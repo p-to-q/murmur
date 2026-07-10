@@ -11,7 +11,6 @@ import type {
 
 export function buildClientTranscriptionResult(
   rawNotes: MelodyNote[],
-  diagnostics: { totalMs: number },
 ): TranscriptionResult {
   if (rawNotes.length === 0) {
     throw new Error("Client pitch detection returned no notes");

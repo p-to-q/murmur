@@ -6,7 +6,7 @@ import {
   getMusicWorkerUrl,
   isMusicWorkerConfigured,
 } from "@/lib/platform/music-worker";
-import { endpointHealth, getQueueDepth } from "@/lib/platform/runpod-serverless";
+import { endpointHealth, parseQueueDepth } from "@/lib/platform/runpod-serverless";
 
 export const runtime = "nodejs";
 
@@ -63,7 +63,7 @@ async function serverlessHealth() {
   }
 
   try {
-    const { ok, status } = await endpointHealth(config, AbortSignal.timeout(12_000));
+    const { ok, status, body } = await endpointHealth(config, AbortSignal.timeout(12_000));
     if (!ok) {
       const unauthorized = status === 401 || status === 403;
       return publicHealth({
@@ -74,7 +74,9 @@ async function serverlessHealth() {
         reason: unauthorized ? "unauthorized" : `http_${status}`,
       });
     }
-    const depth = await getQueueDepth(config);
+    // Reuse the body we already fetched — a second /health round-trip would
+    // double the latency and could disagree with the availability answer above.
+    const depth = parseQueueDepth(body);
     const estimatedWaitMs = depth
       ? estimateWaitFromQueue(depth.inQueue, depth.inProgress, depth.workers.total)
       : null;

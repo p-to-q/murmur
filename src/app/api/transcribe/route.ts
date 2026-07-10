@@ -262,7 +262,7 @@ async function resolveBilling(
   } else {
     try {
       balance = await getNotesBalance(userId);
-    } catch (error) {
+    } catch {
       if (shouldBypassBillingForLocalDemo(request)) {
         billingMode = "dev_fallback";
         balance = devFallbackBalance(userId);

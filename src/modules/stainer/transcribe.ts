@@ -115,10 +115,7 @@ async function tryClientPitchFallback(
     log("transcribe.client_fallback_starting", {});
     const audioBuffer = await decodeAudioBlob(audioBlob);
     const pitchResult = await detectPitchClient(audioBuffer);
-    const result = buildClientTranscriptionResult(
-      pitchResult.rawNotes,
-      pitchResult.diagnostics,
-    );
+    const result = buildClientTranscriptionResult(pitchResult.rawNotes);
 
     log("transcribe.completed", {
       provider: result.provider,

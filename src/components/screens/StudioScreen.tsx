@@ -67,9 +67,17 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
     }
   }, [currentVersion, setActiveCreationRoute]);
 
+  // Track once per mount, but only after a version exists — demo seeding fills
+  // the store asynchronously, and firing earlier would drop the flow context.
+  const stageTrackedRef = useRef(false);
   useEffect(() => {
-    trackStageEntered("studio");
-  }, []);
+    if (stageTrackedRef.current || !currentVersion) return;
+    stageTrackedRef.current = true;
+    trackStageEntered("studio", {
+      flowId: currentVersion.originFlowId,
+      draftId: currentVersion.draftId,
+    });
+  }, [currentVersion]);
 
   useRestoredVersionAudio(currentVersion, restoredDraftAt);
 

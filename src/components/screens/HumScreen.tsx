@@ -13,7 +13,7 @@ import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import { HumOnboardingOverlay } from "@/components/screens/hum-onboarding";
 import { useMurmurStore } from "@/lib/store/murmur-store";
-import { trackStageEntered } from "@/lib/observability/stage-tracking";
+import { resetStageTracking, trackStageEntered } from "@/lib/observability/stage-tracking";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import {
   createMagentaVersions,
@@ -319,7 +319,10 @@ export function HumScreen() {
     // A direct visit to `/` is an explicit request for a fresh Create surface.
     // Draft recovery still lives in the nav controls, where the user is asking
     // to resume the creation journey rather than load the public home route.
+    // Stage tracking resets with the flow so a completed (or abandoned) run
+    // cannot leak stale `from`/`dwellMs` attribution into the new funnel.
     resetFlow();
+    resetStageTracking();
     trackStageEntered("hum");
   }, [resetFlow]);
 
