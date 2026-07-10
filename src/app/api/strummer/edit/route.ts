@@ -25,7 +25,6 @@ const STRUMMER_EDIT_RATE_LIMIT = { capacity: 10, refillWindowMs: 60_000 };
 type RequestBody = { prompt?: string };
 
 export async function POST(req: NextRequest) {
-  const startedAt = performance.now();
   const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
   const spendRef = createSpendReference("llm_edit");
   const auth = await resolveRequestAuth(req);
@@ -183,6 +182,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const startedAt = performance.now();
     const completion = await Promise.race([
       ai.chat({
         model: "deepseek.v3.1",

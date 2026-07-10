@@ -1,0 +1,1617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Murmur · Hackathon Pitch Deck</title>
+  <meta name="description" content="Murmur 黑客松答辩 PPT：把脑海里的哼唱变成可以收藏和分享的小歌。" />
+
+  <!-- Fonts: Instrument Serif + Geist + Noto Serif SC (closest web-safe to LXGW WenKai tone) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Noto+Serif+SC:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════════
+       MURMUR HACKATHON PITCH DECK — DESIGN TOKENS
+       Sourced from src/app/globals.css & src/app/layout.tsx
+       ═══════════════════════════════════════════════════════════════ */
+    :root {
+      /* Surface */
+      --murmur-bg: #F5F1EB;
+      --murmur-bg-warm: #EFE8DA;
+      --murmur-card: #FFFEFB;
+      --murmur-ink: #1A1A1A;
+      --murmur-ink-soft: #3A3A3A;
+      --murmur-mute: #8C8780;
+      --murmur-mute-light: #B6B0A4;
+      --murmur-border: #E5DDD0;
+      --murmur-border-strong: #D2C9B6;
+
+      /* Accent */
+      --murmur-accent: #FF5924;
+      --murmur-accent-light: #FF8A5C;
+      --murmur-accent-deep: #D9421A;
+      --murmur-accent-tint: #FFE6DA;
+      --murmur-dust-blue: #A7B8C8;
+      --murmur-lavender: #C9B6E4;
+      --murmur-warm-gold: #EBCB8B;
+
+      /* Fonts */
+      --murmur-font-sans: "Geist", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      --murmur-font-serif: "Instrument Serif", "Noto Serif SC", Georgia, "Times New Roman", Times, serif;
+      --murmur-font-chinese: "Noto Serif SC", "PingFang SC", "Songti SC", serif;
+
+      /* Radius */
+      --radius: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 20px;
+      --radius-2xl: 28px;
+
+      /* Spacing */
+      --safe-x: clamp(1.25rem, 4vw, 3.5rem);
+      --safe-y: clamp(1.25rem, 4vh, 2.5rem);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--murmur-bg);
+      color: var(--murmur-ink);
+      font-family: var(--murmur-font-sans);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* Selection matches Murmur coral */
+    ::selection {
+      background: var(--murmur-accent);
+      color: var(--murmur-card);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       PITCH APP SHELL
+       ═══════════════════════════════════════════════════════════════ */
+    .pitch-app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .slide-deck {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding: var(--safe-y) var(--safe-x);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(20px) scale(0.985);
+      transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+                  transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      z-index: 0;
+    }
+
+    .slide.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+      z-index: 10;
+    }
+
+    .slide-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 2.5rem;
+    }
+
+    .slide-number {
+      font-family: var(--murmur-font-serif);
+      font-size: 0.875rem;
+      color: var(--murmur-mute);
+      letter-spacing: 0.05em;
+    }
+
+    .slide-eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.32em;
+      font-weight: 500;
+      font-size: 0.6875rem;
+      color: var(--murmur-mute);
+    }
+
+    .slide-main {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+      align-items: center;
+      width: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 1rem 0;
+    }
+
+    @media (min-width: 1024px) {
+      .slide-main {
+        grid-template-columns: 1.1fr 1fr;
+        gap: 4rem;
+      }
+      .slide-main.reverse { grid-template-columns: 1fr 1.1fr; }
+      .slide-main.centered { grid-template-columns: 1fr; text-align: center; }
+    }
+
+    .slide-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 2rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       TYPOGRAPHY
+       ═══════════════════════════════════════════════════════════════ */
+    .hero-title {
+      font-family: var(--murmur-font-serif);
+      font-weight: 400;
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+      font-size: clamp(2.4rem, 6vw, 5rem);
+      color: var(--murmur-ink);
+    }
+
+    .hero-title em,
+    .hero-title i {
+      font-style: italic;
+      letter-spacing: -0.005em;
+    }
+
+    .hero-subtitle {
+      font-family: var(--murmur-font-serif);
+      font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+      line-height: 1.3;
+      color: var(--murmur-ink-soft);
+      margin-top: 1rem;
+      max-width: 52ch;
+    }
+
+    .slide-narrative {
+      font-size: clamp(1rem, 1.4vw, 1.15rem);
+      line-height: 1.8;
+      color: var(--murmur-ink-soft);
+      max-width: 60ch;
+      margin-top: 1.5rem;
+    }
+
+    .slide-narrative p + p { margin-top: 1.1em; }
+
+    .slide-narrative strong {
+      color: var(--murmur-ink);
+      font-weight: 500;
+    }
+
+    .slide-narrative .highlight {
+      color: var(--murmur-accent);
+      font-weight: 500;
+    }
+
+    /* Chinese serif override for headings */
+    .zh-serif { font-family: var(--murmur-font-chinese); letter-spacing: 0; }
+
+    /* ═══════════════════════════════════════════════════════════════
+       CARDS & BUTTONS
+       ═══════════════════════════════════════════════════════════════ */
+    .mm-card {
+      background: var(--murmur-card);
+      border: 1px solid #ECE5D6;
+      border-radius: var(--radius);
+      box-shadow:
+        0 1px 2px rgba(26, 26, 26, 0.04),
+        0 6px 18px rgba(26, 26, 26, 0.06);
+    }
+
+    .mm-card-hover {
+      transition: box-shadow 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+                  transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .mm-card-hover:hover {
+      box-shadow:
+        0 2px 4px rgba(26, 26, 26, 0.05),
+        0 12px 28px rgba(26, 26, 26, 0.10);
+      transform: translateY(-2px);
+    }
+
+    .mm-btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1.5rem;
+      border-radius: 999px;
+      background: var(--murmur-accent);
+      color: #FFFEFB;
+      font-weight: 500;
+      font-size: 0.875rem;
+      letter-spacing: 0.01em;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.24s ease;
+    }
+    .mm-btn-primary:hover {
+      background: var(--murmur-accent-deep);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 22px rgba(255, 89, 36, 0.32);
+    }
+
+    .mm-btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.25rem;
+      border-radius: 999px;
+      background: var(--murmur-bg-warm);
+      color: var(--murmur-ink);
+      font-weight: 500;
+      font-size: 0.875rem;
+      border: 1px solid var(--murmur-border);
+      cursor: pointer;
+      transition: transform 0.18s ease, background 0.18s ease;
+    }
+    .mm-btn-secondary:hover { background: var(--murmur-border); }
+
+    /* ═══════════════════════════════════════════════════════════════
+       BACKDROP: AURORA BLOBS + PAPER GRAIN
+       ═══════════════════════════════════════════════════════════════ */
+    .backdrop {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .aurora-blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.55;
+      mix-blend-mode: multiply;
+      will-change: transform;
+    }
+
+    .blob-1 {
+      width: 60vw; height: 60vw;
+      max-width: 800px; max-height: 800px;
+      background: radial-gradient(circle, rgba(255, 105, 210, 0.32), rgba(255, 105, 210, 0) 70%);
+      top: -10%; left: -10%;
+      animation: aurora-drift-1 28s ease-in-out infinite;
+    }
+    .blob-2 {
+      width: 55vw; height: 55vw;
+      max-width: 700px; max-height: 700px;
+      background: radial-gradient(circle, rgba(178, 196, 255, 0.36), rgba(178, 196, 255, 0) 70%);
+      bottom: -15%; right: -10%;
+      animation: aurora-drift-2 34s ease-in-out infinite;
+    }
+    .blob-3 {
+      width: 40vw; height: 40vw;
+      max-width: 520px; max-height: 520px;
+      background: radial-gradient(circle, rgba(140, 230, 200, 0.28), rgba(140, 230, 200, 0) 70%);
+      top: 40%; left: 45%;
+      animation: aurora-drift-3 22s ease-in-out infinite;
+    }
+
+    .paper-grain {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+      background-size: 200px;
+      opacity: 0.45;
+      z-index: 1;
+    }
+
+    @keyframes aurora-drift-1 {
+      0%   { transform: translate(0, 0) scale(1); }
+      33%  { transform: translate(8%, -6%) scale(1.05); }
+      66%  { transform: translate(-4%, 4%) scale(0.97); }
+      100% { transform: translate(0, 0) scale(1); }
+    }
+    @keyframes aurora-drift-2 {
+      0%   { transform: translate(0, 0) scale(1); }
+      33%  { transform: translate(-10%, 5%) scale(1.08); }
+      66%  { transform: translate(6%, -8%) scale(0.95); }
+      100% { transform: translate(0, 0) scale(1); }
+    }
+    @keyframes aurora-drift-3 {
+      0%   { transform: translate(0, 0) scale(1); }
+      33%  { transform: translate(5%, 8%) scale(0.96); }
+      66%  { transform: translate(-7%, -3%) scale(1.06); }
+      100% { transform: translate(0, 0) scale(1); }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       NAVIGATION & PROGRESS
+       ═══════════════════════════════════════════════════════════════ */
+    .slide-nav {
+      position: fixed;
+      bottom: var(--safe-y);
+      right: var(--safe-x);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      z-index: 100;
+    }
+
+    .nav-btn {
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 50%;
+      border: 1px solid var(--murmur-border);
+      background: rgba(255, 254, 251, 0.86);
+      color: var(--murmur-ink);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: background 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+    }
+    .nav-btn:hover { background: var(--murmur-card); border-color: var(--murmur-border-strong); transform: translateY(-1px); }
+    .nav-btn:active { transform: scale(0.96); }
+    .nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .nav-dots {
+      position: fixed;
+      bottom: var(--safe-y);
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      z-index: 100;
+      background: rgba(255, 254, 251, 0.72);
+      padding: 0.4rem 0.8rem;
+      border-radius: 999px;
+      border: 1px solid var(--murmur-border);
+      backdrop-filter: blur(8px);
+    }
+
+    .dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 50%;
+      background: var(--murmur-border-strong);
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.2s ease;
+    }
+    .dot.active { background: var(--murmur-accent); transform: scale(1.3); }
+    .dot:hover { background: var(--murmur-accent-light); }
+
+    .progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: var(--murmur-accent);
+      width: 0%;
+      z-index: 200;
+      transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .brand-mark {
+      position: fixed;
+      top: var(--safe-y);
+      left: var(--safe-x);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .brand-glyph {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--murmur-ink);
+      display: grid;
+      place-items: center;
+    }
+    .brand-glyph::after {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--murmur-accent);
+    }
+    .brand-word {
+      font-family: var(--murmur-font-serif);
+      font-size: 1.1rem;
+      letter-spacing: -0.02em;
+      color: var(--murmur-ink);
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       EFFECTS & PLACEHOLDERS
+       ═══════════════════════════════════════════════════════════════ */
+
+    /* Breathing orb (like the Hum button) */
+    .orb-stage {
+      position: relative;
+      width: min(280px, 50vw);
+      aspect-ratio: 1;
+      margin: 0 auto;
+    }
+    .orb-shell {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: conic-gradient(from 0deg, #FF8A5C88, #FF69D266, #A7B8C844, #FFE04066, #C9B6E444, #FF8A5C88);
+      animation: glow-spin 20s linear infinite;
+      filter: blur(8px);
+      opacity: 0.9;
+    }
+    .orb-core {
+      position: absolute;
+      inset: 8%;
+      border-radius: 50%;
+      background: var(--murmur-card);
+      box-shadow: inset 0 0 28px rgba(255, 89, 36, 0.12), 0 12px 40px rgba(26, 26, 26, 0.08);
+      display: grid;
+      place-items: center;
+      animation: breathe 2.5s ease-in-out infinite;
+    }
+    .orb-core svg { width: 32%; height: 32%; opacity: 0.12; color: var(--murmur-ink); }
+
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.04); opacity: 0.92; }
+    }
+    @keyframes glow-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Waveform canvas */
+    .waveform-wrap {
+      position: relative;
+      width: 100%;
+      height: 180px;
+      background: var(--murmur-card);
+      border: 1px solid #ECE5D6;
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      box-shadow: 0 8px 30px rgba(26, 26, 26, 0.06);
+    }
+    .waveform-canvas { width: 100%; height: 100%; display: block; }
+    .waveform-label {
+      position: absolute;
+      bottom: 0.75rem;
+      left: 1rem;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--murmur-mute);
+    }
+
+    /* Flow diagram */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      padding: 1.5rem;
+      background: var(--murmur-card);
+      border: 1px solid #ECE5D6;
+      border-radius: var(--radius-2xl);
+      box-shadow: 0 8px 30px rgba(26, 26, 26, 0.06);
+    }
+    .flow-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1rem;
+      min-width: 90px;
+      border-radius: var(--radius-lg);
+      background: var(--murmur-bg);
+      border: 1px solid var(--murmur-border);
+      transition: transform 0.3s ease, border-color 0.3s ease;
+    }
+    .flow-node:hover { transform: translateY(-3px); border-color: var(--murmur-accent-light); }
+    .flow-node .icon {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: var(--murmur-accent-tint);
+      color: var(--murmur-accent);
+      font-size: 1rem;
+    }
+    .flow-node .label {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--murmur-ink-soft);
+      letter-spacing: 0.02em;
+    }
+    .flow-arrow {
+      color: var(--murmur-mute-light);
+      font-size: 1.25rem;
+      line-height: 1;
+    }
+
+    /* Placeholder box for user assets */
+    .asset-placeholder {
+      position: relative;
+      width: 100%;
+      min-height: 220px;
+      background: repeating-linear-gradient(45deg, var(--murmur-bg), var(--murmur-bg) 12px, var(--murmur-bg-warm) 12px, var(--murmur-bg-warm) 24px);
+      border: 2px dashed var(--murmur-border-strong);
+      border-radius: var(--radius-xl);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      color: var(--murmur-mute);
+      text-align: center;
+      padding: 1.5rem;
+    }
+    .asset-placeholder .ph-icon {
+      width: 3rem;
+      height: 3rem;
+      border-radius: 50%;
+      background: var(--murmur-card);
+      border: 1px solid var(--murmur-border);
+      display: grid;
+      place-items: center;
+      font-size: 1.25rem;
+    }
+    .asset-placeholder .ph-title { font-weight: 500; color: var(--murmur-ink-soft); }
+    .asset-placeholder .ph-hint { font-size: 0.8rem; max-width: 32ch; line-height: 1.5; }
+
+    /* Comparison table */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      width: 100%;
+    }
+    .compare-card {
+      background: var(--murmur-card);
+      border: 1px solid #ECE5D6;
+      border-radius: var(--radius-xl);
+      padding: 1.25rem;
+      box-shadow: 0 6px 20px rgba(26, 26, 26, 0.05);
+    }
+    .compare-card.lead { border-color: var(--murmur-accent-tint); background: linear-gradient(180deg, var(--murmur-card), #FFFCFA); }
+    .compare-card h4 { font-family: var(--murmur-font-serif); font-size: 1.1rem; margin-bottom: 0.75rem; }
+    .compare-card ul { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+    .compare-card li {
+      font-size: 0.85rem;
+      color: var(--murmur-ink-soft);
+      display: flex;
+      align-items: flex-start;
+      gap: 0.4rem;
+    }
+    .compare-card li::before { content: "•"; color: var(--murmur-accent); }
+    .compare-card.lead li::before { content: "✓"; font-weight: 700; }
+
+    /* Roadmap timeline */
+    .timeline {
+      position: relative;
+      padding-left: 1.5rem;
+      border-left: 2px solid var(--murmur-border);
+    }
+    .timeline-item {
+      position: relative;
+      padding-bottom: 1.5rem;
+    }
+    .timeline-item::before {
+      content: "";
+      position: absolute;
+      left: -1.85rem;
+      top: 0.25rem;
+      width: 0.75rem;
+      height: 0.75rem;
+      border-radius: 50%;
+      background: var(--murmur-card);
+      border: 2px solid var(--murmur-accent);
+    }
+    .timeline-item h4 { font-family: var(--murmur-font-serif); font-size: 1rem; margin-bottom: 0.25rem; }
+    .timeline-item p { font-size: 0.85rem; color: var(--murmur-mute); line-height: 1.5; }
+
+    /* Team cards */
+    .team-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+      width: 100%;
+    }
+    .team-card {
+      background: var(--murmur-card);
+      border: 1px solid #ECE5D6;
+      border-radius: var(--radius-xl);
+      padding: 1.25rem;
+      text-align: center;
+      box-shadow: 0 6px 20px rgba(26, 26, 26, 0.05);
+    }
+    .team-avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--murmur-bg-warm);
+      margin: 0 auto 0.75rem;
+      display: grid;
+      place-items: center;
+      color: var(--murmur-mute);
+      font-size: 1.5rem;
+      overflow: hidden;
+    }
+    .team-card h4 { font-size: 0.95rem; font-weight: 600; }
+    .team-card .role { font-size: 0.75rem; color: var(--murmur-mute); margin-bottom: 0.4rem; }
+    .team-card p { font-size: 0.75rem; color: var(--murmur-ink-soft); line-height: 1.5; }
+
+    /* QR / CTA */
+    .qr-card {
+      width: 180px;
+      height: 180px;
+      background: var(--murmur-card);
+      border: 1px solid #ECE5D6;
+      border-radius: var(--radius-xl);
+      display: grid;
+      place-items: center;
+      margin: 0 auto;
+      box-shadow: 0 8px 30px rgba(26, 26, 26, 0.06);
+      color: var(--murmur-mute);
+      font-size: 0.75rem;
+      text-align: center;
+      padding: 1rem;
+    }
+
+    /* Floating particles for vibe cards */
+    .particle {
+      position: absolute;
+      border-radius: 50%;
+      background: var(--murmur-warm-gold);
+      opacity: 0.35;
+      filter: blur(1px);
+      animation: particle-float 6s ease-in-out infinite;
+    }
+    @keyframes particle-float {
+      0%, 100% { transform: translateY(0) translateX(0); opacity: 0.35; }
+      25% { transform: translateY(-12px) translateX(4px); opacity: 0.2; }
+      50% { transform: translateY(-20px) translateX(-3px); opacity: 0.3; }
+      75% { transform: translateY(-8px) translateX(5px); opacity: 0.15; }
+    }
+
+    /* Presenter notes panel */
+    .notes-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-height: 35vh;
+      background: rgba(255, 254, 251, 0.96);
+      border-top: 1px solid var(--murmur-border);
+      padding: 1rem var(--safe-x);
+      transform: translateY(100%);
+      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+      z-index: 150;
+      overflow-y: auto;
+      backdrop-filter: blur(10px);
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--murmur-ink-soft);
+    }
+    .notes-panel.open { transform: translateY(0); }
+    .notes-panel h5 { font-family: var(--murmur-font-serif); font-size: 1rem; margin-bottom: 0.5rem; color: var(--murmur-ink); }
+    .notes-panel kbd {
+      display: inline-block;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      background: var(--murmur-bg-warm);
+      border: 1px solid var(--murmur-border);
+      font-family: var(--murmur-font-sans);
+      font-size: 0.75rem;
+    }
+
+    /* Utility helpers */
+    .text-center { text-align: center; }
+    .mx-auto { margin-left: auto; margin-right: auto; }
+    .mt-1 { margin-top: 0.5rem; }
+    .mt-2 { margin-top: 1rem; }
+    .mt-3 { margin-top: 1.5rem; }
+    .mt-4 { margin-top: 2rem; }
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .items-center { align-items: center; }
+    .justify-center { justify-content: center; }
+    .gap-1 { gap: 0.5rem; }
+    .gap-2 { gap: 1rem; }
+    .w-full { width: 100%; }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      .aurora-blob, .orb-shell, .orb-core, .particle, .flow-node:hover, .slide {
+        animation: none !important;
+        transition: none !important;
+      }
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .slide-main { gap: 1.25rem; padding: 0.5rem 0; }
+      .hero-subtitle { margin-top: 0.5rem; }
+      .slide-narrative { margin-top: 0.75rem; }
+      .flow-diagram { gap: 0.35rem; padding: 1rem; }
+      .flow-node { min-width: 70px; padding: 0.6rem 0.5rem; }
+      .flow-arrow { display: none; }
+      .nav-dots { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Fixed brand mark -->
+  <div class="brand-mark">
+    <div class="brand-glyph"></div>
+    <span class="brand-word">Murmur</span>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="progress-bar" id="progressBar"></div>
+
+  <!-- Aurora + paper grain backdrop -->
+  <div class="backdrop">
+    <div class="aurora-blob blob-1"></div>
+    <div class="aurora-blob blob-2"></div>
+    <div class="aurora-blob blob-3"></div>
+    <div class="paper-grain"></div>
+  </div>
+
+  <main class="pitch-app">
+    <div class="slide-deck" id="slideDeck">
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           SLIDE 1 — TITLE CARD
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="slide active" data-slide="1">
+        <div class="slide-header">
+          <span class="slide-eyebrow">Hackathon Pitch</span>
+          <span class="slide-number">01 / 11</span>
+        </div>
+        <div class="slide-main centered">
+          <div>
+            <h1 class="hero-title zh-serif">Murmur</h1>
+            <p class="hero-subtitle zh-serif">
+              把脑海里的哼唱，变成一首可以收藏和分享的小歌。
+            </p>
+            <div class="slide-narrative mx-auto">
+              <p>
+                Murmur 是一个<strong>AI 音乐速写本</strong>。我们相信，<span class="highlight">每一首完整的歌，最初都只是一段无意识的哼唱</span>——在洗澡时、在通勤路上、在睡前半梦半醒之间。这些旋律往往转瞬即逝：大多数人不会弹钢琴，不懂乐理，也懒得打开复杂的 DAW。Murmur 要做的，就是让这些最原初的音乐念头，能够被听见、被整理、被保存，最终变成一张真正属于自己的音乐卡片。
+              </p>
+              <!-- NARRATIVE_OPTION_A: 更感性的项目宣言
+              <p>
+                这不是一个“输入提示词、等待 AI 吐出一首歌”的工具。Murmur 从你自己的声音开始：你的音高、你的呼吸、你的起伏。我们把它翻译成乐器可以理解的语言，再帮你挑选一种风格、打磨一段编曲，最后让你把它命名、收藏、分享。你可以把它理解为“音乐创作的拍立得”——不是最专业的，但一定是最贴近你的。
+              </p>
+              -->
+              <!-- NARRATIVE_OPTION_B: 更偏技术/产品定位
+              <p>
+                从产品形态上看，Murmur 是一个浏览器端的端到端音乐创作工作流：录音 → 音高检测 → 旋律清洗 → 风格生成 → 编曲编辑 → 离线渲染 → 持久化存储 → 社交分享。整个链路被设计成一条极其克制的用户路径：Hum → Vibe → Studio → Save → Gallery → Song Detail。每一步只做一件事，让不懂音乐的人也能完成一次完整的创作。
+              </p>
+              -->
+            </div>
+            <div class="mt-4 flex justify-center gap-2">
+              <a class="mm-btn-primary" href="#" onclick="goTo(2); return false;">开始听故事</a>
+              <a class="mm-btn-secondary" href="#" onclick="goTo(5); return false;">直接看 Demo</a>
+            </div>
+          </div>
+          <!-- Visual: breathing orb + waveform canvas -->
+          <div class="orb-stage mt-4">
+            <div class="orb-shell"></div>
+            <div class="orb-core">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v14a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="slide-eyebrow">P to Q</span>
+          <span class="slide-eyebrow">Music + AI</span>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           SLIDE 2 — THE HOOK
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="slide" data-slide="2">
+        <div class="slide-header">
+          <span class="slide-eyebrow">The Hook</span>
+          <span class="slide-number">02 / 11</span>
+        </div>
+        <div class="slide-main">
+          <div>
+            <h2 class="hero-title zh-serif">每一首歌，<br/>最初都只是一段<span style="color:var(--murmur-accent)">哼唱</span>。</h2>
+            <div class="slide-narrative">
+              <p>
+                想想看，你有多少次在浴室里、地铁上、或是睡前半梦半醒之间，嘴里突然飘出一段旋律？那一刻它是属于你的，鲜活、完整、带着情绪。但等你拿起手机，它往往已经散了。你也许会打开语音备忘录，录下一段含糊的“啦啦啦”，但然后呢？这段录音不会被整理成乐谱，不会被配上和弦，更不会变成一首你可以分享给朋友的歌。它就像一张写在空气中的便签，风一吹就消失了。
+              </p>
+              <!-- NARRATIVE_OPTION_A: 更具象的故事
+              <p>
+                小林是我们假想中的用户。她不是一个音乐人，也不懂和弦，但她某天早上起床时脑子里有一段旋律。她打开 Murmur，对着手机哼了 8 秒钟，然后选择了一个“暖色调、慢节奏、带弦乐”的氛围。30 秒后，她听到了一首以自己旋律为主线的完整编曲。她给这首歌取名叫《星期天的早晨》，把它存进了 Gallery。这整个过程，比她点一杯咖啡还快。
+              </p>
+              -->
+              <!-- NARRATIVE_OPTION_B: 更偏数据/调研
+              <p>
+                数据显示，全球有数千万人会用语音备忘录记录音乐灵感，但其中超过 90% 的片段从未被再次打开。原因不是缺乏灵感，而是缺乏“从声音到作品”的桥梁。现有工具要么太轻（只能录音），要么太重（需要学习 DAW 和音乐理论），要么太黑盒（输入一段文字，AI 直接替你把歌写了）。Murmur 想填补的，正是这个“中间的、有人情味的”创作空间。
+              </p>
+              -->
+            </div>
+          </div>
+          <div>
+            <!-- Visual: animated waveform showing raw hum → clean melody -->
+            <div class="waveform-wrap" data-canvas="waveform">
+              <canvas class="waveform-canvas" id="waveform-2"></canvas>
+              <span class="waveform-label">Raw hum → Clean melody</span>
+            </div>
+            <div class="asset-placeholder mt-2">
+              <div class="ph-icon">🎙</div>
+              <div class="ph-title">可替换素材：真实哼唱录音</div>
+              <div class="ph-hint">请在这里嵌入一段 3–5 秒的用户哼唱音频，让听众立刻理解“从声音开始”的体验。</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="slide-eyebrow">01:00 故事开场</span>
+          <span class="slide-eyebrow">要点：让听众“回忆起自己的旋律”</span>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           SLIDE 3 — PROBLEM
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="slide" data-slide="3">
+        <div class="slide-header">
+          <span class="slide-eyebrow">The Problem</span>
+          <span class="slide-number">03 / 11</span>
+        </div>
+        <div class="slide-main reverse">
+          <div>
+            <!-- Visual: three panels representing the three pain points -->
+            <div class="compare-grid" style="max-width: 520px; margin: 0 auto;">
+              <div class="compare-card">
+                <h4>太轻</h4>
+                <ul>
+                  <li>语音备忘录只是录音</li>
+                  <li>无法变成乐谱或 MIDI</li>
+                  <li>灵感死在文件夹里</li>
+                </ul>
+              </div>
+              <div class="compare-card">
+                <h4>太重</h4>
+                <ul>
+                  <li>DAW 学习曲线陡峭</li>
+                  <li>需要乐理和乐器技能</li>
+                  <li>创作变成工程任务</li>
+                </ul>
+              </div>
+              <div class="compare-card">
+                <h4>太黑盒</h4>
+                <ul>
+                  <li>文本生成音乐工具</li>
+                  <li>用户旋律被替代</li>
+                  <li>缺少“我”的存在感</li>
+                </ul>
+              </div>
+            </div>
+            <div class="asset-placeholder mt-2">
+              <div class="ph-icon">📊</div>
+              <div class="ph-title">可替换素材：市场调研或痛点数据</div>
+              <div class="ph-hint">可以放一张关于“音乐灵感流失”的调研图表、DAW 复杂度截图，或竞品界面。</div>
+            </div>
+          </div>
+          <div>
+            <h2 class="hero-title zh-serif">创作音乐的门槛，<br/>从第一个念头就开始了。</h2>
+            <div class="slide-narrative">
+              <p>
+                今天的音乐工具大致分为三类。第一类是“录音工具”，比如手机自带的语音备忘录——它们只能帮你把声音存下来，却不能把它变成乐谱、和弦或编曲。第二类是“专业工作站”，比如 Logic、Ableton Live、GarageBand——它们功能强大，但需要你懂乐理、会操作轨道、调音色、做混音。对一个只是想“把脑子里的旋律留住”的人来说，这太重了。第三类是“生成式 AI 音乐工具”，比如 Suno 或 Udio——它们确实很惊艳，但你输入的是文字，输出的是一首与你无关的歌；你的哼唱不是起点，而是可有可无的参考。
+              </p>
+              <!-- NARRATIVE_OPTION_A: 更情感化
+              <p>
+                结果就是，大多数普通人的音乐灵感被困在“想创作”和“能创作”之间的鸿沟里。他们不是不想表达，而是表达的成本太高。一段旋律从脑海里诞生，到真正被听见，中间要跨越好几座大山：记谱、编曲、混音、导出、发布。Murmur 想把这些大山削成一条小路，让任何人都能走通。
+              </p>
+              -->
+              <!-- NARRATIVE_OPTION_B: 更聚焦用户画像
+              <p>
+                我们的核心用户不是专业制作人，而是“有旋律但不精通乐器”的人：业余歌手、词曲创作初学者、音乐教育学生、短视频创作者，甚至只是喜欢在洗澡时哼歌的普通人。他们需要的不是一台功能全满的录音棚，而是一张“音乐拍立得”——快、轻、有个人痕迹。
+              </p>
+              -->
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="slide-eyebrow">核心痛点：捕捉、编辑、归属</span>
+          <span class="slide-eyebrow">02:00 建立问题</span>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           SLIDE 4 — SOLUTION
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="slide" data-slide="4">
+        <div class="slide-header">
+          <span class="slide-eyebrow">The Solution</span>
+          <span class="slide-number">04 / 11</span>
+        </div>
+        <div class="slide-main centered">
+          <div class="w-full" style="max-width: 1100px;">
+            <h2 class="hero-title zh-serif">Murmur 让哼唱长出<span style="color:var(--murmur-accent)">成品</span>的形状。</h2>
+            <p class="hero-subtitle mx-auto">
+              一条极简的六步路径，把“脑海里的声音”变成“可以收藏的小歌”。
+            </p>
+            <div class="flow-diagram mt-3">
+              <div class="flow-node"><div class="icon">🎤</div><div class="label">Hum<br/>哼唱</div></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-node"><div class="icon">✨</div><div class="label">Vibe<br/>选氛围</div></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-node"><div class="icon">🎛</div><div class="label">Studio<br/>编曲</div></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-node"><div class="icon">💾</div><div class="label">Save<br/>保存</div></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-node"><div class="icon">🖼</div><div class="label">Gallery<br/>收藏</div></div>
+              <div class="flow-arrow">→</div>
+              <div class="flow-node"><div class="icon">🔗</div><div class="label">Share<br/>分享</div></div>
+            </div>
+            <div class="slide-narrative mx-auto mt-3">
+              <p>
+                Murmur 的解法不是做一个更强大的 DAW，也不是做一个更聪明的文本生成器，而是<strong>把“从声音到作品”的完整路径拆成六个极简的步骤</strong>。你只需哼一段旋律，系统会自动完成音高检测、旋律清洗、风格推断和编曲生成；然后你像在 Spotify 里选歌一样挑选一个“氛围”，进入 Studio 做微调，最后给这首歌取个名字，它就成为了你个人 Gallery 里的一张音乐卡片。每一步都有清晰的反馈，每一次操作都听得见结果。
+              </p>
+              <!-- NARRATIVE_OPTION_A: 强调设计哲学
+              <p>
+                这个流程的设计哲学是“一次只做一个决定”。Hum 只负责捕捉；Vibe 只负责挑选；Studio 只负责微调；Save 只负责命名；Gallery 只负责回忆。我们不会把混音台、轨道编辑器、参数面板一次性堆到你面前。Murmur 认为，创作初期最宝贵的不是“无限可能性”，而是“被引导的确定性”。
+              </p>
+              -->
+              <!-- NARRATIVE_OPTION_B: 强调完整闭环
+              <p>
+                很多 AI 音乐产品止步于“生成一段音频”，但 Murmur 更进一步：保存、命名、封面、分享、再编辑、版本谱系。我们不只是帮你“做一首歌”，而是帮你建立一座属于自己的音乐小博物馆。你可以随时回到 Gallery，点开任何一首歌，重新混音、导出 MP3、生成视频，甚至把它作为灵感起点再次创作。
+              </p>
+              -->
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="slide-eyebrow">产品核心：Hum → Vibe → Studio → Save → Gallery → Song Detail</span>
+          <span class="slide-eyebrow">03:00 抛出解法</span>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           SLIDE 5 — DEMO
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="slide" data-slide="5">
+        <div class="slide-header">
+          <span class="slide-eyebrow">Live Demo</span>
+          <span class="slide-number">05 / 11</span>
+        </div>
+        <div class="slide-main">
+          <div>
+            <h2 class="hero-title zh-serif">看一段<br/>60 秒的完整旅程。</h2>
+            <div class="slide-narrative">
+              <p>
+                接下来请大家看一段真实的产品演示。我们会从 Hum 开始：对着手机哼一段 5–8 秒的旋律；然后进入 Vibe，系统会生成三种不同风格的编曲预览，我们可以长按试听、挑选最喜欢的一个；进入 Studio 后，我们可以用自然语言说“加多一点鼓”或者“让弦乐更暖”，也可以直接拖动轨道音量；最后我们给这首歌命名，保存进 Gallery，并生成一段可分享的封面视频。
+              </p>
+              <!-- NARRATIVE_OPTION_A: 更紧凑的 Demo 脚本
+              <p>
+                Demo 脚本：1）打开 Murmur，点击录制按钮；2）哼 5 秒旋律；3）等待 3 个 vibe 生成；4）选择 vibe 2；5）点击播放听完整编曲；6）输入“更慢一点，加点钢琴”；7）点击保存，输入歌名；8）打开 Gallery 查看成品；9）导出分享视频。
+              </p>
+              -->
+              <!-- NARRATIVE_OPTION_B: 强调技术稳定性
+              <p>
+                这个 Demo 的所有环节都跑在真实的浏览器环境中：录音使用 Web Audio / MediaRecorder，音高检测调用本地 Python 音频 worker，编曲生成可以对接 Magenta/RunPod GPU worker，渲染和导出使用 Tone.Offline + Canvas + MediaRecorder。如果现场没有 GPU  worker，我们还有完整的 Tone.js 合成器兜底，确保 Demo 不会中断。
+              </p>
+              -->
+            </div>
+            <div class="mt-3">
+              <a class="mm-btn-primary" href="#" onclick="alert('请将此处替换为真实 Demo 链接或录屏'); return false;">播放 Demo 视频</a>
+            </div>
+          </div>
+          <div>
+            <!-- Visual: screen recording placeholder -->
+            <div class="asset-placeholder" style="min-height: 360px;">
+              <div class="ph-icon">▶️</div>
+              <div class="ph-title">可替换素材：产品录屏 / Live Demo</div>
+              <div class="ph-hint">建议嵌入一段 60–90 秒的屏幕录制（MP4/WebM），展示 Hum → Vibe → Studio → Save 的完整流程。也可以直接 iframe 嵌入本地运行的 Murmur 实例。</div>
+            </div>
+            <div class="waveform-wrap mt-2" style="height: 80px;">
+              <canvas class="waveform-canvas" id="waveform-5"></canvas>
+              <span class="waveform-label">Demo 音频波形占位</span>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="slide-eyebrow">这是整场答辩最重要的 90 秒</span>
+          <span class="slide-eyebrow">04:00 现场演示</span>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           SLIDE 6 — WHY NOW
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="slide" data-slide="6">
+        <div class="slide-header">
+          <span class="slide-eyebrow">Why Now</span>
+          <span class="slide-number">06 / 11</span>
+        </div>
+        <div class="slide-main">
+          <div>
+            <h2 class="hero-title zh-serif">为什么<br/>现在做这件事？</h2>
+            <div class="slide-narrative">
+              <p>
+                三年前，把一段哼唱变成一首歌几乎是不可能的：音高检测不够准，实时编曲不够快，浏览器端的音频渲染也不够稳定。但今天，三件事同时成熟了：第一，<strong>生成式音频模型</strong>已经能在几秒内产出可用的音乐片段；第二，<strong>浏览器音频能力</strong>（Web Audio API、MediaRecorder、WebAssembly）让复杂的音频处理可以在本地运行；第三，也是最重要的一点，<strong>创作正从专业工具向普通人迁移</strong>——越来越多的人想表达，而不是想“学音乐”。
+              </p>
+              <!-- NARRATIVE_OPTION_A: 更强调窗口期
+              <p>
+                这是一个难得的窗口期：AI 音乐工具已经证明了“生成”的能力，但还没有人真正解决“从个人声音到个人作品”的体验。Suno 和 Udio 让“生成音乐”变得很酷，但它们也让“你的旋律”变得可有可无。Murmur 想在这个窗口期里，抢占一个更个人化、更情感化的位置：不是“AI 替你写歌”，而是“AI 帮你把哼唱变成歌”。
+              </p>
+              -->
+              <!-- NARRATIVE_OPTION_B: 更强调趋势数据
+              <p>
+                从趋势上看，短视频平台每天都在产生数以亿计的音乐内容需求；音乐教育市场正在寻找更低门槛的创作工具；而独立音乐人和词曲作者也需要一个比语音备忘录更聪明、比 DAW 更轻量的“灵感速写本”。这三个人群重叠在一个产品上：Murmur。
+              </p>
+              -->
+            </div>
+          </div>
+          <div>
+            <!-- Visual: timeline/roadmap -->
+            <div class="timeline" style="max-width: 480px; margin: 0 auto;">
+              <div class="timeline-item">
+                <h4>Before 2022</h4>
+                <p>音高检测与实时编曲尚不成熟，浏览器端难以完成端到端音乐创作。</p>
+              </div>
+              <div class="timeline-item">
+                <h4>2023–2024</h4>
+                <p>生成式音频爆发，但工具多为“文本进、音频出”，用户个人痕迹薄弱。</p>
+              </div>
+              <div class="timeline-item">
+                <h4>2025</h4>
+                <p>Murmur 将浏览器音频、AI 生成与个人旋律结合，成为“音乐速写本”。</p>
+              </div>
+              <div class="timeline-item">
+                <h4>Next</h4>
+                <p>移动原生、社交分享、协作创作、授权工具——从速写到完整工作流。</p>
+              </div>
+            </div>
+            <div class="asset-placeholder mt-2">
+              <div class="ph-icon">📈</div>
+              <div class="ph-title">可替换素材：市场增长图表</div>
+              <div class="ph-hint">可以放 AI 音乐市场规模、短视频音乐内容增长、或用户创作工具渗透率的数据图。</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="slide-eyebrow">时机：技术成熟 + 用户迁移 + 市场空白</span>
+          <span class="slide-eyebrow">05:00 论证时机</span>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           SLIDE 7 — TECH
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="slide" data-slide="7">
+        <div class="slide-header">
+          <span class="slide-eyebrow">Technical Execution</span>
+          <span class="slide-number">07 / 11</span>
+        </div>
+        <div class="slide-main reverse">
+          <div>
+            <!-- Visual: architecture placeholder -->
+            <div class="asset-placeholder" style="min-height: 320px;">
+              <div class="ph-icon">🧱</div>
+              <div class="ph-title">可替换素材：系统架构图</div>
+              <div class="ph-hint">建议放一张清晰的架构图：Browser (Next.js + Web Audio) → API → Audio Worker / Magenta GPU → Postgres / S3。可以画成 Figma 或 draw.io 的 SVG。</div>
+            </div>
+            <div class="compare-grid mt-2">
+              <div class="compare-card">
+                <h4>音频层</h4>
+                <ul>
+                  <li>RMVPE / pYIN 音高检测</li>
+                  <li>旋律清洗与调式推断</li>
+                  <li>Tone.js 实时预览</li>
+                </ul>
+              </div>
+              <div class="compare-card">
+                <h4>生成层</h4>
+                <ul>
+                  <li>Magenta/RT2 风格生成</li>
+                  <li>多 vibe 并行候选</li>
+                  <li>Tone.js 兜底合成</li>
+                </ul>
+              </div>
+              <div class="compare-card">
+                <h4>应用层</h4>
+                <ul>
+                  <li>Next.js 16 + React 19</li>
+                  <li>Drizzle + Postgres</li>
+                  <li>Zustand + localStorage</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h2 class="hero-title zh-serif">从声音到乐谱，<br/>再到一首歌。</h2>
+            <div class="slide-narrative">
+              <p>
+                Murmur 的技术栈可以概括为“三层一闭环”。最底层是<strong>音频理解层</strong>：我们用 RMVPE 做音高检测，用 SwiftF0 和 pYIN 做 fallback，再用自主研发的 melody-polisher 做噪声抑制、音高漂移修正和调式推断。中间是<strong>音乐生成层</strong>：基于旋律轮廓生成和弦、贝斯、鼓组和织体，Magenta/RT2 提供风格化的音频片段，Tone.js 则提供确定性的实时预览和兜底合成。最上层是<strong>应用与存储层</strong>：Next.js 16 App Router、React 19、Tailwind CSS v4、Drizzle ORM + Postgres，以及 S3 兼容的存储适配器。
+              </p>
+              <!-- NARRATIVE_OPTION_A: 强调技术亮点
+              <p>
+                其中最有技术价值的是两个“一致性”：第一，<strong>实时预览与离线导出一源</strong>——我们使用同一套 assembleSong() 逻辑驱动浏览器内播放和 Tone.Offline 离线渲染，所以你听到的就是你保存的；第二，<strong>LLM 只用于意图分类，不直接修改状态</strong>——所有对编曲的修改都通过一个受控的 EditToken 白名单完成，确保生成结果可控、可解释、可回滚。
+              </p>
+              -->
+              <!-- NARRATIVE_OPTION_B: 强调工程落地
+              <p>
+                为了撑起一场稳定的黑客松 Demo，我们做了大量工程兜底：本地 Creator 模式让访客无需注册即可体验；Demo 路由可以在没有 GPU worker 的情况下用 fixture 旋律跑通；音频 worker 掉线时会显示清晰错误并提供重试/演示入口；视频导出失败时自动回退到 WebM。这些细节不是最性感的，但它们是产品能“见人”的底气。
+              </p>
+              -->
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="slide-eyebrow">Next.js 16 · React 19 · Tailwind v4 · Bun · Drizzle · Postgres</span>
+          <span class="slide-eyebrow">06:00 技术可信</span>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           SLIDE 8 — DIFFERENTIATION
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="slide" data-slide="8">
+        <div class="slide-header">
+          <span class="slide-eyebrow">Differentiation</span>
+          <span class="slide-number">08 / 11</span>
+        </div>
+        <div class="slide-main centered">
+          <div class="w-full" style="max-width: 1100px;">
+            <h2 class="hero-title zh-serif">我们不是又一个<br/>“输入文本、输出音乐”的工具。</h2>
+            <p class="hero-subtitle mx-auto">
+              Murmur 的起点是你的声音，终点是你的作品。
+            </p>
+            <div class="compare-grid mt-3">
+              <div class="compare-card">
+                <h4>语音备忘录</h4>
+                <ul>
+                  <li>只能录音</li>
+                  <li>无乐谱/编曲</li>
+                  <li>灵感容易丢失</li>
+                </ul>
+              </div>
+              <div class="compare-card">
+                <h4>DAW / GarageBand</h4>
+                <ul>
+                  <li>功能全面</li>
+                  <li>学习门槛高</li>
+                  <li>需要乐理/乐器</li>
+                </ul>
+              </div>
+              <div class="compare-card">
+                <h4>Suno / Udio</h4>
+                <ul>
+                  <li>文本生成音乐</li>
+                  <li>惊艳但黑盒</li>
+                  <li>用户旋律可被替代</li>
+                </ul>
+              </div>
+              <div class="compare-card lead">
+                <h4>Murmur</h4>
+                <ul>
+                  <li>从哼唱开始</li>
+                  <li>可编辑、可迭代</li>
+                  <li>保存为个人作品</li>
+                  <li>浏览器即用</li>
+                </ul>
+              </div>
+            </div>
+            <div class="slide-narrative mx-auto mt-3">
+              <p>
+                市面上的 AI 音乐产品大多在回答一个问题：<em>“给我一段描述，你能帮我生成一首歌吗？”</em> 而 Murmur 在回答另一个问题：<em>“我脑子里有一段旋律，你能帮我把它变成作品吗？”</em> 前者比拼的是模型能力，后者比拼的是<strong>对个人声音的尊重、对创作过程的保护、对成品归属的确认</strong>。Murmur 不替代你的旋律，而是围绕你的旋律搭建一首歌。
+              </p>
+              <!-- NARRATIVE_OPTION_A: 更聚焦竞品对比
+              <p>
+                与 Suno/Udio 相比，Murmur 的输入是声音而非文本，输出是可编辑的歌曲而非一次性音频；与 GarageBand 相比，Murmur 不需要用户懂乐理或操作复杂轨道；与语音备忘录相比，Murmur 能把声音变成真正的音乐作品。我们处在一个尚未被明确定义的细分市场：为“有旋律但不精通制作”的人服务的 AI 音乐速写本。
+              </p>
+              -->
+              <!-- NARRATIVE_OPTION_B: 更强调护城河
+              <p>
+                长期来看，Murmur 的护城河不是某一个模型，而是“以用户旋律为中心”的数据结构和交互范式。我们保存的不仅是音频文件，而是 melody + arrangement state + edit history + parent/child lineage。这让我们可以做 remix、版本比较、协作创作，甚至未来的版权追踪。这些能力只有从“个人声音”开始的产品才能积累。
+              </p>
+              -->
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="slide-eyebrow">差异化：以声音为起点，以作品为终点</span>
+          <span class="slide-eyebrow">07:00 建立壁垒</span>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           SLIDE 9 — VISION
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="slide" data-slide="9">
+        <div class="slide-header">
+          <span class="slide-eyebrow">Vision</span>
+          <span class="slide-number">09 / 11</span>
+        </div>
+        <div class="slide-main">
+          <div>
+            <h2 class="hero-title zh-serif">从音乐速写，<br/>到新一代创作工作台。</h2>
+            <div class="slide-narrative">
+              <p>
+                今天的 Murmur 是一个“音乐速写本”，但我们看到的未来远不止于此。下一步我们会把它带到移动端，让你随时随地捕捉哼唱；然后加入社交分享，让你可以像发朋友圈一样分享一首自己的小歌；再之后是协作创作，让两个人各自哼一段旋律，Murmur 帮它们融合在一起；最终，我们希望能为创作者提供授权、分发和版权追踪工具，让普通人的音乐灵感也能产生真实的价值。
+              </p>
+              <!-- NARRATIVE_OPTION_A: 更聚焦商业模式
+              <p>
+                商业模式上，我们计划采用 Freemium：免费用户可以每天哼唱并保存有限数量的歌曲；付费用户可以获得高清导出、更多风格、云端同步和批量生成额度。我们还会面向音乐教育、短视频创作和独立音乐人提供 API 或 B2B 合作，让 Murmur 的引擎嵌入到其他创作工具中。
+              </p>
+              -->
+              <!-- NARRATIVE_OPTION_B: 更聚焦用户价值
+              <p>
+                我们希望十年后的音乐创作者回忆自己的起点时，说的不是“我买了一个 DAW 的教程”，而是“我曾经用 Murmur 把一段哼唱变成了一首歌”。那个起点不需要勇气，不需要技能，只需要一个声音。我们要做的，就是让每一个声音都被认真对待。
+              </p>
+              -->
+            </div>
+          </div>
+          <div>
+            <!-- Visual: roadmap -->
+            <div class="timeline" style="max-width: 480px; margin: 0 auto;">
+              <div class="timeline-item">
+                <h4>Today</h4>
+                <p>浏览器端端到端哼唱创作，六步闭环完成从声音到分享。</p>
+              </div>
+              <div class="timeline-item">
+                <h4>Next</h4>
+                <p>移动端原生 App、更多风格与乐器、更高清导出。</p>
+              </div>
+              <div class="timeline-item">
+                <h4>Scale</h4>
+                <p>社交分享、协作创作、授权与分发工具。</p>
+              </div>
+              <div class="timeline-item">
+                <h4>Future</h4>
+                <p>个人音乐博物馆、版权谱系、创作者经济基础设施。</p>
+              </div>
+            </div>
+            <div class="asset-placeholder mt-2">
+              <div class="ph-icon">🚀</div>
+              <div class="ph-title">可替换素材：产品路线图 / 商业模式图</div>
+              <div class="ph-hint">可以放一张 Figma 或 Notion 风格的产品路线图，或 Free/Pro 定价对比图。</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="slide-eyebrow">愿景：每个人的声音都值得成为作品</span>
+          <span class="slide-eyebrow">08:00 描绘未来</span>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           SLIDE 10 — TEAM
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="slide" data-slide="10">
+        <div class="slide-header">
+          <span class="slide-eyebrow">Team</span>
+          <span class="slide-number">10 / 11</span>
+        </div>
+        <div class="slide-main centered">
+          <div class="w-full" style="max-width: 900px;">
+            <h2 class="hero-title zh-serif">我们为什么<br/>做这件事？</h2>
+            <p class="hero-subtitle mx-auto">
+              一群相信“声音比文字更先抵达情绪”的人。
+            </p>
+            <div class="slide-narrative mx-auto">
+              <p>
+                我们团队横跨前端工程、音频算法、产品设计和音乐创作。有人写了十几年的 Web 产品，有人做过音乐信息检索的学术研究，有人是独立音乐人，深刻理解“灵感从指缝溜走”的焦虑。我们不是因为 AI 音乐很火才做 Murmur，而是因为我们自己曾经就是那个“有旋律但不会做歌”的人。我们想做的是自己也会每天用的工具。
+              </p>
+              <!-- NARRATIVE_OPTION_A: 更简洁的团队介绍
+              <p>
+                团队由 P to Q 发起，核心成员包括全栈工程师、音频/ML 工程师和产品设计师。我们在过去几个月里完成了从音频 worker 到浏览器端渲染、从编曲引擎到社交分享的完整链路，验证了技术和体验上的可行性。
+              </p>
+              -->
+              <!-- NARRATIVE_OPTION_B: 更强调互补性
+              <p>
+                我们的组合正好覆盖了 Murmur 需要的三个核心能力：有人负责把复杂的音频 pipeline 变成稳定的工程系统，有人负责把冰冷的参数变成有温度的交互，有人负责确保每一次 Demo 听起来都足够动人。技术和审美，在我们这里不是对立的，而是同一个产品的一体两面。
+              </p>
+              -->
+            </div>
+            <div class="team-grid mt-4">
+              <div class="team-card">
+                <div class="team-avatar">👤</div>
+                <h4>姓名</h4>
+                <div class="role">创始人 / 产品</div>
+                <p>负责产品愿景、用户旅程与商业模式设计。</p>
+              </div>
+              <div class="team-card">
+                <div class="team-avatar">👤</div>
+                <h4>姓名</h4>
+                <div class="role">全栈工程师</div>
+                <p>负责 Next.js 应用、实时音频与导出渲染。</p>
+              </div>
+              <div class="team-card">
+                <div class="team-avatar">👤</div>
+                <h4>姓名</h4>
+                <div class="role">音频 / ML 工程师</div>
+                <p>负责音高检测、旋律清洗与编曲生成。</p>
+              </div>
+              <div class="team-card">
+                <div class="team-avatar">👤</div>
+                <h4>姓名</h4>
+                <div class="role">设计师</div>
+                <p>负责视觉系统、交互与品牌体验。</p>
+              </div>
+            </div>
+            <div class="asset-placeholder mt-2">
+              <div class="ph-icon">🖼</div>
+              <div class="ph-title">可替换素材：团队照片或头像</div>
+              <div class="ph-hint">请替换为真实头像和姓名，让评委看到背后的人。</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="slide-eyebrow">团队 = 工程 + 音频 + 设计 + 音乐</span>
+          <span class="slide-eyebrow">09:00 建立信任</span>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════════════════
+           SLIDE 11 — ASK
+           ═══════════════════════════════════════════════════════════════ -->
+      <section class="slide" data-slide="11">
+        <div class="slide-header">
+          <span class="slide-eyebrow">The Ask</span>
+          <span class="slide-number">11 / 11</span>
+        </div>
+        <div class="slide-main">
+          <div>
+            <h2 class="hero-title zh-serif">把哼唱变成作品，<br/>需要你的加入。</h2>
+            <div class="slide-narrative">
+              <p>
+                我们今天来，不只是为了展示一个产品，更是为了寻找一起把这件事做大的人。我们需要<strong>评委的反馈</strong>来打磨体验，需要<strong>潜在用户</strong>来验证音乐速写的真实需求，需要<strong>合作伙伴</strong>来把 Murmur 带到更多场景，也需要<strong>资源支持</strong>来加速移动端和云端生成能力的建设。如果你也曾有过一段哼在心里却没有被听见的旋律，我们就是同路人。
+              </p>
+              <!-- NARRATIVE_OPTION_A: 更直接的 CTA
+              <p>
+                请扫码体验 Demo，或者添加我们的联系方式。如果你对这个方向感兴趣，无论是投资人、音乐人、产品经理还是工程师，我们都很期待和你聊。让我们一起把每一个无意识的哼唱，变成一首被认真收藏的小歌。
+              </p>
+              -->
+              <!-- NARRATIVE_OPTION_B: 更偏比赛结语
+              <p>
+                Murmur 的旅程才刚刚开始。我们希望通过这次黑客松，让更多人看到“以声音为中心”的 AI 音乐创作可能性。谢谢大家的时间，期待你们的提问。
+              </p>
+              -->
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <a class="mm-btn-primary" href="mailto:hello@murmur.app">联系我们</a>
+              <a class="mm-btn-secondary" href="#" onclick="alert('请替换为真实 Demo 链接'); return false;">在线体验</a>
+              <a class="mm-btn-secondary" href="#" onclick="alert('请替换为 GitHub 仓库链接'); return false;">GitHub</a>
+            </div>
+          </div>
+          <div class="flex flex-col items-center justify-center">
+            <div class="qr-card">
+              <div>
+                <div class="ph-icon" style="margin: 0 auto 0.5rem;">🔗</div>
+                <div class="ph-title">二维码占位</div>
+                <div class="ph-hint">请替换为 Demo 链接或联系页面的真实二维码。</div>
+              </div>
+            </div>
+            <div class="asset-placeholder mt-2">
+              <div class="ph-icon">🎬</div>
+              <div class="ph-title">可替换素材：结尾视频 / 产品截图</div>
+              <div class="ph-hint">可以放一段循环播放的 Murmur 产品封面视频，或一张精美的 Gallery 截图。</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span class="slide-eyebrow">Hum it. Vibe it. Build it.</span>
+          <span class="slide-eyebrow">10:00 收尾 + Q&A</span>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Navigation controls -->
+  <nav class="slide-nav" aria-label="Slide navigation">
+    <button class="nav-btn" id="prevBtn" aria-label="Previous slide">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    </button>
+    <button class="nav-btn" id="nextBtn" aria-label="Next slide">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+    </button>
+  </nav>
+
+  <div class="nav-dots" id="navDots" aria-label="Slide dots"></div>
+
+  <!-- Presenter notes -->
+  <div class="notes-panel" id="notesPanel">
+    <h5>演讲者提示 <span style="font-weight:400;color:var(--murmur-mute)">（按 N 键切换）</span></h5>
+    <p id="notesText">加载中…</p>
+    <p style="margin-top:0.5rem;color:var(--murmur-mute-light);">
+      快捷键：<kbd>←</kbd> / <kbd>→</kbd> 或 <kbd>Space</kbd> 切换幻灯片；<kbd>N</kbd> 开关提示；<kbd>Home</kbd> / <kbd>End</kbd> 跳到首尾。
+    </p>
+  </div>
+
+  <script>
+    /* ═══════════════════════════════════════════════════════════════
+       SLIDE LOGIC
+       ═══════════════════════════════════════════════════════════════ */
+    const slides = document.querySelectorAll('.slide');
+    const total = slides.length;
+    let current = 1;
+
+    const notes = {
+      1: "开场 20 秒：介绍团队，说出项目名称和一句话定位。让观众知道 Murmur 是做什么的。",
+      2: "30 秒：用一个具体场景建立共鸣。让观众想起自己也曾在某个时刻哼出过旋律。",
+      3: "45 秒：明确三类工具的痛点。语速放慢，强调“太轻、太重、太黑盒”。",
+      4: "45 秒：介绍六步流程。用手势配合 flow diagram，强调“一次只做一个决定”。",
+      5: "90 秒：核心 Demo。这是最重要的部分，请提前演练两次。确保网络、音频、GPU worker 可用。",
+      6: "30 秒：解释为什么现在做。连接技术成熟、用户需求和市场空白。",
+      7: "45 秒：技术可信。保持高阶，不要陷入代码细节。强调“预览与导出一源”和“LLM 只分类不修改”。",
+      8: "30 秒：差异化。明确我们不是 Suno/Udio，不是 GarageBand，而是“音乐速写本”。",
+      9: "45 秒：愿景和商业模式。既要展示野心，也要脚踏实地。",
+      10: "30 秒：团队。简洁、真实，突出互补性。",
+      11: "30 秒：收尾。清晰说出你们需要什么，给出联系方式或二维码。"
+    };
+
+    function renderDots() {
+      const dots = document.getElementById('navDots');
+      dots.innerHTML = '';
+      for (let i = 1; i <= total; i++) {
+        const d = document.createElement('button');
+        d.className = 'dot' + (i === current ? ' active' : '');
+        d.setAttribute('aria-label', `Go to slide ${i}`);
+        d.addEventListener('click', () => goTo(i));
+        dots.appendChild(d);
+      }
+    }
+
+    function updateUI() {
+      slides.forEach(s => s.classList.remove('active'));
+      const active = document.querySelector(`.slide[data-slide="${current}"]`);
+      if (active) active.classList.add('active');
+
+      document.getElementById('prevBtn').disabled = current === 1;
+      document.getElementById('nextBtn').disabled = current === total;
+
+      document.querySelectorAll('.dot').forEach((d, i) => {
+        d.classList.toggle('active', i + 1 === current);
+      });
+
+      document.getElementById('progressBar').style.width = `${(current / total) * 100}%`;
+      document.getElementById('notesText').textContent = notes[current] || '';
+
+      // Restart canvas animations when entering a slide
+      if (current === 2) startWaveform('waveform-2', 60, 'raw');
+      if (current === 5) startWaveform('waveform-5', 80, 'demo');
+    }
+
+    function goTo(n) {
+      if (n < 1 || n > total) return;
+      current = n;
+      updateUI();
+    }
+
+    function next() { goTo(current + 1); }
+    function prev() { goTo(current - 1); }
+
+    document.getElementById('nextBtn').addEventListener('click', next);
+    document.getElementById('prevBtn').addEventListener('click', prev);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); next(); }
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+      if (e.key === 'Home') { e.preventDefault(); goTo(1); }
+      if (e.key === 'End') { e.preventDefault(); goTo(total); }
+      if (e.key.toLowerCase() === 'n') { document.getElementById('notesPanel').classList.toggle('open'); }
+    });
+
+    renderDots();
+    updateUI();
+
+    /* ═══════════════════════════════════════════════════════════════
+       WAVEFORM CANVAS ANIMATION
+       ═══════════════════════════════════════════════════════════════ */
+    const waveformRafs = {};
+
+    function startWaveform(id, speed, mode) {
+      const canvas = document.getElementById(id);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (waveformRafs[id]) cancelAnimationFrame(waveformRafs[id]);
+
+      function resize() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width * (window.devicePixelRatio || 1);
+        canvas.height = rect.height * (window.devicePixelRatio || 1);
+        ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+      }
+      resize();
+
+      let t = 0;
+      const points = 120;
+
+      function draw() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        const w = rect.width;
+        const h = rect.height;
+        ctx.clearRect(0, 0, w, h);
+
+        // Draw baseline
+        ctx.beginPath();
+        ctx.strokeStyle = '#E5DDD0';
+        ctx.lineWidth = 1;
+        ctx.moveTo(0, h / 2);
+        ctx.lineTo(w, h / 2);
+        ctx.stroke();
+
+        // Draw waveform
+        ctx.beginPath();
+        ctx.strokeStyle = mode === 'demo' ? '#FF5924' : '#3A3A3A';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        for (let i = 0; i <= points; i++) {
+          const x = (i / points) * w;
+          const norm = i / points;
+          let amp = 0;
+
+          if (mode === 'raw') {
+            // messy, noisy, high frequency
+            amp = (Math.sin(norm * 30 + t) * 0.25 + Math.sin(norm * 70 - t * 1.5) * 0.2 + Math.random() * 0.15) * (h / 2);
+          } else {
+            // cleaner, beat-like, structured
+            amp = (Math.sin(norm * 12 + t * 0.5) * 0.45 + Math.sin(norm * 4 - t * 0.3) * 0.15) * (h / 2);
+            // Beat pulses
+            const beat = Math.sin(t * 0.8) > 0.7 ? 0.2 : 0;
+            amp += beat * (h / 2) * (norm > 0.2 && norm < 0.8 ? 1 : 0.5);
+          }
+
+          const y = h / 2 + amp;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // Fill area below
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fillStyle = mode === 'demo'
+          ? 'rgba(255, 89, 36, 0.08)'
+          : 'rgba(58, 58, 58, 0.06)';
+        ctx.fill();
+
+        t += speed / 1000;
+        waveformRafs[id] = requestAnimationFrame(draw);
+      }
+      draw();
+
+      window.addEventListener('resize', () => {
+        resize();
+      }, { once: false });
+    }
+
+    // Start first waveform if slide 1 is active
+    setTimeout(() => startWaveform('waveform-2', 60, 'raw'), 300);
+  </script>
+</body>
+</html>

@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Murmur · Effects &amp; Materials Library</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Noto+Serif+SC:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --murmur-bg: #F5F1EB;
+      --murmur-bg-warm: #EFE8DA;
+      --murmur-card: #FFFEFB;
+      --murmur-ink: #1A1A1A;
+      --murmur-ink-soft: #3A3A3A;
+      --murmur-mute: #8C8780;
+      --murmur-mute-light: #B6B0A4;
+      --murmur-border: #E5DDD0;
+      --murmur-border-strong: #D2C9B6;
+      --murmur-accent: #FF5924;
+      --murmur-accent-light: #FF8A5C;
+      --murmur-accent-deep: #D9421A;
+      --murmur-accent-tint: #FFE6DA;
+      --murmur-dust-blue: #A7B8C8;
+      --murmur-lavender: #C9B6E4;
+      --murmur-warm-gold: #EBCB8B;
+      --font-sans: "Geist", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      --font-serif: "Instrument Serif", "Noto Serif SC", Georgia, "Times New Roman", Times, serif;
+      --radius: 10px;
+      --radius-xl: 20px;
+      --radius-2xl: 28px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { background: var(--murmur-bg); color: var(--murmur-ink); font-family: var(--font-sans); padding: 2rem; }
+    h1 { font-family: var(--font-serif); font-size: 2.5rem; letter-spacing: -0.015em; line-height: 1.05; margin-bottom: 0.5rem; }
+    h2 { font-family: var(--font-serif); font-size: 1.5rem; letter-spacing: -0.01em; margin-bottom: 1rem; padding-top: 3rem; border-top: 1px solid var(--murmur-border); }
+    h3 { font-family: var(--font-serif); font-size: 1.1rem; margin-bottom: 0.75rem; }
+    .sub { color: var(--murmur-mute); font-size: 0.9rem; margin-bottom: 2rem; }
+    .lib-wrap { max-width: 1200px; margin: 0 auto; }
+    .section { margin-bottom: 4rem; }
+    .demo-grid { display: flex; flex-wrap: wrap; gap: 2rem; align-items: flex-start; }
+    .demo-box { background: var(--murmur-card); border: 1px solid #ECE5D6; border-radius: var(--radius-xl); padding: 1.5rem; box-shadow: 0 6px 20px rgba(26,26,26,0.05); }
+    .code { background: #EFE8DA; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.8rem; font-family: "SFMono-Regular", Consolas, monospace; color: var(--murmur-ink-soft); overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+    .tag { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; background: var(--murmur-accent-tint); color: var(--murmur-accent); font-size: 0.7rem; font-weight: 500; margin-bottom: 0.75rem; }
+    hr { border: none; border-top: 1px solid var(--murmur-border); margin: 2rem 0; }
+    .mt-1 { margin-top: 0.5rem; } .mt-2 { margin-top: 1rem; }
+    /* ── Inline demos ── */
+
+    /* Aurora Blobs */
+    .aurora-demo { position: relative; width: 100%; height: 240px; border-radius: var(--radius-xl); overflow: hidden; background: var(--murmur-bg); }
+    .aurora-blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.55; mix-blend-mode: multiply; will-change: transform; }
+    .a1 { width: 60%; height: 80%; background: radial-gradient(circle, rgba(255,105,210,0.32), transparent 70%); top: -10%; left: -10%; animation: ad1 28s ease-in-out infinite; }
+    .a2 { width: 50%; height: 70%; background: radial-gradient(circle, rgba(178,196,255,0.36), transparent 70%); bottom: -15%; right: -10%; animation: ad2 34s ease-in-out infinite; }
+    .a3 { width: 40%; height: 55%; background: radial-gradient(circle, rgba(140,230,200,0.28), transparent 70%); top: 40%; left: 45%; animation: ad3 22s ease-in-out infinite; }
+    @keyframes ad1 { 0% { transform: translate(0,0) scale(1); } 33% { transform: translate(8%,-6%) scale(1.05); } 66% { transform: translate(-4%,4%) scale(0.97); } 100% { transform: translate(0,0) scale(1); } }
+    @keyframes ad2 { 0% { transform: translate(0,0) scale(1); } 33% { transform: translate(-10%,5%) scale(1.08); } 66% { transform: translate(6%,-8%) scale(0.95); } 100% { transform: translate(0,0) scale(1); } }
+    @keyframes ad3 { 0% { transform: translate(0,0) scale(1); } 33% { transform: translate(5%,8%) scale(0.96); } 66% { transform: translate(-7%,-3%) scale(1.06); } 100% { transform: translate(0,0) scale(1); } }
+
+    /* Paper Grain */
+    .grain-overlay { position: absolute; inset: 0; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E"); background-size: 200px; opacity: 0.45; z-index: 1; }
+
+    /* Breathing Orb */
+    .orb-demo { position: relative; width: 180px; height: 180px; }
+    .orb-shell { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, #FF8A5C88, #FF69D266, #A7B8C844, #FFE04066, #C9B6E444, #FF8A5C88); animation: gs 20s linear infinite; filter: blur(8px); opacity: 0.9; }
+    .orb-core { position: absolute; inset: 8%; border-radius: 50%; background: var(--murmur-card); box-shadow: inset 0 0 28px rgba(255,89,36,0.12), 0 12px 40px rgba(26,26,26,0.08); display: grid; place-items: center; animation: br 2.5s ease-in-out infinite; }
+    .orb-core-icon { width: 32%; height: 32%; opacity: 0.12; color: var(--murmur-ink); }
+    @keyframes br { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.04); opacity: 0.92; } }
+    @keyframes gs { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    /* Waveform */
+    .wf-canvas { width: 100%; height: 120px; display: block; border-radius: 12px; background: var(--murmur-card); border: 1px solid #ECE5D6; }
+
+    /* Shimmer loading */
+    .shimmer { background: linear-gradient(90deg, var(--murmur-bg) 25%, var(--murmur-bg-warm) 50%, var(--murmur-bg) 75%); background-size: 200% 100%; animation: sh 2s ease-in-out infinite; border-radius: 8px; height: 1rem; }
+    @keyframes sh { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+
+    /* Song Card mockup */
+    .song-card { width: 200px; aspect-ratio: 1; border-radius: 20px; background: linear-gradient(148deg, #FFBA5A 0%, #F0663E 42%, #B87FCC 100%); box-shadow: 0 16px 32px rgba(26,26,26,0.14); display: flex; flex-direction: column; justify-content: flex-end; padding: 1rem; color: white; position: relative; overflow: hidden; }
+    .song-card .grain { position: absolute; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"); background-size: 200px; pointer-events: none; }
+    .song-card .title { font-family: var(--font-serif); font-size: 1.1rem; position: relative; z-index: 1; }
+    .song-card .sub { font-size: 0.7rem; opacity: 0.7; position: relative; z-index: 1; }
+
+    /* Vibe Card gradient samples */
+    .vibe-swatch { width: 100%; height: 120px; border-radius: 32px; }
+    .vibe-1 { background: linear-gradient(148deg, #FFBA5A 0%, #F0663E 42%, #B87FCC 100%); }
+    .vibe-2 { background: linear-gradient(148deg, #16242C 0%, #4E7D96 48%, #D8D0C4 100%); }
+    .vibe-3 { background: linear-gradient(148deg, #EDD9A3 0%, #8BAFC2 52%, #6A6472 100%); }
+    .vibe-4 { background: linear-gradient(148deg, #2A2118 0%, #1E1A12 45%, #241D14 100%); }
+    .vibe-5 { background: linear-gradient(160deg, #C9B6E4 0%, #A7B8C8 50%, #EBCB8B 100%); }
+
+    /* Studio panel gradient */
+    .studio-panel { width: 100%; height: 100px; border-radius: 28px; background: linear-gradient(160deg, #2A2118 0%, #1E1A12 45%, #241D14 100%); }
+
+    /* Comparison table */
+    .cmp-table { width: 100%; border-collapse: separate; border-spacing: 0; border-radius: var(--radius-xl); overflow: hidden; box-shadow: 0 6px 20px rgba(26,26,26,0.06); }
+    .cmp-table th { background: var(--murmur-ink); color: var(--murmur-card); padding: 0.75rem 1rem; font-weight: 500; font-size: 0.85rem; text-align: left; }
+    .cmp-table td { padding: 0.6rem 1rem; font-size: 0.85rem; background: var(--murmur-card); border-bottom: 1px solid #ECE5D6; color: var(--murmur-ink-soft); }
+    .cmp-table tr:last-child td { border-bottom: none; }
+    .cmp-table .check { color: #22C55E; font-weight: 700; }
+    .cmp-table .cross { color: var(--murmur-mute-light); }
+
+    /* Flow diagram nodes */
+    .fnode { display: inline-flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 0.6rem 0.8rem; background: var(--murmur-bg); border: 1px solid var(--murmur-border); border-radius: 12px; font-size: 0.75rem; font-weight: 500; }
+    .fnode .fi { width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--murmur-accent-tint); color: var(--murmur-accent); display: grid; place-items: center; font-size: 0.8rem; }
+    .farrow { color: var(--murmur-mute-light); font-size: 1.2rem; }
+
+    /* Particles */
+    .particle-scene { position: relative; width: 100%; height: 160px; border-radius: var(--radius-xl); overflow: hidden; background: linear-gradient(180deg, var(--murmur-bg), var(--murmur-bg-warm)); }
+    .p { position: absolute; border-radius: 50%; filter: blur(1px); animation: pf 6s ease-in-out infinite; }
+    .p-gold { background: var(--murmur-warm-gold); }
+    .p-coral { background: var(--murmur-accent-light); }
+    .p-blue { background: var(--murmur-dust-blue); }
+    .p-lav { background: var(--murmur-lavender); }
+    @keyframes pf { 0%,100% { transform: translateY(0) translateX(0); opacity: 0.35; } 25% { transform: translateY(-12px) translateX(4px); opacity: 0.2; } 50% { transform: translateY(-20px) translateX(-3px); opacity: 0.3; } 75% { transform: translateY(-8px) translateX(5px); opacity: 0.15; } }
+
+    /* Side-nav paper */
+    .sidenav-paper { width: 240px; padding: 1.5rem; border-radius: var(--radius-xl); position: relative; isolation: isolate; overflow: hidden; background: radial-gradient(circle at 82% 10%, rgba(255,230,218,0.34), transparent 0 24%), linear-gradient(180deg, rgba(255,254,251,0.94), rgba(245,241,235,0.90)); backdrop-filter: blur(3px); border: 1px solid #ECE5D6; }
+    .sidenav-paper::before { content: ""; position: absolute; inset: 0; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E"); background-size: 300px; opacity: 0.35; mix-blend-mode: multiply; pointer-events: none; }
+
+    /* Buttons */
+    .btn-row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+    .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.875rem 1.5rem; border-radius: 999px; background: var(--murmur-accent); color: #FFFEFB; font-weight: 500; font-size: 0.875rem; border: none; cursor: pointer; transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.24s ease; }
+    .btn-primary:hover { background: var(--murmur-accent-deep); transform: translateY(-1px); box-shadow: 0 8px 22px rgba(255,89,36,0.32); }
+    .btn-secondary { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.25rem; border-radius: 999px; background: var(--murmur-bg-warm); color: var(--murmur-ink); font-weight: 500; font-size: 0.875rem; border: 1px solid var(--murmur-border); cursor: pointer; transition: transform 0.18s ease, background 0.18s ease; }
+    .btn-secondary:hover { background: var(--murmur-border); }
+    .btn-ghost { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 8px; color: var(--murmur-ink-soft); font-size: 0.875rem; border: none; background: transparent; cursor: pointer; transition: background 0.18s ease; }
+    .btn-ghost:hover { background: var(--murmur-bg-warm); }
+
+    /* Timeline */
+    .tl { position: relative; padding-left: 1.5rem; border-left: 2px solid var(--murmur-border); }
+    .tl-item { position: relative; padding-bottom: 1.25rem; }
+    .tl-item::before { content: ""; position: absolute; left: -1.85rem; top: 0.25rem; width: 0.75rem; height: 0.75rem; border-radius: 50%; background: var(--murmur-card); border: 2px solid var(--murmur-accent); }
+    .tl-item h4 { font-family: var(--font-serif); font-size: 0.95rem; }
+    .tl-item p { font-size: 0.8rem; color: var(--murmur-mute); line-height: 1.5; }
+
+    /* Iris transition mock */
+    @keyframes ic { 0% { clip-path: circle(100% at 50% 50%); } 100% { clip-path: circle(0% at 50% 50%); } }
+    @keyframes io { 0% { clip-path: circle(0% at 50% 50%); } 100% { clip-path: circle(100% at 50% 50%); } }
+    .iris-demo { width: 200px; height: 200px; border-radius: 50%; background: var(--murmur-accent); display: grid; place-items: center; color: white; font-family: var(--font-serif); cursor: pointer; }
+    .iris-demo.close { animation: ic 0.7s cubic-bezier(0.65,0,0.35,1) forwards; }
+    .iris-demo.open { animation: io 0.55s cubic-bezier(0.22,1,0.36,1) forwards; }
+
+    .eyebrow { text-transform: uppercase; letter-spacing: 0.32em; font-weight: 500; font-size: 0.6875rem; color: var(--murmur-mute); }
+
+    .ui-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+
+    .mm-card-ui { background: var(--murmur-card); border: 1px solid #ECE5D6; border-radius: 10px; box-shadow: 0 1px 2px rgba(26,26,26,0.04), 0 6px 18px rgba(26,26,26,0.06); transition: box-shadow 0.32s cubic-bezier(.22,1,.36,1), transform 0.32s cubic-bezier(.22,1,.36,1); }
+    .mm-card-ui:hover { box-shadow: 0 2px 4px rgba(26,26,26,0.05), 0 12px 28px rgba(26,26,26,0.10); transform: translateY(-2px); }
+
+    .hero-serif { font-family: var(--font-serif); font-weight: 400; line-height: 1.05; letter-spacing: -0.015em; }
+    .pill { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.18rem 0.6rem; border-radius: 999px; background: var(--murmur-bg-warm); color: var(--murmur-ink); font-size: 0.75rem; font-weight: 500; }
+  </style>
+</head>
+<body>
+<div class="lib-wrap">
+
+  <h1>Murmur · 特效与素材库</h1>
+  <p class="sub">从主仓库剥离开来的可复用 CSS 组件、动画和效果模块。你可以直接复制代码到你的 HTML 中使用。</p>
+
+  <!-- ═══ TITLE ═══ -->
+  <div class="section">
+    <h2>1. 设计令牌 (Design Tokens)</h2>
+    <div class="demo-box">
+      <p style="margin-bottom:1rem; font-size:0.9rem; color:var(--murmur-mute);">全部颜色变量，复制到你的 CSS :root 中使用。</p>
+      <div class="code">:root {
+  /* 表面色 */
+  --murmur-bg:            #F5F1EB;
+  --murmur-bg-warm:       #EFE8DA;
+  --murmur-card:          #FFFEFB;
+  --murmur-ink:           #1A1A1A;
+  --murmur-ink-soft:      #3A3A3A;
+  --murmur-mute:          #8C8780;
+  --murmur-mute-light:    #B6B0A4;
+  --murmur-border:        #E5DDD0;
+  --murmur-border-strong: #D2C9B6;
+
+  /* 强调色 */
+  --murmur-accent:        #FF5924;
+  --murmur-accent-light:  #FF8A5C;
+  --murmur-accent-deep:   #D9421A;
+  --murmur-accent-tint:   #FFE6DA;
+  --murmur-dust-blue:     #A7B8C8;
+  --murmur-lavender:      #C9B6E4;
+  --murmur-warm-gold:     #EBCB8B;
+
+  /* 字体 */
+  --font-sans:  "Geist", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-serif: "Instrument Serif", "Noto Serif SC", Georgia, serif;
+
+  /* 圆角 */
+  --radius:    0.625rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.75rem;
+}</div>
+    </div>
+  </div>
+
+  <!-- ═══ BUTTONS ═══ -->
+  <div class="section">
+    <h2>2. 按钮 (Buttons)</h2>
+    <div class="ui-grid">
+      <div class="demo-box">
+        <div class="tag">mm-btn-primary</div>
+        <div class="btn-row">
+          <button class="btn-primary">开始创作</button>
+          <button class="btn-primary">保存歌曲</button>
+        </div>
+        <div class="code mt-2">.btn-primary {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.875rem 1.5rem; border-radius: 999px;
+  background: #FF5924; color: #FFFEFB;
+  font-weight: 500; font-size: 0.875rem; border: none;
+  transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.24s ease;
+}
+.btn-primary:hover {
+  background: #D9421A;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(255, 89, 36, 0.32);
+}</div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">mm-btn-secondary</div>
+        <div class="btn-row">
+          <button class="btn-secondary">听预览</button>
+          <button class="btn-secondary">Demo</button>
+        </div>
+        <div class="code mt-2">.btn-secondary {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.75rem 1.25rem; border-radius: 999px;
+  background: #EFE8DA; color: #1A1A1A;
+  border: 1px solid #E5DDD0; cursor: pointer;
+}</div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">btn-ghost</div>
+        <div class="btn-row">
+          <button class="btn-ghost">取消</button>
+          <button class="btn-ghost">更多</button>
+        </div>
+        <div class="code mt-2">.btn-ghost {
+  padding: 0.5rem 0.75rem; border-radius: 8px;
+  color: #3A3A3A; border: none; background: transparent;
+}
+.btn-ghost:hover { background: #EFE8DA; }</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CARDS ═══ -->
+  <div class="section">
+    <h2>3. 卡片 (Cards)</h2>
+    <div class="ui-grid">
+      <div class="demo-box">
+        <div class="tag">mm-card（标准卡片）</div>
+        <div class="mm-card-ui" style="padding:1.5rem;">
+          <h3 style="margin-bottom:0.75rem;">标准卡片</h3>
+          <p style="font-size:0.85rem; color:var(--murmur-mute); line-height:1.6;">用于 dialog、popover、side nav 等 UI 容器。白色面纸、10px 圆角、极浅阴影。</p>
+        </div>
+        <div class="code mt-2">.mm-card {
+  background: #FFFEFB;
+  border: 1px solid #ECE5D6;
+  border-radius: 10px;
+  box-shadow:
+    0 1px 2px rgba(26,26,26,0.04),
+    0 6px 18px rgba(26,26,26,0.06);
+}</div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">Song Card（歌曲卡片）</div>
+        <div class="song-card">
+          <div class="grain"></div>
+          <div class="title">星期天的早晨</div>
+          <div class="sub">Warm · 85 BPM</div>
+        </div>
+        <div class="code mt-2">.song-card {
+  width: 200px; aspect-ratio: 1;
+  border-radius: 20px;
+  background: linear-gradient(148deg, #FFBA5A 0%, #F0663E 42%, #B87FCC 100%);
+  box-shadow: 0 16px 32px rgba(26,26,26,0.14);
+}</div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">Vibe Card（氛围卡片）</div>
+        <div style="display:flex; gap:0.75rem; flex-wrap:wrap;">
+          <div style="flex:1; min-width:80px;">
+            <div class="vibe-swatch vibe-1"></div>
+            <p style="font-size:0.7rem; margin-top:0.3rem; color:var(--murmur-mute); text-align:center;">Warm Coral</p>
+          </div>
+          <div style="flex:1; min-width:80px;">
+            <div class="vibe-swatch vibe-2"></div>
+            <p style="font-size:0.7rem; margin-top:0.3rem; color:var(--murmur-mute); text-align:center;">Deep Teal</p>
+          </div>
+          <div style="flex:1; min-width:80px;">
+            <div class="vibe-swatch vibe-3"></div>
+            <p style="font-size:0.7rem; margin-top:0.3rem; color:var(--murmur-mute); text-align:center;">Earthy Gold</p>
+          </div>
+        </div>
+        <div class="code mt-2">.vibe-card {
+  border-radius: 32px;
+  background: linear-gradient(148deg, #FFBA5A 0%, #F0663E 42%, #B87FCC 100%);
+  overflow: hidden;
+}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ BACKGROUND EFFECTS ═══ -->
+  <div class="section">
+    <h2>4. 背景效果 (Background Effects)</h2>
+    <div class="ui-grid">
+      <div class="demo-box">
+        <div class="tag">Aurora Blobs（极光斑点）</div>
+        <div class="aurora-demo">
+          <div class="aurora-blob a1"></div>
+          <div class="aurora-blob a2"></div>
+          <div class="aurora-blob a3"></div>
+          <div class="grain-overlay"></div>
+        </div>
+        <div class="code mt-2">/* 三层彩色斑点 + SVG 纸纹噪点 */
+.aurora-blob { border-radius: 50%; filter: blur(80px); opacity: 0.55; mix-blend-mode: multiply; }
+.blob-1 { background: radial-gradient(circle, rgba(255,105,210,0.32), transparent 70%); width: 60vw; height: 60vw; animation: ad1 28s ease-in-out infinite; }
+.blob-2 { background: radial-gradient(circle, rgba(178,196,255,0.36), transparent 70%); animation: ad2 34s ease-in-out infinite; }
+.blob-3 { background: radial-gradient(circle, rgba(140,230,200,0.28), transparent 70%); animation: ad3 22s ease-in-out infinite; }</div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">Side-nav Paper（侧边栏纸张）</div>
+        <div class="sidenav-paper">
+          <div style="position:relative;z-index:1;">
+            <p style="font-family:var(--font-serif); font-size:1.1rem; margin-bottom:0.5rem;">Murmur</p>
+            <p style="font-size:0.8rem; color:var(--murmur-mute);">带噪点的纸纹<br/>磨砂模糊、径向渐变、半透明叠加</p>
+          </div>
+        </div>
+        <div class="code mt-2">.side-nav-paper {
+  background:
+    radial-gradient(circle at 82% 10%, rgba(255,230,218,0.34), transparent 0 24%),
+    linear-gradient(180deg, rgba(255,254,251,0.94), rgba(245,241,235,0.90));
+  backdrop-filter: blur(3px);
+}
+.side-nav-paper::before {
+  background-image: url("...noise.svg");
+  opacity: 0.35; mix-blend-mode: multiply;
+}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ANIMATIONS ═══ -->
+  <div class="section">
+    <h2>5. 动画 (Animations)</h2>
+    <div class="ui-grid">
+      <div class="demo-box">
+        <div class="tag">Breathing Orb（呼吸光晕）</div>
+        <div class="orb-demo">
+          <div class="orb-shell"></div>
+          <div class="orb-core">
+            <svg class="orb-core-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a3 3 0 0 0-3 3v14a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">Floating Particles（浮动粒子）</div>
+        <div class="particle-scene">
+          <div class="p p-gold" style="width:12px;height:12px;top:20%;left:15%;animation-delay:0s;"></div>
+          <div class="p p-coral" style="width:8px;height:8px;top:50%;left:30%;animation-delay:1.2s;"></div>
+          <div class="p p-blue" style="width:10px;height:10px;top:35%;left:55%;animation-delay:2.4s;"></div>
+          <div class="p p-lav" style="width:14px;height:14px;top:60%;left:70%;animation-delay:0.8s;"></div>
+          <div class="p p-gold" style="width:6px;height:6px;top:25%;left:80%;animation-delay:3.6s;"></div>
+          <div class="p p-coral" style="width:9px;height:9px;top:70%;left:85%;animation-delay:1.8s;"></div>
+          <div class="p p-blue" style="width:7px;height:7px;top:45%;left:10%;animation-delay:2.9s;"></div>
+        </div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">Shimmer（闪烁加载）</div>
+        <div style="display:flex; flex-direction:column; gap:0.5rem;">
+          <div class="shimmer" style="width:70%;"></div>
+          <div class="shimmer" style="width:90%;"></div>
+          <div class="shimmer" style="width:45%;"></div>
+        </div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">Rise-in（淡入上升）</div>
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+          <div style="animation: rise 0.7s cubic-bezier(.22,1,.36,1) both; background:var(--murmur-bg-warm); padding:0.5rem 1rem; border-radius:8px;">
+            <p class="hero-serif" style="font-size:1.2rem;">每一个声音</p>
+          </div>
+          <div style="animation: rise 0.7s cubic-bezier(.22,1,.36,1) 0.15s both; background:var(--murmur-bg-warm); padding:0.5rem 1rem; border-radius:8px;">
+            <p class="hero-serif" style="font-size:1.2rem;">都值得被听见</p>
+          </div>
+        </div>
+        <style>
+          @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        </style>
+        <div class="code mt-2">.rise-in {
+  animation: rise-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ COMPONENTS ═══ -->
+  <div class="section">
+    <h2>6. UI 组件 (Components)</h2>
+    <div class="ui-grid">
+      <div class="demo-box">
+        <div class="tag">Flow Diagram（六步流程）</div>
+        <div style="display:flex; align-items:center; flex-wrap:wrap; gap:0.4rem;">
+          <div class="fnode"><div class="fi">🎤</div><span>Hum</span></div>
+          <span class="farrow">→</span>
+          <div class="fnode"><div class="fi">✨</div><span>Vibe</span></div>
+          <span class="farrow">→</span>
+          <div class="fnode"><div class="fi">🎛</div><span>Studio</span></div>
+          <span class="farrow">→</span>
+          <div class="fnode"><div class="fi">💾</div><span>Save</span></div>
+          <span class="farrow">→</span>
+          <div class="fnode"><div class="fi">🖼</div><span>Gallery</span></div>
+          <span class="farrow">→</span>
+          <div class="fnode"><div class="fi">🔗</div><span>Share</span></div>
+        </div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">Comparison Table（对比表格）</div>
+        <table class="cmp-table">
+          <thead><tr><th></th><th>语音备忘录</th><th>DAW</th><th>Suno/Udio</th><th>Murmur</th></tr></thead>
+          <tbody>
+            <tr><td>起点</td><td>录音</td><td>轨道</td><td>文字</td><td><strong>哼唱</strong></td></tr>
+            <tr><td>门槛</td><td class="check">低</td><td class="cross">高</td><td class="check">低</td><td class="check">低</td></tr>
+            <tr><td>归属感</td><td class="cross">—</td><td class="check">强</td><td class="cross">弱</td><td class="check">强</td></tr>
+            <tr><td>可编辑</td><td class="cross">—</td><td class="check">强</td><td class="cross">弱</td><td class="check">中</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="demo-box">
+        <div class="tag">Timeline（路线图）</div>
+        <div class="tl" style="max-width:400px;">
+          <div class="tl-item"><h4>Today</h4><p>浏览器端端到端哼唱创作</p></div>
+          <div class="tl-item"><h4>Next</h4><p>移动端、更多风格、高清导出</p></div>
+          <div class="tl-item"><h4>Scale</h4><p>社交分享、协作、授权工具</p></div>
+        </div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">Eyebrow Label（眉毛标签）</div>
+        <p class="eyebrow">Name It</p>
+        <p class="eyebrow" style="margin-top:0.5rem;">Export</p>
+        <p class="eyebrow" style="margin-top:0.5rem;">Gallery</p>
+        <div class="code mt-2">.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.32em;
+  font-weight: 500;
+  font-size: 0.6875rem;
+  color: #8C8780;
+}</div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">Hero Serif（英雄衬线标题）</div>
+        <p class="hero-serif" style="font-size:2rem; max-width:12ch;">把哼唱变成一首歌</p>
+        <p class="hero-serif" style="font-size:1.4rem; margin-top:0.75rem; color:var(--murmur-ink-soft);">Instrument Serif · 400 weight · -0.015em letter-spacing</p>
+        <div class="code mt-2">.hero-serif {
+  font-family: "Instrument Serif", "Noto Serif SC", Georgia, serif;
+  font-weight: 400; line-height: 1.05; letter-spacing: -0.015em;
+}</div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">Pill Tag（药丸标签）</div>
+        <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+          <span class="pill">Warm</span>
+          <span class="pill">Cinematic</span>
+          <span class="pill">Minimal</span>
+          <span class="pill">Brighter</span>
+        </div>
+        <div class="code mt-2">.pill {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.18rem 0.6rem; border-radius: 999px;
+  background: #EFE8DA; color: #1A1A1A;
+  font-size: 0.75rem; font-weight: 500;
+}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SVG / PLACEHOLDER ═══ -->
+  <div class="section">
+    <h2>7. 占位素材 (Asset Placeholders)</h2>
+    <div class="ui-grid">
+      <div class="demo-box">
+        <div class="tag">Asset Placeholder Box</div>
+        <div style="border:2px dashed var(--murmur-border-strong); border-radius:var(--radius-xl); padding:2rem; text-align:center; background:repeating-linear-gradient(45deg, var(--murmur-bg), var(--murmur-bg) 12px, var(--murmur-bg-warm) 12px, var(--murmur-bg-warm) 24px);">
+          <div style="font-size:2rem; margin-bottom:0.75rem;">🖼</div>
+          <p style="font-weight:500; color:var(--murmur-ink-soft); margin-bottom:0.25rem;">可替换素材</p>
+          <p style="font-size:0.8rem; color:var(--murmur-mute);">尺寸：宽 100% / 最小高度 220px</p>
+          <p style="font-size:0.8rem; color:var(--murmur-mute);">支持：视频 / 图片 / 音频 / 嵌入</p>
+        </div>
+        <div class="code mt-2">&lt;div class="asset-placeholder"&gt;
+  &lt;div class="ph-icon"&gt;🖼&lt;/div&gt;
+  &lt;div class="ph-title"&gt;可替换素材&lt;/div&gt;
+  &lt;div class="ph-hint"&gt;描述文字&lt;/div&gt;
+&lt;/div&gt;</div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">QR Code Placeholder</div>
+        <div style="width:160px; height:160px; margin:0 auto; background:var(--murmur-card); border:1px solid #ECE5D6; border-radius:var(--radius-xl); display:grid; place-items:center; box-shadow:0 8px 30px rgba(26,26,26,0.06);">
+          <div style="text-align:center;">
+            <div style="font-size:1rem; margin-bottom:0.25rem;">🔗</div>
+            <p style="font-size:0.7rem; color:var(--murmur-mute);">扫描体验 Demo</p>
+            <p style="font-size:0.65rem; color:var(--murmur-mute-light); margin-top:0.25rem;">(替换为真实二维码)</p>
+          </div>
+        </div>
+      </div>
+      <div class="demo-box">
+        <div class="tag">Team Avatar Placeholder</div>
+        <div style="display:flex; gap:1rem; justify-content:center;">
+          <div style="text-align:center;">
+            <div style="width:64px; height:64px; border-radius:50%; background:var(--murmur-bg-warm); margin:0 auto 0.5rem; display:grid; place-items:center; color:var(--murmur-mute); font-size:1.25rem;">👤</div>
+            <p style="font-size:0.85rem; font-weight:600;">姓名</p>
+            <p style="font-size:0.7rem; color:var(--murmur-mute);">角色</p>
+          </div>
+          <div style="text-align:center;">
+            <div style="width:64px; height:64px; border-radius:50%; background:var(--murmur-bg-warm); margin:0 auto 0.5rem; display:grid; place-items:center; color:var(--murmur-mute); font-size:1.25rem;">👤</div>
+            <p style="font-size:0.85rem; font-weight:600;">姓名</p>
+            <p style="font-size:0.7rem; color:var(--murmur-mute);">角色</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SOUND / WAVEFORM ═══ -->
+  <div class="section">
+    <h2>8. 声音可视化 (Sound Viz)</h2>
+    <div class="ui-grid">
+      <div class="demo-box">
+        <div class="tag">Animated Waveform Canvas</div>
+        <canvas class="wf-canvas" id="wfDemo"></canvas>
+        <div class="code mt-2">// 在 JS 中调用：
+function startWaveform(canvasId, speed, mode) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  // ...（见完整 pitch/index.html 中的实现）
+}</div>
+        <script>
+          (function() {
+            const c = document.getElementById('wfDemo');
+            if (!c) return;
+            let ctx = c.getContext('2d');
+            let running = true;
+            function resize() {
+              const r = c.parentElement.getBoundingClientRect();
+              c.width = r.width * (window.devicePixelRatio||1);
+              c.height = 120 * (window.devicePixelRatio||1);
+              ctx = c.getContext('2d');
+              ctx.scale(window.devicePixelRatio||1, window.devicePixelRatio||1);
+            }
+            resize();
+            let t = 0;
+            function draw() {
+              if (!running) return;
+              const r = c.parentElement.getBoundingClientRect();
+              const w = r.width, h = 120;
+              ctx.clearRect(0,0,w,h);
+              ctx.beginPath();
+              ctx.strokeStyle = '#E5DDD0';
+              ctx.lineWidth = 1;
+              ctx.moveTo(0,h/2);
+              ctx.lineTo(w,h/2);
+              ctx.stroke();
+              ctx.beginPath();
+              ctx.strokeStyle = '#FF5924';
+              ctx.lineWidth = 2;
+              ctx.lineCap = 'round';
+              const pts = 100;
+              for(let i=0;i<=pts;i++) {
+                const x = (i/pts)*w;
+                const n = i/pts;
+                const amp = (Math.sin(n*12 + t*0.5)*0.45 + Math.sin(n*4 - t*0.3)*0.15) * (h/2);
+                const y = h/2 + amp;
+                i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+              }
+              ctx.stroke();
+              t += 0.03;
+              requestAnimationFrame(draw);
+            }
+            draw();
+            window.addEventListener('resize', resize);
+          })();
+        </script>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ KEYBOARD / USAGE ═══ -->
+  <div class="section">
+    <h2>9. 使用说明</h2>
+    <div class="demo-box">
+      <p style="margin-bottom:1rem; line-height:1.8; color:var(--murmur-ink-soft);">
+        本素材库包含了 Murmur 产品中所有可提取的 CSS 组件、视觉动画和 UI 模式。
+        你可以直接复制 CSS 代码段到你的演示文件中使用。<br/><br/>
+        <strong>主演示文件：</strong><code>pitch/index.html</code> — 包含 11 页完整答辩 PPT，已配齐所有效果和叙事文本。<br/>
+        <strong>素材库文件：</strong><code>pitch/effects-library.html</code> — 即本文件，提供独立的组件示例。<br/><br/>
+        <strong>使用流程：</strong><br/>
+        1. 打开 <code>pitch/index.html</code> 在浏览器中预览<br/>
+        2. 按 <kbd style="padding:0.1rem 0.35rem; background:var(--murmur-bg-warm); border:1px solid var(--murmur-border); border-radius:4px; font-size:0.75rem;">→</kbd> <kbd style="padding:0.1rem 0.35rem; background:var(--murmur-bg-warm); border:1px solid var(--murmur-border); border-radius:4px; font-size:0.75rem;">←</kbd> 或 <kbd style="padding:0.1rem 0.35rem; background:var(--murmur-bg-warm); border:1px solid var(--murmur-border); border-radius:4px; font-size:0.75rem;">Space</kbd> 切换幻灯片<br/>
+        3. 按 <kbd style="padding:0.1rem 0.35rem; background:var(--murmur-bg-warm); border:1px solid var(--murmur-border); border-radius:4px; font-size:0.75rem;">N</kbd> 打开演讲者提示<br/>
+        4. 将 HTML 注释中的叙事选项取消注释以切换不同文本<br/>
+        5. 替换 <code>asset-placeholder</code> 中的内容为你的真实素材
+      </p>
+    </div>
+  </div>
+
+  <hr />
+  <p style="text-align:center; color:var(--murmur-mute); font-size:0.85rem; padding:2rem 0;">
+    Murmur · Pitch Deck Materials · 基于 <code>src/app/globals.css</code> 设计令牌
+  </p>
+
+</div>
+</body>
+</html>

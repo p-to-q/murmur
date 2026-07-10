@@ -170,7 +170,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
   useEffect(() => {
     trackStageEntered("vibe", { flowId: currentFlowId ?? undefined, draftId: currentDraftId ?? undefined });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentFlowId, currentDraftId]);
 
   /* ── Arrival sequence ─────────────────────────────────────────── */
   useEffect(() => {

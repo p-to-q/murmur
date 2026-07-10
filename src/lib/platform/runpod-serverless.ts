@@ -307,37 +307,47 @@ export interface QueueDepth {
 }
 
 /**
- * Read the endpoint's current queue depth from the /health response.
+ * Parse queue depth from a raw /health response body.
  *
  * RunPod's health body shape:
  *   { jobs: { completed, failed, inProgress, inQueue, retried },
  *     workers: { idle, initializing, ready, running, throttled } }
  *
- * Returns null if the health endpoint is unreachable or the shape is
+ * Returns null if the health body is unreachable or the shape is
  * unexpected — callers should treat null as "allow the request" (fail open).
+ */
+export function parseQueueDepth(body: unknown): QueueDepth | null {
+  if (!body || typeof body !== "object") return null;
+
+  const b = body as Record<string, unknown>;
+  const jobs = b.jobs as Record<string, unknown> | undefined;
+  const workers = b.workers as Record<string, unknown> | undefined;
+
+  const inQueue = typeof jobs?.inQueue === "number" ? jobs.inQueue : 0;
+  const inProgress = typeof jobs?.inProgress === "number" ? jobs.inProgress : 0;
+  const idle = typeof workers?.idle === "number" ? workers.idle : 0;
+  const running = typeof workers?.running === "number" ? workers.running : 0;
+  const initializing = typeof workers?.initializing === "number" ? workers.initializing : 0;
+
+  return {
+    inQueue,
+    inProgress,
+    workers: { idle, running, total: idle + running + initializing },
+  };
+}
+
+/**
+ * Read the endpoint's current queue depth from the /health response.
+ *
+ * Convenience wrapper over parseQueueDepth that first fetches /health.
  */
 export async function getQueueDepth(
   config: MusicServerlessConfig,
 ): Promise<QueueDepth | null> {
   try {
     const { ok, body } = await endpointHealth(config, AbortSignal.timeout(5_000));
-    if (!ok || !body || typeof body !== "object") return null;
-
-    const b = body as Record<string, unknown>;
-    const jobs = b.jobs as Record<string, unknown> | undefined;
-    const workers = b.workers as Record<string, unknown> | undefined;
-
-    const inQueue = typeof jobs?.inQueue === "number" ? jobs.inQueue : 0;
-    const inProgress = typeof jobs?.inProgress === "number" ? jobs.inProgress : 0;
-    const idle = typeof workers?.idle === "number" ? workers.idle : 0;
-    const running = typeof workers?.running === "number" ? workers.running : 0;
-    const initializing = typeof workers?.initializing === "number" ? workers.initializing : 0;
-
-    return {
-      inQueue,
-      inProgress,
-      workers: { idle, running, total: idle + running + initializing },
-    };
+    if (!ok) return null;
+    return parseQueueDepth(body);
   } catch {
     return null;
   }

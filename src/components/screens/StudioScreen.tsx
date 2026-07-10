@@ -57,6 +57,8 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
   const setActiveCreationRoute = useMurmurStore(
     (state) => state.setActiveCreationRoute,
   );
+  const currentDraftId = useMurmurStore((state) => state.currentDraftId);
+  const currentFlowId = useMurmurStore((state) => state.currentFlowId);
   const restoredDraftAt = useMurmurStore((state) => state.restoredDraftAt);
   const demoSeededRef = useRef(false);
   const demoEnabled = initialDemo;
@@ -68,8 +70,8 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
   }, [currentVersion, setActiveCreationRoute]);
 
   useEffect(() => {
-    trackStageEntered("studio");
-  }, []);
+    trackStageEntered("studio", { flowId: currentFlowId ?? undefined, draftId: currentDraftId ?? undefined });
+  }, [currentFlowId, currentDraftId]);
 
   useRestoredVersionAudio(currentVersion, restoredDraftAt);
 

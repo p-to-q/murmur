@@ -6,7 +6,7 @@ import {
   getMusicWorkerUrl,
   isMusicWorkerConfigured,
 } from "@/lib/platform/music-worker";
-import { endpointHealth, getQueueDepth } from "@/lib/platform/runpod-serverless";
+import { endpointHealth, parseQueueDepth } from "@/lib/platform/runpod-serverless";
 
 export const runtime = "nodejs";
 
@@ -63,18 +63,18 @@ async function serverlessHealth() {
   }
 
   try {
-    const { ok, status } = await endpointHealth(config, AbortSignal.timeout(12_000));
-    if (!ok) {
-      const unauthorized = status === 401 || status === 403;
+    const health = await endpointHealth(config, AbortSignal.timeout(12_000));
+    if (!health.ok) {
+      const unauthorized = health.status === 401 || health.status === 403;
       return publicHealth({
         available: false,
         configured: true,
         mode: "serverless",
         requestedMode: getRequestedMusicEngineMode(),
-        reason: unauthorized ? "unauthorized" : `http_${status}`,
+        reason: unauthorized ? "unauthorized" : `http_${health.status}`,
       });
     }
-    const depth = await getQueueDepth(config);
+    const depth = parseQueueDepth(health.body);
     const estimatedWaitMs = depth
       ? estimateWaitFromQueue(depth.inQueue, depth.inProgress, depth.workers.total)
       : null;
