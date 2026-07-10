@@ -226,6 +226,26 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     }
   }, [restoredDraftAt, vibeVersions]);
 
+  /* ── Auto-audition: play the first ready clip as soon as it lands ── */
+  const autoAuditionedRef = useRef(false);
+  useEffect(() => {
+    if (autoAuditionedRef.current) return;
+    if (auditioningVersionId) return;
+    const firstReady = vibeVersions.find(
+      (v) => v.generation?.status === "ready" && v.generation.audioUrl,
+    );
+    if (!firstReady) return;
+    autoAuditionedRef.current = true;
+    try {
+      setAuditioning(firstReady.id);
+      if (!versionPreview.play(firstReady)) {
+        setAuditioning(null);
+      }
+    } catch {
+      setAuditioning(null);
+    }
+  }, [vibeVersions, auditioningVersionId, setAuditioning]);
+
   /* ── Stop preview on unmount ──────────────────────────────────── */
   useEffect(() => {
     return () => {
