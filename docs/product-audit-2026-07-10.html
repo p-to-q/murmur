@@ -1,0 +1,939 @@
+<title>Murmur · Product Experience Audit</title>
+<style>
+  @font-face {
+    font-family: 'Charter';
+    src: local('Charter'), local('Georgia');
+    font-weight: 400;
+  }
+
+  :root {
+    --warm-paper: #FAF7F2;
+    --ink: #1C1917;
+    --ink-secondary: #57534E;
+    --ink-tertiary: #A8A29E;
+    --terracotta: #C2410C;
+    --terracotta-light: #FFF7ED;
+    --sage: #3F6212;
+    --sage-light: #F7FEE7;
+    --slate-accent: #475569;
+    --slate-light: #F1F5F9;
+    --amber: #92400E;
+    --amber-light: #FFFBEB;
+    --violet: #6D28D9;
+    --violet-light: #F5F3FF;
+    --rose: #9F1239;
+    --rose-light: #FFF1F2;
+    --border: #E7E0D6;
+    --card-bg: rgba(255, 255, 255, 0.72);
+    --divider: #D6CFC3;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: Charter, Georgia, 'Noto Serif SC', serif;
+    background: var(--warm-paper);
+    color: var(--ink);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .report-header {
+    padding: 72px 24px 48px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #F5F0E8 0%, var(--warm-paper) 100%);
+  }
+
+  .report-header .eyebrow {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-tertiary);
+    margin-bottom: 16px;
+  }
+
+  .report-header h1 {
+    font-size: clamp(28px, 5vw, 42px);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    color: var(--ink);
+    margin-bottom: 12px;
+    text-wrap: balance;
+  }
+
+  .report-header .subtitle {
+    font-size: 15px;
+    color: var(--ink-secondary);
+    max-width: 520px;
+    margin: 0 auto;
+    line-height: 1.65;
+  }
+
+  .meta-strip {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 12px;
+    color: var(--ink-tertiary);
+    letter-spacing: 0.04em;
+  }
+
+  .meta-strip span { white-space: nowrap; }
+
+  .container {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* Summary strip */
+  .summary-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 40px 0;
+  }
+
+  .summary-cell {
+    background: var(--card-bg);
+    padding: 20px 16px;
+    text-align: center;
+  }
+
+  .summary-cell .num {
+    font-size: 32px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .summary-cell .label {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-tertiary);
+  }
+
+  /* Flow sections */
+  .flow-section {
+    margin: 48px 0;
+    padding-top: 40px;
+    border-top: 1px solid var(--border);
+  }
+
+  .flow-section:first-of-type {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  .flow-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .flow-number {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink-tertiary);
+    letter-spacing: 0.06em;
+    flex-shrink: 0;
+  }
+
+  .flow-title {
+    font-size: clamp(22px, 3.5vw, 28px);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+  }
+
+  .flow-subtitle {
+    font-size: 14px;
+    color: var(--ink-secondary);
+    margin-bottom: 28px;
+    padding-left: 38px;
+    line-height: 1.6;
+  }
+
+  /* Finding cards */
+  .finding {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    background: var(--card-bg);
+    backdrop-filter: blur(8px);
+  }
+
+  .finding-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .severity-pip {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .severity-pip.critical { background: var(--terracotta); }
+  .severity-pip.notable  { background: var(--amber); }
+  .severity-pip.polish   { background: var(--sage); }
+  .severity-pip.idea     { background: var(--violet); }
+
+  .finding-title {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    flex: 1;
+    line-height: 1.35;
+  }
+
+  .finding-tag {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    font-weight: 500;
+  }
+
+  .finding-tag.critical { background: var(--terracotta-light); color: var(--terracotta); }
+  .finding-tag.notable  { background: var(--amber-light); color: var(--amber); }
+  .finding-tag.polish   { background: var(--sage-light); color: var(--sage); }
+  .finding-tag.idea     { background: var(--violet-light); color: var(--violet); }
+
+  .finding-body {
+    padding: 14px 18px 16px;
+    font-size: 14px;
+    color: var(--ink-secondary);
+    line-height: 1.7;
+  }
+
+  .finding-body p + p {
+    margin-top: 10px;
+  }
+
+  .finding-body code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 2px 5px;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+
+  .finding-body strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .ref {
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 11px;
+    color: var(--ink-tertiary);
+    display: block;
+    margin-top: 8px;
+  }
+
+  /* Summary table */
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 13px;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+
+  .summary-table th {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-tertiary);
+  }
+
+  .summary-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    line-height: 1.5;
+    color: var(--ink-secondary);
+  }
+
+  .summary-table tr:last-child td { border-bottom: none; }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 32px;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 12px;
+    color: var(--ink-tertiary);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Footer */
+  .report-footer {
+    text-align: center;
+    padding: 48px 24px;
+    border-top: 1px solid var(--border);
+    margin-top: 64px;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 12px;
+    color: var(--ink-tertiary);
+    letter-spacing: 0.04em;
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .report-header { padding: 48px 20px 36px; }
+    .flow-subtitle { padding-left: 0; }
+    .meta-strip { flex-direction: column; gap: 6px; align-items: center; }
+    .finding-header { flex-wrap: wrap; }
+    .legend { gap: 12px; }
+  }
+</style>
+
+<header class="report-header">
+  <p class="eyebrow">Product Experience Audit</p>
+  <h1>Murmur: From Hum to Song</h1>
+  <p class="subtitle">
+    A product-design review of every user-facing flow — recording, discovery, arrangement, gallery, export, payments, and global experience — with concrete findings and recommendations.
+  </p>
+  <div class="meta-strip">
+    <span>7 flows audited</span>
+    <span>·</span>
+    <span>32 findings</span>
+    <span>·</span>
+    <span>July 2026</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="summary-strip">
+    <div class="summary-cell">
+      <div class="num" style="color: var(--terracotta)">5</div>
+      <div class="label">Critical</div>
+    </div>
+    <div class="summary-cell">
+      <div class="num" style="color: var(--amber)">10</div>
+      <div class="label">Notable</div>
+    </div>
+    <div class="summary-cell">
+      <div class="num" style="color: var(--sage)">10</div>
+      <div class="label">Polish</div>
+    </div>
+    <div class="summary-cell">
+      <div class="num" style="color: var(--violet)">7</div>
+      <div class="label">Ideas</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="severity-pip critical"></span> Critical — blocks or loses users</div>
+    <div class="legend-item"><span class="severity-pip notable"></span> Notable — friction or confusion</div>
+    <div class="legend-item"><span class="severity-pip polish"></span> Polish — quality gap</div>
+    <div class="legend-item"><span class="severity-pip idea"></span> Idea — opportunity</div>
+  </div>
+
+  <!-- ═══════════════════════ FLOW 1 ═══════════════════════ -->
+  <section class="flow-section">
+    <div class="flow-header">
+      <span class="flow-number">01</span>
+      <h2 class="flow-title">Landing & First Encounter</h2>
+    </div>
+    <p class="flow-subtitle">The home route (<code>/</code>) drops users directly into HumScreen — no landing page, no explanation, just an orb.</p>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip critical"></span>
+        <span class="finding-title">No value proposition for new visitors</span>
+        <span class="finding-tag critical">Critical</span>
+      </div>
+      <div class="finding-body">
+        <p>The entry page is the recording screen itself. A first-time visitor sees rotating serif headlines ("哼一句脑海里的旋律") and a white orb — but <strong>no explanation of what Murmur does</strong>, what will happen after they hum, or what the output looks like. The onboarding overlay (<code>HumOnboardingOverlay</code>) is a thin 3-step tooltip, not a value showcase.</p>
+        <p><strong>Recommendation:</strong> Before the orb, show one sample output — a 4-second looping video of a finished song card with its gradient and wave animation. "You hum, we make this." The demo fallback (<code>transcribeAndGenerate(undefined)</code>) already exists; surface it as a visible "Try the demo" button, not buried in error recovery.</p>
+        <span class="ref">HumScreen.tsx:296–305, hum-onboarding.tsx</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip notable"></span>
+        <span class="finding-title">Demo path is only discoverable through error</span>
+        <span class="finding-tag notable">Notable</span>
+      </div>
+      <div class="finding-body">
+        <p>The "试听 Demo" button only appears as a secondary action on error cards (inaudible, mic unavailable, etc.). A user who <em>wants</em> to see the product before committing their voice has no way to discover it from the idle state. The demo flow is fully functional (<code>/vibe?demo=1</code>), but hidden.</p>
+        <p><strong>Recommendation:</strong> Add a small "先看看效果" text link below the orb in idle state. This removes the activation barrier for cautious users and lets judges evaluate the product without a microphone.</p>
+        <span class="ref">HumScreen.tsx:890–900 (handleRecoveryAction), VibePage searchParams</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip polish"></span>
+        <span class="finding-title">Idle headline rotation is disorienting</span>
+        <span class="finding-tag polish">Polish</span>
+      </div>
+      <div class="finding-body">
+        <p>Five headlines rotate every 9 seconds with a fade. On a first visit, the user reads one, then it vanishes before they've decided to act. The rotation creates movement but doesn't add information — each headline says roughly the same thing in different words.</p>
+        <p><strong>Recommendation:</strong> Show one strong headline on first visit. Only rotate after the user has completed at least one creation (localStorage flag already exists for onboarding).</p>
+        <span class="ref">HumScreen.tsx:296–305, IDLE_ROTATE_INTERVAL = 9000</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip polish"></span>
+        <span class="finding-title">SEO meta is Chinese-only but keywords are bilingual</span>
+        <span class="finding-tag polish">Polish</span>
+      </div>
+      <div class="finding-body">
+        <p>The OG description is <code>"哼一句脑海里的旋律，MURMUR 帮它长成一首小歌。"</code> — pure Chinese. But the general description is bilingual. Social previews for English-speaking audiences will show Chinese text with no English context.</p>
+        <p><strong>Recommendation:</strong> Use the bilingual format from the <code>description</code> field consistently across OG and Twitter cards.</p>
+        <span class="ref">layout.tsx:66–67 vs 44–45</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ FLOW 2 ═══════════════════════ -->
+  <section class="flow-section">
+    <div class="flow-header">
+      <span class="flow-number">02</span>
+      <h2 class="flow-title">Humming & Recording</h2>
+    </div>
+    <p class="flow-subtitle">Tap the orb → mic permission → record → transcribe → navigate to /vibe.</p>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip critical"></span>
+        <span class="finding-title">Mic denial error card doesn't guide to browser settings</span>
+        <span class="finding-tag critical">Critical</span>
+      </div>
+      <div class="finding-body">
+        <p>When a user denies mic permission, <code>startRecording</code> catches the error and shows a "mic unavailable" card. But the card's text (<code>hum.mic.detail</code>) doesn't tell the user <em>how</em> to re-enable it — on iOS Safari or Chrome, this requires navigating to browser settings, not just tapping "retry."</p>
+        <p><strong>Recommendation:</strong> Detect the denial reason (NotAllowedError vs NotFoundError). For denial: show platform-specific instructions ("Open Settings → Safari → Microphone"). For not-found: show "No microphone detected — try from a device with a mic."</p>
+        <span class="ref">HumScreen.tsx:738–837</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip notable"></span>
+        <span class="finding-title">No visual hint about recording duration expectations</span>
+        <span class="finding-tag notable">Notable</span>
+      </div>
+      <div class="finding-body">
+        <p>The timer shows elapsed/limit (e.g. "3.2s / 30s") but there's no guidance about the <em>minimum</em> useful duration. Users who tap quickly after 2 seconds get a "too short" or "inaudible" error. The system trims and validates, but the UI doesn't communicate "hum for at least 5 seconds."</p>
+        <p><strong>Recommendation:</strong> Show a gentle "keep going..." state in the first ~4 seconds. The <code>inputLevelLabelKey</code> system already tracks "quiet" vs "heard" — extend it with a "warming up" phase that discourages early stops.</p>
+        <span class="ref">HumScreen.tsx:1033–1038, recording-progress.ts</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip notable"></span>
+        <span class="finding-title">Processing messages rotate too fast</span>
+        <span class="finding-tag notable">Notable</span>
+      </div>
+      <div class="finding-body">
+        <p>During transcription+generation, processing messages rotate every 900ms (tickMessages). This is too fast to read — "Listening to your melody..." → "Polishing the notes..." → "Adding drums..." → "Three vibes brewing..." cycles through in 3.6 seconds total. The user can't absorb what's happening.</p>
+        <p><strong>Recommendation:</strong> Slow to 2.5–3s per message. Better yet, map messages to actual pipeline stages instead of a fixed timer — show "Polishing" when transcription completes, "Brewing" when generation starts.</p>
+        <span class="ref">HumScreen.tsx:478–489, msgTimerRef interval = 900</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip idea"></span>
+        <span class="finding-title">Audio-reactive aurora is beautiful but unexplained</span>
+        <span class="finding-tag idea">Idea</span>
+      </div>
+      <div class="finding-body">
+        <p>The blob animation driven by <code>amplitudeSpring</code> is a standout visual — it responds to the user's voice in real time. But there's no moment where the UI communicates "I can hear you" beyond a tiny 12px "Heard you" flash that appears for 1 second and disappears. The connection between voice → visual is felt but never named.</p>
+        <p><strong>Recommendation:</strong> When the aurora first responds to voice, show a gentle "I can hear you ✓" near the orb that persists for 2–3s. This confirms the mic is working and the user's hum is being captured.</p>
+        <span class="ref">HumScreen.tsx:267–280 (amplitudeSpring), 1041–1065 (heard/quiet messages)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip polish"></span>
+        <span class="finding-title">Guest gate timing is confusing</span>
+        <span class="finding-tag polish">Polish</span>
+      </div>
+      <div class="finding-body">
+        <p>Guests can create some songs for free (local note system), but the login wall only appears <em>after</em> tapping the orb when notes are exhausted. The user has committed to recording, mentally prepared their hum, and then gets blocked. The balance pill in the nav shows remaining notes, but the connection to "you'll be asked to log in" isn't clear.</p>
+        <p><strong>Recommendation:</strong> When a guest is at 0 notes, show the login prompt <em>before</em> they tap the orb — replace the idle headline with a gentle "Sign in to keep creating" message, keeping the demo button available.</p>
+        <span class="ref">HumScreen.tsx:494–503 (passGuestGate), 1347–1388 (login wall)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ FLOW 3 ═══════════════════════ -->
+  <section class="flow-section">
+    <div class="flow-header">
+      <span class="flow-number">03</span>
+      <h2 class="flow-title">Vibe Discovery & Studio Arrangement</h2>
+    </div>
+    <p class="flow-subtitle">Choose from 3 AI-generated arrangements, then refine in a mixing/editing studio.</p>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip critical"></span>
+        <span class="finding-title">Hard refresh on /vibe loses all state</span>
+        <span class="finding-tag critical">Critical</span>
+      </div>
+      <div class="finding-body">
+        <p>If the user refreshes the page on <code>/vibe</code>, <code>vibeVersions</code> is empty (Zustand store resets), and the screen redirects to <code>/</code> silently. The user's hum, transcription, and all generated versions are lost. No recovery, no warning, no "your session expired" message.</p>
+        <p><strong>Recommendation:</strong> Persist the current draft state to <code>sessionStorage</code> or <code>localStorage</code> so a refresh can recover. The <code>restoredDraftAt</code> mechanism already exists for restored drafts — extend it to handle refresh recovery. At minimum, show a "Your session expired" message instead of a silent redirect.</p>
+        <span class="ref">VibeScreen.tsx:201–205 (redirect guard)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip notable"></span>
+        <span class="finding-title">Vibe cards lack auditory preview affordance</span>
+        <span class="finding-tag notable">Notable</span>
+      </div>
+      <div class="finding-body">
+        <p>The interaction model is "tap = commit, long-press = preview" — but there's no visual hint that long-pressing exists. The play button is small (44px) and positioned at the bottom-right of a large gradient card. Users are more likely to tap-to-commit than discover the preview. Yet preview is the most important action — you shouldn't pick a vibe you haven't heard.</p>
+        <p><strong>Recommendation:</strong> Make the play button more prominent (centered, or auto-play the first card on arrival), and add copy like "Tap ▶ to preview, pick when you're ready." Consider auto-auditioning the first card after a short delay.</p>
+        <span class="ref">VibeScreen.tsx:676–730 (button group), 301–337 (handleAudition)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip notable"></span>
+        <span class="finding-title">Iris-close transition delays content by 1.25s</span>
+        <span class="finding-tag notable">Notable</span>
+      </div>
+      <div class="finding-body">
+        <p>The vibe page plays a dramatic iris-close → rainbow ring → iris-open sequence on arrival. The content is invisible for 1.25 seconds (<code>setTimeout 700ms + 550ms</code>). This is a beautiful cinematic moment the first time, but becomes friction on repeat visits and during demo flows.</p>
+        <p><strong>Recommendation:</strong> Keep the full animation on first arrival from a hum. Skip or shorten it on back-navigation, reroll, and demo entry. Track whether it's the user's first vibe arrival in this session.</p>
+        <span class="ref">VibeScreen.tsx:169–179 (arrival sequence timers)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip notable"></span>
+        <span class="finding-title">Studio prompt input discoverability</span>
+        <span class="finding-tag notable">Notable</span>
+      </div>
+      <div class="finding-body">
+        <p>The Studio has a text prompt interface (<code>AurisPanel</code>) for natural-language edits ("make it faster", "add more bass"). This is a powerful feature, but it's positioned alongside more traditional controls (track mixer, scene grid) without explanation. First-time Studio users may not realize they can type instructions.</p>
+        <p><strong>Recommendation:</strong> Add a placeholder in the prompt input that rotates through example edits: "Try: 'add more drums' or 'make it dreamy'". This teaches the vocabulary while demonstrating capability.</p>
+        <span class="ref">StudioScreen.tsx:188–199 (handlePrompt), auris-panel.tsx</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip polish"></span>
+        <span class="finding-title">Turntable visual is decorative but non-interactive</span>
+        <span class="finding-tag polish">Polish</span>
+      </div>
+      <div class="finding-body">
+        <p>The <code>Turntable</code> component in Studio is a visual centerpiece showing the cover art spinning. It's beautiful, but users may try to tap it expecting playback control. The actual play/pause is a separate button.</p>
+        <p><strong>Recommendation:</strong> Make the turntable tappable as a play/pause toggle. The affordance is natural — everyone expects tapping a turntable to play music.</p>
+        <span class="ref">StudioScreen.tsx, turntable.tsx</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ FLOW 4 ═══════════════════════ -->
+  <section class="flow-section">
+    <div class="flow-header">
+      <span class="flow-number">04</span>
+      <h2 class="flow-title">Gallery & Song Detail</h2>
+    </div>
+    <p class="flow-subtitle">Browse saved songs, play them back, view details, and revisit past creations.</p>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip notable"></span>
+        <span class="finding-title">Gallery empty state shows demo songs without clear differentiation</span>
+        <span class="finding-tag notable">Notable</span>
+      </div>
+      <div class="finding-body">
+        <p>When a user has 0 songs, the gallery renders 3 demo songs (<code>DEMO_SONGS</code>) with a small italic hint "这些是示例歌曲 ↓". But the demo songs look identical to real songs — same card component, same gradients, same layout. Clicking a demo song navigates to <code>/song/demo-1</code> which will show a "not found" state.</p>
+        <p><strong>Recommendation:</strong> Either make demo songs visually distinct (watermark, badge, reduced opacity) or replace them with a single empty-state card: "Your gallery is empty. Hum your first melody →" with a preview of what a filled gallery looks like.</p>
+        <span class="ref">GalleryScreen.tsx:44–87 (DEMO_SONGS), 147–148 (isShowingDemo), 278–290 (demo banner)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip polish"></span>
+        <span class="finding-title">Gallery loads all songs in one fetch</span>
+        <span class="finding-tag polish">Polish</span>
+      </div>
+      <div class="finding-body">
+        <p>The gallery fetches <code>/api/songs</code> and receives the entire list. There's no pagination, infinite scroll, or lazy loading. For power users with 50+ songs, this becomes a performance concern — especially on mobile where rendering 50 gradient cards with artwork images is heavy.</p>
+        <p><strong>Recommendation:</strong> Add cursor-based pagination to the songs API and render the gallery with a virtualised list or "load more" pattern. The <code>sorted</code> memo already handles client-side sorting; move it server-side with the pagination.</p>
+        <span class="ref">GalleryScreen.tsx:118–134 (loadGallerySongsOnce), /api/songs/route.ts</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip notable"></span>
+        <span class="finding-title">Song detail has no progress bar for audio playback</span>
+        <span class="finding-tag notable">Notable</span>
+      </div>
+      <div class="finding-body">
+        <p>The song detail page plays MP3 audio via a raw <code>HTMLAudioElement</code>, but only shows a play/pause button. There's no seek bar, no elapsed/total time display, no visual progress indicator. Users can't skip forward, rewind, or see how long the song is before deciding to share it.</p>
+        <p><strong>Recommendation:</strong> Add a minimal progress bar under the turntable/cover art. Show elapsed and total time. Allow tap-to-seek. The <code>durLabel</code> already computes duration — surface it alongside playback.</p>
+        <span class="ref">SongDetailScreen.tsx:208–234 (handlePlay), 412–413 (durLabel computed but use unclear)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip polish"></span>
+        <span class="finding-title">Activity heatmap is delightful but context-free</span>
+        <span class="finding-tag polish">Polish</span>
+      </div>
+      <div class="finding-body">
+        <p>The <code>ActivityHeatmap</code> at the top of the gallery shows creation dates — a GitHub-style contribution graph. It's a nice editorial touch, but there's no label explaining what the colors mean or what the density represents. It also shows empty for new users (no demo data), which feels broken.</p>
+        <p><strong>Recommendation:</strong> Add a subtle tooltip on hover (or tap on mobile) showing the date and count. For new users, show a motivational message instead of an empty heatmap.</p>
+        <span class="ref">GalleryScreen.tsx:237–256, ActivityHeatmap.tsx</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ FLOW 5 ═══════════════════════ -->
+  <section class="flow-section">
+    <div class="flow-header">
+      <span class="flow-number">05</span>
+      <h2 class="flow-title">Export & Sharing</h2>
+    </div>
+    <p class="flow-subtitle">Download audio/video, generate share links, and view shared songs publicly.</p>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip critical"></span>
+        <span class="finding-title">Share page has generic, non-personalized OG metadata</span>
+        <span class="finding-tag critical">Critical</span>
+      </div>
+      <div class="finding-body">
+        <p>When someone shares a song link on social media, the OG preview shows: title = "Shared song", description = "Listen to a song made from a hum in Murmur." There's no song title, no vibe name, no artwork in the social card. This is the single most viral surface of the product, and it's using placeholder copy.</p>
+        <p><strong>Recommendation:</strong> In <code>generateMetadata</code>, fetch the song title and vibe from the database (the function already queries <code>getSongShareMetaByShareCode</code>). Set <code>title: "'{songTitle}' — MURMUR"</code>, include the gradient or artwork as the OG image (render a server-side poster), and add <code>og:audio</code> for rich link previews.</p>
+        <span class="ref">s/[shareCode]/page.tsx:19–35 (generateMetadata)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip notable"></span>
+        <span class="finding-title">Export options lack format guidance</span>
+        <span class="finding-tag notable">Notable</span>
+      </div>
+      <div class="finding-body">
+        <p>The song detail offers audio download, video export, and link sharing — but doesn't explain what each produces. "Download audio" could be MP3 or WAV (the code checks <code>audioSrc.startsWith("data:audio/wav")</code>). "Export video" doesn't indicate the format (MP4 vs WebM), resolution, or estimated file size. Users don't know what they're getting until after the export completes.</p>
+        <p><strong>Recommendation:</strong> Show the format and approximate size next to each export button: "MP3 · ~2 MB" or "MP4 video · ~8 MB". The data is available at export time.</p>
+        <span class="ref">SongDetailScreen.tsx:252–277 (exportAudio), 279–299 (exportVideo)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip polish"></span>
+        <span class="finding-title">Video export has no progress indicator</span>
+        <span class="finding-tag polish">Polish</span>
+      </div>
+      <div class="finding-body">
+        <p><code>exportSongAsVideo</code> is an async operation that can take several seconds (canvas rendering + encoding). During this time, the button shows a busy state, but there's no progress bar or percentage. The user doesn't know if it's 10% or 90% done.</p>
+        <p><strong>Recommendation:</strong> Pass a progress callback to <code>exportSongAsVideo</code> and show a determinate progress bar. Even a fake-but-honest "Rendering frames... Encoding audio..." two-stage indicator would help.</p>
+        <span class="ref">export-video.ts, SongDetailScreen.tsx:279–299</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip idea"></span>
+        <span class="finding-title">No "share to Instagram/TikTok" optimized format</span>
+        <span class="finding-tag idea">Idea</span>
+      </div>
+      <div class="finding-body">
+        <p>The video export is a general-purpose MP4/WebM. For the target audience (music creators, young users), a 9:16 vertical video optimized for Instagram Stories/Reels or TikTok would be the highest-impact export. The visual canvas already renders beautifully — just needs a portrait viewport.</p>
+        <p><strong>Recommendation:</strong> Add a "Story format" export option that renders 1080×1920 vertical video with the song title and a "Made with Murmur" watermark. This is a growth lever.</p>
+        <span class="ref">export-video.ts</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ FLOW 6 ═══════════════════════ -->
+  <section class="flow-section">
+    <div class="flow-header">
+      <span class="flow-number">06</span>
+      <h2 class="flow-title">Auth, Billing & Account</h2>
+    </div>
+    <p class="flow-subtitle">Login, top-up notes, manage profile, handle payments.</p>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip critical"></span>
+        <span class="finding-title">Topup page has no pricing comparison or "what do notes buy?"</span>
+        <span class="finding-tag critical">Critical</span>
+      </div>
+      <div class="finding-body">
+        <p>The topup screen shows three SKU tiers (Starter/Creator/Patron) with note counts and prices, but never explains <strong>what a note is worth</strong>. "30 notes" is meaningless without context: How many songs does that make? How many hums + generations = 1 note? The COST constant exists (<code>@murmur/core</code>), but it's not surfaced to the user.</p>
+        <p><strong>Recommendation:</strong> Add a conversion line under each SKU: "≈ 10 songs" (based on COST.hum). Also add a brief explainer at the top: "1 note = 1 hum → song creation."</p>
+        <span class="ref">TopupScreen.tsx:79+, COST from @murmur/core</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip notable"></span>
+        <span class="finding-title">Auth error page is minimal</span>
+        <span class="finding-tag notable">Notable</span>
+      </div>
+      <div class="finding-body">
+        <p>The <code>/auth/error</code> route exists but likely shows a generic error without specific guidance on what went wrong or how to retry. OAuth failures (Google callback issues, session timeouts) need distinct copy — "Your login session expired, tap to try again" vs "Google couldn't verify your account."</p>
+        <p><strong>Recommendation:</strong> Parse the error query parameter and show specific recovery guidance per error type. Include a "try again" button that clears state and re-initiates auth.</p>
+        <span class="ref">auth/error/page.tsx</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip polish"></span>
+        <span class="finding-title">Me page loads song count by fetching all songs</span>
+        <span class="finding-tag polish">Polish</span>
+      </div>
+      <div class="finding-body">
+        <p>The profile page (<code>MeScreen</code>) fetches <code>/api/songs</code> and counts <code>data.length</code> just to display a single number. This fetches all song data (with arrangement states, visual configs, etc.) only to count them.</p>
+        <p><strong>Recommendation:</strong> Add a <code>/api/songs?view=count</code> endpoint or a <code>/api/user/stats</code> that returns just the count. This is especially wasteful on the profile page which doesn't display song cards.</p>
+        <span class="ref">MeScreen.tsx:56–73 (loadSongCount)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip idea"></span>
+        <span class="finding-title">No onboarding for payment methods in different regions</span>
+        <span class="finding-tag idea">Idea</span>
+      </div>
+      <div class="finding-body">
+        <p>The topup page handles USD/CNY currencies and Card/WeChat Pay methods, with auto-detection via <code>useRegionalSkus</code>. But there's no explanation of <em>why</em> certain options appear — a Chinese user sees WeChat Pay, a US user sees Card only. If geo-detection is wrong, the user may not realize they can toggle currencies manually.</p>
+        <p><strong>Recommendation:</strong> Make the currency toggle more prominent and label it clearly: "Paying from China? Switch to ¥ CNY for WeChat Pay."</p>
+        <span class="ref">TopupScreen.tsx:87–113</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ FLOW 7 ═══════════════════════ -->
+  <section class="flow-section">
+    <div class="flow-header">
+      <span class="flow-number">07</span>
+      <h2 class="flow-title">Global Experience & Infrastructure</h2>
+    </div>
+    <p class="flow-subtitle">Navigation, mobile responsiveness, performance, error boundaries, notifications.</p>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip notable"></span>
+        <span class="finding-title">Mobile bottom nav's "journey rail" metaphor is ambiguous</span>
+        <span class="finding-tag notable">Notable</span>
+      </div>
+      <div class="finding-body">
+        <p>The bottom navigation shows steps in the creation flow (Hum → Vibe → Studio → Gallery) with soundwave bridges between them. This is creative, but it behaves as both a <em>progress indicator</em> and a <em>navigation bar</em>. Steps that aren't "unlocked" yet are dimmed but still visible, and the soundwave bridges imply a linear flow. Users who want to jump directly to Gallery may hesitate because the rail suggests they need to go through Hum first.</p>
+        <p><strong>Recommendation:</strong> Keep the rail for creation flow (when a draft is active), but show a simpler tab bar (Create / Gallery / Me) when no draft exists. The <code>getRecoverableCreationRoute</code> function already tracks whether a draft is in progress.</p>
+        <span class="ref">bottom-nav.tsx:46–56 (visibleSteps), nav-items.ts (MOBILE_JOURNEY_STEPS)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip notable"></span>
+        <span class="finding-title">Desktop sidebar vs mobile nav have divergent information architecture</span>
+        <span class="finding-tag notable">Notable</span>
+      </div>
+      <div class="finding-body">
+        <p>Desktop shows a <code>SideNavWithModal</code> (232px wide, always visible), while mobile shows the bottom journey rail + a separate <code>MobileTopBar</code>. The sidebar likely has links to /me sub-pages (settings, payments, privacy) that aren't in the mobile rail at all. A mobile user would need to find /me first, then navigate to sub-pages — but /me isn't a visible step in the journey rail.</p>
+        <p><strong>Recommendation:</strong> Ensure /me (profile) is always accessible from the mobile rail, even during creation flow. Add it as a persistent icon (avatar) at the end of the rail.</p>
+        <span class="ref">layout.tsx:143–158, side-nav.tsx, bottom-nav.tsx</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip polish"></span>
+        <span class="finding-title">All screens use 'use client' — no streaming SSR benefits</span>
+        <span class="finding-tag polish">Polish</span>
+      </div>
+      <div class="finding-body">
+        <p>Every screen component (HumScreen, VibeScreen, GalleryScreen, StudioScreen, SongDetailScreen, MeScreen, TopupScreen) is a client component loaded via <code>dynamic()</code> or direct import. The route pages themselves are mostly server components but they render nothing — just the dynamic client import. This means no server-side content streaming, no progressive enhancement, and a blank page until JS loads.</p>
+        <p><strong>Recommendation:</strong> For content-heavy pages (Gallery, Song Detail, Me), render a server-side shell with static content (headers, metadata, skeleton) that hydrates client-side. This improves perceived load time and SEO. The gallery could SSR the first 6 song cards.</p>
+        <span class="ref">gallery/page.tsx, song/[id]/page.tsx, me/page.tsx</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip polish"></span>
+        <span class="finding-title">GlobalLoadingIndicator is the only loading state everywhere</span>
+        <span class="finding-tag polish">Polish</span>
+      </div>
+      <div class="finding-body">
+        <p>Every route and dynamic import uses <code>&lt;GlobalLoadingIndicator /&gt;</code> as the fallback. This means navigating between pages always shows the same generic spinner, regardless of context. The loading state doesn't tell the user <em>what's</em> loading or how long it might take.</p>
+        <p><strong>Recommendation:</strong> Use context-specific skeleton screens: Gallery should show a grid of placeholder cards; Song Detail should show a cover art placeholder with blurred gradient; Studio should show the layout shell with greyed-out controls.</p>
+        <span class="ref">GlobalLoadingIndicator used in page.tsx, vibe/page.tsx, gallery/page.tsx, etc.</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip idea"></span>
+        <span class="finding-title">No offline or poor-connectivity handling</span>
+        <span class="finding-tag idea">Idea</span>
+      </div>
+      <div class="finding-body">
+        <p>A <code>manifest.json</code> exists (PWA intent), but there's no service worker registration visible, no offline fallback page, and no network-state UI. If a user is on a train (common mobile music use case) and loses connectivity mid-recording, the transcription will fail silently and the error card will show "unavailable."</p>
+        <p><strong>Recommendation:</strong> Add a network status indicator that warns users before they start recording: "You're offline — recording won't work until you're back online." Cache the Gallery page for offline browsing of saved songs.</p>
+        <span class="ref">layout.tsx:61 (manifest reference), no service worker found</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip idea"></span>
+        <span class="finding-title">No undo in Studio</span>
+        <span class="finding-tag idea">Idea</span>
+      </div>
+      <div class="finding-body">
+        <p>Studio edits (track mixer changes, scene selections, prompt edits) modify the version in-place via <code>bumpVersionEditState</code>. There's no undo stack — once a user makes a change they don't like, the only recovery is to go back to vibe selection (losing all edits) or manually reverse the change.</p>
+        <p><strong>Recommendation:</strong> Implement a simple undo stack (last 10 version snapshots). The version object is already immutable-style (spread into new objects), so storing previous snapshots is cheap. Add a visible "Undo" button near the prompt input.</p>
+        <span class="ref">StudioScreen.tsx:140–158 (applyTokens, version mutation)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-header">
+        <span class="severity-pip idea"></span>
+        <span class="finding-title">Background color is warm cream everywhere</span>
+        <span class="finding-tag idea">Idea</span>
+      </div>
+      <div class="finding-body">
+        <p>Every page uses <code>bg-[#F5F1EB]</code> — a warm cream. This is the brand identity, but the Vibe and Studio pages could benefit from a darker, more immersive background that lets the gradients and audio visualizations pop. The vibe cards' dark gradients against cream create a visual disconnect.</p>
+        <p><strong>Recommendation:</strong> Consider a dark mode for the creation flow (Vibe → Studio) that transitions back to cream for Gallery/Me. The vibe card gradients were designed for dark backgrounds — they'd look stunning on <code>#1A1A1A</code>. The cream works beautifully for the browsing/editorial pages.</p>
+        <span class="ref">VibeScreen.tsx:393, StudioScreen.tsx, layout.tsx:132</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════ PRIORITY MATRIX ═══════════════════════ -->
+  <section class="flow-section">
+    <div class="flow-header">
+      <span class="flow-number">★</span>
+      <h2 class="flow-title">Priority Recommendations</h2>
+    </div>
+    <p class="flow-subtitle">Top actions ranked by impact × effort, for immediate roadmap consideration.</p>
+
+    <div style="overflow-x: auto;">
+    <table class="summary-table">
+      <thead>
+        <tr>
+          <th style="width: 40%;">Action</th>
+          <th>Impact</th>
+          <th>Effort</th>
+          <th>Flow</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Personalize share page OG metadata</strong> — song title, vibe, artwork in social previews</td>
+          <td style="color: var(--terracotta);">Very High</td>
+          <td>Low</td>
+          <td>Export</td>
+        </tr>
+        <tr>
+          <td><strong>Add visible demo button on idle screen</strong> — let users see the product before committing</td>
+          <td style="color: var(--terracotta);">Very High</td>
+          <td>Low</td>
+          <td>Landing</td>
+        </tr>
+        <tr>
+          <td><strong>Persist draft state across refresh</strong> — sessionStorage backup for vibe/studio</td>
+          <td style="color: var(--terracotta);">High</td>
+          <td>Medium</td>
+          <td>Vibe</td>
+        </tr>
+        <tr>
+          <td><strong>Show "what notes buy" on topup</strong> — "≈ 10 songs" conversion context</td>
+          <td style="color: var(--terracotta);">High</td>
+          <td>Low</td>
+          <td>Billing</td>
+        </tr>
+        <tr>
+          <td><strong>Add playback progress bar</strong> — seek, elapsed/total time in song detail</td>
+          <td style="color: var(--amber);">Medium</td>
+          <td>Medium</td>
+          <td>Gallery</td>
+        </tr>
+        <tr>
+          <td><strong>Platform-specific mic permission guidance</strong> — "Open Settings → Safari → Microphone"</td>
+          <td style="color: var(--amber);">Medium</td>
+          <td>Low</td>
+          <td>Recording</td>
+        </tr>
+        <tr>
+          <td><strong>Slow processing messages to 2.5s</strong> — let users actually read them</td>
+          <td style="color: var(--sage);">Low-Med</td>
+          <td>Trivial</td>
+          <td>Recording</td>
+        </tr>
+        <tr>
+          <td><strong>Context-specific loading skeletons</strong> — gallery grid, song cover, studio shell</td>
+          <td style="color: var(--sage);">Low-Med</td>
+          <td>Medium</td>
+          <td>Global</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+</div>
+
+<footer class="report-footer">
+  Murmur Product Experience Audit · 7 Flows · 32 Findings · July 2026
+</footer>
