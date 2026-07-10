@@ -16,8 +16,6 @@ permissions:
 jobs:
   analyze:
     name: Analyze
-    if: vars.ENABLE_GHAS_CODEQL == 'true'
-    continue-on-error: true
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

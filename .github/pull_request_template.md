@@ -13,6 +13,7 @@
 - [ ] Migration / contract impact documented if applicable
 - [ ] `bun run lint`, relevant tests, and `bun run build` passed
 - [ ] Visible behavior or workflow change documented if applicable
+- [ ] Release impact reviewed (no new secrets, bundled binaries, or credential exposure)
 
 ## Out of scope
 
