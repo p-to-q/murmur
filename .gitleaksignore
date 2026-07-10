@@ -1,0 +1,19 @@
+# Baseline of KNOWN historical leaks in git history (deleted deployment docs).
+# The credentials referenced here are pending rotation by the maintainer.
+#
+# Each fingerprint pins one exact finding (commit:file:rule:line) in already-
+# pushed history, so it exempts nothing in new commits: any new secret anywhere
+# still fails the Secret scan workflow.
+#
+# Do NOT add entries here to silence a new finding. Remove the secret from the
+# commit and rotate the credential instead. Only append a fingerprint when a
+# leak has already reached shared history and rotation is underway.
+dd4d2df8df24b21e13f533201de89688c79b628f:DEPLOYMENT_CHECKLIST.md:generic-api-key:68
+dd4d2df8df24b21e13f533201de89688c79b628f:DEPLOYMENT_CHECKLIST.md:generic-api-key:128
+45d1cf52f20decab81ed382dd7572c24d45bc187:PRODUCTION_CONFIG_CHECKLIST.md:generic-api-key:30
+cb71ac80cec4483e2a2f323294ad9fe759768115:AUDIO_ENGINE_DEPLOY.md:generic-api-key:80
+cb71ac80cec4483e2a2f323294ad9fe759768115:AUDIO_ENGINE_DEPLOY.md:generic-api-key:85
+cb71ac80cec4483e2a2f323294ad9fe759768115:AUDIO_ENGINE_DEPLOY.md:generic-api-key:158
+cb71ac80cec4483e2a2f323294ad9fe759768115:AUDIO_ENGINE_DEPLOY.md:generic-api-key:167
+cb71ac80cec4483e2a2f323294ad9fe759768115:AUDIO_ENGINE_DEPLOY.md:curl-auth-header:139
+0651344ff5660322463e7829ab59e14c99f346ea:GOOGLE_AUTH_SETUP.md:generic-api-key:61
