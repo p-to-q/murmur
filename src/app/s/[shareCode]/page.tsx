@@ -60,7 +60,8 @@ async function resolveShareMeta(shareCode: string): Promise<ShareMeta> {
     const meta = await getSongShareMetaByShareCode(normalized);
     if (!meta || !meta.hasAudio) return { visibility: null, title: null };
     return { visibility: meta.visibility, title: meta.title };
-  } catch {
+  } catch (err) {
+    console.warn("resolveShareMeta: primary query failed, using fallback", err);
     const { getLocalSongByShareCodeFallback } = await import(
       "@/lib/db/queries/local-song-fallback"
     );
