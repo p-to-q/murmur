@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import {
@@ -35,6 +36,7 @@ import type { songs } from "@/lib/db/schema/songs";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
 const ROUTE = "/api/songs";
+const SONG_LIST_RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
 const SONG_CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
 const MELODY_SELECTION_KINDS = new Set<MelodySelectionKind>(["intent", "corrected", "musical"]);
 
@@ -64,12 +66,26 @@ type SongInput = typeof songs.$inferInsert;
 type OkAuth = Extract<ResolvedRequestAuth, { ok: true }>;
 
 export async function GET(req: NextRequest) {
+  const requestId = getRequestId(req);
   const requestHost = getRequestHostname(req);
   const auth = await resolveRequestAuth(req, {
     allowGuestPreview: shouldAllowLocalPreviewFallback(req),
   });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "read:user",
+    userId,
+    requestId,
+    sessionId: auth.sessionId,
+    options: SONG_LIST_RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
+
   try {
     const rows = await getSongSummariesByUser(userId);
     return NextResponse.json(rows);
@@ -108,7 +124,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+  const requestId = getRequestId(req);
   const requestHost = getRequestHostname(req);
   const auth = await resolveRequestAuth(req, {
     allowGuestPreview: shouldAllowLocalPreviewFallback(req),

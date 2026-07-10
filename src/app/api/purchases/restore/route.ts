@@ -10,6 +10,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { purchases } from "@/lib/db/schema/purchases";
@@ -57,7 +58,7 @@ async function listExistingPurchases(userId: string): Promise<RestoredPurchase[]
 }
 
 export async function POST(request: NextRequest) {
-  const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+  const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;

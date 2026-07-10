@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorResponse as baseErrorResponse } from "@/lib/api/error-response";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { log } from "@/lib/observability/log";
 import { hasSongShareAudio, normalizeSongShareCode } from "@/lib/share/song-share";
@@ -12,7 +14,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ shareCode: string }> },
 ) {
-  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+  const requestId = getRequestId(req);
   const { shareCode: rawShareCode } = await params;
   const shareCode = normalizeSongShareCode(rawShareCode);
   if (!shareCode && !isDemoSongId(rawShareCode)) {
@@ -93,25 +95,15 @@ function publicSongResponse(
 }
 
 function errorResponse(
-  error: "validation_error" | "not_found" | "server_error",
+  error: string,
   status: number,
   requestId: string,
   input: { message?: string } = {},
 ) {
-  return NextResponse.json(
-    {
-      error,
-      ...(input.message ? { message: input.message } : {}),
-      requestId,
-    },
-    {
-      status,
-      headers: {
-        "X-Request-Id": requestId,
-        "X-Robots-Tag": "noindex, nofollow",
-      },
-    },
-  );
+  return baseErrorResponse(error, status, requestId, {
+    ...input,
+    extraHeaders: { "X-Robots-Tag": "noindex, nofollow" },
+  });
 }
 
 function toPublicSong(song: {

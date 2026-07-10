@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { motion } from "framer-motion";
 import { CanvasCoverArt } from "./CanvasCoverArt";
-import { mulberry32, hashString } from "@/lib/utils/seeded-random";
+import { mulberry32, hashString } from "@/lib/music/seeded-random";
 import type { VisualArtwork } from "@/modules/shared/types";
 
 export interface SongCardProps {

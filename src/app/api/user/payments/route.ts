@@ -9,6 +9,8 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
 import { db } from "@/lib/db/client";
 import { purchases } from "@/lib/db/schema/purchases";
@@ -17,12 +19,25 @@ import { log } from "@/lib/observability/log";
 export const runtime = "nodejs";
 
 const ROUTE = "/api/user/payments";
+const RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
 
 export async function GET(request: NextRequest) {
-  const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+  const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "read:user",
+    userId,
+    requestId,
+    sessionId: auth.sessionId,
+    options: RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
 
   if (userId === "guest") {
     return NextResponse.json(

@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
 import {
   notifications,
@@ -27,9 +29,25 @@ const unsubscribeSchema = z.object({
   endpoint: z.url(),
 });
 
+const ROUTE = "/api/notifications/push/subscribe";
+const MUTATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
+
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "create:user",
+    userId: auth.user.id,
+    requestId,
+    sessionId: auth.sessionId,
+    options: MUTATE_RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
 
   let body: z.infer<typeof subscribeSchema>;
   try {

@@ -154,7 +154,10 @@ cleanup note in docs instead of checking it in permanently.
 
 ## Naming And Imports
 
-- File names are generally `kebab-case.ts` / `kebab-case.tsx`.
+- File names are generally `kebab-case.ts` / `kebab-case.tsx`. Screen and card
+  components use PascalCase filenames matching the export (`HumScreen.tsx`,
+  `SongCard.tsx`); smaller components and helpers use `kebab-case`
+  (`auth-buttons.tsx`, `side-nav.tsx`).
 - React component exports are `PascalCase`.
 - Hooks are `useCamelCase`.
 - Tests live beside the unit they cover as `<unit>.test.ts` or under the

@@ -1,7 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
 import { upsertUser } from "@/lib/db/queries";
 import { log } from "@/lib/observability/log";
+
+const ROUTE = "/api/user/profile";
+const RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
 
 /**
  * GET /api/user/profile
@@ -9,8 +14,21 @@ import { log } from "@/lib/observability/log";
  * accepted only when the auth resolver explicitly allows fallbacks.
  */
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "read:user",
+    userId: auth.user.id,
+    requestId,
+    sessionId: auth.sessionId,
+    options: RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
 
   const { user } = auth;
 

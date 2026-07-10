@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { getRequestHostname } from "@/lib/auth/local-preview";
 
 import { resolveRequestAuth } from "@/lib/auth";
@@ -9,11 +11,25 @@ import { log } from "@/lib/observability/log";
 export const runtime = "nodejs";
 
 const ROUTE = "/api/user/topup-surface";
+const RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
 
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "read:user",
+    userId,
+    requestId,
+    sessionId: auth.sessionId,
+    options: RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
 
   try {
     const snapshot = await getTopupSurfaceSnapshot(userId);

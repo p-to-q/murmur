@@ -111,10 +111,12 @@ and update this standard in the same PR.
 - Client state lives in:
   - `useState` / `useReducer` for component-local state.
   - **zustand** stores for cross-component, per-shell global state.
-    One store per concern; do not concatenate into a single mega-store.
-  - The current `murmur-store.ts` is split in v2 into:
-    `recording-store.ts`, `version-store.ts`,
-    `current-version-store.ts`, `gallery-store.ts`, `playback-store.ts`.
+    Current stores: `murmur-store.ts` (main creation/recording state),
+    `notification-store.ts` (notification state),
+    `preferences-store.ts` (user preferences).
+  - The current `murmur-store.ts` may be split per concern in a future
+    pass; do not add new cross-cutting state to it without considering
+    extraction.
 - No `redux`, no `mobx`, no `recoil`.
 - React Server Components are used for static + slow-changing reads;
   client components handle interactivity.
@@ -130,7 +132,9 @@ and update this standard in the same PR.
   - `moment` (use `date-fns` or native).
   - `lodash` (use ES native).
   - `axios` (use `fetch`).
-  - `redux`, `react-query` (zustand + SWR are the stack).
+  - `redux`, `react-query`, `swr` (zustand is the client state stack;
+    data fetching uses native `fetch`; SWR or React Query may be
+    introduced when the surface needs caching or request deduplication).
 - Audit every transitive dep that hits >1 MB minified.
 
 `bun audit` runs in CI; high-severity advisories block merge.
@@ -142,8 +146,10 @@ and update this standard in the same PR.
 (Per `repo-architecture.md`; restated to make this file a one-stop
 shop.)
 
-- Files: `kebab-case.ts`.
-- Components: `PascalCase` exported name, filename matches.
+- Files: `kebab-case.ts` for non-component code.
+- Components: `PascalCase` exported name. Filenames: screen and card
+  components use PascalCase matching the export (`HumScreen.tsx`);
+  smaller components and helpers use `kebab-case` (`auth-buttons.tsx`).
 - Hooks: `useCamelCase`.
 - Constants: `SCREAMING_SNAKE_CASE`.
 - Server routes: `app/api/<area>/<resource>/route.ts`.

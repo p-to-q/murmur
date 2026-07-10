@@ -6,6 +6,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
+import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import {
   CUSTOM_TOPUP_MIN_CNY,
   CUSTOM_TOPUP_MIN_USD,
@@ -22,7 +25,24 @@ import { detectCurrencyFromHeaders } from "@/lib/geo/region";
 
 export const runtime = "edge";
 
-export function GET(request: NextRequest) {
+const ROUTE = "/api/billing/skus";
+const RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
+
+export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request);
+  const clientIp = clientIpFromHeaders(request.headers);
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "read:ip",
+    userId: clientIp,
+    requestId,
+    options: RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
+
   const override = request.nextUrl.searchParams.get("currency");
   const currency: Currency =
     override?.toUpperCase() === "CNY"

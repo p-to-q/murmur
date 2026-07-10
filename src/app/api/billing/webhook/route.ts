@@ -12,6 +12,7 @@ import { and, eq } from "drizzle-orm";
 import { verifyWebhook, WebhookEventType } from "@waffo/pancake-ts";
 import type { WebhookEvent, WebhookEventData } from "@waffo/pancake-ts";
 
+import { getRequestId } from "@/lib/api/request-id";
 import { displayAmountToCents, isWaffoConfigured } from "@/lib/billing/waffo";
 import {
   InvalidTopupPurchaseError,
@@ -54,7 +55,7 @@ function newId(prefix: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+  const requestId = getRequestId(request);
 
   if (!isWaffoConfigured()) {
     return NextResponse.json(

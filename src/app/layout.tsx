@@ -19,7 +19,7 @@ import {
   langToHtmlLang,
   resolveInitialLangWithSource,
 } from "@/lib/i18n/language";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/cn";
 import { AuthProvider } from "@/components/auth/auth-provider";
 import { FontHydrator } from "@/components/murmur/font-hydrator";
 import { MobileTopBar } from "@/components/murmur/mobile-top-bar";

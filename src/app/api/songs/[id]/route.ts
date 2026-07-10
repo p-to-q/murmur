@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldAllowLocalPreviewFallback } from "@/lib/auth/local-preview";
 import {
@@ -22,6 +24,8 @@ import { log } from "@/lib/observability/log";
 import { strictArrangementStateSchema, strictVisualConfigSchema } from "../schema";
 
 const ROUTE = "/api/songs/[id]";
+const READ_RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
+const MUTATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
 
 const updateSongSchema = z.object({
   title: z.string().min(1).optional(),
@@ -55,11 +59,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ ...rest, mp3DataUrl: null, mp3Url });
   }
 
+  const requestId = getRequestId(req);
   const auth = await resolveRequestAuth(req, {
     allowGuestPreview: shouldAllowLocalPreviewFallback(req),
   });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "read:user",
+    userId,
+    requestId,
+    sessionId: auth.sessionId,
+    options: READ_RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
 
   try {
     // ?view=summary serves metadata-only consumers (e.g. the lineage trail)
@@ -97,12 +114,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const requestId = getRequestId(req);
   const auth = await resolveRequestAuth(req, {
     allowGuestPreview: shouldAllowLocalPreviewFallback(req),
   });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const { id } = await params;
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "update:user",
+    userId,
+    requestId,
+    sessionId: auth.sessionId,
+    options: MUTATE_RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
 
   let body: SongUpdatePayload;
   try {
@@ -166,12 +196,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const requestId = getRequestId(req);
   const auth = await resolveRequestAuth(req, {
     allowGuestPreview: shouldAllowLocalPreviewFallback(req),
   });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const { id } = await params;
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "delete:user",
+    userId,
+    requestId,
+    sessionId: auth.sessionId,
+    options: MUTATE_RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
+
   try {
     const deleted = await deleteSongForUser(id, userId);
     if (!deleted) {

@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
 import {
   canUseShareReferral,
@@ -10,10 +12,25 @@ import { clearShareReferralCookie, readShareReferrerFromRequest } from "@/lib/ap
 
 export const runtime = "nodejs";
 
+const ROUTE = "/api/share/claim";
+const RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
+
 export async function POST(request: NextRequest) {
-  const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+  const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "create:user",
+    userId: auth.user.id,
+    requestId,
+    sessionId: auth.sessionId,
+    options: RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
 
   const inviteeId = auth.user.id;
   if (!canUseShareReferral(auth.user)) {

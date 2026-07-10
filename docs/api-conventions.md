@@ -141,8 +141,8 @@ GET /api/songs?limit=50&cursor=sng_01H…
   newer-than) instead of pagination; mutually exclusive with `cursor`.
 
 Internally, "list of user's X" queries always pass through a shared
-`paginate()` helper in `src/lib/api/paginate.ts` (Codex implements; spec
-is §4 of this doc).
+`paginate()` helper in `src/lib/api/paginate.ts` (Codex implements; not
+yet built — spec is §4 of this doc).
 
 ---
 
@@ -248,8 +248,8 @@ await rateLimit(req, "transcribe", { perMin: 10 });
 
 Mutating routes accept an `Idempotency-Key` header (ulid). The server
 records `idempotency_key + userId + route` for 24 hours and returns
-the cached response on repeat. Implementation lives in
-`src/lib/api/idempotency.ts`.
+the cached response on repeat. Implementation specified for
+`src/lib/api/idempotency.ts` (not yet implemented).
 
 Routes that **must** use this:
 
@@ -356,44 +356,45 @@ anything.
 
 ## 13. Standard route template
 
-Codex implements every route from this skeleton. The helper names in the
-snippet are illustrative; the current app may use narrower route-local
-adapters as long as the same response contract holds.
+Codex implements every route from this skeleton. The imports below
+reflect the actual helpers in the codebase today.
 
 ```ts
 // src/app/api/<area>/<resource>/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { authenticate } from "@/lib/auth/api";        // resolves session
-import { rateLimit }    from "@/lib/api/rate-limit";
-import { withIdempotency } from "@/lib/api/idempotency";
-import { logRequest, errorEnvelope } from "@/lib/api/envelope";
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { errorResponse } from "@/lib/api/error-response";
+import { getRequestId } from "@/lib/api/request-id";
+import { resolveRequestAuth } from "@/lib/auth";
+import { log } from "@/lib/observability/log";
 import { z } from "zod";
 
-const BodySchema = z.object({ ... });
+const BodySchema = z.object({ /* ... */ });
 type Body = z.infer<typeof BodySchema>;
 
 export async function POST(req: NextRequest) {
-  const requestId = crypto.randomUUID();
+  const requestId = getRequestId(req);
   try {
-  const auth = await authenticate(req);  // throws unauthorized
-    await rateLimit(req, "songs-create", { perMin: 20, userId: auth.user.id });
+    const auth = await resolveRequestAuth(req);        // returns session or throws
+    const rl = await checkApiRateLimit(req, "songs-create", { perMin: 20 });
+    if (rl) return rateLimitedResponse(rl, requestId);
+
     const body = BodySchema.parse(await req.json());
-    return withIdempotency(req, async () => {
-      const result = await createSong({ userId: auth.user.id, ...body });
-      logRequest(requestId, req, 200, { kind: "song.created", id: result.id });
-      return NextResponse.json(result, {
-        status: 201,
-        headers: { "X-Request-Id": requestId },
-      });
+    const result = await createSong({ userId: auth.user.id, ...body });
+
+    log.info("song.created", { requestId, songId: result.id });
+    return NextResponse.json(result, {
+      status: 201,
+      headers: { "X-Request-Id": requestId },
     });
   } catch (e) {
-    return errorEnvelope(e, requestId);
+    return errorResponse(e, requestId);
   }
 }
 ```
 
-`errorEnvelope` maps known throw-types to `ErrorCode`; the unknown
-falls to `server_error`. It always sets `X-Request-Id`.
+`errorResponse` maps known throw-types to the `ErrorCode` enum; unknown
+errors fall to `server_error`. It always sets `X-Request-Id`.
 
 ---
 
