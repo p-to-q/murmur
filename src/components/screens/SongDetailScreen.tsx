@@ -321,10 +321,22 @@ export function SongDetailScreen({ songId }: { songId: string }) {
           : current,
       );
 
+      let sharedNatively = false;
       if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-        await navigator.share({ title: song.title, url: share.url });
-        toast.success(t("song.share.link_copied") || "Shared");
-      } else {
+        try {
+          // The OS share sheet is its own confirmation — no toast on success.
+          await navigator.share({ title: song.title, url: share.url });
+          sharedNatively = true;
+        } catch (shareError) {
+          // Dismissing the sheet is a normal outcome, not an error.
+          if (shareError instanceof DOMException && shareError.name === "AbortError") {
+            return;
+          }
+          // navigator.share can exist yet reject this payload (platform
+          // quirks); fall through to the clipboard path instead of failing.
+        }
+      }
+      if (!sharedNatively) {
         const copied = await copyTextToClipboard(share.url);
         if (!copied) {
           window.open(share.url, "_blank", "noopener,noreferrer");
