@@ -28,6 +28,22 @@ export function hashString(s: string): number {
   return h >>> 0;
 }
 
+/**
+ * Legacy djb2-style string hash (may return negative int32).
+ *
+ * Kept beside the FNV-1a `hashString` because gallery-card gradient /
+ * rotation seeds were minted with this function; switching algorithms
+ * would silently recolor every existing song's cover. Do not use for new
+ * code — prefer `hashString`.
+ */
+export function hashStringDjb2(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return hash;
+}
+
 /** Pick one element from `arr` using `rng`. */
 export function pick<T>(rng: () => number, arr: readonly T[]): T {
   const i = Math.floor(rng() * arr.length);

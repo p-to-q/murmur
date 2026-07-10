@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { motion } from "framer-motion";
 import { CanvasCoverArt } from "./CanvasCoverArt";
-import { mulberry32, hashString } from "@/lib/utils/seeded-random";
+import { mulberry32, hashStringDjb2 } from "@/lib/music/seeded-random";
 import type { VisualArtwork } from "@/modules/shared/types";
 
 export interface SongCardProps {
@@ -92,8 +92,9 @@ export function SongCard({
 
   const { ref, inView } = useInView({ threshold: 0.1, triggerOnce: true });
 
-  // Seeded rotation for sticker feel
-  const seed = hashString(id);
+  // Seeded rotation for sticker feel. Must stay on the legacy djb2 hash:
+  // existing songs' cover gradients/rotations were minted with it.
+  const seed = hashStringDjb2(id);
   const rand = mulberry32(seed);
   const labelRotation = (rand() - 0.5) * 4; // -2 to 2 degrees
   const titleLines = splitTitleForCover(title);
