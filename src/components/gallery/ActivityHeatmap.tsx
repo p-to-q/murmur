@@ -145,55 +145,61 @@ export function ActivityHeatmap({
   // Pick top 2-3 recent songs
   const displaySongs = recentSongs.slice(0, isDesktop ? 3 : 2);
 
+  const isEmpty = songCount === 0;
+
   return (
     <div className={className}>
       <div ref={containerRef}>
-        {/* ── Heatmap grid ───────────────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.12, duration: 0.5 }}
-          className="flex justify-between w-full"
-          style={{ gap: CELL_GAP, height: gridHeight }}
-        >
-          {weeks.map((week, wi) => (
-            <div key={wi} className="flex flex-col" style={{ gap: CELL_GAP }}>
-              {week.map((day, di) => (
-                <div
-                  key={di}
-                  style={{
-                    width: CELL_SIZE,
-                    height: CELL_SIZE,
-                    borderRadius: CELL_RADIUS,
-                    background:
-                      day.level < 0 ? "transparent" : CELL_COLORS[day.level],
-                    boxShadow:
-                      day.level >= 3
-                        ? `0 0 ${isDesktop ? 6 : 5}px ${CELL_COLORS[day.level]}35`
-                        : undefined,
-                    transition: "background 0.2s ease",
-                  }}
-                />
+        {/* ── Heatmap grid (hidden when no real songs) ──────────────────── */}
+        {!isEmpty && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.12, duration: 0.5 }}
+              className="flex justify-between w-full"
+              style={{ gap: CELL_GAP, height: gridHeight }}
+            >
+              {weeks.map((week, wi) => (
+                <div key={wi} className="flex flex-col" style={{ gap: CELL_GAP }}>
+                  {week.map((day, di) => (
+                    <div
+                      key={di}
+                      style={{
+                        width: CELL_SIZE,
+                        height: CELL_SIZE,
+                        borderRadius: CELL_RADIUS,
+                        background:
+                          day.level < 0 ? "transparent" : CELL_COLORS[day.level],
+                        boxShadow:
+                          day.level >= 3
+                            ? `0 0 ${isDesktop ? 6 : 5}px ${CELL_COLORS[day.level]}35`
+                            : undefined,
+                        transition: "background 0.2s ease",
+                      }}
+                    />
+                  ))}
+                </div>
+              ))}
+            </motion.div>
+
+            {/* ── Month labels ───────────────────────────────────────────── */}
+            <div className="relative mt-2 md:mt-2.5" style={{ height: isDesktop ? 18 : 16 }}>
+              {months.map(({ label, col }) => (
+                <span
+                  key={`${label}-${col}`}
+                  className="absolute text-[10px] md:text-[11px] tracking-[0.04em] text-[#B7AEA1]"
+                  style={{ left: col * STRIDE }}
+                >
+                  {label}
+                </span>
               ))}
             </div>
-          ))}
-        </motion.div>
-
-        {/* ── Month labels ───────────────────────────────────────────────── */}
-        <div className="relative mt-2 md:mt-2.5" style={{ height: isDesktop ? 18 : 16 }}>
-          {months.map(({ label, col }) => (
-            <span
-              key={`${label}-${col}`}
-              className="absolute text-[10px] md:text-[11px] tracking-[0.04em] text-[#B7AEA1]"
-              style={{ left: col * STRIDE }}
-            >
-              {label}
-            </span>
-          ))}
-        </div>
+          </>
+        )}
 
         {/* ── Title + Legend row ─────────────────────────────────────────── */}
-        <div className="flex items-start justify-between mt-3 md:mt-4 mb-6 md:mb-8">
+        <div className={`flex items-start justify-between ${isEmpty ? "mb-4 md:mb-6" : "mt-3 md:mt-4 mb-6 md:mb-8"}`}>
           {title ? (
             <h1 className="hero-serif-italic text-[#1A1A1A] text-[40px] leading-[1.0] md:text-[72px] lg:text-[84px] -mb-1">
               {title}
@@ -204,22 +210,24 @@ export function ActivityHeatmap({
             </span>
           )}
 
-          {/* Legend */}
-          <div className="flex items-center gap-1.5 md:gap-2.5 shrink-0">
-            <span className="text-[10px] md:text-[12px] text-[#B7AEA1] mr-0.5 md:mr-1">Less</span>
-            {CELL_COLORS.map((color, i) => (
-              <div
-                key={i}
-                style={{
-                  width: isDesktop ? 14 : 9,
-                  height: isDesktop ? 14 : 9,
-                  borderRadius: isDesktop ? 3 : 2,
-                  background: color,
-                }}
-              />
-            ))}
-            <span className="text-[10px] md:text-[12px] text-[#B7AEA1] ml-0.5 md:ml-1">More</span>
-          </div>
+          {/* Legend — hidden when no real songs */}
+          {!isEmpty && (
+            <div className="flex items-center gap-1.5 md:gap-2.5 shrink-0">
+              <span className="text-[10px] md:text-[12px] text-[#B7AEA1] mr-0.5 md:mr-1">Less</span>
+              {CELL_COLORS.map((color, i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: isDesktop ? 14 : 9,
+                    height: isDesktop ? 14 : 9,
+                    borderRadius: isDesktop ? 3 : 2,
+                    background: color,
+                  }}
+                />
+              ))}
+              <span className="text-[10px] md:text-[12px] text-[#B7AEA1] ml-0.5 md:ml-1">More</span>
+            </div>
+          )}
         </div>
 
         {/* ── Recent songs showcase ──────────────────────────────────────── */}
