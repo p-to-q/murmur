@@ -2,9 +2,9 @@
 
 import { RouteErrorScreen } from "@/components/murmur/route-error-screen";
 
-export default function GlobalError(props: {
+export default function GalleryError(props: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  return <RouteErrorScreen scope="app" {...props} />;
+  return <RouteErrorScreen scope="gallery" {...props} />;
 }

@@ -19,8 +19,9 @@
  *   - Title in serif italic — a vibe is a poem, not a setting.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Play, Pause, Loader2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
@@ -389,6 +390,17 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     vibeVersions.map((candidate) => candidate.id).join(":"),
   );
 
+  const batchInsufficientNotes = useMemo(
+    () =>
+      vibeVersions.length > 0 &&
+      vibeVersions.every(
+        (v) =>
+          v.generation?.status === "error" &&
+          v.generation?.errorCode === "insufficient_notes",
+      ),
+    [vibeVersions],
+  );
+
   return (
     <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       {/* ── Phase 1: iris-close + rainbow ring ───────────────────── */}
@@ -485,6 +497,25 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                   {t("cards.sub.short") || "Listen, then pick the one that feels right."}
                 </motion.h2>
               </div>
+
+              {/* ── Batch insufficient-notes banner ───────────── */}
+              {batchInsufficientNotes && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-4 flex flex-col items-center gap-3 rounded-[20px] border border-[#E5DDD0]/60 bg-white/60 px-6 py-5 text-center backdrop-blur-sm"
+                >
+                  <p className="text-[15px] leading-relaxed text-[#6F6A63]">
+                    {t("vibe.gen.insufficient_notes") || "Out of notes — top up to brew more."}
+                  </p>
+                  <Link
+                    href="/topup"
+                    className="mm-btn-primary justify-center"
+                  >
+                    {t("vibe.gen.topup") || "Top up"}
+                  </Link>
+                </motion.div>
+              )}
 
               {/* ── Card grid — dominates the viewport ───────── */}
               <div className="grid grid-cols-1 md:grid-cols-[1.18fr_1fr] gap-4 md:gap-5 flex-1 min-h-0 md:min-h-[68vh] lg:min-h-[72vh]">
