@@ -94,7 +94,10 @@ jobs:
               body: body,
             });
 
-            // Fail if too large (optional - remove if you don't want to block)
-            if (changes > 1500) {
-              core.setFailed(`PR is too large (${changes} changes). Maximum recommended: 1500 lines.`);
+            // Fail if too large (optional - remove if you don't want to block).
+            // A maintainer can exempt a PR (e.g. archive recovery, generated
+            // code) by applying the `size-override` label.
+            const hasOverride = labels.data.some((l) => l.name === 'size-override');
+            if (changes > 1500 && !hasOverride) {
+              core.setFailed(`PR is too large (${changes} changes). Maximum recommended: 1500 lines. Apply the 'size-override' label to exempt intentionally large PRs.`);
             }
