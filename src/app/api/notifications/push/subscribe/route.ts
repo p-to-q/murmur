@@ -8,8 +8,12 @@ import {
 } from "@/lib/platform/notifications-server";
 import { log } from "@/lib/observability/log";
 
+const httpsEndpoint = z
+  .url()
+  .regex(/^https:\/\//, "Push endpoint must use HTTPS");
+
 const subscriptionSchema = z.object({
-  endpoint: z.url(),
+  endpoint: httpsEndpoint,
   expirationTime: z.number().nullable().optional(),
   keys: z.object({
     p256dh: z.string().min(1),
@@ -24,7 +28,7 @@ const subscribeSchema = z.object({
 });
 
 const unsubscribeSchema = z.object({
-  endpoint: z.url(),
+  endpoint: httpsEndpoint,
 });
 
 export async function POST(request: NextRequest) {

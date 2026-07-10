@@ -92,6 +92,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState<ExportKey | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [shareCardOpen, setShareCardOpen] = useState(false);
   const [shareCardMode, setShareCardMode] = useState<ShareCardMode>("image");
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -354,7 +355,8 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   /* ── Delete ────────────────────────────────────────────────────────── */
 
   const handleDelete = async () => {
-    if (!song) return;
+    if (!song || isDeleting) return;
+    setIsDeleting(true);
     try {
       const res = await fetch(`/api/songs/${song.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`delete HTTP ${res.status}`);
@@ -370,6 +372,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     } catch (e) {
       console.error(e);
       toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?");
+      setIsDeleting(false);
     }
   };
 
@@ -820,7 +823,8 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="flex-1 h-11 rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors"
+                  disabled={isDeleting}
+                  className="flex-1 h-11 rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors disabled:opacity-50"
                 >
                   {t("song.delete.confirm") || "Delete"}
                 </button>

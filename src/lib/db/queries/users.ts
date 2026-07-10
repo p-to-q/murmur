@@ -1,4 +1,4 @@
-import { and, eq, ilike, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { ulid } from "ulid";
 import { db } from "../client";
 import { users, type User } from "../schema/users";
@@ -232,7 +232,7 @@ export async function upsertOAuthUser(
     const [existingByEmail] = await tx
       .select({ id: users.id, deletedAt: users.deletedAt })
       .from(users)
-      .where(ilike(users.email, email))
+      .where(eq(users.email, email))
       .limit(1);
 
     let userId: string;

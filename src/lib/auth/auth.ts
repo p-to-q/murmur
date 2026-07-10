@@ -143,7 +143,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             .limit(1);
           if (identity) token.murmurUserId = identity.userId;
         } catch (error) {
-          console.error("JWT identity lookup error:", error);
+          log(
+            "auth.jwt_identity_lookup_failed",
+            { err: error instanceof Error ? error.message : String(error) },
+            { level: "error" },
+          );
         }
       }
 
@@ -163,7 +167,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       if (murmurUserId) {
         const [user] = await db
-          .select()
+          .select({
+            id: users.id,
+            email: users.email,
+            name: users.name,
+            avatarUrl: users.avatarUrl,
+            accountKind: users.accountKind,
+          })
           .from(users)
           .where(and(eq(users.id, murmurUserId), isNull(users.deletedAt)))
           .limit(1);
@@ -203,7 +213,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             : "google";
 
         const [identity] = await db
-          .select()
+          .select({ userId: externalIdentities.userId })
           .from(externalIdentities)
           .where(
             and(
@@ -215,7 +225,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (identity) {
           const [user] = await db
-            .select()
+            .select({
+              id: users.id,
+              email: users.email,
+              name: users.name,
+              avatarUrl: users.avatarUrl,
+              accountKind: users.accountKind,
+            })
             .from(users)
             .where(and(eq(users.id, identity.userId), isNull(users.deletedAt)))
             .limit(1);
