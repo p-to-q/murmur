@@ -136,6 +136,27 @@ Update docs when changes affect:
 - visible user behavior
 - known limitations or fallback behavior
 
+## Orphan-file policy
+
+Not every unreferenced file is dead code. Before deleting a file that has
+zero import sites:
+
+1. **Check `src/_recovered/MANIFEST.md`** — if the file was previously
+   recovered from git history, it was kept for a reason. Do not re-delete it
+   without explicit user approval.
+2. **Check for design value** — files containing algorithms (DSP, generative
+   art, music theory), original illustrations (SVG, canvas animations), or
+   infrastructure with documented production incidents are not orphans. They
+   are dormant modules.
+3. **When in doubt, move to `src/_recovered/`** instead of deleting. Add an
+   entry to the manifest with the original path and a one-line reason.
+4. **Never batch-delete** unreferenced files in a cleanup PR without
+   per-file justification. The commit message "clean up dead code" is not
+   sufficient for files over 50 lines.
+
+The `src/_recovered/` directory is excluded from TypeScript compilation and
+ESLint. Files there are reference code, not dead weight.
+
 ## Agent guardrails
 
 Agents should not:
@@ -145,6 +166,8 @@ Agents should not:
 - hide uncertainty
 - describe something as fixed without validation
 - leave partial structural migrations undocumented
+- delete files with algorithms, DSP logic, or original creative work
+  without checking the orphan-file policy above
 
 If work is blocked or only partially complete, leave a short handoff note in the
 final response or the relevant PR.
