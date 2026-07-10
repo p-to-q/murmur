@@ -58,6 +58,7 @@ flowchart TB
     classDef infra fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
     classDef accent fill:#FFF3E0,stroke:#FF5924,stroke-width:2px,color:#BF360C
     classDef user fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef anchor fill:transparent,stroke:transparent
 
     User(["🎤 User"]):::user
 
@@ -66,9 +67,11 @@ flowchart TB
         ClientPitch["WASM pYIN<br/>Essentia.js · browser fallback"]
         ToneSynth["Tone.js · SimpleSynth<br/>live preview & playback"]
         Store["State<br/>Zustand · localStorage"]
+        bBot[ ]:::anchor
     end
 
     subgraph API["⚡ API Routes  ·  Vercel  ·  Node.js"]
+        aTop[ ]:::anchor
         Transcribe["/api/transcribe"]
         MusicGen["/api/music/generate"]
         Strummer["/api/strummer/edit"]
@@ -76,19 +79,27 @@ flowchart TB
         Auth["/api/auth · NextAuth"]
         BillingAPI["/api/billing · Waffo"]
         Notifs["/api/notifications · Web Push"]
+        aBot[ ]:::anchor
     end
 
     subgraph Workers["🐍 Python Workers"]
+        wTop[ ]:::anchor
         AE["Audio Engine  ·  Fly.io<br/>RMVPE → SwiftF0 → pYIN<br/>DeepFilterNet denoise · FastAPI"]
         ME["Music Engine  ·  RunPod Serverless<br/>Magenta RT2 · GPU<br/>scale-to-zero · JAX/CUDA"]
+        wBot[ ]:::anchor
     end
 
     subgraph Infra["🗄️ Infrastructure"]
+        iTop[ ]:::anchor
         DB[("PostgreSQL<br/>Drizzle ORM")]
         Storage[("Object Storage<br/>S3 / R2")]
         AI[("AI Gateway<br/>OpenAI-compatible")]
         Waffo[("Waffo Pancake<br/>Billing")]
     end
+
+    bBot --- aTop
+    aBot --- wTop
+    wBot --- iTop
 
     User -->|"capture hum"| Screens
     Screens -->|"transcribe audio"| Transcribe
