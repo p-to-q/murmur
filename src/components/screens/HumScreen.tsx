@@ -1032,7 +1032,7 @@ export function HumScreen() {
                   </h1>
                   <div className="flex items-center justify-center xl:justify-start gap-2 mt-4">
                     <span className="w-2 h-2 rounded-full bg-[#FF5924] animate-pulse" />
-                    <span className="text-[#8C8780] text-[13px] tabular-nums tracking-[0.12em] font-mono">
+                    <span className="text-[#8C8780] text-[13px] tabular-nums tracking-[0.12em]">
                       {recordingElapsedLabel}s /{" "}
                       {HUM_RECORDING_LIMIT_SECONDS}s
                     </span>
