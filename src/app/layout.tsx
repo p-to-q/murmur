@@ -9,12 +9,8 @@ import "./fonts/lxgw-wenkai-gb-screen-300.css";
 import { Instrument_Serif } from "next/font/google";
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";
-import dynamic from "next/dynamic";
 import { Toaster } from "@/components/ui/sonner";
-const BottomNav = dynamic(
-  () => import("@/components/murmur/bottom-nav").then((m) => ({ default: m.BottomNav })),
-  { ssr: false },
-);
+import { BottomNav } from "@/components/murmur/bottom-nav";
 import { SideNavWithModal as SideNav } from "@/components/murmur/side-nav";
 import { AudioUnlock } from "@/components/murmur/audio-unlock";
 import { I18nHydrator, I18nProvider } from "@/lib/i18n";

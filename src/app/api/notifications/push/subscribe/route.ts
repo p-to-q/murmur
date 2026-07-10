@@ -8,9 +8,12 @@ import {
 } from "@/lib/platform/notifications-server";
 import { log } from "@/lib/observability/log";
 
-const httpsEndpoint = z
-  .url()
-  .regex(/^https:\/\//, "Push endpoint must use HTTPS");
+// Browser push services only hand out HTTPS endpoints; anything else would
+// point our web-push sender at an arbitrary (possibly internal) target.
+const httpsEndpoint = z.url({
+  protocol: /^https$/,
+  error: "Push endpoint must use HTTPS",
+});
 
 const subscriptionSchema = z.object({
   endpoint: httpsEndpoint,

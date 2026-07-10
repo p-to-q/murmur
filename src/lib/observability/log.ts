@@ -17,6 +17,7 @@ export type LogEvent =
   | "auth.local_creator_failed"
   | "auth.session_revoked"
   | "auth.signin_failed"
+  | "auth.jwt_identity_lookup_failed"
   | "auth.user_provisioned"
   | "auth.email_code_sent"
   | "auth.email_send_code_failed"
