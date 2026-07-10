@@ -19,6 +19,7 @@ import {
   getLocalSongSummariesByUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
 import { isDatabaseUnavailable, objectFieldAsString } from "@/app/api/songs/db-fallback";
+import { isObject } from "@/lib/utils/is-object";
 import { log } from "@/lib/observability/log";
 import {
   langFromAcceptLanguage,
@@ -369,11 +370,6 @@ function buildSongInput(body: SongPayload, userId: string): SongInput {
     arrangementState: body.arrangementState,
     tags: body.tags,
   };
-}
-
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function isSongIdUniqueConstraintViolation(error: unknown): boolean {
