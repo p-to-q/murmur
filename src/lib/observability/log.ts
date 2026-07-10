@@ -77,7 +77,10 @@ export type LogEvent =
   | "client_pitch.completed"
   | "transcribe.client_fallback_unavailable"
   | "transcribe.client_fallback_starting"
-  | "transcribe.client_fallback_failed";
+  | "transcribe.client_fallback_failed"
+  | "cascading.interim_melody_received"
+  | "cascading.generation_started"
+  | "cascading.reconciled";
 
 export interface LogContext {
   requestId?: string;

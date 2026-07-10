@@ -166,8 +166,8 @@ function statusToFallbackCode(status: number): TranscribeRequestErrorCode {
   return "server_error";
 }
 
-export type TranscribePhase = "billing_ok" | "worker_started" | "complete";
-export type TranscribeProgressCallback = (phase: TranscribePhase) => void;
+export type TranscribePhase = "billing_ok" | "worker_started" | "interim_melody" | "complete";
+export type TranscribeProgressCallback = (phase: TranscribePhase, data?: unknown) => void;
 
 /**
  * Streaming variant of `transcribeRecording`. Sends `Accept: text/x-ndjson`
@@ -254,6 +254,9 @@ async function consumeTranscribeStream(
         case "billing_ok":
         case "worker_started":
           onProgress?.(event.phase);
+          break;
+        case "interim_melody":
+          onProgress?.("interim_melody", event.melody);
           break;
         case "complete":
           onProgress?.("complete");

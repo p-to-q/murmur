@@ -21,6 +21,7 @@ import {
   prefetchMusicEngineStatus,
   shouldUseMagentaEngine,
 } from "@/modules/magenta/generate-magenta-versions";
+import type { CleanMelody } from "@/modules/shared/types";
 import { startAudioContext } from "@/lib/music/tone-player";
 import { transcribeWithStainer } from "@/modules/stainer/transcribe";
 import { selectGenerationMelody } from "@/modules/music/humming-engine";
@@ -508,53 +509,90 @@ export function HumScreen() {
     setRecordingState("processing");
     tickMessages();
     try {
-      // Fail fast while the engine is known-down (fresh negative health
-      // verdict, ≤10s old): transcription spends a note server-side, and a
-      // hum that can never become a song must not be charged for. The user
-      // sees the same unavailable card they would get after the round-trip.
       const cachedEngineStatus = getCachedMusicEngineStatus();
       if (cachedEngineStatus && !cachedEngineStatus.available) {
         throw new MusicEngineUnavailableError();
       }
-      // Overlap Magenta routing with transcription. When the deployment is
-      // configured for a worker we never silently downgrade to Tone.js.
       const magentaPathPromise = shouldUseMagentaEngine();
       const preparedBlob = blob ? await prepareAudioBlob(blob) : undefined;
+
+      const draftId = crypto.randomUUID();
+      const flowId = crypto.randomUUID();
+      let navigatedEarly = false;
+
       const result = await transcribeWithStainer({
         audioBlob: preparedBlob,
-        onProgress: (phase) => {
+        onProgress: (phase, data) => {
           if (phase === "billing_ok") {
             setProcessingMessage(t("hum.proc.billing_ok"));
           } else if (phase === "worker_started") {
             setProcessingMessage(t("hum.proc.analyzing"));
+          } else if (phase === "interim_melody" && data && !navigatedEarly) {
+            const interim = data as CleanMelody;
+            log("cascading.interim_melody_received", {
+              notes: interim.notes.length,
+              bpm: interim.bpm,
+              key: interim.key,
+            });
+
+            const engineReady = getCachedMusicEngineStatus();
+            if (engineReady && !engineReady.available) return;
+
+            setHumStyleBlob(preparedBlob ?? null);
+            const versions = createMagentaVersions(interim, {
+              draftId,
+              originFlowId: flowId,
+              sourceType: blob ? "hum" : "demo",
+              sourceMelodyKind: "clean",
+              batchIndex: 0,
+              humBlob: preparedBlob ?? null,
+            });
+            setVibeVersions(versions);
+            setCurrentDraftId(draftId);
+            setCurrentFlowId(flowId);
+            navigatedEarly = true;
+            log("cascading.generation_started", {
+              versionCount: versions.length,
+              source: "interim",
+            });
+            setRecordingState("done");
+            router.push("/vibe");
           }
         },
       });
-      const draftId = crypto.randomUUID();
-      const flowId = crypto.randomUUID();
+
       const selectedMelody = selectGenerationMelody(result, { repairBias });
-      // Magenta is the only music engine. If the worker is unreachable after
-      // all health-probe retries we stop with an honest error card — never
-      // a silent downgrade to the legacy structured synth.
       const useMagenta = await magentaPathPromise;
       if (!useMagenta) {
         throw new MusicEngineUnavailableError();
       }
-      setHumStyleBlob(preparedBlob ?? null);
-      const versions = createMagentaVersions(selectedMelody.melody, {
-        draftId,
-        originFlowId: flowId,
-        sourceType: blob ? "hum" : "demo",
-        sourceMelodyKind: selectedMelody.kind,
-        batchIndex: 0,
-        humBlob: preparedBlob ?? null,
-      });
-      setVibeVersions(versions);
-      setCurrentDraftId(draftId);
-      setCurrentFlowId(flowId);
+
+      if (!navigatedEarly) {
+        setHumStyleBlob(preparedBlob ?? null);
+        const versions = createMagentaVersions(selectedMelody.melody, {
+          draftId,
+          originFlowId: flowId,
+          sourceType: blob ? "hum" : "demo",
+          sourceMelodyKind: selectedMelody.kind,
+          batchIndex: 0,
+          humBlob: preparedBlob ?? null,
+        });
+        setVibeVersions(versions);
+        setCurrentDraftId(draftId);
+        setCurrentFlowId(flowId);
+        setRecordingState("done");
+        router.push("/vibe");
+      } else {
+        log("cascading.reconciled", {
+          interimNotes: result.cleanMelody.notes.length,
+          finalNotes: selectedMelody.melody.notes.length,
+          finalKind: selectedMelody.kind,
+        });
+      }
+
       memory
         .reportAction({
-          content: `Stainer ${result.provider} → ${selectedMelody.kind} ${selectedMelody.melody.notes.length} notes → ${versions.length} versions`,
+          content: `Stainer ${result.provider} → ${selectedMelody.kind} ${selectedMelody.melody.notes.length} notes`,
           event_type: "create",
           page: "hum",
           metadata: {
@@ -564,6 +602,7 @@ export function HumScreen() {
             bpm: selectedMelody.melody.bpm,
             key: selectedMelody.melody.key,
             notes: selectedMelody.melody.notes.length,
+            cascaded: navigatedEarly,
           },
         })
         .catch(() => {});
@@ -571,12 +610,7 @@ export function HumScreen() {
         writeFixtureRescueState(noteLiveSuccess(readFixtureRescueState()));
         if (isGuest) spendLocalNotes(COST.hum);
       }
-      // A live take debits guest quota locally; signed-in users spend server-side notes.
       if (blob) void refreshBalance();
-      setRecordingState("done");
-      // Vibe is its own route in v2; hand the journey off so the iris-close
-      // transition mounts on /vibe instead of bouncing through an overlay.
-      router.push("/vibe");
     } catch (e) {
       const fixtureStateBefore = readFixtureRescueState();
       const rescueEligible =

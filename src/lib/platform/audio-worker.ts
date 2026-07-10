@@ -320,6 +320,168 @@ async function runTranscribeAttempt({
   });
 }
 
+/**
+ * Like transcribeWithAudioWorker but emits an interim CleanMelody via callback
+ * as soon as the worker responds — before running the full humming-engine
+ * normalization pipeline. This enables the client to start music generation
+ * speculatively while the server finishes the complete analysis.
+ *
+ * Architecture: speculative execution inspired by WhisperKit's dual-stream
+ * (hypothesis + confirmed) and Lambda architecture's fast-path / batch-path
+ * reconciliation.
+ */
+export async function transcribeWithAudioWorkerStreaming({
+  audio,
+  targetInstrument,
+  requestId,
+  onInterimMelody,
+}: AudioWorkerRequest & {
+  onInterimMelody?: (melody: CleanMelody) => void;
+}): Promise<TranscriptionResult> {
+  const workerBase = getAudioWorkerUrl();
+  if (!workerBase) {
+    throw new AudioWorkerError(
+      "worker_unconfigured",
+      "AUDIO_WORKER_URL is not configured",
+      503,
+    );
+  }
+
+  const workerUrl = workerBase.endsWith("/transcribe")
+    ? workerBase
+    : `${workerBase.replace(/\/+$/, "")}/transcribe`;
+  const token = process.env.AUDIO_WORKER_TOKEN?.trim() || undefined;
+  const audioBytes = await audio.arrayBuffer();
+  const audioName = audio.name || "hum.webm";
+  const audioType = audio.type || "audio/webm";
+
+  const deadline = Date.now() + WORKER_TOTAL_BUDGET_MS;
+  let lastError: AudioWorkerError | null = null;
+
+  for (let attempt = 0; attempt < WORKER_MAX_ATTEMPTS; attempt++) {
+    const remaining = deadline - Date.now();
+    if (remaining < MIN_ATTEMPT_BUDGET_MS) break;
+
+    if (attempt > 0) {
+      const backoff = Math.min(
+        WORKER_RETRY_BACKOFF_MS[attempt - 1] ?? 1_500,
+        remaining - MIN_ATTEMPT_BUDGET_MS,
+      );
+      if (backoff > 0) await sleep(backoff);
+    }
+
+    const attemptTimeout = Math.min(WORKER_ATTEMPT_TIMEOUT_MS, deadline - Date.now());
+    if (attemptTimeout < MIN_ATTEMPT_BUDGET_MS) break;
+
+    try {
+      const parsed = await runTranscribeAttemptRaw({
+        workerUrl,
+        audioBytes,
+        audioName,
+        audioType,
+        targetInstrument,
+        requestId,
+        token,
+        timeoutMs: attemptTimeout,
+      });
+
+      if (onInterimMelody) {
+        const interim = extractInterimMelody(parsed.data, { targetInstrument });
+        if (interim) onInterimMelody(interim);
+      }
+
+      return normalizeWorkerResponse(parsed.data, {
+        targetInstrument,
+        workerMs: parsed.workerMs,
+      });
+    } catch (error) {
+      if (error instanceof AudioWorkerError && error.retryable) {
+        lastError = error;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw (
+    lastError ??
+    new AudioWorkerError(
+      "worker_http_error",
+      "Audio worker did not respond within the retry budget",
+      502,
+      false,
+    )
+  );
+}
+
+async function runTranscribeAttemptRaw({
+  workerUrl,
+  audioBytes,
+  audioName,
+  audioType,
+  targetInstrument,
+  requestId,
+  token,
+  timeoutMs,
+}: Omit<Parameters<typeof runTranscribeAttempt>[0], "pitchProvider">): Promise<{
+  data: z.infer<typeof workerResponseSchema>;
+  workerMs: number;
+}> {
+  const form = new FormData();
+  form.append("audio", new Blob([audioBytes], { type: audioType }), audioName);
+  form.append("target_instrument", targetInstrument);
+
+  const headers = new Headers({ "X-Request-Id": requestId });
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const startedAt = performance.now();
+  let response: Response;
+  try {
+    response = await fetch(workerUrl, {
+      method: "POST",
+      body: form,
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    throw new AudioWorkerError(
+      "worker_http_error",
+      error instanceof Error ? error.message : "Audio worker request failed",
+      502,
+      true,
+    );
+  }
+
+  const workerMs = Math.round(performance.now() - startedAt);
+  if (!response.ok) {
+    const workerError = await readWorkerError(response);
+    if (response.status === 422 && workerError.code === "no_voiced_frames") {
+      throw new AudioWorkerError("no_voiced_frames", workerError.message, 422);
+    }
+    throw new AudioWorkerError(
+      "worker_http_error",
+      workerError.message || `Audio worker returned HTTP ${response.status}`,
+      response.status === 422 ? 422 : 502,
+      response.status >= 500,
+    );
+  }
+
+  let parsed: z.infer<typeof workerResponseSchema>;
+  try {
+    parsed = workerResponseSchema.parse(await response.json());
+  } catch (error) {
+    throw new AudioWorkerError(
+      "worker_invalid_response",
+      error instanceof Error ? error.message : "Invalid audio worker response",
+      502,
+    );
+  }
+
+  return { data: parsed, workerMs };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -330,6 +492,35 @@ export function isInstrumentId(value: string): value is InstrumentId {
 
 export function isMelodyCarrier(value: InstrumentId): boolean {
   return INSTRUMENT_RANGES[value].canCarryMelody;
+}
+
+/**
+ * Fast extraction of a generation-ready CleanMelody from raw worker output.
+ *
+ * Runs only normalizeNotes → polishMelody → clampMelody (< 50ms) without
+ * the full humming-engine pipeline. Used by the streaming transcription
+ * endpoint to emit an interim melody that lets the client start music
+ * generation speculatively while the server finishes the complete analysis.
+ *
+ * Inspired by WhisperKit's dual-stream pattern: the interim melody is the
+ * "hypothesis" stream — good enough to act on immediately — while the full
+ * TranscriptionResult is the "confirmed" stream.
+ */
+export function extractInterimMelody(
+  workerResponse: z.infer<typeof workerResponseSchema>,
+  options: { targetInstrument: InstrumentId },
+): CleanMelody | null {
+  const rawNotes = normalizeNotes(
+    workerResponse.rawNotes ??
+      workerResponse.notes ??
+      workerResponse.cleanMelody?.notes ??
+      [],
+  );
+  if (rawNotes.length === 0) return null;
+  const polished = workerResponse.cleanMelody
+    ? normalizeCleanMelody(workerResponse.cleanMelody)
+    : polishMelody(rawNotes);
+  return clampMelody(polished, options.targetInstrument).melody;
 }
 
 export function normalizeWorkerResponse(
