@@ -252,6 +252,7 @@ export type TranscriptionProvider =
   | "rmvpe"
   | "swiftf0"
   | "pyin"
+  | "client_pyin"
   | "yin"
   | "parselmouth"
   | "fixture";

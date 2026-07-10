@@ -403,6 +403,7 @@ function normalizeProvider(value: string | undefined): TranscriptionProvider {
   if (lower.includes("rmvpe")) return "rmvpe";
   if (lower.includes("swift")) return "swiftf0";
   if (lower.includes("parselmouth") || lower.includes("praat")) return "parselmouth";
+  if (lower === "client_pyin") return "client_pyin";
   if (lower.includes("pyin")) return "pyin";
   if (lower === "yin" || lower.includes("librosa_yin")) return "yin";
   return "pyin";
