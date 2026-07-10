@@ -48,23 +48,23 @@ const SONG_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
 const songPayloadSchema = z.object({
   id: z.string().regex(SONG_ID_PATTERN, "Invalid song id").optional(),
-  title: z.string().min(1),
-  vibe: z.string().min(1),
-  vibeEn: z.string().min(1),
+  title: z.string().min(1).max(200),
+  vibe: z.string().min(1).max(500),
+  vibeEn: z.string().min(1).max(500),
   bpm: z.number().int(),
-  keySignature: z.string().min(1),
-  scaleType: z.string().min(1),
+  keySignature: z.string().min(1).max(100),
+  scaleType: z.string().min(1).max(100),
   duration: z.number().int().nonnegative(),
-  parentSongId: z.string().min(1).max(64).nullable().optional(),
-  rootSongId: z.string().min(1).max(64).nullable().optional(),
+  parentSongId: z.string().min(1).max(100).nullable().optional(),
+  rootSongId: z.string().min(1).max(100).nullable().optional(),
   lineageDepth: z.number().int().optional(),
-  sourceMelodyKind: z.string().optional(),
+  sourceMelodyKind: z.string().max(100).optional(),
   editCount: z.number().int().optional(),
   editDepth: z.enum(["fresh", "shaped", "reworked"]).optional(),
   mp3DataUrl: z.string().nullable().optional(),
   visualConfig: visualConfigSchema,
   arrangementState: arrangementStateSchema,
-  tags: z.array(z.string()),
+  tags: z.array(z.string().max(100)),
 }).passthrough();
 
 type SongPayload = z.infer<typeof songPayloadSchema>;
