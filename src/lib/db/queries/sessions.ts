@@ -106,15 +106,6 @@ export async function revokeSessionByToken(token: string): Promise<boolean> {
   return rows.length > 0;
 }
 
-export async function revokeSessionsForUser(userId: string): Promise<number> {
-  const rows = await db
-    .update(sessions)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
-    .returning({ id: sessions.id });
-  return rows.length;
-}
-
 export function hashSessionToken(token: string): string {
   return createHash("sha256").update(token, "utf8").digest("hex");
 }

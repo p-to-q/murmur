@@ -1,3 +1,5 @@
+import { isObject } from "@/lib/utils/is-object";
+
 export function errorSummary(error: unknown): Record<string, unknown> {
   if (!isObject(error)) {
     return { message: String(error) };
@@ -46,6 +48,3 @@ function stringField(value: Record<string, unknown>, key: string): string | null
   return typeof field === "string" && field.trim() ? field : null;
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
