@@ -752,8 +752,8 @@ async function generateViaHttp(
     let workerDetail: unknown = null;
     try {
       workerDetail = (await workerRes.json()) as unknown;
-    } catch {
-      // non-JSON body (tunnel error pages etc.) — nothing to extract
+    } catch (parseError) {
+      console.warn("[music/generate] worker error body parse failed (status", workerRes.status, "):", parseError);
     }
     const unauthorized = workerRes.status === 401 || workerRes.status === 403;
     return {

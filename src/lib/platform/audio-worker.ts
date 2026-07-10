@@ -441,7 +441,8 @@ async function readWorkerError(
             ? detail
             : `Audio worker returned HTTP ${response.status}`,
     };
-  } catch {
+  } catch (parseError) {
+    console.warn("[audio-worker] failed to parse error response body:", parseError);
     return {
       code: null,
       message: `Audio worker returned HTTP ${response.status}`,

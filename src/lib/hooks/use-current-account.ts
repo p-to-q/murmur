@@ -114,7 +114,8 @@ export async function fetchCurrentAccount(
       cachedAt = Date.now();
       publish();
       return { ok: true, account, error: null };
-    } catch {
+    } catch (fetchError) {
+      console.warn("[use-current-account] account fetch failed:", fetchError);
       return {
         ok: false,
         account: cachedAccount,

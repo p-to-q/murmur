@@ -203,7 +203,8 @@ export async function POST(request: NextRequest) {
   let body: CheckoutRequestBody;
   try {
     body = (await request.json()) as CheckoutRequestBody;
-  } catch {
+  } catch (parseError) {
+    console.warn("[checkout] request body parse failed:", parseError);
     body = {};
   }
 

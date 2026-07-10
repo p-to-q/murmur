@@ -220,7 +220,11 @@ async function renderToBuffer(version: VibeVersion): Promise<AudioBuffer> {
     transport.start();
   }, song.totalDuration, 2, SAMPLE_RATE);
 
-  return (buf as unknown as { get(): AudioBuffer }).get?.() ?? (buf as unknown as AudioBuffer);
+  if (buf instanceof AudioBuffer) return buf;
+  const viaGet = (buf as unknown as { get(): AudioBuffer }).get?.();
+  if (viaGet) return viaGet;
+  console.warn("[render-mp3] Tone.Offline returned unexpected type, attempting direct cast");
+  return buf as unknown as AudioBuffer;
 }
 
 // ── Drum scheduling ────────────────────────────────────────────────────
@@ -373,7 +377,7 @@ async function encodeMp3(buffer: AudioBuffer): Promise<Blob> {
   if (final.length > 0) chunks.push(final);
 
   const parts = chunks.map(
-    (c) => new Uint8Array(c.buffer.slice(c.byteOffset, c.byteOffset + c.byteLength)) as unknown as BlobPart
+    (c) => new Uint8Array(c.buffer.slice(c.byteOffset, c.byteOffset + c.byteLength)) as BlobPart
   );
   return new Blob(parts, { type: "audio/mpeg" });
 }
