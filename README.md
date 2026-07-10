@@ -63,6 +63,7 @@ flowchart TB
     User(["🎤 User"]):::user
 
     subgraph Browser["🌐 Browser  ·  Next.js 16  ·  React 19"]
+        direction LR
         Screens["Screens<br/>Hum · Vibe · Studio · Name · Gallery · Song Detail · Me"]
         ClientPitch["WASM pYIN<br/>Essentia.js · browser fallback"]
         ToneSynth["Tone.js · SimpleSynth<br/>live preview & playback"]
@@ -71,6 +72,7 @@ flowchart TB
     end
 
     subgraph API["⚡ API Routes  ·  Vercel  ·  Node.js"]
+        direction LR
         aTop[ ]:::anchor
         Transcribe["/api/transcribe"]
         MusicGen["/api/music/generate"]
@@ -83,6 +85,7 @@ flowchart TB
     end
 
     subgraph Workers["🐍 Python Workers"]
+        direction LR
         wTop[ ]:::anchor
         AE["Audio Engine  ·  Fly.io<br/>RMVPE → SwiftF0 → pYIN<br/>DeepFilterNet denoise · FastAPI"]
         ME["Music Engine  ·  RunPod Serverless<br/>Magenta RT2 · GPU<br/>scale-to-zero · JAX/CUDA"]
@@ -90,6 +93,7 @@ flowchart TB
     end
 
     subgraph Infra["🗄️ Infrastructure"]
+        direction LR
         iTop[ ]:::anchor
         DB[("PostgreSQL<br/>Drizzle ORM")]
         Storage[("Object Storage<br/>S3 / R2")]
