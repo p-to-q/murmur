@@ -520,7 +520,16 @@ export function HumScreen() {
       // configured for a worker we never silently downgrade to Tone.js.
       const magentaPathPromise = shouldUseMagentaEngine();
       const preparedBlob = blob ? await prepareAudioBlob(blob) : undefined;
-      const result = await transcribeWithStainer({ audioBlob: preparedBlob });
+      const result = await transcribeWithStainer({
+        audioBlob: preparedBlob,
+        onProgress: (phase) => {
+          if (phase === "billing_ok") {
+            setProcessingMessage(t("hum.proc.billing_ok"));
+          } else if (phase === "worker_started") {
+            setProcessingMessage(t("hum.proc.analyzing"));
+          }
+        },
+      });
       const draftId = crypto.randomUUID();
       const flowId = crypto.randomUUID();
       const selectedMelody = selectGenerationMelody(result, { repairBias });

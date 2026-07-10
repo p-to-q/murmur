@@ -3,7 +3,11 @@ import type {
   TranscriptionResult,
 } from "@/modules/shared/types";
 import { log } from "@/lib/observability/log";
-import { transcribeRecording } from "@/lib/api/transcribe";
+import {
+  transcribeRecording,
+  transcribeRecordingStreaming,
+  type TranscribeProgressCallback,
+} from "@/lib/api/transcribe";
 import { transcribeFixture } from "./providers/fixture";
 
 /**
@@ -14,7 +18,7 @@ import { transcribeFixture } from "./providers/fixture";
  * is omitted; real audio never silently falls through to demo content.
  */
 export async function transcribeWithStainer(
-  input: TranscriptionInput,
+  input: TranscriptionInput & { onProgress?: TranscribeProgressCallback },
 ): Promise<TranscriptionResult> {
   const startedAt = performance.now();
 
@@ -22,14 +26,23 @@ export async function transcribeWithStainer(
     hasAudioBlob: !!input.audioBlob,
     providerHint: input.providerHint ?? null,
     targetInstrument: input.targetInstrument ?? null,
+    streaming: !!input.onProgress,
   });
 
   try {
-    const result = input.audioBlob
-      ? await transcribeRecording(input.audioBlob, {
-          targetInstrument: input.targetInstrument,
-        })
-      : await transcribeFixture(input);
+    let result: TranscriptionResult;
+    if (input.audioBlob && input.onProgress) {
+      result = await transcribeRecordingStreaming(input.audioBlob, {
+        targetInstrument: input.targetInstrument,
+        onProgress: input.onProgress,
+      });
+    } else if (input.audioBlob) {
+      result = await transcribeRecording(input.audioBlob, {
+        targetInstrument: input.targetInstrument,
+      });
+    } else {
+      result = await transcribeFixture(input);
+    }
 
     log("transcribe.completed", {
       provider: result.provider,

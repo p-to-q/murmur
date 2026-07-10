@@ -236,6 +236,8 @@ export const DICT = {
   "hum.proc.polishing":{ zh: "整理成更顺的版本…", en: "Polishing it into a cleaner take…" },
   "hum.proc.adding_drums": { zh: "长出鼓、贝斯和弦乐…", en: "Growing drums, bass and strings…" },
   "hum.proc.three_vibes":  { zh: "生成三种感觉…",    en: "Generating three vibes…" },
+  "hum.proc.billing_ok":   { zh: "确认余额…",      en: "Balance confirmed…" },
+  "hum.proc.analyzing":    { zh: "分析你的旋律…",   en: "Analyzing your melody…" },
   "hum.mic.title":     { zh: "无法访问麦克风",    en: "Microphone not available" },
   "hum.mic.detail":    { zh: "可能是浏览器权限被拒，或在不支持录音的环境里。可以用示例旋律走完整流程，或开放权限后重试。", en: "Mic permission may be denied or unavailable here. Try the example melody to see the whole flow, or grant access and retry." },
   "hum.mic.cta_example": { zh: "用示例旋律体验完整流程", en: "Try with an example melody" },
