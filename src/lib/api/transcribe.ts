@@ -232,10 +232,14 @@ async function consumeTranscribeStream(
   const decoder = new TextDecoder();
   let buffer = "";
   let result: TranscriptionResult | null = null;
+  const MAX_BUFFER = 512 * 1024; // 512 KB guard against malformed streams
 
   for (;;) {
     const { done, value } = await reader.read();
     if (value) buffer += decoder.decode(value, { stream: true });
+    if (buffer.length > MAX_BUFFER) {
+      buffer = buffer.slice(-MAX_BUFFER);
+    }
 
     let newlineIdx: number;
     while ((newlineIdx = buffer.indexOf("\n")) !== -1) {

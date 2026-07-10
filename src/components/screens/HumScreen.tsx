@@ -518,7 +518,10 @@ export function HumScreen() {
 
       const draftId = crypto.randomUUID();
       const flowId = crypto.randomUUID();
-      let navigatedEarly = false;
+
+      let cascaded = false;
+      let magentaResolved: boolean | null = null;
+      magentaPathPromise.then((v) => { magentaResolved = v; });
 
       const result = await transcribeWithStainer({
         audioBlob: preparedBlob,
@@ -527,7 +530,18 @@ export function HumScreen() {
             setProcessingMessage(t("hum.proc.billing_ok"));
           } else if (phase === "worker_started") {
             setProcessingMessage(t("hum.proc.analyzing"));
-          } else if (phase === "interim_melody" && data && !navigatedEarly) {
+          } else if (
+            phase === "interim_melody" &&
+            data &&
+            !cascaded
+          ) {
+            // Gate: if magenta health resolved before interim arrived and
+            // it's unavailable, skip speculative generation.
+            if (magentaResolved === false) return;
+
+            const engineReady = getCachedMusicEngineStatus();
+            if (engineReady && !engineReady.available) return;
+
             const interim = data as CleanMelody;
             log("cascading.interim_melody_received", {
               notes: interim.notes.length,
@@ -535,22 +549,20 @@ export function HumScreen() {
               key: interim.key,
             });
 
-            const engineReady = getCachedMusicEngineStatus();
-            if (engineReady && !engineReady.available) return;
-
+            setProcessingMessage(t("hum.proc.generating"));
             setHumStyleBlob(preparedBlob ?? null);
             const versions = createMagentaVersions(interim, {
               draftId,
               originFlowId: flowId,
               sourceType: blob ? "hum" : "demo",
-              sourceMelodyKind: "clean",
+              sourceMelodyKind: "corrected",
               batchIndex: 0,
               humBlob: preparedBlob ?? null,
             });
             setVibeVersions(versions);
             setCurrentDraftId(draftId);
             setCurrentFlowId(flowId);
-            navigatedEarly = true;
+            cascaded = true;
             log("cascading.generation_started", {
               versionCount: versions.length,
               source: "interim",
@@ -567,7 +579,7 @@ export function HumScreen() {
         throw new MusicEngineUnavailableError();
       }
 
-      if (!navigatedEarly) {
+      if (!cascaded) {
         setHumStyleBlob(preparedBlob ?? null);
         const versions = createMagentaVersions(selectedMelody.melody, {
           draftId,
@@ -602,7 +614,7 @@ export function HumScreen() {
             bpm: selectedMelody.melody.bpm,
             key: selectedMelody.melody.key,
             notes: selectedMelody.melody.notes.length,
-            cascaded: navigatedEarly,
+            cascaded: cascaded,
           },
         })
         .catch(() => {});
