@@ -149,13 +149,21 @@ zero import sites:
    infrastructure with documented production incidents are not orphans. They
    are dormant modules.
 3. **When in doubt, move to `src/_recovered/`** instead of deleting. Add an
-   entry to the manifest with the original path and a one-line reason.
+   entry to the manifest with the original path and a one-line reason, and
+   rename any `.test.ts` file to `.test-archived.ts` so `bun test` skips it.
 4. **Never batch-delete** unreferenced files in a cleanup PR without
    per-file justification. The commit message "clean up dead code" is not
    sufficient for files over 50 lines.
 
-The `src/_recovered/` directory is excluded from TypeScript compilation and
-ESLint. Files there are reference code, not dead weight.
+The `src/_recovered/` directory is read-only reference material, not dead
+weight — and it must stay **inert**: it is excluded from TypeScript
+compilation (`tsconfig.json`), ESLint (`eslint.config.mjs`), and test
+discovery (archived tests carry a `.test-archived.ts` suffix). Nothing in
+live code may import from `src/_recovered/`, and nothing there may run in
+CI or ship in the build. To reactivate a file: move it out of
+`src/_recovered/` to its original path, restore the `.test.ts` suffix if it
+is a test, wire up imports, and add or update tests — the full checklist
+lives in `src/_recovered/MANIFEST.md`.
 
 ## Agent guardrails
 

@@ -8,6 +8,10 @@ This directory is excluded from TypeScript compilation and ESLint to avoid
 build noise. Files here are **reference code** — to reactivate one, move it
 back to its original path (shown below) and resolve any import drift.
 
+Archived test files use a `.test-archived.ts` suffix instead of `.test.ts`
+so `bun test` does not discover and execute them — the archive must stay
+inert. Rename back to `.test.ts` when reactivating.
+
 ## Inventory
 
 ### Visual / Interaction (6 files)
@@ -29,14 +33,14 @@ back to its original path (shown below) and resolve any import drift.
 | `lib/music/stainer.ts` | `src/lib/music/stainer.ts` | estimateKey / estimateBPM / estimateContour — music theory helpers not found elsewhere |
 | `modules/stainer/runtime.ts` | `src/modules/stainer/runtime.ts` | Provider fallback chain architecture (remote → browser-yin → basic-pitch → fixture) |
 | `workers/basic-pitch-service/main.py` | `workers/basic-pitch-service/main.py` | FastAPI PYIN worker with humming-tuned params (FMIN=75Hz) |
-| `modules/music/melody-polisher.test.ts` | `src/modules/music/melody-polisher.test.ts` | Tests for the still-active melody-polisher module (currently untested) |
+| `modules/music/melody-polisher.test-archived.ts` | `src/modules/music/melody-polisher.test.ts` | Tests for the still-active melody-polisher module (no dedicated test file today) |
 
 ### Infrastructure / Export (6 files)
 
 | File | Original path | Why it matters |
 |------|--------------|----------------|
 | `lib/http/deadline.ts` | `src/lib/http/deadline.ts` | withTimeout / deadlineSignal / mergeSignals — production timeout library |
-| `lib/http/deadline.test.ts` | `src/lib/http/deadline.test.ts` | Tests for deadline.ts |
+| `lib/http/deadline.test-archived.ts` | `src/lib/http/deadline.test.ts` | Tests for deadline.ts |
 | `modules/export/render-poster.ts` | `src/modules/export/render-poster.ts` | 1080x1080 share poster generator (no current replacement) |
 | `modules/export/render-share-html.ts` | `src/modules/export/render-share-html.ts` | Self-contained HTML share file with embedded audio + particle animations |
 | `scripts/test-music-gen.ts` | `scripts/test-music-gen.ts` | Music engine evaluation suite (7 fixtures, tests musical correctness) |
@@ -45,7 +49,8 @@ back to its original path (shown below) and resolve any import drift.
 ## Reactivation checklist
 
 1. Move the file back to its original path
-2. Check imports — some `@/` paths may have shifted since deletion
-3. Verify any dependencies are still in `package.json`
-4. Remove the entry from this manifest
-5. Add tests or update existing tests if applicable
+2. Rename `.test-archived.ts` back to `.test.ts` if it is a test file
+3. Check imports — some `@/` paths may have shifted since deletion
+4. Verify any dependencies are still in `package.json`
+5. Remove the entry from this manifest
+6. Add tests or update existing tests if applicable
