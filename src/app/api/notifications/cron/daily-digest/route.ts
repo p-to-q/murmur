@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
 import {
   NotificationPublishError,
@@ -17,7 +18,8 @@ export async function GET(request: NextRequest) {
     );
   }
   const auth = request.headers.get("authorization");
-  if (auth !== `Bearer ${expected}`) {
+  const token = auth?.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
+  if (!timingSafeTokenEqual(token, expected)) {
     return NextResponse.json(
       { error: "unauthorized", message: "Invalid or missing authorization", requestId },
       { status: 401, headers: { "X-Request-Id": requestId } },
@@ -54,4 +56,14 @@ export async function GET(request: NextRequest) {
       { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
+}
+
+function timingSafeTokenEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
 }

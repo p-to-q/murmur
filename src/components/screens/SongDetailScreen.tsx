@@ -321,7 +321,6 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         visibility: "unlisted",
       });
 
-      const copied = await copyTextToClipboard(share.url);
       setSong((current) =>
         current && current.id === song.id
           ? {
@@ -331,16 +330,35 @@ export function SongDetailScreen({ songId }: { songId: string }) {
             }
           : current,
       );
-      if (!copied) {
-        window.open(share.url, "_blank", "noopener,noreferrer");
-        throw new SongShareRequestError({
-          code: "clipboard_unavailable",
-          status: 0,
-          message: "Clipboard unavailable",
-          requestId: share.requestId,
-        });
+
+      let sharedNatively = false;
+      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+        try {
+          // The OS share sheet is its own confirmation — no toast on success.
+          await navigator.share({ title: song.title, url: share.url });
+          sharedNatively = true;
+        } catch (shareError) {
+          // Dismissing the sheet is a normal outcome, not an error.
+          if (shareError instanceof DOMException && shareError.name === "AbortError") {
+            return;
+          }
+          // navigator.share can exist yet reject this payload (platform
+          // quirks); fall through to the clipboard path instead of failing.
+        }
       }
-      toast.success(t("song.share.link_copied") || "Share link copied");
+      if (!sharedNatively) {
+        const copied = await copyTextToClipboard(share.url);
+        if (!copied) {
+          window.open(share.url, "_blank", "noopener,noreferrer");
+          throw new SongShareRequestError({
+            code: "clipboard_unavailable",
+            status: 0,
+            message: "Clipboard unavailable",
+            requestId: share.requestId,
+          });
+        }
+        toast.success(t("song.share.link_copied") || "Share link copied");
+      }
       memory
         .reportAction({
           content: `Copied share link for "${song.title}"`,

@@ -81,7 +81,7 @@ export function TopupScreen() {
   const router = useRouter();
   const t = useTranslator();
   const lang = useCurrentLang();
-  const { balance, isLoading, refresh } = useUserBalance();
+  const { balance, isLoading, error: balanceError, refresh } = useUserBalance();
   const { data: topupSurface, refresh: refreshTopupSurface } = useTopupSurface();
 
   // ── Currency state ────────────────────────────────────────────────
@@ -231,7 +231,11 @@ export function TopupScreen() {
           result.balance.notes,
           (surface?.lifetimeTopupCents ?? topupSurface?.lifetimeTopupCents ?? 0) / 100,
         );
+      } else if (result && !result.ok) {
+        toast.error(t("topup.refresh_failed") || "Couldn't refresh balance — try again.");
       }
+    } catch {
+      toast.error(t("topup.refresh_failed") || "Couldn't refresh balance — try again.");
     } finally {
       setIsRefreshing(false);
     }
@@ -332,7 +336,11 @@ export function TopupScreen() {
                 className="flex items-start gap-2"
               >
                 <h1 className="font-serif text-[#1A1A1A] text-[68px] leading-[1.0] tabular-nums tracking-tight">
-                  {isLoading ? "—" : <motion.span>{displayNotesBalance}</motion.span>}
+                  {isLoading
+                    ? "—"
+                    : balanceError && !balance
+                      ? <span className="text-[32px] text-[#B7AEA1]">{t("topup.balance_unavailable") || "Balance unavailable"}</span>
+                      : <motion.span>{displayNotesBalance}</motion.span>}
                 </h1>
                 <button
                   onClick={() => void handleRefresh()}
