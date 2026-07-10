@@ -1,9 +1,6 @@
 import { type Lang } from "@/lib/i18n/dict";
 import { renderTranslationToken } from "@/lib/i18n/translate";
-import type {
-  MurmurNotificationKind,
-  NotificationCopyInput,
-} from "@/lib/notifications/types";
+import type { NotificationCopyInput } from "@/lib/notifications/types";
 
 export type { NotificationMeta } from "@/lib/notifications/types";
 
@@ -193,12 +190,4 @@ export function dailyDigestNotificationCopy(
       token("nav.notify.daily_digest.body", lang)
       || "Your saved songs are waiting — or start with a fresh hum.",
   };
-}
-
-export function isKnownNotificationKind(
-  value: string,
-): value is MurmurNotificationKind {
-  return value === "song_generated"
-    || value === "song_saved"
-    || value === "system";
 }
