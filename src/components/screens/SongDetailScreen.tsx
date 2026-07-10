@@ -322,7 +322,15 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       );
 
       if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-        await navigator.share({ title: song.title, url: share.url });
+        try {
+          await navigator.share({ title: song.title, url: share.url });
+        } catch (shareError) {
+          // AbortError means the user cancelled the native share sheet — not a failure
+          if (shareError instanceof DOMException && shareError.name === "AbortError") {
+            return;
+          }
+          throw shareError;
+        }
         toast.success(t("song.share.link_copied") || "Shared");
       } else {
         const copied = await copyTextToClipboard(share.url);
