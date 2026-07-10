@@ -58,6 +58,19 @@ export function invalidateMusicEngineCache(): void {
   healthCache = null;
 }
 
+/**
+ * Abort any in-flight generation requests. Call on VibeScreen unmount or
+ * when navigating away so server-side RunPod jobs are cancelled promptly
+ * instead of running until their execution timeout.
+ */
+export function cancelActiveGeneration(): void {
+  if (activeAbort) {
+    activeAbort.abort();
+    activeAbort = null;
+  }
+  activeBatchId = null;
+}
+
 /** Warm the status cache as soon as the hum screen mounts. */
 export function prefetchMusicEngineStatus(): void {
   void fetchMusicEngineStatus(true);

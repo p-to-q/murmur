@@ -31,6 +31,7 @@ import { trackStageEntered } from "@/lib/observability/stage-tracking";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
 import {
+  cancelActiveGeneration,
   createMagentaVersions,
   regenerateVersionAudio,
   shouldUseMagentaEngine,
@@ -246,7 +247,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     }
   }, [vibeVersions, auditioningVersionId, setAuditioning]);
 
-  /* ── Stop preview on unmount ──────────────────────────────────── */
+  /* ── Stop preview + cancel in-flight generation on unmount ────── */
   useEffect(() => {
     return () => {
       if (auditionStartTimerRef.current !== null) {
@@ -254,6 +255,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       }
       versionPreview.stop();
       setAuditioning(null);
+      cancelActiveGeneration();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
