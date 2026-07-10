@@ -40,8 +40,14 @@ const ROUTE = "/api/songs";
 const SONG_CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
 const MELODY_SELECTION_KINDS = new Set<MelodySelectionKind>(["intent", "corrected", "musical"]);
 
+// Client-minted draft ids double as the idempotency key for save retries
+// (see handleSongIdConflict), so they must be accepted — but only in a
+// bounded, URL-safe shape. Covers every id the app mints today: raw UUIDs,
+// `demo-<uuid>` drafts, and server-generated `song_<ulid>` fallbacks.
+const SONG_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
 const songPayloadSchema = z.object({
-  id: z.string().min(1).optional(),  // ignored — server generates the id
+  id: z.string().regex(SONG_ID_PATTERN, "Invalid song id").optional(),
   title: z.string().min(1),
   vibe: z.string().min(1),
   vibeEn: z.string().min(1),
@@ -49,8 +55,8 @@ const songPayloadSchema = z.object({
   keySignature: z.string().min(1),
   scaleType: z.string().min(1),
   duration: z.number().int().nonnegative(),
-  parentSongId: z.string().min(1).nullable().optional(),
-  rootSongId: z.string().min(1).nullable().optional(),
+  parentSongId: z.string().min(1).max(64).nullable().optional(),
+  rootSongId: z.string().min(1).max(64).nullable().optional(),
   lineageDepth: z.number().int().optional(),
   sourceMelodyKind: z.string().optional(),
   editCount: z.number().int().optional(),
@@ -337,8 +343,9 @@ export async function POST(req: NextRequest) {
 }
 
 function buildSongInput(body: SongPayload, userId: string): SongInput {
-  // Always generate the song id server-side; any client-supplied id is ignored.
-  const id = `song_${ulid()}`;
+  // Prefer the client-minted draft id (idempotent retry key); mint a
+  // server-side id only when the payload omits one.
+  const id = body.id ?? `song_${ulid()}`;
   const editCount = normalizeEditCount(body.editCount);
   const lineageDepth = normalizeLineageDepth(body.lineageDepth);
   const sourceMelodyKind = isMelodySelectionKind(body.sourceMelodyKind)

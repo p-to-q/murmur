@@ -611,7 +611,7 @@ function safeHostnameFromUrl(url: string): string | null {
 }
 
 function createSpendReference(kind: "music_generate"): string {
-  return `spend_${kind}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+  return `${kind}:${crypto.randomUUID()}`;
 }
 
 /** Production path: invoke the RunPod Serverless endpoint (JSON + base64). */
