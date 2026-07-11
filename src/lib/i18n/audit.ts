@@ -4,6 +4,7 @@ import { DICT } from "./dict";
 
 const DEFAULT_SOURCE_DIR = "src";
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
+const IGNORED_DIRECTORIES = new Set(["_recovered"]);
 const TRANSLATOR_CALL = /\bt\(\s*["']([^"']+)["']\s*\)/g;
 
 export interface I18nAuditMissingKey {
@@ -66,6 +67,7 @@ function walk(dir: string): string[] {
     const fullPath = join(dir, entry);
     const stat = statSync(fullPath);
     if (stat.isDirectory()) {
+      if (IGNORED_DIRECTORIES.has(entry)) continue;
       files.push(...walk(fullPath));
       continue;
     }

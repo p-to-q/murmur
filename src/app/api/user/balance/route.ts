@@ -16,7 +16,10 @@ const RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
 export async function GET(request: NextRequest) {
   const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
-  if (!auth.ok) return auth.response;
+  if (!auth.ok) {
+    auth.response.headers.set("X-Request-Id", requestId);
+    return auth.response;
+  }
   const userId = auth.user.id;
 
   const rateLimit = await checkApiRateLimit({
@@ -43,7 +46,7 @@ export async function GET(request: NextRequest) {
           planTier: "free",
           nextRefillAt: nextNotesRefillAt().toISOString(),
         },
-        { status: 404 },
+        { status: 404, headers: { "X-Request-Id": requestId } },
       );
     }
 
@@ -54,7 +57,7 @@ export async function GET(request: NextRequest) {
       planTier: balance.planTier,
       nextRefillAt: nextNotesRefillAt().toISOString(),
       unlimited: false,
-    });
+    }, { headers: { "X-Request-Id": requestId } });
   } catch (error) {
     if (shouldUseDevBalanceFallback({ host: getRequestHostname(request) })) {
       log("user.balance_failed", {
@@ -73,7 +76,7 @@ export async function GET(request: NextRequest) {
         dailyFreeNotes: 0,
         planTier: fallback.planTier,
         nextRefillAt: nextNotesRefillAt().toISOString(),
-      });
+      }, { headers: { "X-Request-Id": requestId } });
     }
 
     log("user.balance_failed", {
@@ -86,8 +89,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json(
       { error: "balance_unavailable" },
-      { status: 503 },
+      { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
 }
-

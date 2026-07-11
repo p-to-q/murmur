@@ -6,10 +6,11 @@ import {
 } from "@/lib/platform/notifications-server";
 import { log } from "@/lib/observability/log";
 import { dailyDigestNotificationCopy } from "@/lib/notifications/notification-copy";
+import { getRequestId } from "@/lib/api/request-id";
 
 /** Scheduled by `vercel.json#crons`. Authenticated via `CRON_SECRET`. */
 export async function GET(request: NextRequest) {
-  const requestId = crypto.randomUUID();
+  const requestId = getRequestId(request);
   const expected = process.env.CRON_SECRET;
   if (!expected) {
     return NextResponse.json(
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
       body: copy.body,
       data: { source: "cron-daily-digest" },
     });
-    return NextResponse.json(result);
+    return NextResponse.json(result, { headers: { "X-Request-Id": requestId } });
   } catch (err) {
     if (err instanceof NotificationPublishError) {
       return NextResponse.json(

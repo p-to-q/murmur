@@ -29,12 +29,10 @@ export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id") || randomUUID();
   const auth = await resolveRequestAuth(request, { allowGuestPreview: true });
   if (auth.ok && auth.source !== "guest" && auth.user.id !== "guest") {
-    return NextResponse.json({
-      user: auth.user,
-      source: auth.source,
-      sessionId: auth.sessionId,
-      created: false,
-    });
+    return NextResponse.json(
+      { user: auth.user, source: auth.source, sessionId: auth.sessionId, created: false },
+      { headers: { "X-Request-Id": requestId } },
+    );
   }
 
   const ip = clientIpFromHeaders(request.headers);
@@ -88,7 +86,7 @@ export async function POST(request: NextRequest) {
       source: "session",
       sessionId: session.sessionId,
       created: true,
-    });
+    }, { headers: { "X-Request-Id": requestId } });
     response.cookies.set(
       SESSION_COOKIE_NAME,
       session.token,
@@ -107,7 +105,7 @@ export async function POST(request: NextRequest) {
         error: "local_creator_unavailable",
         message: "Could not create a Local Creator account.",
       },
-      { status: 503 },
+      { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
 }

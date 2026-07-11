@@ -82,6 +82,10 @@ flowchart TB
 - When the remote worker is unavailable, Murmur falls back to browser-side pYIN pitch detection via Essentia.js WASM (`src/lib/audio/client-pitch-fallback.ts`). The result runs through the same melody-polisher + humming-engine pipeline, so the rest of the app sees a normal `TranscriptionResult` regardless of where pitch detection happened.
 - Transient errors are classified centrally (`src/lib/errors/transient.ts`) so retry logic, observability, and UI all agree on what counts as retryable.
 - Murmur normalizes that output before it becomes arrangement input.
+- The streaming transcription route may emit a validated `interim_melody`
+  progress event for UI timing and observability. It is never used to start
+  billed generation or attribution; arrangement generation waits for the final
+  humming-engine melody selection.
 
 ### 2. Arrangement and editing
 

@@ -4,24 +4,26 @@ import { type NextRequest, NextResponse } from "next/server";
 import { reconcileWaffoBilling } from "@/lib/billing/waffo-reconcile";
 import { log } from "@/lib/observability/log";
 import { resolveWaffoPrivateKey } from "@/lib/platform/waffo-server";
+import { getRequestId } from "@/lib/api/request-id";
 
 export const runtime = "nodejs";
 
 const ROUTE = "/api/billing/cron/reconcile";
 
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request);
   const expected = process.env.CRON_SECRET;
   if (!expected) {
     return NextResponse.json(
       { error: "CRON_SECRET is not configured" },
-      { status: 500 },
+      { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
 
   const auth = request.headers.get("authorization");
   const token = auth?.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
   if (!timingSafeTokenEqual(token, expected)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "unauthorized" }, { status: 401, headers: { "X-Request-Id": requestId } });
   }
 
   const merchantId = process.env.WAFFO_MERCHANT_ID?.trim();
@@ -29,7 +31,7 @@ export async function GET(request: NextRequest) {
   if (!merchantId || !privateKey) {
     return NextResponse.json(
       { error: "waffo_not_configured" },
-      { status: 503 },
+      { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
 
@@ -68,7 +70,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json(report, { status });
+    return NextResponse.json(report, { status, headers: { "X-Request-Id": requestId } });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     log(
@@ -78,7 +80,7 @@ export async function GET(request: NextRequest) {
     );
     return NextResponse.json(
       { error: "reconcile_failed", message },
-      { status: 500 },
+      { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
 }

@@ -154,8 +154,16 @@ function pickThreeDistinctVibes(
   melody: CleanMelody,
   options: { preferredVibeId?: VibeId; preferredVibeMode?: PreferredVibeMode } = {},
 ) {
+  const selectionSeed = hashString(
+    JSON.stringify({
+      melody,
+      preferredVibeId: options.preferredVibeId ?? null,
+      preferredVibeMode: options.preferredVibeMode ?? null,
+    }),
+  );
+  const rng = mulberry32(selectionSeed);
   const scored = VIBE_PRESETS.map((p) => {
-    let score = Math.random() * 2.0;
+    let score = rng() * 2.0;
     if (melody.scale === "minor" && ["cinematic", "bedroom", "rain"].includes(p.id)) score += 1.5;
     if (melody.scale === "major" && ["sunset", "party", "synth"].includes(p.id)) score += 1.5;
     if (melody.bpm < 80 && p.energy < 0.5) score += 0.8;

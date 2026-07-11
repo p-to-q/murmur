@@ -13,6 +13,21 @@ from audio_engine.detectors import (
 
 
 class DetectorSelectionTests(unittest.TestCase):
+    def test_pitch_detection_diagnostics_and_warnings_are_mutable(self):
+        detection = PitchDetection(
+            provider="pyin",
+            timestamps=[],
+            f0=[],
+            voiced=[],
+            confidence=[],
+        )
+
+        detection.diagnostics["pitchMs"] = 12
+        detection.warnings.append("fallback")
+
+        self.assertEqual(detection.diagnostics["pitchMs"], 12)
+        self.assertEqual(detection.warnings, ["fallback"])
+
     def test_default_provider_is_auto(self):
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(configured_pitch_provider(), "auto")

@@ -154,6 +154,8 @@ export interface AudioWorkerRequest {
   workerBaseUrl?: string;
   /** Product routes omit this and let the worker's configured auto route decide. */
   pitchProvider?: string;
+  /** Optional progress hook invoked after the worker payload is schema-validated. */
+  onInterimMelody?: (melody: CleanMelody) => void;
 }
 
 /**
@@ -166,6 +168,7 @@ export async function transcribeWithAudioWorker({
   requestId,
   workerBaseUrl,
   pitchProvider,
+  onInterimMelody,
 }: AudioWorkerRequest): Promise<TranscriptionResult> {
   const workerBase = workerBaseUrl?.trim() || getAudioWorkerUrl();
   if (!workerBase) {
@@ -214,6 +217,7 @@ export async function transcribeWithAudioWorker({
         requestId,
         token,
         pitchProvider,
+        onInterimMelody,
         timeoutMs: attemptTimeout,
       });
     } catch (error) {
@@ -245,6 +249,7 @@ async function runTranscribeAttempt({
   requestId,
   token,
   pitchProvider,
+  onInterimMelody,
   timeoutMs,
 }: {
   workerUrl: string;
@@ -255,6 +260,7 @@ async function runTranscribeAttempt({
   requestId: string;
   token?: string;
   pitchProvider?: string;
+  onInterimMelody?: (melody: CleanMelody) => void;
   timeoutMs: number;
 }): Promise<TranscriptionResult> {
   const form = new FormData();
@@ -316,10 +322,37 @@ async function runTranscribeAttempt({
     );
   }
 
+  if (onInterimMelody) {
+    const interim = extractInterimMelody(parsed, { targetInstrument });
+    if (interim) onInterimMelody(interim);
+  }
+
   return normalizeWorkerResponse(parsed, {
     targetInstrument,
     workerMs,
   });
+}
+
+/**
+ * Produce a validated, generation-shaped preview without selecting a final
+ * humming-engine melody. The preview is informational only; callers must wait
+ * for normalizeWorkerResponse before starting billed generation.
+ */
+export function extractInterimMelody(
+  workerResponse: z.infer<typeof workerResponseSchema>,
+  options: { targetInstrument: InstrumentId },
+): CleanMelody | null {
+  const rawNotes = normalizeNotes(
+    workerResponse.rawNotes ??
+      workerResponse.notes ??
+      workerResponse.cleanMelody?.notes ??
+      [],
+  );
+  if (rawNotes.length === 0) return null;
+  const polished = workerResponse.cleanMelody
+    ? normalizeCleanMelody(workerResponse.cleanMelody)
+    : polishMelody(rawNotes);
+  return clampMelody(polished, options.targetInstrument).melody;
 }
 
 function sleep(ms: number): Promise<void> {

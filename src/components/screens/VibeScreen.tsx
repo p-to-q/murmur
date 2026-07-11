@@ -19,7 +19,7 @@
  *   - Title in serif italic — a vibe is a poem, not a setting.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -663,7 +663,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
    VibeCard — pebble-shaped card with a MurmurWave bottom.
    ───────────────────────────────────────────────────────────────────── */
 
-function VibeCard({
+const VibeCard = memo(function VibeCard({
   version,
   visualBatchSeed,
   cardIndex,
@@ -871,7 +871,7 @@ function VibeCard({
       </AnimatePresence>
     </motion.div>
   );
-}
+});
 
 function canRetryGeneration(version: VibeVersion): boolean {
   const code = version.generation?.errorCode;

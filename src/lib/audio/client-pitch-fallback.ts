@@ -119,7 +119,7 @@ export async function detectPitchClient(
   );
 
   const frames = buildFrames(pitch, voicedProbabilities, sampleRate);
-  const notes = framesToNotes(frames);
+  const notes = framesToNotes(frames, sampleRate);
   const totalMs = Math.round(performance.now() - startedAt);
   const voicedFrames = frames.filter((f) => f.voiced).length;
 
@@ -185,7 +185,7 @@ function hzToMidi(hz: number): number {
   return 12 * Math.log2(hz / 440) + 69;
 }
 
-function framesToNotes(frames: PitchFrame[]): MelodyNote[] {
+function framesToNotes(frames: PitchFrame[], sampleRate: number): MelodyNote[] {
   const notes: MelodyNote[] = [];
   let noteStart = -1;
   let pitchSum = 0;
@@ -209,7 +209,7 @@ function framesToNotes(frames: PitchFrame[]): MelodyNote[] {
       const avgHz = pitchSum / frameCount;
       const avgConf = confSum / frameCount;
       const start = frames[noteStart]!.time;
-      const end = frames[i - 1]!.time;
+      const end = frames[i - 1]!.time + (HOP_SIZE / sampleRate);
       const duration = end - start;
 
       if (duration >= MIN_NOTE_DURATION) {

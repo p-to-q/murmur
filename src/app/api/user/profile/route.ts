@@ -16,7 +16,10 @@ const RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
 export async function GET(request: NextRequest) {
   const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
-  if (!auth.ok) return auth.response;
+  if (!auth.ok) {
+    auth.response.headers.set("X-Request-Id", requestId);
+    return auth.response;
+  }
 
   const rateLimit = await checkApiRateLimit({
     route: ROUTE,
@@ -53,5 +56,5 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ ok: true, user });
+  return NextResponse.json({ ok: true, user }, { headers: { "X-Request-Id": requestId } });
 }

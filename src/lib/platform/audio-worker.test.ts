@@ -1,12 +1,31 @@
 import { describe, expect, it } from "bun:test";
 import {
   AudioWorkerError,
+  extractInterimMelody,
   normalizeWorkerResponse,
   transcribeWithAudioWorker,
 } from "@/lib/platform/audio-worker";
 import { INSTRUMENT_RANGES } from "@murmur/core/music/instrument-ranges";
 
 describe("audio worker adapter", () => {
+  it("extracts a clamped interim melody without selecting a final variant", () => {
+    const interim = extractInterimMelody(
+      {
+        source: "pyin",
+        notes: [
+          { pitch: 30, start: 0, duration: 0.5, confidence: 0.9 },
+          { pitch: 62, start: 0.6, duration: 0.5, confidence: 0.8 },
+        ],
+      },
+      { targetInstrument: "bell" },
+    );
+
+    expect(interim?.notes).toHaveLength(2);
+    expect(interim?.notes[0]?.pitch).toBeGreaterThanOrEqual(
+      INSTRUMENT_RANGES.bell.lowMidi,
+    );
+  });
+
   it("normalizes legacy pYIN notes and clamps them to the target instrument", () => {
     const result = normalizeWorkerResponse(
       {

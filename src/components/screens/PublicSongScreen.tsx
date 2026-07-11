@@ -51,6 +51,8 @@ export function PublicSongScreen({ shareCode }: { shareCode: string }) {
         }
         const data = (await res.json()) as PublicSong;
         if (active) setSong(data);
+      } catch {
+        if (active) setSong(null);
       } finally {
         if (active) setIsLoading(false);
       }

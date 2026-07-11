@@ -1,5 +1,5 @@
 import type { TranscribeStreamEvent } from "@/app/api/transcribe/route";
-import type { TranscriptionResult } from "@/modules/shared/types";
+import type { CleanMelody, TranscriptionResult } from "@/modules/shared/types";
 import { log } from "@/lib/observability/log";
 import { request } from "./request";
 
@@ -173,8 +173,8 @@ function statusToFallbackCode(status: number): TranscribeRequestErrorCode {
   return "server_error";
 }
 
-export type TranscribePhase = "billing_ok" | "worker_started" | "complete";
-export type TranscribeProgressCallback = (phase: TranscribePhase) => void;
+export type TranscribePhase = "billing_ok" | "worker_started" | "interim_melody" | "complete";
+export type TranscribeProgressCallback = (phase: TranscribePhase, data?: unknown) => void;
 
 /**
  * Streaming variant of `transcribeRecording`. Sends `Accept: text/x-ndjson`
@@ -250,6 +250,22 @@ function parseStreamEvent(value: unknown): TranscribeStreamEvent | null {
     }
     case "worker_started":
       return { phase: "worker_started" };
+    case "interim_melody": {
+      const melody = value.melody;
+      if (!isRecord(melody) || !Array.isArray(melody.notes) || melody.notes.length === 0) {
+        return null;
+      }
+      if (
+        typeof melody.key !== "string" ||
+        typeof melody.scale !== "string" ||
+        typeof melody.bpm !== "number" ||
+        typeof melody.duration !== "number" ||
+        typeof melody.contour !== "string"
+      ) {
+        return null;
+      }
+      return { phase: "interim_melody", melody: melody as CleanMelody };
+    }
     case "complete":
       if (!("result" in value)) return null;
       return { phase: "complete", result: value.result };
@@ -286,10 +302,11 @@ function parseStreamEvent(value: unknown): TranscribeStreamEvent | null {
 function dispatchProgress(
   onProgress: TranscribeProgressCallback | undefined,
   phase: TranscribePhase,
+  data?: unknown,
 ): void {
   if (!onProgress) return;
   try {
-    onProgress(phase);
+    onProgress(phase, data);
   } catch (error) {
     log("transcribe.stream_event_invalid", {
       reason: "onprogress_threw",
@@ -356,6 +373,9 @@ async function consumeTranscribeStream(
         case "billing_ok":
         case "worker_started":
           dispatchProgress(onProgress, event.phase);
+          break;
+        case "interim_melody":
+          dispatchProgress(onProgress, event.phase, event.melody);
           break;
         case "complete":
           dispatchProgress(onProgress, "complete");

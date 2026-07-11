@@ -40,7 +40,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 
 import engine
 # Re-exported for tests and backwards compatibility (tests import `main.*`).
@@ -149,7 +149,7 @@ def _verify_auth(request: Request) -> None:
 
 @app.get("/health")
 def health() -> dict[str, object]:
-    return {
+    payload = {
         "status": "degraded" if engine.model_load_error() else "ok",
         "mock": engine.MOCK,
         "model": engine.MODEL_NAME,
@@ -157,6 +157,9 @@ def health() -> dict[str, object]:
         "loading": engine.model_loading(),
         "loadError": engine.model_load_error(),
     }
+    if engine.model_load_error():
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @app.post("/generate")
