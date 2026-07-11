@@ -99,8 +99,31 @@ export function decideRefund(input: {
 
 export type TopupReversalDecision =
   | { kind: "duplicate"; ledgerId: string; balanceAfter: number; amount: number }
-  | { kind: "proceed"; balanceAfter: number; amount: number };
+  | {
+      kind: "proceed";
+      /** Notes actually clawed back — `Math.min(amount, availableBalance)`. */
+      amount: number;
+      /** Post-reversal balance, floored at 0 so a reversal never locks the user out. */
+      balanceAfter: number;
+      /** True when the requested reversal exceeded the spendable balance. */
+      clamped: boolean;
+      /** Requested minus applied — the shortfall the provider refunded but we could not claw back. */
+      unrefunded: number;
+    };
 
+/**
+ * Reverse a confirmed top-up grant, clamping the claw-back so the ledger
+ * balance can never be driven negative.
+ *
+ * Policy (#233): a full provider refund after the buyer already spent some of
+ * the purchased notes must not push `notes_balance` below zero — a negative
+ * balance blocks every future spend and effectively locks the account out. We
+ * claw back only what is still on the balance (`min(amount, currentBalance)`)
+ * and record the shortfall as `unrefunded` so reconciliation / support can see
+ * that the money was refunded but the notes were already consumed. This is the
+ * safer default; the alternative (reject + manual review) is a product-policy
+ * call flagged for the owner in the PR.
+ */
 export function decideTopupReversal(input: {
   currentBalance: number;
   amount: number;
@@ -114,10 +137,17 @@ export function decideTopupReversal(input: {
       amount: Math.abs(input.existingRefund.delta),
     };
   }
+  // Only notes currently on the balance can be clawed back; a balance already
+  // in debt (negative) has nothing to reverse.
+  const available = Math.max(0, input.currentBalance);
+  const applied = Math.min(input.amount, available);
+  const unrefunded = input.amount - applied;
   return {
     kind: "proceed",
-    balanceAfter: input.currentBalance - input.amount,
-    amount: input.amount,
+    amount: applied,
+    balanceAfter: input.currentBalance - applied,
+    clamped: unrefunded > 0,
+    unrefunded,
   };
 }
 
@@ -128,6 +158,29 @@ export function decideTopupReversal(input: {
  */
 export function refundReferenceFor(originalLedgerId: string): string {
   return `refund:${originalLedgerId}`;
+}
+
+/** external_ref prefix for the durable "a spend refund is owed" marker (#232). */
+const PENDING_REFUND_REF_PREFIX = "refund_pending:";
+
+/**
+ * Deterministic external_ref for a `refund:pending` marker, keyed by the
+ * original spend's ledger id. Stable so a retried failure `onConflictDoNothing`
+ * against the idempotency index instead of writing a duplicate marker.
+ */
+export function pendingRefundReferenceFor(originalLedgerId: string): string {
+  return `${PENDING_REFUND_REF_PREFIX}${originalLedgerId}`;
+}
+
+/**
+ * Recover the original spend's ledger id from a `refund:pending` marker's
+ * external_ref. Returns null when the ref isn't a pending marker (defensive —
+ * the reconcile loop skips anything it can't route back to a spend).
+ */
+export function originalLedgerIdFromPendingRef(externalRef: string | null): string | null {
+  if (!externalRef || !externalRef.startsWith(PENDING_REFUND_REF_PREFIX)) return null;
+  const id = externalRef.slice(PENDING_REFUND_REF_PREFIX.length);
+  return id.length > 0 ? id : null;
 }
 
 /** Split a spend across daily-free notes first, then the account pool. */

@@ -1,9 +1,10 @@
 import { randomUUID } from "crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { db } from "../client";
 import { notesLedger } from "../schema/notes-ledger";
 import { users } from "../schema/users";
 import { DAILY_REFILL, MAX_FREE_BALANCE, type NotesReason } from "@murmur/core";
+import { log } from "@/lib/observability/log";
 import {
   currentNotesRefillWindowStart,
   notesRefillWindowKey,
@@ -18,6 +19,8 @@ import {
   decideTopupReversal,
   dailyFreeAfterGrant,
   refundReferenceFor,
+  pendingRefundReferenceFor,
+  originalLedgerIdFromPendingRef,
   trimDailyFreeAfterTopupReversal,
   accountNotesFromTotal,
   type ExistingLedgerRow,
@@ -35,10 +38,15 @@ export {
   decideTopupReversal,
   dailyFreeAfterGrant,
   refundReferenceFor,
+  pendingRefundReferenceFor,
+  originalLedgerIdFromPendingRef,
   trimDailyFreeAfterTopupReversal,
   accountNotesFromTotal,
   type ExistingLedgerRow,
 } from "@/lib/billing/notes-ledger-decisions";
+
+/** Ledger reason for the durable "a spend refund is owed" marker (#232). */
+const PENDING_REFUND_REASON: NotesReason = "refund:pending";
 
 export type SpendReason = Extract<NotesReason, `spend:${string}`>;
 export type GrantReason = Exclude<NotesReason, SpendReason>;
@@ -113,8 +121,14 @@ export type ReverseTopupGrantResult =
       ledgerId: string;
       purchaseLedgerId: string;
       balanceBefore: number;
+      /** Post-reversal balance, floored at 0 (#233 clamp-at-zero). */
       balanceAfter: number;
+      /** Notes actually clawed back (may be < requested when clamped). */
       amount: number;
+      /** True when the reversal was clamped because notes were already spent. */
+      clamped: boolean;
+      /** Requested reversal minus `amount`; the shortfall left un-reversed. */
+      unrefunded: number;
       duplicate: boolean;
     }
   | {
@@ -498,6 +512,8 @@ export async function reverseTopupGrant(
         balanceBefore: user.notesBalance,
         balanceAfter: decision.balanceAfter,
         amount: decision.amount,
+        clamped: false,
+        unrefunded: 0,
         duplicate: true,
       };
     }
@@ -513,6 +529,12 @@ export async function reverseTopupGrant(
         ...(input.metadata ?? {}),
         refunds: purchaseGrant.id,
         orderId: input.orderId,
+        // #233: record when the claw-back was floored so the shortfall is
+        // auditable — the buyer was refunded `notesGranted` but only `amount`
+        // was still on the balance to reverse.
+        requestedAmount: amount,
+        clamped: decision.clamped,
+        unrefunded: decision.unrefunded,
       },
     });
     await tx
@@ -527,6 +549,26 @@ export async function reverseTopupGrant(
       })
       .where(eq(users.id, input.userId));
 
+    // A clamped reversal means real money was refunded but the notes were
+    // already spent — never a hard error (the alternative is a negative balance
+    // that locks the account), but it must be visible to reconciliation/support.
+    if (decision.clamped) {
+      log(
+        "notes.topup_reversal_clamped",
+        {
+          orderId: input.orderId,
+          purchaseLedgerId: purchaseGrant.id,
+          refundLedgerId: ledgerId,
+          requestedAmount: amount,
+          appliedAmount: decision.amount,
+          unrefunded: decision.unrefunded,
+          balanceBefore: user.notesBalance,
+          balanceAfter: decision.balanceAfter,
+        },
+        { userId: input.userId, level: "warn" },
+      );
+    }
+
     return {
       ok: true,
       ledgerId,
@@ -534,8 +576,135 @@ export async function reverseTopupGrant(
       balanceBefore: user.notesBalance,
       balanceAfter: decision.balanceAfter,
       amount: decision.amount,
+      clamped: decision.clamped,
+      unrefunded: decision.unrefunded,
       duplicate: false,
     };
+  });
+}
+
+// ─── Durable refund-pending markers (#232) ─────────────────────────
+
+export type RecordPendingRefundInput = {
+  userId: string;
+  /** Ledger id of the original spend whose refund could not be written in-request. */
+  originalLedgerId: string;
+  /** Notes owed back (audit only; the retry derives the real amount from the spend row). */
+  amount?: number;
+  /** Spend reason being reversed (e.g. "spend:hum"), for observability. */
+  spendReason?: string;
+  requestId?: string;
+  /** Where the failure happened, e.g. "transcribe_worker_failed". */
+  source: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type RecordPendingRefundResult =
+  | { ok: true; pendingLedgerId: string; externalRef: string; duplicate: boolean }
+  | { ok: false; reason: "invalid_original" };
+
+/**
+ * Persist a durable "a spend refund is owed" marker when an in-request refund
+ * write fails, so the reconcile cron can retry the reversal idempotently
+ * instead of the note being silently lost (#232).
+ *
+ * The marker is a zero-delta ledger row: it records intent without touching the
+ * balance (SUM(delta)==balance still holds) and is a single unlocked insert, so
+ * it can land even when the full refund transaction could not (lock contention,
+ * a transient serialization failure, etc.). `onConflictDoNothing` against the
+ * (user, reason, external_ref) idempotency index makes repeated failures a
+ * no-op rather than a second marker.
+ */
+export async function recordPendingRefund(
+  input: RecordPendingRefundInput,
+): Promise<RecordPendingRefundResult> {
+  if (!input.originalLedgerId) return { ok: false, reason: "invalid_original" };
+
+  const externalRef = pendingRefundReferenceFor(input.originalLedgerId);
+  const ledgerId = createLedgerId();
+  const inserted = await db
+    .insert(notesLedger)
+    .values({
+      id: ledgerId,
+      userId: input.userId,
+      delta: 0,
+      reason: PENDING_REFUND_REASON,
+      externalRef,
+      metadata: {
+        ...(input.metadata ?? {}),
+        originalLedgerId: input.originalLedgerId,
+        spendReason: input.spendReason ?? null,
+        amountOwed: input.amount ?? null,
+        source: input.source,
+        requestId: input.requestId ?? null,
+      },
+    })
+    .onConflictDoNothing()
+    .returning({ id: notesLedger.id });
+
+  if (!inserted[0]) {
+    return { ok: true, pendingLedgerId: "", externalRef, duplicate: true };
+  }
+  return { ok: true, pendingLedgerId: inserted[0].id, externalRef, duplicate: false };
+}
+
+export interface PendingRefundMarker {
+  id: string;
+  userId: string;
+  originalLedgerId: string;
+  createdAt: Date;
+  metadata: Record<string, unknown>;
+}
+
+export type PendingRefundCursor = { createdAt: Date; id: string };
+
+/**
+ * Page through `refund:pending` markers oldest-first for the reconcile retry
+ * loop (#238). The cursor is (created_at, id) so pages stay stable even as new
+ * markers land mid-scan. Markers whose external_ref can't be parsed back to a
+ * spend id are dropped (defensive — the retry loop can't act on them).
+ */
+export async function listPendingRefundMarkers(input: {
+  limit: number;
+  after?: PendingRefundCursor | null;
+}): Promise<PendingRefundMarker[]> {
+  const limit = Math.max(1, Math.min(500, Math.trunc(input.limit)));
+  const reasonFilter = eq(notesLedger.reason, PENDING_REFUND_REASON);
+  const cursorFilter = input.after
+    ? or(
+        gt(notesLedger.createdAt, input.after.createdAt),
+        and(
+          eq(notesLedger.createdAt, input.after.createdAt),
+          gt(notesLedger.id, input.after.id),
+        ),
+      )
+    : undefined;
+
+  const rows = await db
+    .select({
+      id: notesLedger.id,
+      userId: notesLedger.userId,
+      externalRef: notesLedger.externalRef,
+      createdAt: notesLedger.createdAt,
+      metadata: notesLedger.metadata,
+    })
+    .from(notesLedger)
+    .where(cursorFilter ? and(reasonFilter, cursorFilter) : reasonFilter)
+    .orderBy(asc(notesLedger.createdAt), asc(notesLedger.id))
+    .limit(limit);
+
+  return rows.flatMap((row) => {
+    const originalLedgerId = originalLedgerIdFromPendingRef(row.externalRef);
+    if (!originalLedgerId) return [];
+    return [
+      {
+        id: row.id,
+        userId: row.userId,
+        originalLedgerId,
+        createdAt: row.createdAt,
+        metadata: row.metadata,
+      },
+    ];
   });
 }
 
