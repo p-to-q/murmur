@@ -86,6 +86,7 @@ export type LogEvent =
   | "transcribe.client_fallback_unavailable"
   | "transcribe.client_fallback_starting"
   | "transcribe.client_fallback_failed"
+  | "transcribe.client_fallback_shown"
   // Open escape hatch: known events above give autocomplete; ad-hoc
   // diagnostic events (e.g. "<route>.body_parse_failed") stay allowed.
   | (string & {});

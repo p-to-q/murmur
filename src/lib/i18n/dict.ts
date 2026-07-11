@@ -318,6 +318,16 @@ export const DICT = {
   "vibe.all_failed.demo": { zh: "用示例", en: "Use demo" },
   "vibe.all_failed.record": { zh: "重录", en: "Record again" },
   "vibe.demo.failed": { zh: "暂时没能载入示例旋律。", en: "Couldn't load the demo melody." },
+  // Brewing surface — primary phase (serif) + secondary status (sans) + a
+  // coarse queue-wait hint so cold-start waits read as "in queue", not a hang.
+  "vibe.gen.brewing_eyebrow": { zh: "酿造中", en: "Brewing" },
+  "vibe.gen.brewing_title":   { zh: "正在为这句哼唱谱三个方向", en: "Composing three takes on your hum" },
+  "vibe.gen.brewing_sub":     { zh: "谱好一个就先放一个。", en: "First previews arrive as each one finishes." },
+  "vibe.gen.progress":        { zh: "已就绪", en: "ready" },
+  "vibe.gen.wait_in_queue":   { zh: "排队中", en: "in queue" },
+  // Reduced-detail capture hint (client-side pitch fallback). Informational,
+  // never blocking.
+  "vibe.capture.reduced":     { zh: "以精简模式采集，细节可能略有出入。", en: "Captured in reduced-detail mode — some nuance may vary." },
 
   // ── Melody origin semantics ───────────────────────────────────────
   "melody_origin.intent.label": { zh: "贴近原唱", en: "INTENT" },
@@ -670,6 +680,9 @@ export const DICT = {
   "settings.developer.debug":  { zh: "打开调试台", en: "Open debug" },
   "settings.developer.health": { zh: "QA 健康 JSON", en: "QA health JSON" },
   "settings.developer.i18n":   { zh: "i18n JSON", en: "i18n JSON" },
+  "settings.audio.title":      { zh: "播放", en: "Playback" },
+  "settings.audio.auto_audition":      { zh: "自动试听", en: "Auto-preview vibes" },
+  "settings.audio.auto_audition_body": { zh: "生成完成后，自动播放第一个方向的试听。默认关闭；当系统开启“减少动态效果”时始终关闭。", en: "When a set finishes brewing, play the first vibe automatically. Off by default, and always off when your device prefers reduced motion." },
 
   // ── Common ──────────────────────────────────────────────────────────
   "common.back":                 { zh: "返回",     en: "Back" },
