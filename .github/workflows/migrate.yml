@@ -8,13 +8,13 @@ name: Migrate (production)
 #
 # Required secret:
 #   DATABASE_URL_UNPOOLED — direct (non-pooled) prod connection string used to
-#                           apply migrations. Until it is set this workflow is a
-#                           no-op (stays green), so committing it changes nothing
-#                           about prod until you opt in.
+#                           apply migrations. The workflow fails closed when the
+#                           secret is absent so a green run always means the
+#                           migration command was actually attempted.
 #
-# Migrations run in parallel with the native deploy. For the additive
-# (ADD COLUMN IF NOT EXISTS) migrations this repo uses, a brief overlap is
-# harmless and far better than migrations never running.
+# Migrations currently run in parallel with the native deploy. This workflow
+# does not claim that overlap is safe for every migration; ordered
+# migrate-before-deploy promotion is tracked separately in issue #307.
 
 on:
   push:
@@ -36,6 +36,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Validate migration configuration
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error title=Production migration is not configured::Set the DATABASE_URL_UNPOOLED repository secret to the direct production Postgres connection string."
+            exit 1
+          fi
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -47,9 +56,4 @@ jobs:
       - name: Run DB migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
-        run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::notice title=Migrations skipped::DATABASE_URL_UNPOOLED secret not set."
-            exit 0
-          fi
-          bun run db:migrate
+        run: bun run db:migrate
