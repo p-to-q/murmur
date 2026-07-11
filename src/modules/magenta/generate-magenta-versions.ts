@@ -46,6 +46,13 @@ export type MusicEngineStatus = {
   configured: boolean;
   available: boolean;
   reason: string | null;
+  /**
+   * Coarse queue-wait estimate (ms) from /api/music/health, derived from
+   * RunPod queue depth + a cold-start penalty. Null when the transport does
+   * not expose it (HTTP/legacy) or the queue shape was unreadable. Surfaced in
+   * VibeScreen so cold-start waits read as "in queue", not a hang (issue #216).
+   */
+  estimatedWaitMs: number | null;
 };
 
 let healthCache: { at: number; status: MusicEngineStatus } | null = null;
@@ -131,6 +138,7 @@ export async function fetchMusicEngineStatus(force = false): Promise<MusicEngine
       configured: false,
       available: false,
       reason: "unreachable",
+      estimatedWaitMs: null,
     };
 
     for (const delayMs of retryDelaysMs) {
@@ -164,17 +172,25 @@ async function probeHealthOnce(): Promise<MusicEngineStatus | null> {
       cache: "no-store",
     });
     if (!res.ok) {
-      return { configured: false, available: false, reason: `http_${res.status}` };
+      return {
+        configured: false,
+        available: false,
+        reason: `http_${res.status}`,
+        estimatedWaitMs: null,
+      };
     }
     const data = (await res.json()) as {
       available?: boolean;
       configured?: boolean;
       reason?: string | null;
+      estimatedWaitMs?: number | null;
     };
     return {
       configured: data.configured === true,
       available: data.available === true,
       reason: data.reason ?? null,
+      estimatedWaitMs:
+        typeof data.estimatedWaitMs === "number" ? data.estimatedWaitMs : null,
     };
   } catch {
     return null;
@@ -192,6 +208,13 @@ export interface MagentaVersionOptions {
   /** 0 for the first three vibes; reroll passes previous + 1. */
   batchIndex: number;
   humBlob?: Blob | null;
+  /**
+   * "reduced" when the source melody came from the client-side pitch fallback
+   * (worker unreachable) rather than the server transcriber — the generated
+   * versions carry this so VibeScreen can show a non-blocking reduced-detail
+   * hint (issue #211). Absent for normal server-side captures.
+   */
+  captureQuality?: VibeVersion["captureQuality"];
 }
 
 /**
@@ -235,6 +258,7 @@ export function createMagentaVersions(
       title: spec.title,
       vibe: spec.vibeId,
       tags: spec.tags,
+      captureQuality: options.captureQuality,
       visualConfig: (() => {
         const artworkSeed = `${options.draftId}:${options.batchIndex}:${index}:${version.id}`;
         const artwork = pickArtworkSelection(spec.visualFacets, artworkSeed, [], batchArtworkIds);

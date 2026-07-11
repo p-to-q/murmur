@@ -212,6 +212,14 @@ export type VibeVersion = {
   arrangementState: ArrangementState;
   visualConfig: VisualConfig;
   generation?: VersionGeneration;
+  /**
+   * Fidelity of the transcription that seeded this version. "reduced" means the
+   * client-side pitch fallback (browser pYIN) produced the melody because the
+   * audio worker was unreachable — the UI surfaces a subtle, non-blocking
+   * reduced-detail hint. Absent (undefined) for normal server-side captures
+   * (issue #211).
+   */
+  captureQuality?: "reduced";
 };
 
 export type SongCard = {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Bug, Gauge, Languages, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Bug, Gauge, Languages, SlidersHorizontal, Volume2 } from "lucide-react";
 import { useCurrentLang, useI18nStore, useTranslator } from "@/lib/i18n";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
@@ -55,6 +55,8 @@ export function SettingsScreen() {
   const setRepairBias = usePreferencesStore((state) => state.setRepairBias);
   const developerMode = usePreferencesStore((state) => state.developerMode);
   const setDeveloperMode = usePreferencesStore((state) => state.setDeveloperMode);
+  const autoAudition = usePreferencesStore((state) => state.autoAudition);
+  const setAutoAudition = usePreferencesStore((state) => state.setAutoAudition);
   const [qaHealth, setQaHealth] = useState<QaHealthResponse | null>(null);
   const [i18nAudit, setI18nAudit] = useState<I18nAuditResponse | null>(null);
   const [runtimeSnapshot, setRuntimeSnapshot] = useState<RuntimeSnapshot | null>(null);
@@ -225,6 +227,38 @@ export function SettingsScreen() {
                 border: none;
               }
             `}</style>
+          </SettingsCard>
+
+          <SettingsCard
+            icon={<Volume2 className="h-4 w-4" />}
+            label={t("settings.audio.title") || "Playback"}
+          >
+            <div className="flex items-start justify-between gap-5">
+              <div>
+                <p className="text-[13px] font-medium leading-[1.5] text-[#1A1A1A]">
+                  {t("settings.audio.auto_audition") || "Auto-preview vibes"}
+                </p>
+                <p className="mt-1 text-[13px] leading-[1.6] text-[#6F6A63]">
+                  {t("settings.audio.auto_audition_body") ||
+                    "When a set finishes brewing, play the first vibe automatically. Off by default, and always off when your device prefers reduced motion."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAutoAudition(!autoAudition)}
+                className={`h-7 w-12 shrink-0 rounded-full p-1 transition-colors ${
+                  autoAudition ? "bg-[#1A1A1A]" : "bg-[#D8CCBA]"
+                }`}
+                aria-pressed={autoAudition}
+                aria-label={t("settings.audio.auto_audition") || "Auto-preview vibes"}
+              >
+                <span
+                  className={`block h-5 w-5 rounded-full bg-white transition-transform ${
+                    autoAudition ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
           </SettingsCard>
 
           <SettingsCard
