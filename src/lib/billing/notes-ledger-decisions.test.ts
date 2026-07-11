@@ -9,6 +9,8 @@ import {
   decideSpend,
   decideSpendPoolsForCost,
   decideTopupReversal,
+  originalLedgerIdFromPendingRef,
+  pendingRefundReferenceFor,
   refundReferenceFor,
   trimDailyFreeAfterTopupReversal,
 } from "@/lib/billing/notes-ledger-decisions";
@@ -146,7 +148,10 @@ describe("refundReferenceFor", () => {
 });
 
 describe("decideTopupReversal", () => {
-  it("fully reverses the purchased amount even when the balance goes negative", () => {
+  it("clamps the reversal so the balance never goes negative (#233)", () => {
+    // Buyer purchased 130 notes, then spent all but 2 before the refund.
+    // Clawing back the full 130 would drive the balance to -128 and lock the
+    // account out of every future spend; clamp to what is still on the balance.
     const result = decideTopupReversal({
       currentBalance: 2,
       amount: 130,
@@ -155,8 +160,42 @@ describe("decideTopupReversal", () => {
 
     expect(result).toEqual({
       kind: "proceed",
-      balanceAfter: -128,
+      amount: 2,
+      balanceAfter: 0,
+      clamped: true,
+      unrefunded: 128,
+    });
+  });
+
+  it("reverses the full amount when the balance still covers it", () => {
+    const result = decideTopupReversal({
+      currentBalance: 200,
       amount: 130,
+      existingRefund: null,
+    });
+
+    expect(result).toEqual({
+      kind: "proceed",
+      amount: 130,
+      balanceAfter: 70,
+      clamped: false,
+      unrefunded: 0,
+    });
+  });
+
+  it("claws back nothing (but never errors) when the balance is already in debt", () => {
+    const result = decideTopupReversal({
+      currentBalance: -5,
+      amount: 130,
+      existingRefund: null,
+    });
+
+    expect(result).toEqual({
+      kind: "proceed",
+      amount: 0,
+      balanceAfter: -5,
+      clamped: true,
+      unrefunded: 130,
     });
   });
 
@@ -173,6 +212,24 @@ describe("decideTopupReversal", () => {
       balanceAfter: -128,
       amount: 130,
     });
+  });
+});
+
+describe("pending-refund references (#232)", () => {
+  it("builds a stable refund_pending:<id> external_ref", () => {
+    expect(pendingRefundReferenceFor("nle_spend_1")).toBe("refund_pending:nle_spend_1");
+  });
+
+  it("round-trips the original ledger id out of a pending ref", () => {
+    const ref = pendingRefundReferenceFor("nle_spend_1");
+    expect(originalLedgerIdFromPendingRef(ref)).toBe("nle_spend_1");
+  });
+
+  it("does not confuse a settled refund:<id> ref for a pending marker", () => {
+    // refund:<id> (the real reversal) must not parse as a pending marker.
+    expect(originalLedgerIdFromPendingRef(refundReferenceFor("nle_spend_1"))).toBeNull();
+    expect(originalLedgerIdFromPendingRef(null)).toBeNull();
+    expect(originalLedgerIdFromPendingRef("refund_pending:")).toBeNull();
   });
 });
 

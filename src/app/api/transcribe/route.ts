@@ -11,7 +11,12 @@ import { resolveRequestAuth, type ResolvedRequestAuth } from "@/lib/auth";
 import { createSpendReference } from "@/lib/billing/spend-ref";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
-import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
+import {
+  getNotesBalance,
+  recordPendingRefund,
+  refundNotes,
+  spendNotes,
+} from "@/lib/db/queries/notes-ledger";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { classifyError } from "@/lib/errors/transient";
 import { log } from "@/lib/observability/log";
@@ -42,9 +47,22 @@ type TranscribeRouteError =
   | "no_voiced_frames"
   | "insufficient_notes"
   | "billing_unavailable"
+  | "refund_pending"
   | "server_error";
 
 type BillingMode = "ledger" | "dev_fallback";
+
+/**
+ * Distinct client signal (#232): the worker failed AND the automatic refund
+ * could not complete in-request, so a durable `refund:pending` marker was
+ * written for the reconcile cron to retry. Surfaced to the client instead of
+ * masking the charge behind the worker's own error (previous behaviour).
+ */
+const REFUND_PENDING_MESSAGE =
+  "Transcription failed and your note couldn't be returned right away — it's queued to be restored.";
+
+/** Outcome of the best-effort in-request refund after a worker failure. */
+type TranscribeRefundOutcome = "refunded" | "not_needed" | "pending";
 
 /**
  * POST /api/transcribe
@@ -157,13 +175,26 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
             requestId,
           });
         } catch (error) {
-          await refundSpendIfNeeded({
+          const outcome = await refundSpendIfNeeded({
             spend: billingResult.spend,
             requestId,
             userId,
             sessionId: auth.sessionId,
             targetInstrument,
           });
+          if (outcome === "pending") {
+            // Don't mask the charge behind the worker error — tell the client a
+            // refund is owed and being restored (#232).
+            emit(controller, {
+              phase: "error",
+              error: "refund_pending",
+              message: REFUND_PENDING_MESSAGE,
+              status: 500,
+              requestId,
+            });
+            controller.close();
+            return;
+          }
           throw error;
         }
 
@@ -602,13 +633,24 @@ async function classicTranscribe(request: NextRequest) {
         requestId,
       });
     } catch (error) {
-      await refundSpendIfNeeded({
+      const outcome = await refundSpendIfNeeded({
         spend,
         requestId,
         userId,
         sessionId: auth.sessionId,
         targetInstrument,
       });
+      if (outcome === "pending") {
+        // Refund could not complete in-request; a durable marker was written
+        // for reconcile to retry. Surface the distinct signal instead of
+        // re-throwing the worker error and masking the lost note (#232).
+        return fail("refund_pending", REFUND_PENDING_MESSAGE, 500, {
+          requestId,
+          userId,
+          startedAt,
+          phase: "billing",
+        });
+      }
       throw error;
     }
 
@@ -704,13 +746,14 @@ async function refundSpendIfNeeded(options: {
   userId: string;
   sessionId: string | null;
   targetInstrument: string;
-}): Promise<void> {
-  if (!options.spend.ok) return;
-  if (options.spend.ledgerId === null || options.spend.duplicate) return;
+}): Promise<TranscribeRefundOutcome> {
+  if (!options.spend.ok) return "not_needed";
+  if (options.spend.ledgerId === null || options.spend.duplicate) return "not_needed";
+  const ledgerId = options.spend.ledgerId;
 
   try {
     const refund = await refundNotes({
-      originalLedgerId: options.spend.ledgerId,
+      originalLedgerId: ledgerId,
       metadata: {
         requestId: options.requestId,
         targetInstrument: options.targetInstrument,
@@ -734,31 +777,92 @@ async function refundSpendIfNeeded(options: {
           level: "warn",
         });
       }
-      return;
+      return "refunded";
     }
 
-    log("notes.refund_failed", {
-      requestLedgerId: options.spend.ledgerId,
-      reason: refund.reason,
-    }, {
-      route: ROUTE,
+    return recordTranscribeRefundPending({
+      ledgerId,
+      failureReason: refund.reason,
       requestId: options.requestId,
       userId: options.userId,
       sessionId: options.sessionId,
-      level: "error",
+      targetInstrument: options.targetInstrument,
     });
   } catch (error) {
-    log("notes.refund_failed", {
-      requestLedgerId: options.spend.ledgerId,
-      reason: error instanceof Error ? error.message : String(error),
-    }, {
-      route: ROUTE,
+    return recordTranscribeRefundPending({
+      ledgerId,
+      failureReason: error instanceof Error ? error.message : String(error),
       requestId: options.requestId,
       userId: options.userId,
       sessionId: options.sessionId,
-      level: "error",
+      targetInstrument: options.targetInstrument,
     });
   }
+}
+
+/**
+ * In-request refund failed: persist a durable `refund:pending` marker (#232)
+ * so reconcile can retry the reversal idempotently, and return "pending" so the
+ * route surfaces the distinct signal rather than masking the lost note behind
+ * the worker error. A marker-write failure downgrades the log to
+ * MANUAL_REFUND_REQUIRED but still reports "pending" — the user is owed a note.
+ */
+async function recordTranscribeRefundPending(input: {
+  ledgerId: string;
+  failureReason: string;
+  requestId: string;
+  userId: string;
+  sessionId: string | null;
+  targetInstrument: string;
+}): Promise<"pending"> {
+  let pendingRecorded = false;
+  try {
+    const pending = await recordPendingRefund({
+      userId: input.userId,
+      originalLedgerId: input.ledgerId,
+      amount: COST.hum,
+      spendReason: "spend:hum",
+      requestId: input.requestId,
+      source: "transcribe_refund_failed",
+      metadata: {
+        trigger: "transcribe_worker_failed",
+        targetInstrument: input.targetInstrument,
+        refundError: input.failureReason,
+      },
+    });
+    pendingRecorded = pending.ok;
+  } catch (markerError) {
+    log("notes.refund_failed", {
+      requestLedgerId: input.ledgerId,
+      reason: input.failureReason,
+      pendingMarkerError: markerError instanceof Error ? markerError.message : String(markerError),
+      reconciliation: "MANUAL_REFUND_REQUIRED",
+    }, {
+      route: ROUTE,
+      requestId: input.requestId,
+      userId: input.userId,
+      sessionId: input.sessionId,
+      level: "error",
+    });
+    return "pending";
+  }
+
+  log(
+    pendingRecorded ? "notes.refund_pending" : "notes.refund_failed",
+    {
+      requestLedgerId: input.ledgerId,
+      reason: input.failureReason,
+      reconciliation: pendingRecorded ? "REFUND_PENDING_RECORDED" : "MANUAL_REFUND_REQUIRED",
+    },
+    {
+      route: ROUTE,
+      requestId: input.requestId,
+      userId: input.userId,
+      sessionId: input.sessionId,
+      level: pendingRecorded ? "warn" : "error",
+    },
+  );
+  return "pending";
 }
 
 function fail(

@@ -37,8 +37,15 @@ let nextEngineMode: "serverless" | "http" | null = null;
 let nextRunJobThrows: Error | null = null;
 let nextRefundResult: RefundNotesResult | null = null;
 let nextRefundThrows: Error | null = null;
+type QueueDepthShape = {
+  inQueue: number;
+  inProgress: number;
+  workers: { idle: number; running: number; total: number };
+};
+let nextQueueDepth: QueueDepthShape | null = null;
 const lastSpendInputs: SpendNotesInput[] = [];
 const lastRefundInputs: RefundNotesInput[] = [];
+const lastPendingRefundInputs: Array<{ userId: string; originalLedgerId: string }> = [];
 let runJobCallCount = 0;
 
 mock.module("@/lib/auth", () => ({
@@ -62,6 +69,15 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
       balanceBefore: 9,
       balanceAfter: 10,
       amount: 1,
+      duplicate: false,
+    };
+  },
+  recordPendingRefund: async (input: { userId: string; originalLedgerId: string }) => {
+    lastPendingRefundInputs.push(input);
+    return {
+      ok: true as const,
+      pendingLedgerId: "nle_pending",
+      externalRef: `refund_pending:${input.originalLedgerId}`,
       duplicate: false,
     };
   },
@@ -157,6 +173,7 @@ mock.module("@/lib/platform/runpod-serverless", () => ({
     status: 200,
     body: { workers: { idle: 0, running: 0 } },
   }),
+  getQueueDepth: async () => nextQueueDepth,
   runJob: async () => {
     runJobCallCount += 1;
     if (nextRunJobThrows) throw nextRunJobThrows;
@@ -214,8 +231,10 @@ beforeEach(async () => {
   nextRunJobThrows = null;
   nextRefundResult = null;
   nextRefundThrows = null;
+  nextQueueDepth = null;
   lastSpendInputs.length = 0;
   lastRefundInputs.length = 0;
+  lastPendingRefundInputs.length = 0;
   runJobCallCount = 0;
   publishedNotifications.length = 0;
 });
@@ -377,7 +396,7 @@ describe("POST /api/music/generate", () => {
     expect(lastRefundInputs[0]?.metadata?.trigger).toBe("worker_http_error");
   });
 
-  it("surfaces refund failures instead of swallowing a charged failed generation", async () => {
+  it("records a pending-refund marker and returns refund_pending when the refund fails (#232)", async () => {
     nextEngineMode = "serverless";
     nextRunJobThrows = new Error("runpod unavailable");
     nextRefundResult = { ok: false, reason: "original_not_found" };
@@ -394,9 +413,36 @@ describe("POST /api/music/generate", () => {
     expect(runJobCallCount).toBe(1);
     expect(lastSpendInputs).toHaveLength(1);
     expect(lastRefundInputs).toHaveLength(1);
-    const body = await response.json() as { error: string; message: string };
-    expect(body.error).toBe("billing_unavailable");
-    expect(body.message).toBe("Music generation refund failed");
+    // The lost note is durably recorded for reconcile to retry, keyed by the spend.
+    expect(lastPendingRefundInputs).toHaveLength(1);
+    expect(lastPendingRefundInputs[0]?.originalLedgerId).toBe("nle_music_generate");
+    const body = await response.json() as { error: string };
+    expect(body.error).toBe("refund_pending");
+  });
+
+  it("sheds load before spending a note for any account kind when the queue is deep (#230)", async () => {
+    nextEngineMode = "serverless";
+    nextQueueDepth = {
+      inQueue: 10,
+      inProgress: 2,
+      workers: { idle: 0, running: 2, total: 2 },
+    };
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_shed", email: null, name: "Shed", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_shed",
+    };
+
+    const response = await POST(buildRequest("req_music_shed"));
+
+    expect(response.status).toBe(503);
+    const body = await response.json() as { error: string };
+    expect(body.error).toBe("worker_overloaded");
+    // The whole point of #230: never charge a note we can't deliver on a cold pool.
+    expect(lastSpendInputs).toHaveLength(0);
+    expect(runJobCallCount).toBe(0);
+    expect(response.headers.get("Retry-After")).toBeTruthy();
   });
 
   it("collapses sibling clips of one batch under a shared push identity", async () => {

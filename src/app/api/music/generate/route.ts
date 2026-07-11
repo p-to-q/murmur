@@ -5,7 +5,12 @@ import { resolveRequestAuth } from "@/lib/auth";
 import { createSpendReference } from "@/lib/billing/spend-ref";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
-import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
+import {
+  getNotesBalance,
+  recordPendingRefund,
+  refundNotes,
+  spendNotes,
+} from "@/lib/db/queries/notes-ledger";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { classifyError } from "@/lib/errors/transient";
 import { log } from "@/lib/observability/log";
@@ -52,12 +57,25 @@ type MusicRouteError =
   | "validation_error"
   | "insufficient_notes"
   | "billing_unavailable"
+  | "refund_pending"
   | "worker_unconfigured"
   | "worker_unauthorized"
   | "worker_http_error"
   | "worker_overloaded"
   | "client_closed_request"
   | "server_error";
+
+/**
+ * Distinct client signal (#232): the generation failed AND the automatic
+ * in-request refund could not complete, so a durable `refund:pending` marker
+ * was written for the reconcile cron to retry. The UI shows this as "we owe
+ * you a note, it's being restored" rather than a generic failure.
+ */
+const REFUND_PENDING_MESSAGE =
+  "Generation failed and your note couldn't be returned right away — it's queued to be restored.";
+
+/** Outcome of the best-effort in-request refund after a failed generation. */
+type MusicRefundOutcome = "refunded" | "not_needed" | "pending";
 
 type BillingMode = "ledger" | "dev_fallback";
 type SuccessfulSpend = Extract<Awaited<ReturnType<typeof spendNotes>>, { ok: true }>;
@@ -153,7 +171,12 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (mode === "serverless" && auth.user.accountKind === "local_creator") {
+  // Pre-flight load-shed (#230): when the serverless queue is already deep, a
+  // new job would sit through a multi-minute cold start and risk exceeding the
+  // Vercel timeout — after the note was spent. Shed BEFORE spending, for every
+  // account kind (not just local_creator), so a cold pool never charges a note
+  // it can't deliver. `getQueueDepth` fails open (null → allow).
+  if (mode === "serverless") {
     const serverlessConfig = getMusicServerlessConfig();
     if (serverlessConfig) {
       const depth = await getQueueDepth(serverlessConfig);
@@ -162,6 +185,7 @@ export async function POST(request: NextRequest) {
           error_code: "worker_overloaded",
           inQueue: depth.inQueue,
           inProgress: depth.inProgress,
+          accountKind: auth.user.accountKind,
           loadShed: true,
         }, {
           route: ROUTE, requestId, userId, level: "warn",
@@ -268,7 +292,7 @@ export async function POST(request: NextRequest) {
         : await generateViaHttp(params, requestId, request.signal);
 
     if (!result.ok) {
-      const refunded = await refundMusicGenerateSpendIfNeeded({
+      const outcome = await refundMusicGenerateSpendIfNeeded({
         spend: spendForRefund,
         requestId,
         userId,
@@ -278,8 +302,8 @@ export async function POST(request: NextRequest) {
         trigger: result.error,
       });
       spendForRefund = null;
-      if (!refunded) {
-        return fail("billing_unavailable", "Music generation refund failed", 500, {
+      if (outcome === "pending") {
+        return fail("refund_pending", REFUND_PENDING_MESSAGE, 500, {
           requestId, userId, startedAt,
           ext: { trigger: result.error },
         });
@@ -328,7 +352,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    const refunded = await refundMusicGenerateSpendIfNeeded({
+    const outcome = await refundMusicGenerateSpendIfNeeded({
       spend: spendForRefund,
       requestId,
       userId,
@@ -338,8 +362,8 @@ export async function POST(request: NextRequest) {
       trigger: "route_exception",
     });
     spendForRefund = null;
-    if (!refunded) {
-      return fail("billing_unavailable", "Music generation refund failed", 500, {
+    if (outcome === "pending") {
+      return fail("refund_pending", REFUND_PENDING_MESSAGE, 500, {
         requestId, userId, startedAt,
         ext: {
           trigger: "route_exception",
@@ -584,14 +608,15 @@ async function refundMusicGenerateSpendIfNeeded(options: {
   promptLength: number | null;
   duration: number | null;
   trigger: string;
-}): Promise<boolean> {
+}): Promise<MusicRefundOutcome> {
   if (!options.spend || options.spend.ledgerId === null || options.spend.duplicate) {
-    return true;
+    return "not_needed";
   }
+  const ledgerId = options.spend.ledgerId;
 
   try {
     const refund = await refundNotes({
-      originalLedgerId: options.spend.ledgerId,
+      originalLedgerId: ledgerId,
       metadata: {
         requestId: options.requestId,
         promptLength: options.promptLength,
@@ -616,37 +641,91 @@ async function refundMusicGenerateSpendIfNeeded(options: {
           level: "warn",
         });
       }
-      return true;
+      return "refunded";
     }
 
-    log("notes.refund_failed", {
-      requestLedgerId: options.spend.ledgerId,
-      reason: refund.reason,
-      reconciliation: "MANUAL_REFUND_REQUIRED",
-      trigger: options.trigger,
-    }, {
-      route: ROUTE,
+    return recordMusicRefundPending({
+      ledgerId,
+      failureReason: refund.reason,
       requestId: options.requestId,
       userId: options.userId,
       sessionId: options.sessionId,
-      level: "error",
+      trigger: options.trigger,
     });
-    return false;
   } catch (error) {
-    log("notes.refund_failed", {
-      requestLedgerId: options.spend.ledgerId,
-      reason: error instanceof Error ? error.message : String(error),
-      reconciliation: "MANUAL_REFUND_REQUIRED",
-      trigger: options.trigger,
-    }, {
-      route: ROUTE,
+    return recordMusicRefundPending({
+      ledgerId,
+      failureReason: error instanceof Error ? error.message : String(error),
       requestId: options.requestId,
       userId: options.userId,
       sessionId: options.sessionId,
+      trigger: options.trigger,
+    });
+  }
+}
+
+/**
+ * In-request refund failed: persist a durable `refund:pending` marker (#232)
+ * so the reconcile cron can retry the reversal idempotently, and return
+ * "pending" so the route emits the distinct client signal. Even if the marker
+ * write itself fails we still return "pending" — the user is owed a note either
+ * way — but downgrade the log to MANUAL_REFUND_REQUIRED since nothing durable
+ * was recorded for the cron to find.
+ */
+async function recordMusicRefundPending(input: {
+  ledgerId: string;
+  failureReason: string;
+  requestId: string;
+  userId: string;
+  sessionId: string | null;
+  trigger: string;
+}): Promise<"pending"> {
+  let pendingRecorded = false;
+  try {
+    const pending = await recordPendingRefund({
+      userId: input.userId,
+      originalLedgerId: input.ledgerId,
+      amount: COST.music_generate,
+      spendReason: "spend:music_generate",
+      requestId: input.requestId,
+      source: "music_generate_refund_failed",
+      metadata: { trigger: input.trigger, refundError: input.failureReason },
+    });
+    pendingRecorded = pending.ok;
+  } catch (markerError) {
+    log("notes.refund_failed", {
+      requestLedgerId: input.ledgerId,
+      reason: input.failureReason,
+      pendingMarkerError: markerError instanceof Error ? markerError.message : String(markerError),
+      reconciliation: "MANUAL_REFUND_REQUIRED",
+      trigger: input.trigger,
+    }, {
+      route: ROUTE,
+      requestId: input.requestId,
+      userId: input.userId,
+      sessionId: input.sessionId,
       level: "error",
     });
-    return false;
+    return "pending";
   }
+
+  log(
+    pendingRecorded ? "notes.refund_pending" : "notes.refund_failed",
+    {
+      requestLedgerId: input.ledgerId,
+      reason: input.failureReason,
+      reconciliation: pendingRecorded ? "REFUND_PENDING_RECORDED" : "MANUAL_REFUND_REQUIRED",
+      trigger: input.trigger,
+    },
+    {
+      route: ROUTE,
+      requestId: input.requestId,
+      userId: input.userId,
+      sessionId: input.sessionId,
+      level: pendingRecorded ? "warn" : "error",
+    },
+  );
+  return "pending";
 }
 
 function safeHostnameFromUrl(url: string): string | null {

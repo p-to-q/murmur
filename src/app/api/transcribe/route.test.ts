@@ -37,9 +37,11 @@ let nextSpendResult: SpendNotesResult = {
 let nextSpendThrows: Error | null = null;
 let nextBalanceThrows: Error | null = null;
 let nextRefundThrows: Error | null = null;
+let nextRefundResult: { ok: false; reason: string } | null = null;
 let nextWorkerImpl: (() => Promise<TranscriptionResult>) | null = null;
 const lastSpendInputs: SpendNotesInput[] = [];
 const lastRefundInputs: RefundNotesInput[] = [];
+const lastPendingRefundInputs: Array<{ userId: string; originalLedgerId: string }> = [];
 let lastResolveAuthOptions: { allowGuestPreview?: boolean } | null = null;
 
 const stubTranscription: TranscriptionResult = {
@@ -131,6 +133,7 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
   refundNotes: async (input: RefundNotesInput) => {
     lastRefundInputs.push(input);
     if (nextRefundThrows) throw nextRefundThrows;
+    if (nextRefundResult) return nextRefundResult;
     return {
       ok: true as const,
       refundLedgerId: "nle_refund",
@@ -138,6 +141,15 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
       balanceBefore: 9,
       balanceAfter: 10,
       amount: 1,
+      duplicate: false,
+    };
+  },
+  recordPendingRefund: async (input: { userId: string; originalLedgerId: string }) => {
+    lastPendingRefundInputs.push(input);
+    return {
+      ok: true as const,
+      pendingLedgerId: "nle_pending",
+      externalRef: `refund_pending:${input.originalLedgerId}`,
       duplicate: false,
     };
   },
@@ -271,9 +283,11 @@ beforeEach(() => {
   nextSpendThrows = null;
   nextBalanceThrows = null;
   nextRefundThrows = null;
+  nextRefundResult = null;
   nextWorkerImpl = async () => stubTranscription;
   lastSpendInputs.length = 0;
   lastRefundInputs.length = 0;
+  lastPendingRefundInputs.length = 0;
   lastResolveAuthOptions = null;
 });
 
@@ -514,6 +528,29 @@ describe("POST /api/transcribe", () => {
     expect(body.error).toBe("worker_http_error");
     expect(lastSpendInputs).toHaveLength(1);
     expect(lastRefundInputs).toHaveLength(1);
+  });
+
+  it("surfaces refund_pending (not the worker error) and records a durable marker when the refund also fails (#232)", async () => {
+    nextRefundResult = { ok: false, reason: "original_not_found" };
+    nextWorkerImpl = async () => {
+      throw new AudioWorkerError(
+        "worker_http_error",
+        "Audio worker unreachable",
+        502,
+      );
+    };
+    const form = new FormData();
+    form.append("audio", audioFile());
+    const response = await POST(buildRequest(form));
+    // Previously this masked the lost note behind the worker's 502.
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe("refund_pending");
+    expect(lastSpendInputs).toHaveLength(1);
+    expect(lastRefundInputs).toHaveLength(1);
+    // A durable marker was written for the reconcile cron to retry, keyed by the spend.
+    expect(lastPendingRefundInputs).toHaveLength(1);
+    expect(lastPendingRefundInputs[0]?.originalLedgerId).toBe("nle_test");
   });
 
   it("returns 503 when the ledger spend throws", async () => {

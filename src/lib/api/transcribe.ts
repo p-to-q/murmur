@@ -22,6 +22,11 @@ export type TranscribeRequestErrorCode =
   | "no_voiced_frames"
   | "worker_unconfigured"
   | "billing_unavailable"
+  // The hum failed but the note refund could not complete in-request; a durable
+  // marker was written and reconcile will restore the note (#232). Distinct
+  // from a generic failure so the UI can reassure the user the note is coming
+  // back rather than implying it was consumed for nothing.
+  | "refund_pending"
   | "worker_unavailable"
   | "server_error"
   | "network_error";
@@ -39,6 +44,7 @@ const SERVER_ERROR_TO_CLIENT: Record<string, TranscribeRequestErrorCode> = {
   worker_http_error: "worker_unavailable",
   worker_invalid_response: "worker_unavailable",
   billing_unavailable: "billing_unavailable",
+  refund_pending: "refund_pending",
   server_error: "server_error",
 };
 

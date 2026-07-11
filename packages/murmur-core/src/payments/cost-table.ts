@@ -39,6 +39,11 @@ export type NotesReason =
   // Application-level reversal of a failed spend (transcribe/save/etc).
   // Distinct from `refund:topup`, which reverses a `purchase:topup`.
   | "refund:spend"
+  // Durable "a spend refund is owed" marker written when an in-request
+  // refund write fails. A zero-delta bookkeeping row (balance invariant is
+  // preserved); the reconcile cron finds it by external_ref and retries the
+  // real `refund:spend` idempotently. Never carries a balance change itself.
+  | "refund:pending"
   // Operations
   | "manual:op_grant";
 

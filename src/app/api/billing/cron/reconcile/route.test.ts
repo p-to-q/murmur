@@ -4,7 +4,13 @@ import type { NextRequest } from "next/server";
 let cronSecret = "cron_test";
 let merchantId: string | null = "merchant_test";
 let privateKey: string | null = "private_test";
-const reconcileInputs: Array<{ merchantId: string; privateKey: string; limit?: number }> = [];
+type ReconcileInput = {
+  merchantId: string;
+  privateKey: string;
+  limit?: number;
+  autoFix?: boolean;
+};
+const reconcileInputs: Array<ReconcileInput> = [];
 let reconcileSummary = {
   checkedAt: "2026-06-15T18:00:00.000Z",
   paymentsChecked: 2,
@@ -14,13 +20,24 @@ let reconcileSummary = {
   errorCount: 0,
   warnCount: 0,
 };
+let nextAutoFix: {
+  enabled: boolean;
+  grantsFixed: number;
+  refundsFixed: number;
+  refundsAlreadySettled: number;
+  pendingRefundsScanned: number;
+  pendingRefundPages: number;
+  requiresManualReview: number;
+  fixed: number;
+} | null = null;
 
 mock.module("@/lib/billing/waffo-reconcile", () => ({
-  reconcileWaffoBilling: mock(async (input: { merchantId: string; privateKey: string; limit?: number }) => {
+  reconcileWaffoBilling: mock(async (input: ReconcileInput) => {
     reconcileInputs.push(input);
     return {
       summary: reconcileSummary,
       issues: [],
+      ...(nextAutoFix ? { autoFix: nextAutoFix } : {}),
     };
   }),
 }));
@@ -32,6 +49,8 @@ beforeEach(() => {
   merchantId = "merchant_test";
   privateKey = "private_test";
   reconcileInputs.length = 0;
+  nextAutoFix = null;
+  delete process.env.WAFFO_RECONCILE_AUTOFIX;
   reconcileSummary = {
     checkedAt: "2026-06-15T18:00:00.000Z",
     paymentsChecked: 2,
@@ -122,5 +141,84 @@ describe("GET /api/billing/cron/reconcile", () => {
     );
 
     expect(response.status).toBe(500);
+  });
+
+  it("stays report-only by default and enables autoFix via env or ?autoFix (#238)", async () => {
+    process.env.CRON_SECRET = cronSecret;
+    process.env.WAFFO_MERCHANT_ID = merchantId;
+    process.env.WAFFO_PRIVATE_KEY = privateKey;
+
+    // Default: report-only.
+    await GET(buildRequest({ authorization: "Bearer cron_test" }));
+    expect(reconcileInputs.at(-1)?.autoFix).toBe(false);
+
+    // Env opt-in.
+    process.env.WAFFO_RECONCILE_AUTOFIX = "1";
+    await GET(buildRequest({ authorization: "Bearer cron_test" }));
+    expect(reconcileInputs.at(-1)?.autoFix).toBe(true);
+
+    // Per-request override wins over the env.
+    await GET(
+      buildRequest(
+        { authorization: "Bearer cron_test" },
+        "http://test.local/api/billing/cron/reconcile?autoFix=0",
+      ),
+    );
+    expect(reconcileInputs.at(-1)?.autoFix).toBe(false);
+  });
+
+  it("returns 200 once autoFix resolves the detected drift", async () => {
+    process.env.CRON_SECRET = cronSecret;
+    process.env.WAFFO_MERCHANT_ID = merchantId;
+    process.env.WAFFO_PRIVATE_KEY = privateKey;
+    // Drift was detected (errorCount 1) but auto-fix repaired it all.
+    reconcileSummary = { ...reconcileSummary, issueCount: 1, errorCount: 1 };
+    nextAutoFix = {
+      enabled: true,
+      grantsFixed: 1,
+      refundsFixed: 0,
+      refundsAlreadySettled: 0,
+      pendingRefundsScanned: 0,
+      pendingRefundPages: 0,
+      requiresManualReview: 0,
+      fixed: 1,
+    };
+
+    const response = await GET(
+      buildRequest(
+        { authorization: "Bearer cron_test" },
+        "http://test.local/api/billing/cron/reconcile?autoFix=1",
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { autoFix?: { fixed: number } };
+    expect(body.autoFix?.fixed).toBe(1);
+  });
+
+  it("returns 207 when autoFix still leaves items for manual review", async () => {
+    process.env.CRON_SECRET = cronSecret;
+    process.env.WAFFO_MERCHANT_ID = merchantId;
+    process.env.WAFFO_PRIVATE_KEY = privateKey;
+    reconcileSummary = { ...reconcileSummary, issueCount: 1, errorCount: 1 };
+    nextAutoFix = {
+      enabled: true,
+      grantsFixed: 0,
+      refundsFixed: 0,
+      refundsAlreadySettled: 0,
+      pendingRefundsScanned: 1,
+      pendingRefundPages: 1,
+      requiresManualReview: 1,
+      fixed: 0,
+    };
+
+    const response = await GET(
+      buildRequest(
+        { authorization: "Bearer cron_test" },
+        "http://test.local/api/billing/cron/reconcile?autoFix=1",
+      ),
+    );
+
+    expect(response.status).toBe(207);
   });
 });
