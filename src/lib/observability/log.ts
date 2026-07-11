@@ -32,6 +32,12 @@ export type LogEvent =
   | "transcribe.requested"
   | "transcribe.completed"
   | "transcribe.failed"
+  // Client disconnected mid-stream; the spent note was refunded (#206).
+  | "transcribe.client_disconnected"
+  // A streaming NDJSON line failed JSON parse or schema validation, or a
+  // progress handler threw; the line was skipped instead of failing the whole
+  // transcription (#224).
+  | "transcribe.stream_event_invalid"
   | "notes.spent"
   | "notes.granted"
   | "notes.refund_failed"

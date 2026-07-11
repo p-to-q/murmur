@@ -254,6 +254,42 @@ function buildRequest(
   }) as unknown as NextRequest;
 }
 
+function buildStreamingRequest(
+  form: FormData,
+  options: { requestId?: string; signal?: AbortSignal } = {},
+): NextRequest {
+  const headers = new Headers({ Accept: "text/x-ndjson" });
+  if (options.requestId) headers.set("x-request-id", options.requestId);
+  return new Request("http://test.local/api/transcribe", {
+    method: "POST",
+    body: form,
+    headers,
+    signal: options.signal,
+  }) as unknown as NextRequest;
+}
+
+type StreamEvent = { phase: string; [key: string]: unknown };
+
+async function drainNdjson(response: Response): Promise<StreamEvent[]> {
+  const reader = response.body?.getReader();
+  if (!reader) return [];
+  const decoder = new TextDecoder();
+  const events: StreamEvent[] = [];
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (value) buffer += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 1);
+      if (line) events.push(JSON.parse(line) as StreamEvent);
+    }
+    if (done) break;
+  }
+  return events;
+}
+
 beforeEach(() => {
   delete process.env.MURMUR_RATE_LIMIT_DRIVER;
   resetCachedRateLimitStore();
@@ -694,5 +730,147 @@ describe("POST /api/transcribe", () => {
     expect(response.status).toBe(502);
     expect(lastSpendInputs).toHaveLength(1);
     expect(lastRefundInputs).toHaveLength(0);
+  });
+
+  // --- Streaming (NDJSON) path (#206) ---
+
+  it("streams progress events and returns the melody without refunding (happy path)", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    nextWorkerImpl = async () => stubTranscription;
+
+    try {
+      const form = new FormData();
+      form.append("audio", audioFile());
+      form.append("targetInstrument", "piano");
+      const response = await POST(
+        buildStreamingRequest(form, { requestId: "req_stream_ok" }),
+      );
+      expect(response.headers.get("Content-Type")).toContain("text/x-ndjson");
+
+      const events = await drainNdjson(response);
+      expect(events.map((e) => e.phase)).toEqual([
+        "billing_ok",
+        "worker_started",
+        "complete",
+      ]);
+      const complete = events.find((e) => e.phase === "complete");
+      expect((complete?.result as TranscriptionResult).provider).toBe("swiftf0");
+      expect(lastSpendInputs).toHaveLength(1);
+      expect(lastRefundInputs).toHaveLength(0);
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+    }
+  });
+
+  it("refunds and emits an error event when the worker fails mid-stream", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    nextWorkerImpl = async () => {
+      throw new AudioWorkerError("worker_http_error", "Audio worker unreachable", 502);
+    };
+
+    try {
+      const form = new FormData();
+      form.append("audio", audioFile());
+      form.append("targetInstrument", "piano");
+      const response = await POST(
+        buildStreamingRequest(form, { requestId: "req_stream_err" }),
+      );
+
+      const events = await drainNdjson(response);
+      const errorEvent = events.find((e) => e.phase === "error");
+      expect(errorEvent?.error).toBe("worker_http_error");
+      expect(errorEvent?.status).toBe(502);
+      expect(lastSpendInputs).toHaveLength(1);
+      expect(lastRefundInputs).toHaveLength(1);
+      expect(lastRefundInputs[0]?.originalLedgerId).toBe("nle_test");
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+    }
+  });
+
+  it("refunds the spent note exactly once when the client disconnects mid-stream (#206)", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    const abort = new AbortController();
+    // Resolve `workerEntered` the moment the route reaches the worker call —
+    // this is strictly after billing/spend — then hang forever so the client
+    // disconnect wins the race deterministically (no fixed-delay flakiness).
+    let workerEntered!: () => void;
+    const workerReady = new Promise<void>((resolve) => {
+      workerEntered = resolve;
+    });
+    nextWorkerImpl = () => {
+      workerEntered();
+      return new Promise<TranscriptionResult>(() => {
+        /* never settles */
+      });
+    };
+
+    try {
+      const form = new FormData();
+      form.append("audio", audioFile());
+      form.append("targetInstrument", "piano");
+      const response = await POST(
+        buildStreamingRequest(form, {
+          requestId: "req_disconnect",
+          signal: abort.signal,
+        }),
+      );
+      expect(response.headers.get("Content-Type")).toContain("text/x-ndjson");
+
+      // Worker was entered => the note was already spent, nothing refunded yet.
+      await workerReady;
+      expect(lastSpendInputs).toHaveLength(1);
+      expect(lastRefundInputs).toHaveLength(0);
+
+      // Client goes away mid-stream. drainNdjson then blocks until the refund
+      // completes and the route closes the stream, so the assertions below race
+      // nothing.
+      abort.abort();
+      const events = await drainNdjson(response);
+
+      const phases = events.map((e) => e.phase);
+      expect(phases).toContain("billing_ok");
+      expect(phases).toContain("worker_started");
+      expect(phases).not.toContain("complete");
+      // Exactly one refund: the disconnect branch and the (unreached) worker
+      // branch are mutually exclusive, and refundNotes is idempotent by ledger.
+      expect(lastRefundInputs).toHaveLength(1);
+      expect(lastRefundInputs[0]?.originalLedgerId).toBe("nle_test");
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+    }
+  });
+
+  it("emits refund_pending on the stream when the worker fails and the refund also fails (#232)", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    nextRefundResult = { ok: false, reason: "original_not_found" };
+    nextWorkerImpl = async () => {
+      throw new AudioWorkerError("worker_http_error", "Audio worker unreachable", 502);
+    };
+
+    try {
+      const form = new FormData();
+      form.append("audio", audioFile());
+      form.append("targetInstrument", "piano");
+      const response = await POST(
+        buildStreamingRequest(form, { requestId: "req_stream_pending" }),
+      );
+
+      const events = await drainNdjson(response);
+      const errorEvent = events.find((e) => e.phase === "error");
+      expect(errorEvent?.error).toBe("refund_pending");
+      expect(errorEvent?.status).toBe(500);
+      expect(lastSpendInputs).toHaveLength(1);
+      expect(lastRefundInputs).toHaveLength(1);
+      // A durable marker was written for the reconcile cron to retry.
+      expect(lastPendingRefundInputs).toHaveLength(1);
+      expect(lastPendingRefundInputs[0]?.originalLedgerId).toBe("nle_test");
+    } finally {
+      process.env.NODE_ENV = prevNodeEnv;
+    }
   });
 });

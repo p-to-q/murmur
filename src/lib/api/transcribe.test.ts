@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import {
   TranscribeRequestError,
   transcribeRecording,
+  transcribeRecordingStreaming,
 } from "@/lib/api/transcribe";
 
 const originalFetch = globalThis.fetch;
@@ -179,5 +180,124 @@ describe("transcribeRecording typed error mapping", () => {
       expect(typed.code).toBe("network_error");
       expect(typed.status).toBe(0);
     }
+  });
+});
+
+function ndjsonResponse(lines: string[]): Response {
+  return new Response(lines.join("\n") + "\n", {
+    status: 200,
+    headers: { "Content-Type": "text/x-ndjson; charset=utf-8" },
+  });
+}
+
+describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("dispatches progress phases and returns the completed result", async () => {
+    const phases: string[] = [];
+    globalThis.fetch = (async () =>
+      ndjsonResponse([
+        JSON.stringify({ phase: "billing_ok", balanceBefore: 9 }),
+        JSON.stringify({ phase: "worker_started" }),
+        JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
+      ])) as typeof fetch;
+
+    const result = await transcribeRecordingStreaming(blob(), {
+      onProgress: (phase) => phases.push(phase),
+    });
+
+    expect(phases).toEqual(["billing_ok", "worker_started", "complete"]);
+    expect((result as { provider: string }).provider).toBe("swiftf0");
+  });
+
+  it("skips an unparseable (non-JSON) line instead of rejecting the transcription", async () => {
+    globalThis.fetch = (async () =>
+      ndjsonResponse([
+        JSON.stringify({ phase: "billing_ok", balanceBefore: 9 }),
+        "<html>502 Bad Gateway</html>",
+        JSON.stringify({ phase: "complete", result: { provider: "rmvpe" } }),
+      ])) as typeof fetch;
+
+    const result = await transcribeRecordingStreaming(blob());
+    expect((result as { provider: string }).provider).toBe("rmvpe");
+  });
+
+  it("skips a well-formed line with an unrecognized phase (schema mismatch)", async () => {
+    const phases: string[] = [];
+    globalThis.fetch = (async () =>
+      ndjsonResponse([
+        // A future/foreign event shape must not be dispatched to onProgress.
+        JSON.stringify({ phase: "interim_melody", melody: { notes: "bad" } }),
+        JSON.stringify({ phase: "worker_started" }),
+        JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
+      ])) as typeof fetch;
+
+    const result = await transcribeRecordingStreaming(blob(), {
+      onProgress: (phase) => phases.push(phase),
+    });
+
+    expect(phases).toEqual(["worker_started", "complete"]);
+    expect((result as { provider: string }).provider).toBe("swiftf0");
+  });
+
+  it("skips a malformed error event (missing fields) rather than throwing a bogus typed error", async () => {
+    globalThis.fetch = (async () =>
+      ndjsonResponse([
+        // Missing message/status/requestId — not a usable error event.
+        JSON.stringify({ phase: "error", error: "server_error" }),
+        JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
+      ])) as typeof fetch;
+
+    const result = await transcribeRecordingStreaming(blob());
+    expect((result as { provider: string }).provider).toBe("swiftf0");
+  });
+
+  it("still surfaces a well-formed error event as a typed transport error", async () => {
+    globalThis.fetch = (async () =>
+      ndjsonResponse([
+        JSON.stringify({ phase: "billing_ok", balanceBefore: 0 }),
+        JSON.stringify({
+          phase: "error",
+          error: "insufficient_notes",
+          message: "Not enough Murmur Notes",
+          status: 402,
+          requestId: "req_stream_402",
+          currentBalance: 0,
+        }),
+      ])) as typeof fetch;
+
+    try {
+      await transcribeRecordingStreaming(blob());
+      throw new Error("expected transcribeRecordingStreaming to throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(TranscribeRequestError);
+      const typed = error as TranscribeRequestError;
+      expect(typed.code).toBe("insufficient_notes");
+      expect(typed.status).toBe(402);
+      expect(typed.requestId).toBe("req_stream_402");
+      expect(typed.currentBalance).toBe(0);
+    }
+  });
+
+  it("does not reject the transcription when onProgress throws (keeps the client-pitch fallback reachable)", async () => {
+    globalThis.fetch = (async () =>
+      ndjsonResponse([
+        JSON.stringify({ phase: "billing_ok", balanceBefore: 9 }),
+        JSON.stringify({ phase: "worker_started" }),
+        JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
+      ])) as typeof fetch;
+
+    const result = await transcribeRecordingStreaming(blob(), {
+      onProgress: () => {
+        throw new Error("UI blew up while updating the phase indicator");
+      },
+    });
+
+    // A throwing progress handler must never convert a successful transcription
+    // into a rejection (which upstream would not classify as a network error,
+    // skipping the fallback the user already paid a note for).
+    expect((result as { provider: string }).provider).toBe("swiftf0");
   });
 });

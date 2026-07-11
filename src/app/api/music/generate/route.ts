@@ -12,6 +12,7 @@ import {
   spendNotes,
 } from "@/lib/db/queries/notes-ledger";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
+import { safeHostnameFromUrl } from "@/lib/http/safe-hostname";
 import { classifyError } from "@/lib/errors/transient";
 import { log } from "@/lib/observability/log";
 import { checkBudget } from "@/lib/observability/latency-budgets";
@@ -726,14 +727,6 @@ async function recordMusicRefundPending(input: {
     },
   );
   return "pending";
-}
-
-function safeHostnameFromUrl(url: string): string | null {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return null;
-  }
 }
 
 /** Production path: invoke the RunPod Serverless endpoint (JSON + base64). */

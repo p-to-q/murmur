@@ -18,6 +18,7 @@ import {
   spendNotes,
 } from "@/lib/db/queries/notes-ledger";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
+import { safeHostnameFromUrl } from "@/lib/http/safe-hostname";
 import { classifyError } from "@/lib/errors/transient";
 import { log } from "@/lib/observability/log";
 import { checkBudget } from "@/lib/observability/latency-budgets";
@@ -87,6 +88,27 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
     controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
   }
 
+  // Unified client-disconnect signal (#206). Fed by both the request abort
+  // (`request.signal` fires in the Node runtime when the socket drops) and the
+  // response stream's `cancel()` (fires when the consumer tears down) so a
+  // mid-stream disconnect refunds the spent note no matter which teardown
+  // signal the platform delivers first.
+  const clientGone = new AbortController();
+  const markClientGone = () => clientGone.abort();
+  if (request.signal.aborted) {
+    markClientGone();
+  } else {
+    request.signal.addEventListener("abort", markClientGone, { once: true });
+  }
+
+  function safeClose(controller: ReadableStreamDefaultController) {
+    try {
+      controller.close();
+    } catch {
+      // Stream already torn down by the client disconnect — nothing to close.
+    }
+  }
+
   const stream = new ReadableStream({
     async start(controller) {
       try {
@@ -141,6 +163,13 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
           return;
         }
 
+        // Client already vanished before we spent anything (#206) — bail before
+        // billing so there's no note to refund.
+        if (clientGone.signal.aborted) {
+          safeClose(controller);
+          return;
+        }
+
         const billingResult = await resolveBilling(request, auth, userId, requestId, startedAt, spendRef, targetInstrument);
         if (!billingResult.ok) {
           emit(controller, { phase: "error", error: billingResult.errorCode, message: billingResult.message, status: billingResult.status, requestId, currentBalance: billingResult.currentBalance });
@@ -167,14 +196,68 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
 
         emit(controller, { phase: "worker_started" });
 
-        let result: Awaited<ReturnType<typeof transcribeWithAudioWorker>>;
-        try {
-          result = await transcribeWithAudioWorker({
-            audio,
-            targetInstrument,
+        // Race the worker call against a client disconnect (#206). On disconnect
+        // we stop awaiting the worker and refund the spent note — mirroring the
+        // worker-failure refund the classic path performs — instead of silently
+        // keeping the charge for a transcription the user will never receive.
+        // The underlying worker fetch self-terminates within its own retry
+        // budget (audio-worker.ts); we don't hold the request open for it.
+        const disconnected = new Promise<{ kind: "disconnected" }>((resolve) => {
+          if (clientGone.signal.aborted) {
+            resolve({ kind: "disconnected" });
+            return;
+          }
+          clientGone.signal.addEventListener(
+            "abort",
+            () => resolve({ kind: "disconnected" }),
+            { once: true },
+          );
+        });
+
+        // Fold the worker's settlement into a value (never a rejection) so a
+        // disconnect that wins the race can't leave the worker promise rejecting
+        // unobserved once we've stopped awaiting it.
+        const workerSettled = transcribeWithAudioWorker({
+          audio,
+          targetInstrument,
+          requestId,
+        }).then(
+          (value) => ({ kind: "result" as const, value }),
+          (error: unknown) => ({ kind: "error" as const, error }),
+        );
+
+        const raced = await Promise.race([workerSettled, disconnected]);
+
+        if (raced.kind === "disconnected") {
+          // The three race outcomes are mutually exclusive, so the refund below
+          // and the worker-error refund can't both fire for one request; the
+          // underlying refund is also idempotent by ledger id, so a late
+          // `cancel()` after settlement can never double-credit.
+          const outcome = await refundSpendIfNeeded({
+            spend: billingResult.spend,
             requestId,
+            userId,
+            sessionId: auth.sessionId,
+            targetInstrument,
           });
-        } catch (error) {
+          log("transcribe.client_disconnected", {
+            targetInstrument,
+            billingMode: billingResult.billingMode,
+            refund: outcome,
+            streaming: true,
+          }, {
+            route: ROUTE,
+            requestId,
+            userId,
+            sessionId: auth.sessionId,
+            durationMs: Math.round(performance.now() - startedAt),
+            level: "warn",
+          });
+          safeClose(controller);
+          return;
+        }
+
+        if (raced.kind === "error") {
           const outcome = await refundSpendIfNeeded({
             spend: billingResult.spend,
             requestId,
@@ -195,8 +278,10 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
             controller.close();
             return;
           }
-          throw error;
+          throw raced.error;
         }
+
+        const result = raced.value;
 
         const totalDurationMs = Math.round(performance.now() - startedAt);
         const budget = checkBudget("transcribe", totalDurationMs);
@@ -242,6 +327,11 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
         }
         controller.close();
       }
+    },
+    cancel() {
+      // The consumer (client) went away. Unblock any in-flight worker race so
+      // the spent note is refunded via the disconnect branch above (#206).
+      markClientGone();
     },
   });
 
@@ -722,14 +812,6 @@ function shouldAllowGuestTranscribePreview(request: NextRequest): boolean {
   if (process.env.NODE_ENV === "development") return true;
   const host = request.nextUrl?.hostname || safeHostnameFromUrl(request.url);
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
-}
-
-function safeHostnameFromUrl(url: string): string | null {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return null;
-  }
 }
 
 async function refundSpendIfNeeded(options: {
