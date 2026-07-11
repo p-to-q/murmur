@@ -26,6 +26,7 @@ const zpayCreateOrder = mock(async () => ({
   tradeNo: "zpay_trade_123",
 }));
 const purchaseInserts: Array<Record<string, unknown>> = [];
+const purchaseUpdates: Array<Record<string, unknown>> = [];
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
@@ -53,6 +54,14 @@ mock.module("@/lib/db/client", () => ({
         purchaseInserts.push(row);
         return Promise.resolve([]);
       },
+    }),
+    update: () => ({
+      set: (row: Record<string, unknown>) => ({
+        where: () => {
+          purchaseUpdates.push(row);
+          return Promise.resolve([]);
+        },
+      }),
     }),
   },
 }));
@@ -82,6 +91,7 @@ beforeEach(async () => {
   };
   createdSessions.length = 0;
   purchaseInserts.length = 0;
+  purchaseUpdates.length = 0;
   checkoutCreate.mockClear();
   zpayCreateOrder.mockClear();
   waffoConfigured = true;
@@ -108,13 +118,27 @@ describe("POST /api/billing/checkout", () => {
         skuId: "topup_120_notes",
         notesGranted: "130",
         purchaseKind: "sku",
+        pendingProviderRef: expect.stringMatching(/^waffo-pending:pur_/),
       },
       orderMerchantExternalId: expect.stringMatching(
-        /^usr_checkout:topup_120_notes:/,
+        /^waffo-pending:pur_/,
       ),
       successUrl: "http://test.local/topup/checkout?sku=topup_120_notes&currency=USD&status=success",
       priceSnapshot: { amount: "5.99", taxCategory: "digital_goods" },
     });
+    expect(purchaseInserts).toHaveLength(1);
+    expect(purchaseInserts[0]).toMatchObject({
+      id: expect.stringMatching(/^pur_/),
+      userId: "usr_checkout",
+      provider: "waffo",
+      productId: "topup_120_notes",
+      providerRef: expect.stringMatching(/^waffo-pending:pur_/),
+      amountCents: 599,
+      currency: "USD",
+      notesGranted: 130,
+      status: "pending",
+    });
+    expect(purchaseUpdates).toHaveLength(1);
   });
 
   it("falls back to the signed-in account email when no billing email is supplied", async () => {
@@ -145,11 +169,20 @@ describe("POST /api/billing/checkout", () => {
         skuId: "topup_custom",
         notesGranted: "240",
         purchaseKind: "custom",
+        pendingProviderRef: expect.stringMatching(/^waffo-pending:pur_/),
         customAmountUsd: "12",
         customAmountCents: "1200",
       },
       successUrl: "http://test.local/topup/checkout?customAmountUsd=12&status=success",
       priceSnapshot: { amount: "12.00", taxCategory: "digital_goods" },
+    });
+    expect(purchaseInserts[0]).toMatchObject({
+      provider: "waffo",
+      productId: "topup_custom",
+      amountCents: 1200,
+      currency: "USD",
+      notesGranted: 240,
+      status: "pending",
     });
   });
 

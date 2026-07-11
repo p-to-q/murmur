@@ -284,7 +284,9 @@ export const purchases = pgTable(
     provider:     varchar("provider", { length: 16 }).notNull(),
     // provider: "waffo" (web; "stripe" retired) | "wechat_pay" | "apple_iap" | "google_play" | "revenuecat"
     productId:    varchar("product_id", { length: 64 }).notNull(),  // SKU id
-    providerRef:  varchar("provider_ref", { length: 128 }).notNull(),  // provider's transaction id
+    providerRef:  varchar("provider_ref", { length: 128 }).notNull(),
+    // Provider transaction id. Waffo pending rows temporarily use Murmur's
+    // orderMerchantExternalId, then switch to the final orderId on success.
     amountCents:  integer("amount_cents").notNull(),
     currency:     varchar("currency", { length: 8 }).notNull(),       // "USD" | "CNY"
     notesGranted: integer("notes_granted").notNull(),
@@ -304,8 +306,12 @@ export const purchases = pgTable(
 
 Lifecycle:
 
-- `pending` on prepay (Waffo checkout init, WeChat unified order).
-- `succeeded` after webhook verification + ledger grant insert.
+- `pending` on prepay (Waffo checkout init, WeChat unified order). Waffo stores
+  the checkout-generated `waffo-pending:pur_…` merchant reference in
+  `providerRef` together with the authoritative amount/grant snapshot.
+- `succeeded` after webhook verification + snapshot validation + ledger grant
+  insert. The same Waffo row switches `providerRef` to the final `orderId` in
+  that transaction; no extra correlation column is required.
 - `refunded` after refund webhook + matching negative ledger row.
 - `failed` after provider error event.
 

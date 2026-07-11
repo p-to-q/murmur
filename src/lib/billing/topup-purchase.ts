@@ -11,6 +11,16 @@ import { displayAmountToCents } from "@/lib/billing/waffo";
 
 export class InvalidTopupPurchaseError extends Error {}
 
+export const WAFFO_PENDING_PROVIDER_REF_PREFIX = "waffo-pending:";
+
+export function waffoPendingProviderRef(purchaseId: string): string {
+  return `${WAFFO_PENDING_PROVIDER_REF_PREFIX}${purchaseId}`;
+}
+
+export function isWaffoPendingProviderRef(value: string | null | undefined): boolean {
+  return Boolean(value?.startsWith(WAFFO_PENDING_PROVIDER_REF_PREFIX));
+}
+
 export interface ResolvedTopupPurchase {
   userId: string;
   productId: string;

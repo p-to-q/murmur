@@ -63,7 +63,7 @@ export interface WaffoReconcileReport {
   autoFix?: WaffoAutoFixReport;
 }
 
-interface WaffoPayment {
+export interface WaffoPayment {
   id: string;
   orderId: string | null;
   orderMerchantExternalId: string | null;
@@ -76,7 +76,7 @@ interface WaffoPayment {
   } | null;
 }
 
-interface WaffoRefund {
+export interface WaffoRefund {
   id: string;
   eventId: string | null;
   orderMerchantExternalId: string | null;
@@ -138,20 +138,31 @@ export async function reconcileWaffoBilling(options: WaffoReconcileOptions): Pro
   const payments = waffo.data?.payments ?? [];
   const refunds = waffo.data?.refunds ?? [];
   const orderIds = Array.from(new Set(payments.map((payment) => payment.orderId ?? payment.onetimeOrder?.id).filter(isString)));
+  const merchantOrderRefs = Array.from(
+    new Set(
+      payments
+        .map((payment) => payment.orderMerchantExternalId)
+        .filter(isString),
+    ),
+  );
   const refundRefs = refunds.flatMap((refund) => {
-    const refs = [`waffo-refund:${refund.id}`];
-    if (refund.refundTicketMerchantExternalId) {
-      refs.push(`waffo-refund:${refund.refundTicketMerchantExternalId}`);
-    }
-    return refs;
+    return [
+      refund.id,
+      refund.eventId,
+      refund.refundTicketMerchantExternalId,
+      refund.orderMerchantExternalId,
+    ]
+      .filter(isString)
+      .map((ref) => `waffo-refund:${ref}`);
   });
   const ledgerRefs = [...orderIds, ...refundRefs];
 
-  const localPurchases = orderIds.length
+  const purchaseRefs = Array.from(new Set([...orderIds, ...merchantOrderRefs]));
+  const localPurchases = purchaseRefs.length
     ? await db
         .select()
         .from(purchases)
-        .where(and(eq(purchases.provider, "waffo"), inArray(purchases.providerRef, orderIds)))
+        .where(and(eq(purchases.provider, "waffo"), inArray(purchases.providerRef, purchaseRefs)))
     : [];
 
   const localLedgers = ledgerRefs.length
@@ -166,7 +177,8 @@ export async function reconcileWaffoBilling(options: WaffoReconcileOptions): Pro
         .where(inArray(notesLedger.externalRef, ledgerRefs))
     : [];
 
-  const purchaseByOrder = new Map(localPurchases.map((purchase) => [purchase.providerRef, purchase]));
+  const purchaseByRef = new Map(localPurchases.map((purchase) => [purchase.providerRef, purchase]));
+  const purchaseByOrder = new Map<string, Purchase>();
   const grantByOrder = new Map(
     localLedgers
       .filter((ledger) => ledger.reason === "purchase:topup" && ledger.externalRef)
@@ -191,7 +203,7 @@ export async function reconcileWaffoBilling(options: WaffoReconcileOptions): Pro
       continue;
     }
 
-    const local = purchaseByOrder.get(orderId);
+    const local = findLocalPurchaseForWaffoPayment(payment, purchaseByRef);
     if (!local) {
       issues.push({
         severity: "error",
@@ -202,12 +214,19 @@ export async function reconcileWaffoBilling(options: WaffoReconcileOptions): Pro
       });
       continue;
     }
+    purchaseByOrder.set(orderId, local);
 
     if (local.status !== "succeeded" && local.status !== "refunded") {
       issues.push({
         severity: "error",
-        code: "local_purchase_status_mismatch",
-        message: `Local purchase status is ${local.status}, expected succeeded/refunded.`,
+        code:
+          local.status === "pending"
+            ? "local_purchase_pending_after_payment"
+            : "local_purchase_status_mismatch",
+        message:
+          local.status === "pending"
+            ? "Succeeded Waffo payment still has an unfulfilled pending local purchase."
+            : `Local purchase status is ${local.status}, expected succeeded/refunded.`,
         orderId,
         paymentId: payment.id,
       });
@@ -225,6 +244,13 @@ export async function reconcileWaffoBilling(options: WaffoReconcileOptions): Pro
           paymentId: payment.id,
         });
       }
+    }
+
+    // A pending row is authoritative evidence for manual webhook replay, but
+    // reconcile must not grant from it directly: only webhook fulfillment may
+    // switch providerRef to the final order id and write the grant atomically.
+    if (local.status !== "succeeded" && local.status !== "refunded") {
+      continue;
     }
 
     const grant = grantByOrder.get(orderId);
@@ -258,15 +284,13 @@ export async function reconcileWaffoBilling(options: WaffoReconcileOptions): Pro
       continue;
     }
 
-    const expectedLedgerRefs = [
-      refund.refundTicketMerchantExternalId
-        ? `waffo-refund:${refund.refundTicketMerchantExternalId}`
-        : null,
-      refund.eventId ? `waffo-refund:${refund.eventId}` : null,
-      refund.orderMerchantExternalId
-        ? `waffo-refund:${refund.orderMerchantExternalId}`
-        : null,
-    ].filter(isString);
+    const refundOrderId = payments.find(
+      (payment) =>
+        payment.orderMerchantExternalId === refund.orderMerchantExternalId,
+    );
+    const providerOrderId =
+      refundOrderId?.orderId ?? refundOrderId?.onetimeOrder?.id ?? null;
+    const expectedLedgerRefs = waffoRefundLedgerRefs(refund, providerOrderId);
 
     if (!refund.refundTicketMerchantExternalId) {
       issues.push({
@@ -459,6 +483,44 @@ function normalizeLimit(limit: number): number {
     throw new Error("limit must be an integer between 1 and 500");
   }
   return limit;
+}
+
+export function findLocalPurchaseForWaffoPayment<T>(
+  payment: Pick<
+    WaffoPayment,
+    "orderId" | "onetimeOrder" | "orderMerchantExternalId"
+  >,
+  purchaseByRef: ReadonlyMap<string, T>,
+): T | undefined {
+  const orderId = payment.orderId ?? payment.onetimeOrder?.id;
+  if (orderId) {
+    const finalized = purchaseByRef.get(orderId);
+    if (finalized) return finalized;
+  }
+  return payment.orderMerchantExternalId
+    ? purchaseByRef.get(payment.orderMerchantExternalId)
+    : undefined;
+}
+
+export function waffoRefundLedgerRefs(
+  refund: Pick<
+    WaffoRefund,
+    | "id"
+    | "eventId"
+    | "orderMerchantExternalId"
+    | "refundTicketMerchantExternalId"
+  >,
+  providerOrderId: string | null,
+): string[] {
+  return [
+    refund.refundTicketMerchantExternalId,
+    refund.eventId,
+    refund.id,
+    providerOrderId,
+    refund.orderMerchantExternalId,
+  ]
+    .filter(isString)
+    .map((ref) => `waffo-refund:${ref}`);
 }
 
 function isString(value: unknown): value is string {
