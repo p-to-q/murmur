@@ -170,7 +170,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
   const [phase, setPhase] = useState<Phase>("closing");
   const [pickingId, setPickingId] = useState<string | null>(null);
-  const [waitHintMs, setWaitHintMs] = useState<number | null>(null);
+  const [fetchedWaitMs, setFetchedWaitMs] = useState<number | null>(null);
   const demoSeededRef = useRef(false);
   const sourceVersion = vibeVersions[0] ?? null;
   const fromSavedSong = sourceVersion?.sourceType === "library";
@@ -298,23 +298,21 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   ]);
 
   /* ── Wait estimate: surface the queue/cold-start hint while brewing ──
-     Prefer the estimate captured at the pre-generation health gate (fetched
-     moments before this screen mounted); fall back to a fresh probe. Cold-start
-     waits can run into minutes, so this keeps "brewing" from reading as a hang
-     (issue #216). */
+     Derive the immediate hint during render (null when idle, or the cached
+     health estimate captured at the pre-generation gate) — only the async
+     fallback probe needs an effect, which avoids a synchronous setState in the
+     effect body. Cold-start waits can run into minutes, so this keeps "brewing"
+     from reading as a hang (issue #216). */
+  const waitHintMs = isBrewing
+    ? (getCachedMusicEngineStatus()?.estimatedWaitMs ?? fetchedWaitMs)
+    : null;
   useEffect(() => {
-    if (!isBrewing) {
-      setWaitHintMs(null);
-      return;
-    }
+    if (!isBrewing) return;
     const cached = getCachedMusicEngineStatus();
-    if (cached && cached.estimatedWaitMs != null) {
-      setWaitHintMs(cached.estimatedWaitMs);
-      return;
-    }
+    if (cached && cached.estimatedWaitMs != null) return;
     let cancelled = false;
     void fetchMusicEngineStatus().then((status) => {
-      if (!cancelled) setWaitHintMs(status.estimatedWaitMs ?? null);
+      if (!cancelled) setFetchedWaitMs(status.estimatedWaitMs ?? null);
     });
     return () => {
       cancelled = true;
