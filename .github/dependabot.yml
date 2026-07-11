@@ -40,6 +40,11 @@ updates:
       # on purpose post-launch.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # ESLint 10 drops the legacy config system and several rule defaults —
+      # a deliberate migration, not a routine bump. Stay on 9.x until we
+      # adopt flat-config v10 on purpose post-launch.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "pip"
     directory: "/workers/audio-engine"
