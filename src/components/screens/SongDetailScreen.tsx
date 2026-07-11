@@ -46,6 +46,7 @@ import {
   buildSavedSongRemixVersions,
 } from "@/modules/music/saved-song-version";
 import { buildLineageTrail } from "@/modules/music/lineage";
+import { isIncompleteSongArtifact } from "@/modules/music/song-artifact";
 import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
@@ -737,6 +738,22 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               onOpenSong={(id) => router.push(`/song/${id}`)}
               reduceMotion={reduceMotion}
             />
+
+            {/* Incomplete/draft state — audio never rendered (#291) */}
+            {isIncompleteSongArtifact(song) && (
+              <motion.div
+                {...entryMotion(reduceMotion, { y: 6, delay: 0.2 })}
+                className="mt-10 rounded-[18px] border border-[#E7C9B3] bg-[#FBF1E9] px-5 py-4"
+              >
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[#B26B45]">
+                  {t("song.incomplete.badge") || "Incomplete draft"}
+                </p>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-[#8A6A57]">
+                  {t("song.incomplete.body") ||
+                    "This song's audio didn't finish rendering, so it can't be shared or downloaded yet. Reopen it in the studio to finish it."}
+                </p>
+              </motion.div>
+            )}
 
             {/* Export list */}
             <motion.p

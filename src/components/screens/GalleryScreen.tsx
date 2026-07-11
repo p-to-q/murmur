@@ -348,6 +348,8 @@ export function GalleryScreen() {
                 index={i}
                 onClick={handleSongClick}
                 onDelete={isShowingDemo ? undefined : handleDeleteRequest}
+                isDraft={song.hasAudio === false}
+                draftLabel={t("gallery.draft") || "Draft"}
               />
             ))}
           </div>

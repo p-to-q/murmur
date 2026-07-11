@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   SONG_ARTIFACT_VERSION,
   computeSaveFingerprint,
+  isIncompleteSongArtifact,
   readSongArtifact,
   validateCleanMelody,
   validateSongProvenance,
@@ -70,6 +71,14 @@ describe("readSongArtifact", () => {
     const artifact = readSongArtifact({ artifactVersion: 2, mp3Url: null, mp3DataUrl: null });
     expect(artifact.playbackSource).toBe("none");
     expect(artifact.playbackUrl).toBeNull();
+  });
+});
+
+describe("isIncompleteSongArtifact (#291)", () => {
+  it("is incomplete only when a row has no playable audio", () => {
+    expect(isIncompleteSongArtifact({ mp3Url: null, mp3DataUrl: null })).toBe(true);
+    expect(isIncompleteSongArtifact({ mp3Url: "https://cdn.test/master.mp3" })).toBe(false);
+    expect(isIncompleteSongArtifact({ mp3DataUrl: "data:audio/mpeg;base64,AAAA" })).toBe(false);
   });
 });
 

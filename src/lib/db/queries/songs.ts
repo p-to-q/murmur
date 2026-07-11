@@ -33,6 +33,9 @@ const songSummaryColumns = {
   shareCode: songs.shareCode,
   visualConfig: songs.visualConfig,
   tags: songs.tags,
+  // Cheap boolean so the gallery can flag an incomplete/draft song (#291)
+  // without pulling the audio payload into the list response.
+  hasAudio: sql<boolean>`((${songs.mp3Url} is not null and ${songs.mp3Url} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> ''))`,
   createdAt: songs.createdAt,
   updatedAt: songs.updatedAt,
 } as const;

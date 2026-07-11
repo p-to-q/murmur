@@ -43,6 +43,7 @@ import { renderAudio } from "@/modules/export/render-mp3";
 import { canSaveHeardVersion, getSaveBlockReason } from "@/modules/music/version-contract";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { buildNameSaveMetadata, buildSaveProvenance } from "./name-save-metadata";
+import { decideSaveRender } from "./name-save-render";
 import {
   getInitialNameTitleState,
   resolveNameDisplayTitle,
@@ -72,6 +73,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const [titleVersionId, setTitleVersionId] = useState<string | null>(null);
   const [suggestionBatch, setSuggestionBatch] = useState({ key: "", index: 0 });
   const [isSaving, setIsSaving] = useState(false);
+  const [renderFailed, setRenderFailed] = useState(false);
   const [processingIdx, setProcessingIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const currentVersionId = currentVersion?.id ?? null;
@@ -189,7 +191,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     );
   }
 
-  const handleSave = async () => {
+  const handleSave = async (options: { allowWithoutAudio?: boolean } = {}) => {
     const trimmed = displayTitle.trim();
     if (!trimmed) {
       toast(t("name.required"));
@@ -209,24 +211,34 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     }
 
     setIsSaving(true);
+    setRenderFailed(false);
     setProcessingIdx(0);
 
     const id = currentVersion.draftId;
-    let mp3DataUrl: string | undefined;
-    let renderedDurationSec: number | undefined;
-
     const versionWithName = { ...currentVersion, title: trimmed };
     const saveMetadata = buildNameSaveMetadata(versionWithName);
 
+    let rendered: Awaited<ReturnType<typeof renderAudio>> = null;
     try {
-      const rendered = await renderAudio(versionWithName);
-      if (rendered) {
-        mp3DataUrl = rendered.dataUrl;
-        renderedDurationSec = rendered.durationSec;
-      }
+      rendered = await renderAudio(versionWithName);
     } catch (error) {
-      console.warn("[Name] render failed, saving without audio:", error);
+      console.warn("[Name] render failed:", error);
     }
+
+    // Render failure is now an explicit choice (#291): don't silently save an
+    // audioless "complete" song. Surface a retry-render / save-as-draft state
+    // unless the user has already opted to save an incomplete draft.
+    const decision = decideSaveRender(rendered, options);
+    if (decision.action === "prompt_render_failure") {
+      setIsSaving(false);
+      setRenderFailed(true);
+      toast.error(
+        t("name.render_failed") || "The audio didn't finish rendering.",
+      );
+      return;
+    }
+    const mp3DataUrl = decision.mp3DataUrl;
+    const renderedDurationSec = decision.durationSec;
 
     try {
       const hasCreatorSession = await ensureLocalCreatorSession();
@@ -466,16 +478,42 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                 )}
               </AnimatePresence>
             </div>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => void handleSave()}
-              disabled={isSaving || !displayTitle.trim() || !canSaveHeardVersion(currentVersion)}
-              className="h-14 w-full rounded-[22px] bg-[#1A1A1A] text-base font-medium text-white transition-opacity disabled:opacity-45"
-            >
-              {isSaving
-                ? t("studio.saving") || "Saving…"
-                : t("name.save") || "Save"}
-            </motion.button>
+            {renderFailed && !isSaving ? (
+              <div className="space-y-3">
+                <p className="text-center text-[12.5px] leading-relaxed text-[#9A6B54]">
+                  {t("name.render_failed_body") ||
+                    "We couldn't render this song's audio. Retry, or save it as an incomplete draft to finish later — drafts can't be shared or downloaded."}
+                </p>
+                <div className="flex gap-3">
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => void handleSave()}
+                    disabled={!displayTitle.trim() || !canSaveHeardVersion(currentVersion)}
+                    className="h-14 flex-1 rounded-[22px] bg-[#1A1A1A] text-base font-medium text-white transition-opacity disabled:opacity-45"
+                  >
+                    {t("name.retry_render") || "Retry render"}
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => void handleSave({ allowWithoutAudio: true })}
+                    className="h-14 flex-1 rounded-[22px] border border-[#D2C9B6] bg-white/70 text-base font-medium text-[#1A1A1A] transition-colors hover:bg-white"
+                  >
+                    {t("name.save_draft") || "Save as draft"}
+                  </motion.button>
+                </div>
+              </div>
+            ) : (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => void handleSave()}
+                disabled={isSaving || !displayTitle.trim() || !canSaveHeardVersion(currentVersion)}
+                className="h-14 w-full rounded-[22px] bg-[#1A1A1A] text-base font-medium text-white transition-opacity disabled:opacity-45"
+              >
+                {isSaving
+                  ? t("studio.saving") || "Saving…"
+                  : t("name.save") || "Save"}
+              </motion.button>
+            )}
           </div>
         </div>
       </div>

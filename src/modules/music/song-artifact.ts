@@ -147,6 +147,15 @@ export function readSongArtifact(row: SongArtifactRow): NormalizedSongArtifact {
   };
 }
 
+/**
+ * A saved song is an incomplete/draft artifact when it has no playable audio
+ * (#291): render failed at save time, so it can be reopened but not shared or
+ * downloaded. Gallery + song detail surface this state.
+ */
+export function isIncompleteSongArtifact(row: SongArtifactRow): boolean {
+  return readSongArtifact(row).playbackSource === "none";
+}
+
 // ── Save fingerprint ──────────────────────────────────────────────────────
 //
 // A stable content hash of the canonical persisted payload. It lets the save

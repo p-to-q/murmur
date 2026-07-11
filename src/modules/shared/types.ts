@@ -259,6 +259,8 @@ export type SongCard = {
   id: string;
   title: string;
   mp3Url?: string;
+  /** False for an incomplete/draft song whose audio never rendered (#291). */
+  hasAudio?: boolean;
   visibility?: "private" | "unlisted" | "public";
   shareCode?: string | null;
   visualHtmlUrl?: string;
