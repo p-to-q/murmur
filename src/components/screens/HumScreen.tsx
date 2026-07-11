@@ -35,6 +35,11 @@ import {
   recordingProgressFromElapsed,
 } from "@/lib/audio/recording-progress";
 import { trimRecordingForUpload } from "@/lib/audio/recording-trim";
+import {
+  clearRecordingBlob,
+  loadRecordingBlob,
+  saveRecordingBlob,
+} from "@/lib/audio/recording-cache";
 import { inputLevelLabelKey, nextInputLevelDecision } from "@/lib/audio/input-level";
 import {
   INITIAL_FIXTURE_RESCUE_STATE,
@@ -93,8 +98,20 @@ type HumErrorCopy = {
 type HumRecoveryAction =
   | { kind: "demo"; label: string }
   | { kind: "record"; label: string; requiresGuestGate: boolean }
+  | { kind: "retry_cached"; label: string }
   | { kind: "topup"; label: string }
   | { kind: "dismiss"; label: string };
+
+// Transient service failures where resubmitting the *same* recording is worth
+// offering — the take itself is fine, only the round-trip failed (issue #234).
+// Deliberately excludes billing/auth/insufficient/inaudible codes, where a
+// re-submit of the same audio would not help.
+const CACHED_RETRY_CODES = new Set<HumErrorState["code"]>([
+  "network_error",
+  "server_error",
+  "worker_unavailable",
+  "rate_limited",
+]);
 
 interface HumRecoveryPlan {
   primary: HumRecoveryAction;
@@ -212,6 +229,9 @@ export function HumScreen() {
 
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [humError, setHumError] = useState<HumErrorState | null>(null);
+  // True when the last take is recoverable from IndexedDB after a transient
+  // upload failure — gates the "retry last recording" affordance (issue #234).
+  const [cachedRecordingAvailable, setCachedRecordingAvailable] = useState(false);
   const [levelState, setLevelState] = useState<"idle" | "quiet" | "heard">("idle");
   const [showHeardMessage, setShowHeardMessage] = useState(false);
   const { refresh: refreshBalance } = useUserBalance();
@@ -510,6 +530,9 @@ export function HumScreen() {
   const transcribeAndGenerate = async (blob: Blob | undefined) => {
     setRecordingState("processing");
     tickMessages();
+    // Tracks whether *this* run left a recoverable copy in IndexedDB, so the
+    // catch block only offers "retry last recording" when there is one.
+    let persistedRecording = false;
     try {
       // Fail fast while the engine is known-down (fresh negative health
       // verdict, ≤10s old): transcription spends a note server-side, and a
@@ -523,6 +546,13 @@ export function HumScreen() {
       // configured for a worker we never silently downgrade to Tone.js.
       const magentaPathPromise = shouldUseMagentaEngine();
       const preparedBlob = blob ? await prepareAudioBlob(blob) : undefined;
+      // Persist the raw take locally right before the upload leaves the device.
+      // A mid-flight network drop then leaves a recoverable copy instead of
+      // forcing the user to re-hum. Storage failures degrade to today's
+      // behavior (no cache, no retry affordance).
+      if (blob) {
+        persistedRecording = await saveRecordingBlob(blob);
+      }
       const result = await transcribeWithStainer({
         audioBlob: preparedBlob,
         onProgress: (phase) => {
@@ -576,6 +606,12 @@ export function HumScreen() {
       }
       // A live take debits guest quota locally; signed-in users spend server-side notes.
       if (blob) void refreshBalance();
+      // Upload + generation committed — the local recovery copy is no longer
+      // needed. Clearing is best-effort; a stale blob is harmless.
+      if (blob) {
+        void clearRecordingBlob();
+        setCachedRecordingAvailable(false);
+      }
       setRecordingState("done");
       // Vibe is its own route in v2; hand the journey off so the iris-close
       // transition mounts on /vibe instead of bouncing through an overlay.
@@ -653,6 +689,11 @@ export function HumScreen() {
       setCurrentDraftId(null);
       setCurrentFlowId(null);
       setHumError(errorState);
+      // Offer to resubmit the same take only when it is actually recoverable
+      // and the failure is the transient kind a re-submit can clear.
+      setCachedRecordingAvailable(
+        persistedRecording && CACHED_RETRY_CODES.has(errorState.code),
+      );
     } finally {
       stopMessages();
     }
@@ -742,6 +783,7 @@ export function HumScreen() {
     cancelPendingStartRef.current = false;
     startAudioContext();
     setHumError(null);
+    setCachedRecordingAvailable(false);
     setInputLevelState("idle");
     updateRecordingElapsed(0);
     chunksRef.current = [];
@@ -880,8 +922,14 @@ export function HumScreen() {
         : t("hum.stop");
 
   const errorCopy = humError ? copyForState(humError, t) : null;
+  const canRetryCachedRecording =
+    cachedRecordingAvailable &&
+    humError !== null &&
+    CACHED_RETRY_CODES.has(humError.code);
   const recoveryPlan =
-    humError && errorCopy ? recoveryForState(humError, errorCopy, isGuest, t) : null;
+    humError && errorCopy
+      ? recoveryForState(humError, errorCopy, isGuest, canRetryCachedRecording, t)
+      : null;
 
   const beginIdleCapture = () => {
     if (isIdle && !humError && startPhaseRef.current === "idle") {
@@ -901,10 +949,32 @@ export function HumScreen() {
     triggerOnboardingReveal();
   };
 
+  // Re-read the last take from IndexedDB and resubmit it — no re-hum needed.
+  // If the cache is somehow empty (evicted, cleared), fall back to a fresh
+  // recording gated on the guest quota, matching the plain retry path.
+  const retryLastRecording = async () => {
+    const cached = await loadRecordingBlob();
+    if (!cached) {
+      setCachedRecordingAvailable(false);
+      startAudioContext();
+      setHumError(null);
+      if (!(await passGuestGate())) return;
+      await startRecording();
+      return;
+    }
+    startAudioContext();
+    setHumError(null);
+    setCachedRecordingAvailable(false);
+    await transcribeAndGenerate(cached.blob);
+  };
+
   const handleRecoveryAction = (action: HumRecoveryAction) => {
     switch (action.kind) {
       case "topup":
         router.push("/topup");
+        return;
+      case "retry_cached":
+        void retryLastRecording();
         return;
       case "demo":
         startAudioContext();
@@ -1566,8 +1636,25 @@ function recoveryForState(
   error: HumErrorState,
   copy: HumErrorCopy,
   isGuest: boolean,
+  canRetryCached: boolean,
   t: Translator,
 ): HumRecoveryPlan {
+  // A recoverable take after a transient upload failure: resubmit the same
+  // recording as the primary action so the user never re-hums after a blip.
+  // Gated (in the caller) to network/server/worker/rate-limited codes.
+  if (canRetryCached) {
+    return {
+      primary: {
+        kind: "retry_cached",
+        label: t("hum.retry_recording"),
+      },
+      secondary: {
+        kind: "demo",
+        label: copy.demo,
+      },
+    };
+  }
+
   if (error.variant === "insufficient" && !isGuest) {
     return {
       primary: {

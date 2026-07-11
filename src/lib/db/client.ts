@@ -28,6 +28,17 @@ const connectionString =
 // connections against the Neon pooler. A single instance rarely needs more
 // than a few, and idle ones should be released instead of held for the
 // instance's lifetime.
+//
+// Connection-budget invariant (issue #235):
+//   peak_serverless_instances × max  <  neon_connection_limit
+// Each warm Vercel instance opens up to `max` backend connections. With
+// `max: 5`, 20 concurrent warm instances = 100 connections — already at the
+// Neon Pro ceiling and well past Neon Free's 20. The durable fix is NOT a
+// smaller `max` but routing through Neon's connection pooler: point
+// `DATABASE_URL` at the `-pooler.neon.tech` host in production so PgBouncer
+// multiplexes many client connections onto a small backend pool, decoupling
+// instance count from the backend limit. Only lower `max` if you have a
+// concrete reason to (and re-check the invariant above if you raise it).
 const client = postgres(connectionString, {
   max: 5,
   idle_timeout: 20,
