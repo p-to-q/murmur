@@ -531,6 +531,52 @@ describe("POST /api/billing/webhook", () => {
     expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
   });
 
+  it("keeps an out-of-order refund retryable instead of acking 200 (#314)", async () => {
+    // refund.succeeded arrives BEFORE its order.completed — no purchase row yet.
+    nextEvent = refundSucceededEvent();
+    purchaseRow = null;
+
+    const response = await POST(buildRequest());
+
+    // Non-2xx so Waffo redelivers later, instead of a 200 that stops retries and
+    // permanently drops a real refund.
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as { error?: string };
+    expect(body.error).toBe("webhook_processing_failed");
+    expect(reverseInputs).toHaveLength(0);
+    expect(purchaseUpdates).toHaveLength(0);
+    // Durable trail records the attempt as failed so the redelivery reclaims it.
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "failed" });
+  });
+
+  it("completes exactly one reversal when the refund is redelivered after order.completed (#314)", async () => {
+    nextEvent = refundSucceededEvent();
+    // Redelivery of the same provider event whose first (out-of-order) attempt
+    // failed; order.completed has since recorded the purchase.
+    eventInsertConflicts = true;
+    reclaimRow = { id: "evw_prior", status: "failed" };
+    purchaseRow = {
+      id: "pur_test",
+      userId: "usr_buyer",
+      productId: "topup_120_notes",
+      amountCents: 599,
+      currency: "USD",
+      notesGranted: 130,
+      status: "succeeded",
+    };
+
+    const response = await POST(buildRequest());
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { refunded?: number };
+    expect(body.refunded).toBe(130);
+    // Exactly one reversal — reverseTopupGrant is idempotent, but the route also
+    // only reaches it once now that the purchase exists.
+    expect(reverseInputs).toHaveLength(1);
+    expect(purchaseUpdates.at(-1)).toMatchObject({ status: "refunded" });
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
   it("falls back to the refund event id when no refund ticket ref is present", async () => {
     nextEvent = refundSucceededEvent({ refundTicketMerchantExternalId: undefined });
     purchaseRow = {
