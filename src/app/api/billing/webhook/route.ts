@@ -16,6 +16,7 @@ import { getRequestId } from "@/lib/api/request-id";
 import { displayAmountToCents, isWaffoConfigured } from "@/lib/billing/waffo";
 import {
   InvalidTopupPurchaseError,
+  isWaffoPendingProviderRef,
   resolveWaffoTopupPurchase,
 } from "@/lib/billing/topup-purchase";
 import { db } from "@/lib/db/client";
@@ -221,33 +222,104 @@ async function fulfillOrder(
     throw error;
   }
 
-  // Record the succeeded purchase and grant its notes in one transaction so a
-  // crash between the two never leaves an orphaned succeeded purchase with no
-  // matching grant (#240). Both writes are idempotent on the Waffo order id —
-  // the insert via onConflict(provider, providerRef), the grant via its
-  // externalRef — so a redelivered event replays cleanly.
+  const metadataPendingRef =
+    typeof data.orderMetadata?.pendingProviderRef === "string"
+      ? data.orderMetadata.pendingProviderRef
+      : null;
+  const externalPendingRef =
+    typeof data.orderMerchantExternalId === "string"
+      ? data.orderMerchantExternalId
+      : null;
+  const isAuthoritativeCheckout =
+    isWaffoPendingProviderRef(metadataPendingRef) ||
+    isWaffoPendingProviderRef(externalPendingRef);
+
+  if (
+    isAuthoritativeCheckout &&
+    (!metadataPendingRef ||
+      !externalPendingRef ||
+      metadataPendingRef !== externalPendingRef)
+  ) {
+    throw new NonRetryableWebhookError(
+      `order ${orderId} has mismatched pending purchase references`,
+    );
+  }
+
+  // Finalize the authoritative pending purchase and grant its notes in one
+  // transaction. Legacy sessions created before pending snapshots existed are
+  // still inserted from their validated metadata so in-flight checkouts keep
+  // working during deployment.
   const grant = await db.transaction(async (tx) => {
-    await tx
-      .insert(purchases)
-      .values({
-        id: newId("pur"),
-        userId: purchase.userId,
-        provider: PROVIDER,
-        productId: purchase.productId,
-        providerRef: orderId,
-        amountCents: purchase.amountCents,
-        currency: purchase.currency,
-        notesGranted: purchase.notesGranted,
-        status: "succeeded",
-        rawPayload: data as unknown as Record<string, unknown>,
-      })
-      .onConflictDoNothing({
-        target: [purchases.provider, purchases.providerRef],
-      });
+    let authoritativePurchase = await findPurchaseForUpdate(tx, orderId);
+
+    if (!authoritativePurchase && isAuthoritativeCheckout) {
+      authoritativePurchase = await findPurchaseForUpdate(
+        tx,
+        externalPendingRef!,
+      );
+      // A concurrent delivery can switch the reference while this transaction
+      // waits for the pending row lock. Re-check the final order id before
+      // classifying the purchase as unknown.
+      if (!authoritativePurchase) {
+        authoritativePurchase = await findPurchaseForUpdate(tx, orderId);
+      }
+      if (!authoritativePurchase) {
+        throw new NonRetryableWebhookError(
+          `order ${orderId} references unknown pending purchase ${externalPendingRef}`,
+        );
+      }
+    }
+
+    if (authoritativePurchase) {
+      assertPurchaseSnapshotMatches(authoritativePurchase, purchase, data);
+      if (authoritativePurchase.status === "pending") {
+        await tx
+          .update(purchases)
+          .set({
+            providerRef: orderId,
+            status: "succeeded",
+            rawPayload: data as unknown as Record<string, unknown>,
+            updatedAt: new Date(),
+          })
+          .where(eq(purchases.id, authoritativePurchase.id));
+        authoritativePurchase = {
+          ...authoritativePurchase,
+          providerRef: orderId,
+          status: "succeeded",
+        };
+      } else if (
+        authoritativePurchase.status !== "succeeded" &&
+        authoritativePurchase.status !== "refunded"
+      ) {
+        throw new NonRetryableWebhookError(
+          `order ${orderId} references purchase in ${authoritativePurchase.status} status`,
+        );
+      }
+    } else {
+      await tx
+        .insert(purchases)
+        .values({
+          id: newId("pur"),
+          userId: purchase.userId,
+          provider: PROVIDER,
+          productId: purchase.productId,
+          providerRef: orderId,
+          amountCents: purchase.amountCents,
+          currency: purchase.currency,
+          notesGranted: purchase.notesGranted,
+          status: "succeeded",
+          rawPayload: data as unknown as Record<string, unknown>,
+        })
+        .onConflictDoNothing({
+          target: [purchases.provider, purchases.providerRef],
+        });
+    }
+
+    const grantPurchase = authoritativePurchase ?? purchase;
 
     const result = await grantNotesInTransaction(tx, {
-      userId: purchase.userId,
-      amount: purchase.notesGranted,
+      userId: grantPurchase.userId,
+      amount: grantPurchase.notesGranted,
       reason: "purchase:topup",
       externalRef: orderId,
       metadata: {
@@ -264,7 +336,7 @@ async function fulfillOrder(
     // the event failed and returns a retryable 500.
     if (!result.ok) {
       throw new Error(
-        `grantNotes failed for ${purchase.userId} on order ${orderId}: ${result.reason}`,
+        `grantNotes failed for ${grantPurchase.userId} on order ${orderId}: ${result.reason}`,
       );
     }
 
@@ -288,6 +360,76 @@ async function fulfillOrder(
     duplicate: grant.duplicate,
     orderId,
   };
+}
+
+type PurchaseSnapshot = {
+  id: string;
+  userId: string;
+  productId: string;
+  providerRef: string;
+  amountCents: number;
+  currency: string;
+  notesGranted: number;
+  status: string;
+};
+
+type PurchaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function findPurchaseForUpdate(
+  tx: PurchaseTransaction,
+  providerRef: string,
+): Promise<PurchaseSnapshot | null> {
+  const [purchase] = await tx
+    .select({
+      id: purchases.id,
+      userId: purchases.userId,
+      productId: purchases.productId,
+      providerRef: purchases.providerRef,
+      amountCents: purchases.amountCents,
+      currency: purchases.currency,
+      notesGranted: purchases.notesGranted,
+      status: purchases.status,
+    })
+    .from(purchases)
+    .where(
+      and(
+        eq(purchases.provider, PROVIDER),
+        eq(purchases.providerRef, providerRef),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return purchase ?? null;
+}
+
+function assertPurchaseSnapshotMatches(
+  expected: PurchaseSnapshot,
+  resolved: ReturnType<typeof resolveWaffoTopupPurchase>,
+  data: WebhookEventData,
+): void {
+  const metadataUserId = data.orderMetadata?.userId?.trim();
+  const metadataSkuId = data.orderMetadata?.skuId;
+  const metadataNotes = Number(data.orderMetadata?.notesGranted);
+  const paidCurrency = data.currency.trim().toUpperCase();
+  const paidAmountCents = displayAmountToCents(data.amount, paidCurrency);
+  const expectedCurrency = expected.currency.trim().toUpperCase();
+
+  const mismatch =
+    expected.userId !== resolved.userId ||
+    expected.productId !== resolved.productId ||
+    expected.amountCents !== paidAmountCents ||
+    expectedCurrency !== paidCurrency ||
+    expected.notesGranted !== resolved.notesGranted ||
+    metadataUserId !== expected.userId ||
+    metadataSkuId !== expected.productId ||
+    !Number.isInteger(metadataNotes) ||
+    metadataNotes !== expected.notesGranted;
+
+  if (mismatch) {
+    throw new NonRetryableWebhookError(
+      `order ${data.orderId} does not match pending purchase snapshot ${expected.id}`,
+    );
+  }
 }
 
 async function refundOrder(

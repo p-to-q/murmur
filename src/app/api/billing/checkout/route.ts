@@ -21,6 +21,7 @@
 
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import {
   CUSTOM_TOPUP_ID,
   getCustomTopupQuote,
@@ -40,6 +41,7 @@ import {
   getWaffoTopupProductId,
   isWaffoConfigured,
 } from "@/lib/billing/waffo";
+import { waffoPendingProviderRef } from "@/lib/billing/topup-purchase";
 import {
   isZpayCheckoutEnabled,
   isZpayConfigured,
@@ -163,6 +165,7 @@ function parseCheckoutProduct(body: CheckoutRequestBody): CheckoutProduct | null
 function checkoutMetadata(
   userId: string,
   product: CheckoutProduct,
+  pendingProviderRef?: string,
 ): Record<string, string> {
   const base: Record<string, string> = {
     userId,
@@ -170,6 +173,9 @@ function checkoutMetadata(
     notesGranted: String(product.notesGranted),
     purchaseKind: product.kind === "custom" ? "custom" : "sku",
   };
+  if (pendingProviderRef) {
+    base.pendingProviderRef = pendingProviderRef;
+  }
   if (product.kind === "custom") {
     if (product.customAmountCny != null) {
       base.customAmountCny = String(product.customAmountCny);
@@ -324,20 +330,42 @@ export async function POST(request: NextRequest) {
   const client = getWaffoClient()!;
   const productId = getWaffoTopupProductId()!;
   const origin = resolveAppOrigin(request);
-  const metadata = checkoutMetadata(userId, product);
+  const purchaseId = newId("pur");
+  const pendingProviderRef = waffoPendingProviderRef(purchaseId);
+  const metadata = checkoutMetadata(userId, product, pendingProviderRef);
   const displayAmount = centsToDisplayAmount(
     product.amountCents,
     product.currency,
   );
 
   try {
+    // The checkout snapshot is authoritative. Persist it before asking Waffo
+    // to create a session so even a webhook that races the HTTP response can
+    // only fulfill the exact user, SKU, amount, currency, and grant quoted here.
+    await db.insert(purchases).values({
+      id: purchaseId,
+      userId,
+      provider: "waffo",
+      productId: product.skuId,
+      providerRef: pendingProviderRef,
+      amountCents: product.amountCents,
+      currency: product.currency,
+      notesGranted: product.notesGranted,
+      status: "pending",
+      rawPayload: {
+        orderMerchantExternalId: pendingProviderRef,
+        metadata,
+        ...(billingEmail ? { billingEmail } : {}),
+      },
+    });
+
     const session = await client.checkout.createSession({
       productId,
       currency: product.currency,
       ...(billingEmail ? { buyerEmail: billingEmail } : {}),
       successUrl: `${origin}/topup/checkout?${product.successQuery}&status=success`,
       metadata,
-      orderMerchantExternalId: `${userId}:${product.skuId}:${crypto.randomUUID()}`,
+      orderMerchantExternalId: pendingProviderRef,
       priceSnapshot: {
         amount: displayAmount,
         taxCategory: TaxCategory.DigitalGoods,
@@ -347,6 +375,20 @@ export async function POST(request: NextRequest) {
     if (!session.checkoutUrl) {
       throw new Error("Waffo returned a session without checkoutUrl");
     }
+
+    await db
+      .update(purchases)
+      .set({
+        rawPayload: {
+          orderMerchantExternalId: pendingProviderRef,
+          metadata,
+          sessionId: session.sessionId,
+          expiresAt: session.expiresAt,
+          ...(billingEmail ? { billingEmail } : {}),
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(purchases.id, purchaseId));
 
     return NextResponse.json(
       {

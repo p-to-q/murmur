@@ -39,6 +39,7 @@ const purchaseUpdates: Row[] = [];
 let eventInsertConflicts = false;
 let reclaimRow: { id: string; status: string } | null = null;
 let purchaseRow: Row | null = null;
+const purchaseSelectResults: Array<Row | null> = [];
 
 function insertChain(values: Row) {
   const isEventRow = "providerEventId" in values;
@@ -56,12 +57,20 @@ function insertChain(values: Row) {
 
 const dbMock = {
   insert: () => ({ values: (v: Row) => insertChain(v) }),
-  select: () => ({
+  select: (selection: Row) => ({
     from: () => ({
       where: () => ({
-        limit: async () => {
-          if (purchaseRow) return [purchaseRow];
-          return reclaimRow ? [reclaimRow] : [];
+        limit: () => {
+          const isPurchaseSelect = "userId" in selection;
+          const selected = isPurchaseSelect
+            ? purchaseSelectResults.length > 0
+              ? purchaseSelectResults.shift() ?? null
+              : purchaseRow
+            : reclaimRow;
+          const rows = selected ? [selected] : [];
+          return Object.assign(Promise.resolve(rows), {
+            for: async () => rows,
+          });
         },
       }),
     }),
@@ -69,7 +78,7 @@ const dbMock = {
   update: () => ({
     set: (v: Row) => ({
       where: () => {
-        if (v.status === "refunded") purchaseUpdates.push(v);
+        if (v.status === "refunded" || v.status === "succeeded") purchaseUpdates.push(v);
         else eventUpdates.push(v);
         return Promise.resolve([]);
       },
@@ -182,6 +191,37 @@ function orderCompletedEvent(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function authoritativeOrderCompletedEvent(
+  overrides: Record<string, unknown> = {},
+) {
+  const pendingProviderRef = "waffo-pending:pur_authoritative";
+  return orderCompletedEvent({
+    orderMerchantExternalId: pendingProviderRef,
+    orderMetadata: {
+      userId: "usr_buyer",
+      skuId: "topup_120_notes",
+      notesGranted: "130",
+      purchaseKind: "sku",
+      pendingProviderRef,
+    },
+    ...overrides,
+  });
+}
+
+function pendingPurchase(overrides: Row = {}): Row {
+  return {
+    id: "pur_authoritative",
+    userId: "usr_buyer",
+    productId: "topup_120_notes",
+    providerRef: "waffo-pending:pur_authoritative",
+    amountCents: 599,
+    currency: "USD",
+    notesGranted: 130,
+    status: "pending",
+    ...overrides,
+  };
+}
+
 function refundSucceededEvent(overrides: Record<string, unknown> = {}) {
   return {
     id: "wh_refund_1",
@@ -216,6 +256,7 @@ beforeEach(() => {
   grantInputs.length = 0;
   reverseInputs.length = 0;
   purchaseRow = null;
+  purchaseSelectResults.length = 0;
   grantResult = {
     ok: true,
     ledgerId: "nle_test",
@@ -279,7 +320,7 @@ describe("POST /api/billing/webhook", () => {
     expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
   });
 
-  it("records the purchase and grants notes for order.completed", async () => {
+  it("keeps legacy in-flight sessions working by inserting from validated metadata", async () => {
     const response = await POST(buildRequest());
     expect(response.status).toBe(200);
     const body = (await response.json()) as { granted?: number };
@@ -306,6 +347,128 @@ describe("POST /api/billing/webhook", () => {
     });
 
     expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
+  it("finalizes an authoritative fixed-tier pending purchase before granting", async () => {
+    nextEvent = authoritativeOrderCompletedEvent();
+    purchaseSelectResults.push(null, pendingPurchase());
+
+    const response = await POST(buildRequest());
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { granted?: number; orderId?: string };
+    expect(body).toMatchObject({ granted: 130, orderId: "ORD_test_123" });
+    expect(purchaseInserts).toHaveLength(0);
+    expect(purchaseUpdates).toHaveLength(1);
+    expect(purchaseUpdates[0]).toMatchObject({
+      providerRef: "ORD_test_123",
+      status: "succeeded",
+    });
+    expect(grantInputs[0]).toMatchObject({
+      userId: "usr_buyer",
+      amount: 130,
+      externalRef: "ORD_test_123",
+    });
+  });
+
+  it("finalizes an authoritative custom-amount pending purchase", async () => {
+    nextEvent = authoritativeOrderCompletedEvent({
+      amount: "12.00",
+      orderMetadata: {
+        userId: "usr_buyer",
+        skuId: "topup_custom",
+        notesGranted: "240",
+        purchaseKind: "custom",
+        customAmountUsd: "12",
+        customAmountCents: "1200",
+        pendingProviderRef: "waffo-pending:pur_authoritative",
+      },
+    });
+    purchaseSelectResults.push(
+      null,
+      pendingPurchase({
+        productId: "topup_custom",
+        amountCents: 1200,
+        notesGranted: 240,
+      }),
+    );
+
+    const response = await POST(buildRequest());
+
+    expect(response.status).toBe(200);
+    expect(purchaseUpdates[0]).toMatchObject({
+      providerRef: "ORD_test_123",
+      status: "succeeded",
+    });
+    expect(grantInputs[0]).toMatchObject({ amount: 240 });
+  });
+
+  it("rejects an authoritative webhook when the pending snapshot mismatches", async () => {
+    nextEvent = authoritativeOrderCompletedEvent();
+    purchaseSelectResults.push(
+      null,
+      pendingPurchase({ amountCents: 499 }),
+    );
+
+    const response = await POST(buildRequest());
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { error?: string };
+    expect(body.error).toBe("non_retryable");
+    expect(purchaseUpdates).toHaveLength(0);
+    expect(grantInputs).toHaveLength(0);
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "failed" });
+  });
+
+  it("rejects an authoritative webhook for an unknown pending purchase", async () => {
+    nextEvent = authoritativeOrderCompletedEvent();
+    purchaseSelectResults.push(null, null, null);
+
+    const response = await POST(buildRequest());
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { error?: string };
+    expect(body.error).toBe("non_retryable");
+    expect(purchaseInserts).toHaveLength(0);
+    expect(grantInputs).toHaveLength(0);
+  });
+
+  it("rejects mismatched authoritative merchant references", async () => {
+    nextEvent = authoritativeOrderCompletedEvent({
+      orderMerchantExternalId: "waffo-pending:pur_other",
+    });
+
+    const response = await POST(buildRequest());
+
+    expect(response.status).toBe(200);
+    expect(grantInputs).toHaveLength(0);
+    expect(purchaseSelectResults).toHaveLength(0);
+  });
+
+  it("idempotently handles a second business webhook after finalization", async () => {
+    nextEvent = authoritativeOrderCompletedEvent();
+    purchaseSelectResults.push(
+      pendingPurchase({
+        providerRef: "ORD_test_123",
+        status: "succeeded",
+      }),
+    );
+    grantResult = {
+      ok: true,
+      ledgerId: "nle_test",
+      balanceBefore: 135,
+      balanceAfter: 135,
+      duplicate: true,
+    };
+
+    const response = await POST(buildRequest());
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { duplicate?: boolean };
+    expect(body.duplicate).toBe(true);
+    expect(purchaseInserts).toHaveLength(0);
+    expect(purchaseUpdates).toHaveLength(0);
+    expect(grantInputs).toHaveLength(1);
   });
 
   it("records and grants custom topups from order metadata", async () => {
@@ -444,6 +607,24 @@ describe("POST /api/billing/webhook", () => {
     expect(body.error).toBe("non_retryable");
     expect(grantInputs).toHaveLength(0);
     expect(eventUpdates.at(-1)).toMatchObject({ status: "failed" });
+  });
+
+  it("rejects unknown SKUs without creating or granting a purchase", async () => {
+    nextEvent = orderCompletedEvent({
+      orderMetadata: {
+        userId: "usr_buyer",
+        skuId: "topup_unknown",
+        notesGranted: "130",
+      },
+    });
+
+    const response = await POST(buildRequest());
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { error?: string };
+    expect(body.error).toBe("non_retryable");
+    expect(purchaseInserts).toHaveLength(0);
+    expect(grantInputs).toHaveLength(0);
   });
 
   it("returns 500 when the grant fails", async () => {

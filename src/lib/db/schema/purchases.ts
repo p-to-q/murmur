@@ -20,7 +20,7 @@ export const purchases = pgTable(
     userId:       varchar("user_id", { length: 128 }).notNull().references(() => users.id, { onDelete: "cascade" }),
     provider:     varchar("provider", { length: 16 }).notNull(),    // stripe | wechat_pay | apple_iap | google_play | revenuecat
     productId:    varchar("product_id", { length: 64 }).notNull(),  // SKU id
-    providerRef:  varchar("provider_ref", { length: 128 }).notNull(), // provider's transaction id
+    providerRef:  varchar("provider_ref", { length: 128 }).notNull(), // provider transaction id; Waffo pending rows temporarily use our merchant external id
     amountCents:  integer("amount_cents").notNull(),
     currency:     varchar("currency", { length: 8 }).notNull(),     // USD | CNY
     notesGranted: integer("notes_granted").notNull(),
