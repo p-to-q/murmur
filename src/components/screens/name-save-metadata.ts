@@ -1,5 +1,35 @@
 import { VIBE_PRESETS } from "@/presets/vibes";
-import type { VibeVersion } from "@/modules/shared/types";
+import type { SongProvenance, VibeVersion } from "@/modules/shared/types";
+
+type SaveProvenanceSource = Pick<
+  VibeVersion,
+  "originFlowId" | "draftId" | "generation" | "sourceType" | "captureQuality"
+>;
+
+/**
+ * Build the creation provenance persisted with a saved song (#297): flow,
+ * recording operation, generation batch/clip, and source. The generation
+ * operation identity (batch/clip ids) is threaded through by durable recovery
+ * (#300); only fields the version actually carries are included.
+ */
+export function buildSaveProvenance(version: SaveProvenanceSource): SongProvenance {
+  const provenance: SongProvenance = {};
+  if (version.originFlowId) provenance.flow = version.originFlowId;
+  if (version.draftId) {
+    provenance.draftId = version.draftId;
+    // The hum→draft session is the client's recording-operation identity.
+    provenance.recordingOperationId = version.draftId;
+  }
+  const generation = version.generation;
+  if (generation) {
+    provenance.generationBatchIndex = generation.batchIndex;
+    if (generation.batchOperationId) provenance.generationBatchId = generation.batchOperationId;
+    if (generation.operationId) provenance.generationClipId = generation.operationId;
+  }
+  if (version.sourceType) provenance.sourceType = version.sourceType;
+  if (version.captureQuality) provenance.captureQuality = version.captureQuality;
+  return provenance;
+}
 
 type NameSaveMetadataSource = Pick<
   VibeVersion,

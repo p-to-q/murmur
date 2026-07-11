@@ -6,7 +6,24 @@ import {
   __setObjectStoreForTesting,
   type ObjectStore,
 } from "@/lib/storage";
+import { computeSaveFingerprint } from "@/modules/music/song-artifact";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+
+const BASE_VISUAL_CONFIG = {
+  preset: "soft_gradient",
+  gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+  particleDensity: 0.4,
+  pulseSource: "energy" as const,
+};
+
+const BASE_ARRANGEMENT = {
+  melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+  chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+  strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+  drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+  bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+  texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+};
 
 // 1x1 silent-ish MP3 payload stand-in — the route only needs decodable bytes.
 const SAMPLE_MP3_DATA_URL = `data:audio/mpeg;base64,${Buffer.from(
@@ -722,5 +739,153 @@ describe("POST /api/songs", () => {
     expect(response.headers.get("X-Murmur-Audio-Storage")).toBe("fallback-data-url");
     expect(createdSongs[0]?.mp3Url).toBeNull();
     expect(createdSongs[0]?.mp3DataUrl).toBe(SAMPLE_MP3_DATA_URL);
+  });
+
+  it("stamps the artifact version and persists the canonical melody + provenance (#297)", async () => {
+    const melody = {
+      notes: [{ pitch: 62, start: 0, duration: 0.5, velocity: 0.8, confidence: 0.9 }],
+      key: "D",
+      scale: "minor",
+      bpm: 92,
+      duration: 12,
+      contour: "wave",
+    };
+    const response = await POST(buildRequest({
+      id: "song_artifact_v2",
+      title: "Versioned",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 92,
+      keySignature: "D",
+      scaleType: "minor",
+      duration: 12,
+      melody,
+      provenance: { flow: "flow_abc", draftId: "draft_abc", sourceType: "hum" },
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: ["night"],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(createdSongs[0]?.artifactVersion).toBe(2);
+    expect(createdSongs[0]?.melody).toEqual(melody);
+    expect(createdSongs[0]?.provenance).toEqual({ flow: "flow_abc", draftId: "draft_abc", sourceType: "hum" });
+    expect(typeof createdSongs[0]?.saveFingerprint).toBe("string");
+  });
+
+  it("derives root + depth from the owned parent, overriding client-supplied lineage (#297)", async () => {
+    existingConflictSong = {
+      id: "song_parent",
+      userId: "usr_song",
+      rootSongId: "song_true_root",
+      lineageDepth: 3,
+    };
+
+    const response = await POST(buildRequest({
+      id: "song_child",
+      title: "Child Branch",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      parentSongId: "song_parent",
+      // Client lies about root/depth — the server must ignore these.
+      rootSongId: "client_root_lie",
+      lineageDepth: 0,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(createdSongs[0]?.parentSongId).toBe("song_parent");
+    expect(createdSongs[0]?.rootSongId).toBe("song_true_root");
+    expect(createdSongs[0]?.lineageDepth).toBe(4);
+  });
+
+  it("returns a payload conflict when a same-id save carries different content (#297)", async () => {
+    createSongError = Object.assign(new Error("duplicate key value violates unique constraint"), {
+      code: "23505",
+      constraint: "songs_pkey",
+    });
+    existingConflictSong = {
+      id: "song_fp",
+      userId: "usr_song",
+      title: "Original Content",
+      saveFingerprint: "not-a-matching-fingerprint",
+    };
+
+    const response = await POST(buildRequest({
+      id: "song_fp",
+      title: "Different Content",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(409);
+    const body = await response.json() as { error: string };
+    expect(body.error).toBe("song_payload_conflict");
+  });
+
+  it("replays idempotently when a same-id save carries matching content (#297)", async () => {
+    const matchingFingerprint = computeSaveFingerprint({
+      title: "Same Content",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      sourceMelodyKind: "corrected",
+      editCount: 0,
+      editDepth: "fresh",
+      parentSongId: null,
+      rootSongId: "song_fp_match",
+      lineageDepth: 0,
+      tags: [],
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      melody: null,
+      provenance: null,
+      mp3Url: null,
+      mp3StorageKey: null,
+      mp3DataUrl: null,
+    });
+    createSongError = Object.assign(new Error("duplicate key value violates unique constraint"), {
+      code: "23505",
+      constraint: "songs_pkey",
+    });
+    existingConflictSong = {
+      id: "song_fp_match",
+      userId: "usr_song",
+      title: "Same Content",
+      saveFingerprint: matchingFingerprint,
+    };
+
+    const response = await POST(buildRequest({
+      id: "song_fp_match",
+      title: "Same Content",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Murmur-Idempotent-Replay")).toBe("song");
   });
 });

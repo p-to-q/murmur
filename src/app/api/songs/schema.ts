@@ -69,6 +69,39 @@ export const visualConfigSchema = z.object({
   visualFacets: visualFacetsSchema.optional(),
 });
 
+// Canonical editable melody persisted alongside the playback artifact (#297).
+// Note count is bounded here (#311) so a corrupt/oversized melody can't land in
+// jsonb; readSongArtifact independently re-validates on the way out.
+export const melodyNoteSchema = z.object({
+  pitch: z.number(),
+  start: z.number(),
+  duration: z.number(),
+  velocity: z.number(),
+  confidence: z.number(),
+});
+
+export const cleanMelodySchema = z.object({
+  notes: z.array(melodyNoteSchema).max(2048),
+  key: z.string().min(1).max(20),
+  scale: z.enum(["major", "minor", "pentatonic", "dorian", "phrygian"]),
+  bpm: z.number(),
+  duration: z.number(),
+  contour: z.enum(["rising", "falling", "wave", "flat"]),
+});
+
+// Creation provenance persisted on save (#297): flow, recording op, generation
+// batch/clip, draft. All optional; bounded strings.
+export const songProvenanceSchema = z.object({
+  flow: z.string().max(256).optional(),
+  draftId: z.string().max(256).optional(),
+  recordingOperationId: z.string().max(256).optional(),
+  generationBatchId: z.string().max(256).optional(),
+  generationClipId: z.string().max(256).optional(),
+  generationBatchIndex: z.number().int().optional(),
+  sourceType: z.enum(["hum", "demo", "library"]).optional(),
+  captureQuality: z.literal("reduced").optional(),
+});
+
 const strictTrackStateSchema = trackStateSchema.strict();
 
 export const strictArrangementStateSchema = z.object({

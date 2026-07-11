@@ -42,7 +42,7 @@ import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
 import { renderAudio } from "@/modules/export/render-mp3";
 import { canSaveHeardVersion, getSaveBlockReason } from "@/modules/music/version-contract";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
-import { buildNameSaveMetadata } from "./name-save-metadata";
+import { buildNameSaveMetadata, buildSaveProvenance } from "./name-save-metadata";
 import {
   getInitialNameTitleState,
   resolveNameDisplayTitle,
@@ -253,6 +253,10 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
           editCount: versionWithName.editCount,
           editDepth: versionWithName.editDepth,
           mp3DataUrl,
+          // Canonical editable source + provenance, persisted separately from
+          // the playback artifact (#297).
+          melody: versionWithName.melody,
+          provenance: buildSaveProvenance(versionWithName),
           visualConfig: versionWithName.visualConfig,
           arrangementState: versionWithName.arrangementState,
           tags: versionWithName.tags,

@@ -37,6 +37,10 @@ export function createLocalSongFallback(data: SongInsert): SongRow {
     mp3DataUrl: data.mp3DataUrl ?? null,
     mp3Url: data.mp3Url ?? null,
     mp3StorageKey: data.mp3StorageKey ?? null,
+    artifactVersion: data.artifactVersion ?? 1,
+    melody: data.melody ?? null,
+    provenance: data.provenance ?? null,
+    saveFingerprint: data.saveFingerprint ?? null,
     visualConfig: data.visualConfig,
     arrangementState: data.arrangementState,
     tags: data.tags ?? [],
@@ -58,7 +62,14 @@ export function getLocalSongsByUserFallback(userId: string): SongRow[] {
 // DB-unavailable fallback path. The store keeps the full rows for detail reads.
 export type SongSummaryRow = Omit<
   SongRow,
-  "mp3DataUrl" | "mp3Url" | "mp3StorageKey" | "arrangementState"
+  | "mp3DataUrl"
+  | "mp3Url"
+  | "mp3StorageKey"
+  | "arrangementState"
+  | "melody"
+  | "provenance"
+  | "saveFingerprint"
+  | "artifactVersion"
 >;
 
 export function getLocalSongSummariesByUserFallback(userId: string): SongSummaryRow[] {
