@@ -155,6 +155,13 @@
       "when": 1783598989762,
       "tag": "0021_songs_user_created_index",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786000000000,
+      "tag": "0024_song_object_audio",
+      "breakpoints": true
     }
   ]
 }

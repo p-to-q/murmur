@@ -42,6 +42,8 @@ const updateSongSchema = z.object({
   editCount: z.number().int().nonnegative().optional(),
   editDepth: z.enum(["fresh", "shaped", "reworked"]).optional(),
   mp3DataUrl: z.string().nullable().optional(),
+  mp3Url: z.string().max(2048).nullable().optional(),
+  mp3StorageKey: z.string().max(1024).nullable().optional(),
   visualConfig: strictVisualConfigSchema.optional(),
   arrangementState: strictArrangementStateSchema.optional(),
   tags: z.array(z.string()).optional(),

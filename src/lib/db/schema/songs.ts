@@ -106,8 +106,16 @@ export const songs = pgTable(
   editDepth: text("edit_depth").notNull().default("fresh").$type<EditDepth>(),
   visibility: text("visibility").notNull().default("private").$type<SongVisibility>(),
   shareCode: text("share_code"),
-  // Audio — base64 data URL or CDN URL; null until generated
+  // Audio playback artifact.
+  // DEPRECATED — legacy base64 data URL; read-only fallback for pre-#292 rows.
+  // New saves upload through the object-storage adapter and leave this null.
   mp3DataUrl: text("mp3_data_url"),
+  // Object-storage URL for newly rendered audio (R2 / S3 / 腾讯云 COS). Preferred
+  // playback source; null until an object master exists.
+  mp3Url: text("mp3_url"),
+  // Storage key backing mp3Url — the durable reference used for re-derivation
+  // and object-lifecycle deletion. Null for legacy/demo rows.
+  mp3StorageKey: text("mp3_storage_key"),
   // JSON blobs
   visualConfig: jsonb("visual_config").$type<VisualConfig>().notNull(),
   arrangementState: jsonb("arrangement_state").$type<ArrangementState>().notNull(),

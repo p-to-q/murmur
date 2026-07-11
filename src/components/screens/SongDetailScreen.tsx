@@ -81,6 +81,15 @@ type ExportKey = "audio" | "video" | "share" | "link";
 type ShareCardMode = "image" | "video";
 const CJK_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
 
+// Pick the download extension for an audio source. Handles both legacy base64
+// data URLs (`data:audio/wav;\u2026`) and object-storage URLs (`\u2026/master.wav`);
+// defaults to mp3, which is what the renderer emits on the happy path.
+function audioFileExtension(audioSrc: string): "wav" | "mp3" {
+  if (/^data:audio\/(wav|x-wav|wave)/i.test(audioSrc)) return "wav";
+  if (/\.wav(?:[?#]|$)/i.test(audioSrc)) return "wav";
+  return "mp3";
+}
+
 // Shared entry-motion vocabulary for the detail screen: a staggered
 // fade + slide-up on the app's signature ease. Honors reduced-motion by
 // collapsing to an instant, offset-free reveal. Spread onto any motion.*.
@@ -293,7 +302,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     }
     setBusy("audio");
     try {
-      const ext = audioSrc.startsWith("data:audio/wav") ? "wav" : "mp3";
+      const ext = audioFileExtension(audioSrc);
       const a = document.createElement("a");
       a.href = audioSrc;
       a.download = `${slug}.${ext}`;

@@ -1,7 +1,17 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, afterEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
+import {
+  __resetObjectStoreForTesting,
+  __setObjectStoreForTesting,
+  type ObjectStore,
+} from "@/lib/storage";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+
+// 1x1 silent-ish MP3 payload stand-in — the route only needs decodable bytes.
+const SAMPLE_MP3_DATA_URL = `data:audio/mpeg;base64,${Buffer.from(
+  "ID3-fake-mp3-master-bytes",
+).toString("base64")}`;
 
 let nextAuth: ResolvedRequestAuth = {
   ok: true,
@@ -103,7 +113,38 @@ beforeEach(async () => {
   createSongWithSpendError = null;
   existingConflictSong = null;
   resetLocalSongFallbackForTests();
+  __resetObjectStoreForTesting();
 });
+
+afterEach(() => {
+  __resetObjectStoreForTesting();
+});
+
+function makeRecordingStore(): { store: ObjectStore; puts: Array<{ key: string }> } {
+  const puts: Array<{ key: string }> = [];
+  const store: ObjectStore = {
+    driver: "memory",
+    async put(key, body, opts) {
+      puts.push({ key });
+      return {
+        key,
+        url: `https://cdn.test/${key}`,
+        size: body.byteLength,
+        contentType: opts.contentType,
+        scope: opts.scope ?? "private",
+        storedAt: new Date("2026-06-05T12:00:00.000Z"),
+      };
+    },
+    async get() {
+      return null;
+    },
+    async delete() {},
+    url(key) {
+      return `https://cdn.test/${key}`;
+    },
+  };
+  return { store, puts };
+}
 
 describe("POST /api/songs", () => {
   it("persists the selected source melody kind with the saved song", async () => {
@@ -556,5 +597,130 @@ describe("POST /api/songs", () => {
     const body = await response.json() as { error?: string; requestId?: string };
     expect(body.error).toBe("save_unavailable");
     expect(body.requestId).toBe("req_registered_db_down");
+  });
+
+  it("uploads rendered audio to object storage and persists an object URL, not base64 (#292)", async () => {
+    const { store, puts } = makeRecordingStore();
+    __setObjectStoreForTesting(store);
+
+    const response = await POST(buildRequest({
+      id: "song_audio_object",
+      title: "Object Master",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      mp3DataUrl: SAMPLE_MP3_DATA_URL,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(puts).toHaveLength(1);
+    expect(puts[0]?.key).toContain("songs/master/usr_song/song_audio_object");
+    expect(createdSongs).toHaveLength(1);
+    // The persisted row references object storage and carries NO embedded base64.
+    expect(createdSongs[0]?.mp3Url).toBe(`https://cdn.test/${puts[0]!.key}`);
+    expect(createdSongs[0]?.mp3StorageKey).toBe(puts[0]!.key);
+    expect(createdSongs[0]?.mp3DataUrl).toBeNull();
+    expect(response.headers.get("X-Murmur-Audio-Storage")).toBeNull();
+  });
+
+  it("persists no audio fields when the save carries no rendered audio (#292)", async () => {
+    __setObjectStoreForTesting(makeRecordingStore().store);
+    const response = await POST(buildRequest({
+      id: "song_audio_none",
+      title: "Silent Draft",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(createdSongs[0]?.mp3Url).toBeNull();
+    expect(createdSongs[0]?.mp3StorageKey).toBeNull();
+    expect(createdSongs[0]?.mp3DataUrl).toBeNull();
+  });
+
+  it("falls back to an embedded data URL and flags it when object storage is unavailable (#292)", async () => {
+    const failingStore: ObjectStore = {
+      driver: "memory",
+      async put() {
+        throw new Error("driver_unconfigured");
+      },
+      async get() {
+        return null;
+      },
+      async delete() {},
+      url(key) {
+        return `memory://${key}`;
+      },
+    };
+    __setObjectStoreForTesting(failingStore);
+
+    const response = await POST(buildRequest({
+      id: "song_audio_fallback",
+      title: "Fallback Master",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      mp3DataUrl: SAMPLE_MP3_DATA_URL,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Murmur-Audio-Storage")).toBe("fallback-data-url");
+    expect(createdSongs[0]?.mp3Url).toBeNull();
+    expect(createdSongs[0]?.mp3DataUrl).toBe(SAMPLE_MP3_DATA_URL);
   });
 });

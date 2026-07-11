@@ -35,6 +35,8 @@ export function createLocalSongFallback(data: SongInsert): SongRow {
     visibility: data.visibility ?? "private",
     shareCode: data.shareCode ?? null,
     mp3DataUrl: data.mp3DataUrl ?? null,
+    mp3Url: data.mp3Url ?? null,
+    mp3StorageKey: data.mp3StorageKey ?? null,
     visualConfig: data.visualConfig,
     arrangementState: data.arrangementState,
     tags: data.tags ?? [],
@@ -54,7 +56,10 @@ export function getLocalSongsByUserFallback(userId: string): SongRow[] {
 // List response shape — drops the heavy audio/arrangement fields, matching
 // getSongSummariesByUser so the gallery payload stays lean even on the
 // DB-unavailable fallback path. The store keeps the full rows for detail reads.
-export type SongSummaryRow = Omit<SongRow, "mp3DataUrl" | "arrangementState">;
+export type SongSummaryRow = Omit<
+  SongRow,
+  "mp3DataUrl" | "mp3Url" | "mp3StorageKey" | "arrangementState"
+>;
 
 export function getLocalSongSummariesByUserFallback(userId: string): SongSummaryRow[] {
   return getLocalSongsByUserFallback(userId).map((song) => ({

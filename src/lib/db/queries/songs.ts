@@ -70,7 +70,7 @@ export async function getSongShareMetaByShareCode(shareCode: string) {
     .select({
       visibility: songs.visibility,
       title: songs.title,
-      hasAudio: sql<boolean>`(${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> '')`,
+      hasAudio: sql<boolean>`((${songs.mp3Url} is not null and ${songs.mp3Url} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> ''))`,
     })
     .from(songs)
     .where(and(
@@ -101,6 +101,7 @@ export async function getPublicSongByShareCode(shareCode: string) {
       visibility: songs.visibility,
       shareCode: songs.shareCode,
       mp3DataUrl: songs.mp3DataUrl,
+      mp3Url: songs.mp3Url,
       visualConfig: songs.visualConfig,
       tags: songs.tags,
       createdAt: songs.createdAt,

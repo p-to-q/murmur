@@ -2,7 +2,9 @@ import type { songs } from "@/lib/db/schema/songs";
 
 type SongRow = typeof songs.$inferSelect;
 
-export type DemoSong = Omit<SongRow, "mp3DataUrl"> & { mp3Url: string };
+export type DemoSong = Omit<SongRow, "mp3DataUrl" | "mp3Url" | "mp3StorageKey"> & {
+  mp3Url: string;
+};
 
 export const DEMO_SONG_IDS = ["demo-1", "demo-2", "demo-3"] as const;
 

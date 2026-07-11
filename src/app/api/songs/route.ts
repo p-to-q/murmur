@@ -20,6 +20,7 @@ import {
   getLocalSongSummariesByUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
 import { isDatabaseUnavailable, objectFieldAsString } from "@/app/api/songs/db-fallback";
+import { uploadSongMasterFromDataUrl } from "@/lib/storage/song-audio";
 import { isObject } from "@/lib/utils/is-object";
 import { log } from "@/lib/observability/log";
 import {
@@ -189,7 +190,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const songInput = buildSongInput(body, userId);
+  const resolvedAudio = await resolveSongAudioForSave(buildSongInput(body, userId), body, {
+    requestId,
+    userId,
+    sessionId: auth.sessionId,
+  });
+  const songInput = resolvedAudio.input;
+  const audioStorageHeaders =
+    resolvedAudio.audioStorage === "data_url_fallback"
+      ? { "X-Murmur-Audio-Storage": "fallback-data-url" }
+      : undefined;
 
   try {
     const skipBilling =
@@ -208,7 +218,7 @@ export async function POST(req: NextRequest) {
         }));
 
         return NextResponse.json(song, {
-          headers: { "X-Request-Id": requestId },
+          headers: { "X-Request-Id": requestId, ...audioStorageHeaders },
         });
       } catch (dbError) {
         if (isSongIdUniqueConstraintViolation(dbError)) {
@@ -306,7 +316,7 @@ export async function POST(req: NextRequest) {
     }));
 
     return NextResponse.json(result.song, {
-      headers: { "X-Request-Id": requestId },
+      headers: { "X-Request-Id": requestId, ...audioStorageHeaders },
     });
   } catch (err) {
     if (shouldUseLocalSongFallback(auth, requestHost) && isDatabaseUnavailable(err)) {
@@ -390,10 +400,81 @@ function buildSongInput(body: SongPayload, userId: string): SongInput {
     sourceMelodyKind,
     editCount,
     editDepth,
-    mp3DataUrl: body.mp3DataUrl ?? null,
     visualConfig: body.visualConfig,
     arrangementState: body.arrangementState,
     tags: body.tags,
+  };
+}
+
+/**
+ * Resolve the persisted audio artifact for a save (#292). Newly rendered
+ * audio is uploaded through the object-storage adapter and stored as an
+ * `mp3Url` + `mp3StorageKey`; the base64 `mp3DataUrl` is no longer written to
+ * Postgres on the happy path.
+ *
+ * Storage-unavailable behavior is explicit and demo-safe: if the upload
+ * throws (unconfigured driver, network) we fall back to embedding the legacy
+ * data URL so the demo/offline flow never loses the user's audio, and flag it
+ * on the response via the caller. A payload with no audio persists no audio at
+ * all (an incomplete draft — see #291).
+ */
+type ResolvedSongAudio = {
+  input: SongInput;
+  audioStorage: "object" | "data_url_fallback" | "none";
+};
+
+async function resolveSongAudioForSave(
+  base: SongInput,
+  body: SongPayload,
+  ctx: { requestId: string; userId: string; sessionId: string | null },
+): Promise<ResolvedSongAudio> {
+  const dataUrl =
+    typeof body.mp3DataUrl === "string" && body.mp3DataUrl.length > 0
+      ? body.mp3DataUrl
+      : null;
+
+  if (!dataUrl) {
+    return {
+      input: { ...base, mp3Url: null, mp3StorageKey: null, mp3DataUrl: null },
+      audioStorage: "none",
+    };
+  }
+
+  try {
+    const uploaded = await uploadSongMasterFromDataUrl({
+      userId: base.userId,
+      songId: base.id!,
+      dataUrl,
+    });
+    if (uploaded) {
+      return {
+        input: {
+          ...base,
+          mp3Url: uploaded.mp3Url,
+          mp3StorageKey: uploaded.mp3StorageKey,
+          mp3DataUrl: null,
+        },
+        audioStorage: "object",
+      };
+    }
+  } catch (err) {
+    log("song.audio_upload_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      songId: base.id,
+    }, {
+      route: ROUTE,
+      requestId: ctx.requestId,
+      userId: ctx.userId,
+      sessionId: ctx.sessionId,
+      level: "warn",
+    });
+  }
+
+  // Demo-safe fallback: keep the rendered audio as an embedded data URL rather
+  // than dropping it. Legacy read paths already accept mp3DataUrl.
+  return {
+    input: { ...base, mp3Url: null, mp3StorageKey: null, mp3DataUrl: dataUrl },
+    audioStorage: "data_url_fallback",
   };
 }
 
