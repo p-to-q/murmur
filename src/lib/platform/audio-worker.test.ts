@@ -26,6 +26,26 @@ describe("audio worker adapter", () => {
     );
   });
 
+  it("does not emit an empty worker clean melody as an interim preview", () => {
+    const interim = extractInterimMelody(
+      {
+        source: "pyin",
+        rawNotes: [{ pitch: 60, start: 0, duration: 0.5, confidence: 0.9 }],
+        cleanMelody: {
+          notes: [],
+          key: "C",
+          scale: "major",
+          bpm: 100,
+          duration: 0,
+          contour: "flat",
+        },
+      },
+      { targetInstrument: "piano" },
+    );
+
+    expect(interim).toBeNull();
+  });
+
   it("normalizes legacy pYIN notes and clamps them to the target instrument", () => {
     const result = normalizeWorkerResponse(
       {
@@ -439,6 +459,25 @@ describe("audio worker retry", () => {
       });
       expect(result.rawNotes.length).toBeGreaterThan(0);
       expect(worker.calls()).toBe(2);
+    } finally {
+      worker.restore();
+    }
+  });
+
+  it("keeps a successful transcription when the interim callback throws", async () => {
+    const worker = withWorker(() => new Response(validBody, { status: 200 }));
+    try {
+      const result = await transcribeWithAudioWorker({
+        audio: new File(["audio"], "hum.webm", { type: "audio/webm" }),
+        targetInstrument: "piano",
+        requestId: "req_interim_callback",
+        onInterimMelody: () => {
+          throw new Error("stream already closed");
+        },
+      });
+
+      expect(result.rawNotes).toHaveLength(1);
+      expect(worker.calls()).toBe(1);
     } finally {
       worker.restore();
     }

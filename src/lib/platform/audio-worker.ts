@@ -323,8 +323,16 @@ async function runTranscribeAttempt({
   }
 
   if (onInterimMelody) {
-    const interim = extractInterimMelody(parsed, { targetInstrument });
-    if (interim) onInterimMelody(interim);
+    try {
+      const interim = extractInterimMelody(parsed, { targetInstrument });
+      if (interim) onInterimMelody(interim);
+    } catch (error) {
+      log(
+        "audio_worker.interim_preview_failed",
+        { error: error instanceof Error ? error.message : String(error) },
+        { requestId, level: "warn" },
+      );
+    }
   }
 
   return normalizeWorkerResponse(parsed, {
@@ -352,6 +360,7 @@ export function extractInterimMelody(
   const polished = workerResponse.cleanMelody
     ? normalizeCleanMelody(workerResponse.cleanMelody)
     : polishMelody(rawNotes);
+  if (polished.notes.length === 0) return null;
   return clampMelody(polished, options.targetInstrument).melody;
 }
 

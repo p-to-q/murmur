@@ -147,8 +147,12 @@ def _verify_auth(request: Request) -> None:
         raise HTTPException(status_code=401, detail={"error": "unauthorized"})
 
 
-@app.get("/health")
-def health() -> dict[str, object]:
+@app.get(
+    "/health",
+    response_model=None,
+    responses={503: {"description": "Music model failed to load"}},
+)
+def health() -> dict[str, object] | JSONResponse:
     payload = {
         "status": "degraded" if engine.model_load_error() else "ok",
         "mock": engine.MOCK,

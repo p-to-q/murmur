@@ -230,6 +230,28 @@ describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
       ndjsonResponse([
         // A future/foreign event shape must not be dispatched to onProgress.
         JSON.stringify({ phase: "interim_melody", melody: { notes: "bad" } }),
+        JSON.stringify({
+          phase: "interim_melody",
+          melody: {
+            notes: [{ pitch: 60, start: 0, duration: 1, velocity: 0.8, confidence: 0.9 }],
+            key: "C",
+            scale: "not-a-scale",
+            bpm: 100,
+            duration: 1,
+            contour: "flat",
+          },
+        }),
+        JSON.stringify({
+          phase: "interim_melody",
+          melody: {
+            notes: [{ pitch: "60", start: 0, duration: 1, velocity: 0.8, confidence: 0.9 }],
+            key: "C",
+            scale: "major",
+            bpm: 100,
+            duration: 1,
+            contour: "flat",
+          },
+        }),
         JSON.stringify({ phase: "worker_started" }),
         JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
       ])) as typeof fetch;
@@ -240,6 +262,29 @@ describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
 
     expect(phases).toEqual(["worker_started", "complete"]);
     expect((result as { provider: string }).provider).toBe("swiftf0");
+  });
+
+  it("dispatches a fully validated interim melody", async () => {
+    const progress: Array<{ phase: string; data: unknown }> = [];
+    const melody = {
+      notes: [{ pitch: 60, start: 0, duration: 1, velocity: 0.8, confidence: 0.9 }],
+      key: "C",
+      scale: "major",
+      bpm: 100,
+      duration: 1,
+      contour: "flat",
+    };
+    globalThis.fetch = (async () =>
+      ndjsonResponse([
+        JSON.stringify({ phase: "interim_melody", melody }),
+        JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
+      ])) as typeof fetch;
+
+    await transcribeRecordingStreaming(blob(), {
+      onProgress: (phase, data) => progress.push({ phase, data }),
+    });
+
+    expect(progress[0]).toEqual({ phase: "interim_melody", data: melody });
   });
 
   it("skips a malformed error event (missing fields) rather than throwing a bogus typed error", async () => {
