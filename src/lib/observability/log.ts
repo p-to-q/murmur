@@ -80,6 +80,12 @@ export type LogEvent =
   | "stage.entered"
   | "stage.completed"
   | "stage.dropped"
+  // A component (transcribe / music_generate / llm_edit / db.*) blew its P95
+  // latency budget. Dedicated, uniform SLO-alert event carrying
+  // { component, durationMs, budgetP95, overageMs } so the log pipeline can page
+  // on regressions without parsing the `budget_exceeded` flag out of every
+  // component's own completion event (#210).
+  | "latency.budget_exceeded"
   | "client_pitch.wasm_loaded"
   | "client_pitch.wasm_unavailable"
   | "client_pitch.completed"
