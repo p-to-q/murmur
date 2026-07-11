@@ -18,11 +18,24 @@ function note(
 }
 
 describe("melody-polisher articulation", () => {
-  it("keeps intentional repeated notes as separate attacks", () => {
+  it("merges repeated attacks inside the 120 ms near-unison window", () => {
     const polished = polishMelody([
       note(60, 0, 0.2, 0.9),
       note(60, 0.23, 0.2, 0.88),
       note(62, 0.52, 0.28, 0.9),
+    ]);
+
+    expect(polished.notes.map((melodyNote) => melodyNote.pitch)).toEqual([
+      60,
+      62,
+    ]);
+  });
+
+  it("keeps repeated attacks separate outside the 120 ms merge window", () => {
+    const polished = polishMelody([
+      note(60, 0, 0.2, 0.9),
+      note(60, 0.33, 0.2, 0.88),
+      note(62, 0.8, 0.28, 0.9),
     ]);
 
     expect(polished.notes.map((melodyNote) => melodyNote.pitch)).toEqual([
@@ -32,7 +45,7 @@ describe("melody-polisher articulation", () => {
     ]);
   });
 
-  it("preserves close neighbor motion for glide-like syllables", () => {
+  it("treats close semitone motion as drift inside the merge window", () => {
     const polished = polishMelody([
       note(60, 0, 0.24, 0.9),
       note(61, 0.27, 0.22, 0.86),
@@ -41,7 +54,6 @@ describe("melody-polisher articulation", () => {
 
     expect(polished.notes.map((melodyNote) => melodyNote.pitch)).toEqual([
       60,
-      61,
       62,
     ]);
   });
