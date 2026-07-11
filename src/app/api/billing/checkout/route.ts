@@ -32,6 +32,7 @@ import {
 } from "@murmur/core";
 
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
 import {
   centsToDisplayAmount,
@@ -199,7 +200,7 @@ function parseBillingEmail(
 }
 
 export async function POST(request: NextRequest) {
-  const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+  const requestId = getRequestId(request);
   let body: CheckoutRequestBody;
   try {
     body = (await request.json()) as CheckoutRequestBody;

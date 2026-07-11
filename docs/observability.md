@@ -195,7 +195,7 @@ originates the trace.
 Sentry (intl) + 腾讯云 APM (cn). Same SDK shape:
 
 - Capture exceptions in the global Next.js error boundary +
-  every `errorEnvelope` call.
+  every `errorResponse` call.
 - Capture Python worker exceptions via `sentry-sdk`.
 - Tag every event with: `userId`, `requestId`, `region`, `release`,
   `route`, `shell`.

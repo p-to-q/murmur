@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { errorResponse } from "@/lib/api/error-response";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldAllowLocalPreviewFallback } from "@/lib/auth/local-preview";
 import {
@@ -46,7 +48,7 @@ export async function POST(
 
   const { id } = await params;
   const userId = auth.user.id;
-  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+  const requestId = getRequestId(req);
   const shareOrigin = getSiteUrlForRequest(req);
   const body = await readJsonObject(req);
   if ("visibility" in body && !isSongShareVisibility(body.visibility)) {
@@ -171,7 +173,7 @@ export async function DELETE(
 
   const { id } = await params;
   const userId = auth.user.id;
-  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+  const requestId = getRequestId(req);
 
   const rateLimit = await checkApiRateLimit({
     route: ROUTE,
@@ -292,27 +294,6 @@ async function publishSongShareWithRetry(
   throw lastConflict ?? new Error("share code allocation failed");
 }
 
-function errorResponse(
-  error:
-    | "validation_error"
-    | "not_found"
-    | "conflict"
-    | "audio_required"
-    | "schema_unavailable"
-    | "server_error",
-  status: number,
-  requestId: string,
-  input: { message?: string } = {},
-) {
-  return NextResponse.json(
-    {
-      error,
-      ...(input.message ? { message: input.message } : {}),
-      requestId,
-    },
-    { status, headers: { "X-Request-Id": requestId } },
-  );
-}
 
 async function revokeExistingShareIfNeeded(
   songId: string,

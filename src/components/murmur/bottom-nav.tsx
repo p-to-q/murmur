@@ -16,7 +16,7 @@ import {
   MOBILE_JOURNEY_STEPS,
   resolveMobileJourneyStage,
 } from "./nav-items";
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/cn";
 
 const MOBILE_RAIL_STOP_HREFS = new Set(["/", "/gallery"]);
 const SOUNDWAVE_BAR_COUNT = 9;

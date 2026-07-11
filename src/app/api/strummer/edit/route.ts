@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
+import { createSpendReference } from "@/lib/billing/spend-ref";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
@@ -25,7 +27,7 @@ const STRUMMER_EDIT_RATE_LIMIT = { capacity: 10, refillWindowMs: 60_000 };
 type RequestBody = { prompt?: string };
 
 export async function POST(req: NextRequest) {
-  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+  const requestId = getRequestId(req);
   const spendRef = createSpendReference("llm_edit");
   const auth = await resolveRequestAuth(req);
   if (!auth.ok) return auth.response;
@@ -339,6 +341,3 @@ function extractTokens(text: string): EditToken[] {
     .slice(0, 3);
 }
 
-function createSpendReference(kind: "llm_edit"): string {
-  return `${kind}:${crypto.randomUUID()}`;
-}

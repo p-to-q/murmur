@@ -1,4 +1,4 @@
-import { cn } from "@/utils/utils";
+import { cn } from "@/lib/cn";
 
 const sizes = {
   xs: "h-3.5 w-3.5 border-[1.5px]",

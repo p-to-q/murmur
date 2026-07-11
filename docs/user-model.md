@@ -382,8 +382,9 @@ discards the upload after producing the `ScoredMelody`. If a future
 v2.x improvement (e.g. local model training) needs uploads, we ship an
 opt-in toggle in `/me/privacy` and persist with a 90-day TTL.
 
-This is documented in `audio-pipeline-redesign.md` §12.2 and re-stated
-here so the user model is self-contained.
+This is documented in `audio-pipeline-redesign.md` (the opt-in
+debug-capture env vars are listed in its §9) and re-stated here so the
+user model is self-contained.
 
 ---
 

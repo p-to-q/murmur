@@ -13,7 +13,7 @@ and what acceptance signal to look for at each stop.
 
 Read first:
 
-- `docs/diagnosis-2026-06.md` — what is real today
+- `docs/archive/diagnosis-2026-06.md` — what is real today
 - `docs/audio-pipeline-redesign.md` — new hum → score pipeline
 - `docs/cross-platform-strategy.md` — Web + Capacitor + Taro
 - `docs/studio-compose-redesign.md` — Compose simplification
@@ -82,7 +82,9 @@ Stops:
 8. Add diagnostics (snr, voicedRatio, provider) to MeScreen for
    power users, removed from default view.
 
-**Done when:** acceptance list in `audio-pipeline-redesign.md` §9 passes.
+**Done when:** the "Done Checklist" in
+`archive/phase-plans/phase-1-server-transcribe.md` passes (pipeline
+behavior itself is specified in `audio-pipeline-redesign.md` §1–§7).
 
 ---
 
@@ -271,10 +273,10 @@ These do not belong to a single phase but must not be dropped:
 
 | If you are about to… | Read |
 |---|---|
-| Change an audio component | `audio-pipeline-redesign.md`, `diagnosis-2026-06.md` §2 |
-| Change a Compose surface | `studio-compose-redesign.md`, `diagnosis-2026-06.md` §3 |
+| Change an audio component | `audio-pipeline-redesign.md`, `archive/diagnosis-2026-06.md` §2 |
+| Change a Compose surface | `studio-compose-redesign.md`, `archive/diagnosis-2026-06.md` §3 |
 | Wire payment in any shell | `payment-topup-feature.md`, `cross-platform-strategy.md` §9 |
 | Spin up a new shell | `cross-platform-strategy.md`, `audio-pipeline-redesign.md` §4.1 |
-| Touch DB schema | `payment-topup-feature.md` §4, `diagnosis-2026-06.md` §5 + §7 |
+| Touch DB schema | `payment-topup-feature.md` §4, `archive/diagnosis-2026-06.md` §5 + §7 |
 
 Sibling docs are the spec; this roadmap is the order.

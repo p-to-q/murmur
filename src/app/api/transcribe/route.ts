@@ -6,7 +6,9 @@ import {
   transcribeWithAudioWorker,
 } from "@/lib/platform/audio-worker";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth, type ResolvedRequestAuth } from "@/lib/auth";
+import { createSpendReference } from "@/lib/billing/spend-ref";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
@@ -798,10 +800,3 @@ function fail(
   );
 }
 
-function getRequestId(request: NextRequest): string {
-  return request.headers.get("x-request-id") || crypto.randomUUID();
-}
-
-function createSpendReference(kind: "hum"): string {
-  return `${kind}:${crypto.randomUUID()}`;
-}

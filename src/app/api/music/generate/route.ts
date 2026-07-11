@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
+import { createSpendReference } from "@/lib/billing/spend-ref";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
@@ -105,7 +107,7 @@ type GenerateResult =
  */
 export async function POST(request: NextRequest) {
   const startedAt = performance.now();
-  const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+  const requestId = getRequestId(request);
   const batchId = readGenerationBatchId(request);
   const spendRef = createSpendReference("music_generate");
   const auth = await resolveRequestAuth(request);
@@ -653,10 +655,6 @@ function safeHostnameFromUrl(url: string): string | null {
   } catch {
     return null;
   }
-}
-
-function createSpendReference(kind: "music_generate"): string {
-  return `${kind}:${crypto.randomUUID()}`;
 }
 
 /** Production path: invoke the RunPod Serverless endpoint (JSON + base64). */

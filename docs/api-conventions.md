@@ -141,8 +141,8 @@ GET /api/songs?limit=50&cursor=sng_01H…
   newer-than) instead of pagination; mutually exclusive with `cursor`.
 
 Internally, "list of user's X" queries always pass through a shared
-`paginate()` helper in `src/lib/api/paginate.ts` (Codex implements; spec
-is §4 of this doc).
+`paginate()` helper in `src/lib/api/paginate.ts` (Codex implements; not
+yet built — spec is §4 of this doc).
 
 ---
 
@@ -234,12 +234,22 @@ Per route + per user (or per IP for guest endpoints).
 
 Exceeded: return `429 rate_limited` with `Retry-After` in seconds.
 
-Implementation: lightweight Redis (when scaling demands) or in-process
-counter with backoff (fine for early v2). Live behind a helper:
+Implementation: a token-bucket store behind `src/lib/rate-limit/`
+(Postgres adapter in production, in-memory in dev; a `redis` driver
+value is recognized but falls back to memory until built). Routes call
+the shared helper:
 
 ```ts
-import { rateLimit } from "@/lib/api/rate-limit";
-await rateLimit(req, "transcribe", { perMin: 10 });
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+
+const rateLimit = await checkApiRateLimit({
+  route: "/api/transcribe",
+  bucket: "transcribe:user",
+  userId: auth.user.id,        // or client IP for guest endpoints
+  requestId,
+  options: { capacity: 10, refillWindowMs: 60_000 },
+});
+if (!rateLimit.allowed) return rateLimitedResponse(rateLimit, requestId);
 ```
 
 ---
@@ -248,8 +258,8 @@ await rateLimit(req, "transcribe", { perMin: 10 });
 
 Mutating routes accept an `Idempotency-Key` header (ulid). The server
 records `idempotency_key + userId + route` for 24 hours and returns
-the cached response on repeat. Implementation lives in
-`src/lib/api/idempotency.ts`.
+the cached response on repeat. Implementation specified for
+`src/lib/api/idempotency.ts` (not yet implemented).
 
 Routes that **must** use this:
 
@@ -356,44 +366,76 @@ anything.
 
 ## 13. Standard route template
 
-Codex implements every route from this skeleton. The helper names in the
-snippet are illustrative; the current app may use narrower route-local
-adapters as long as the same response contract holds.
+Codex implements every route from this skeleton. The imports and call
+shapes below reflect the actual helpers in the codebase today.
 
 ```ts
 // src/app/api/<area>/<resource>/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { authenticate } from "@/lib/auth/api";        // resolves session
-import { rateLimit }    from "@/lib/api/rate-limit";
-import { withIdempotency } from "@/lib/api/idempotency";
-import { logRequest, errorEnvelope } from "@/lib/api/envelope";
 import { z } from "zod";
+import { errorResponse } from "@/lib/api/error-response";
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
+import { resolveRequestAuth } from "@/lib/auth";
+import { log } from "@/lib/observability/log";
 
-const BodySchema = z.object({ ... });
-type Body = z.infer<typeof BodySchema>;
+const ROUTE = "/api/<area>/<resource>";
+const CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
+
+const bodySchema = z.object({ /* ... */ });
 
 export async function POST(req: NextRequest) {
-  const requestId = crypto.randomUUID();
+  const requestId = getRequestId(req);
+
+  // Discriminated union: { ok: false, response } short-circuits.
+  const auth = await resolveRequestAuth(req);
+  if (!auth.ok) return auth.response;
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "create:user",
+    userId: auth.user.id,
+    requestId,
+    sessionId: auth.sessionId,
+    options: CREATE_RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
+
+  let body: z.infer<typeof bodySchema>;
   try {
-  const auth = await authenticate(req);  // throws unauthorized
-    await rateLimit(req, "songs-create", { perMin: 20, userId: auth.user.id });
-    const body = BodySchema.parse(await req.json());
-    return withIdempotency(req, async () => {
-      const result = await createSong({ userId: auth.user.id, ...body });
-      logRequest(requestId, req, 200, { kind: "song.created", id: result.id });
-      return NextResponse.json(result, {
-        status: 201,
-        headers: { "X-Request-Id": requestId },
-      });
+    body = bodySchema.parse(await req.json());
+  } catch {
+    return errorResponse("validation_error", 400, requestId);
+  }
+
+  try {
+    const result = await createSong({ userId: auth.user.id, ...body });
+    log("song.created", { songId: result.id }, {
+      route: ROUTE,
+      requestId,
+      userId: auth.user.id,
     });
-  } catch (e) {
-    return errorEnvelope(e, requestId);
+    return NextResponse.json(result, {
+      status: 201,
+      headers: { "X-Request-Id": requestId },
+    });
+  } catch (error) {
+    log("song.create_failed", {
+      message: error instanceof Error ? error.message : String(error),
+    }, { route: ROUTE, requestId, userId: auth.user.id, level: "error" });
+    return errorResponse("server_error", 500, requestId);
   }
 }
 ```
 
-`errorEnvelope` maps known throw-types to `ErrorCode`; the unknown
-falls to `server_error`. It always sets `X-Request-Id`.
+`errorResponse(code, status, requestId)` (in
+`src/lib/api/error-response.ts`) builds the §3 error envelope and always
+sets `X-Request-Id`. Codes are plain strings today; the route picks the
+`ErrorCode` explicitly — there is no automatic throw-type → code mapping,
+and runtime validation of codes at the boundary is planned follow-up
+work, not yet built.
 
 ---
 
