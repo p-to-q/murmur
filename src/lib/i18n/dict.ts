@@ -804,6 +804,9 @@ export const DICT = {
   "delete.toast.done":   { zh: "账号删除请求已提交。", en: "Account deletion requested." },
   "delete.toast.failed": { zh: "删除请求暂时失败，请稍后再试。", en: "Couldn't request deletion right now. Try again shortly." },
   "delete.back":         { zh: "返回我的", en: "Back to Me" },
+  "delete.confirm.title":   { zh: "确认永久删除账号？", en: "Delete your account permanently?" },
+  "delete.confirm.body":    { zh: "这将永久删除你的账号与歌曲，操作无法撤销。", en: "This permanently deletes your account and songs. This cannot be undone." },
+  "delete.confirm.confirm": { zh: "永久删除", en: "Delete forever" },
 
   // ── Topup extras ───────────────────────────────────────────────────
   "topup.next_refill":   { zh: "下次补给 {time}", en: "Next refill {time}" },

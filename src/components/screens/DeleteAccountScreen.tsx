@@ -15,12 +15,23 @@ import {
   useCurrentAccount,
 } from "@/lib/hooks/use-current-account";
 import { authClient } from "@/lib/platform/auth-client";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export function DeleteAccountScreen() {
   const t = useTranslator();
   const router = useRouter();
   const { isRegistered } = useCurrentAccount();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const steps = ["delete.steps.1", "delete.steps.2", "delete.steps.3"] as const;
 
@@ -50,6 +61,7 @@ export function DeleteAccountScreen() {
         description: formatSupportCode({ area: "ACCOUNT", error: "delete_failed", requestId: null }),
       });
       setIsSubmitting(false);
+      setConfirmOpen(false);
     }
   }
 
@@ -102,7 +114,7 @@ export function DeleteAccountScreen() {
           <button
             type="button"
             disabled={!isRegistered || isSubmitting}
-            onClick={handleDelete}
+            onClick={() => setConfirmOpen(true)}
             className="inline-flex items-center gap-2 justify-center w-full max-w-sm rounded-full px-6 py-3.5 text-[14px] font-medium text-white bg-[#C43B3B] transition-all hover:bg-[#A32D2D] hover:-translate-y-px hover:shadow-[0_8px_22px_rgba(196,59,59,0.32)] disabled:cursor-not-allowed disabled:opacity-60"
             aria-disabled={!isRegistered || isSubmitting}
           >
@@ -113,6 +125,30 @@ export function DeleteAccountScreen() {
           </p>
         </div>
       </div>
+
+      <Dialog open={confirmOpen} onOpenChange={(open) => setConfirmOpen(open)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("delete.confirm.title")}</DialogTitle>
+            <DialogDescription>{t("delete.confirm.body")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose
+              render={<Button variant="outline" disabled={isSubmitting} />}
+            >
+              {t("common.cancel")}
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isSubmitting}
+              className="bg-[#C43B3B] text-white hover:bg-[#A32D2D] focus-visible:ring-[#C43B3B]/30"
+            >
+              {isSubmitting ? t("delete.cta.working") : t("delete.confirm.confirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

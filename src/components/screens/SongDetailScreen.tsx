@@ -775,13 +775,13 @@ export function SongDetailScreen({ songId }: { songId: string }) {
             >
               <button
                 onClick={handleRemixAgain}
-                className="font-serif-italic text-[15px] text-[#1A1A1A] hover:text-[#FF5924] underline-mm transition-colors"
+                className="font-serif-italic text-[15px] text-[#1A1A1A] hover:text-[#D9421A] underline-mm transition-colors"
               >
                 {t("song.remix_again") || "Try new versions"}
               </button>
               <button
                 onClick={handleEditAgain}
-                className="font-serif-italic text-[15px] text-[#FF5924] hover:text-[#D9421A] underline-mm transition-colors"
+                className="font-serif-italic text-[15px] text-[#D9421A] underline-mm transition-colors"
               >
                 {t("song.edit_again") || "Edit again"}
               </button>

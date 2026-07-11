@@ -293,7 +293,7 @@ export function HumScreen() {
   const blob1Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.35]);
   const blob2Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.28]);
   const blob3Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.22]);
-  const blobOpacity = useTransform(amplitudeSpring, [0, 1], [1, 2.2]);
+  const blobOpacity = useTransform(amplitudeSpring, [0, 1], [0.82, 1]);
   // Orb conic glow — bigger range, brighter response
   const glowScale = useTransform(amplitudeSpring, [0, 0.3, 1], [1, 1.15, 1.7]);
   const glowOpacity = useTransform(amplitudeSpring, [0, 0.2, 1], [0.35, 0.55, 1.0]);
