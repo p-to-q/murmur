@@ -420,7 +420,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                         inputRef.current?.focus();
                       }}
                       disabled={isSaving}
-                      className="font-serif-italic text-[16px] text-[#8C8780] hover:text-[#FF5924] underline-mm transition-colors disabled:opacity-50"
+                      className="font-serif-italic text-[16px] text-[#8C8780] hover:text-[#D9421A] underline-mm transition-colors disabled:opacity-50"
                     >
                       {s}
                     </button>

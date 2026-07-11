@@ -23,6 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const ogTitle = title ? `${title} – Murmur` : "Shared song – Murmur";
   const ogDescription = "Listen to a song made from a hum in Murmur.";
+  const ogImage = `/og?title=${encodeURIComponent(title ?? "Shared Song")}`;
 
   return {
     title: title ? `${title} – Murmur` : "Shared song",
@@ -38,13 +39,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: ogTitle,
       description: ogDescription,
       url: `/s/${shareCode}`,
-      images: ["/og?title=Shared+Song"],
+      images: [ogImage],
     },
     twitter: {
       card: "summary_large_image",
       title: ogTitle,
       description: ogDescription,
-      images: ["/og?title=Shared+Song"],
+      images: [ogImage],
     },
   };
 }

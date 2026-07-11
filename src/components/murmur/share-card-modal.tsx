@@ -195,7 +195,7 @@ export function ShareCardModal({ open, onClose, shareUrl }: ShareCardModalProps)
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="relative mx-4 w-full max-w-md"
+            className="relative mx-4 max-h-[90svh] w-full max-w-md overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative overflow-hidden rounded-[32px] shadow-2xl">
