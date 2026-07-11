@@ -127,7 +127,7 @@ flowchart TB
   system while the page is hidden or closed. When keys are absent, publish calls
   skip cleanly so local demos remain usable.
 - Memory events are stored locally for now, which keeps user flows non-blocking.
-- Stage-based funnel tracking (`src/lib/observability/stage-tracking.ts`) records every hum → vibe → studio → save → gallery transition with dwell times, so drop-off rates are observable from structured logs without a separate analytics SDK.
+- Stage-based funnel tracking (`src/lib/observability/stage-tracking.ts`) records hum → vibe → studio → save → gallery transitions with dwell times. Callers explicitly pass the creation flow's existing `currentFlowId` / `VibeVersion.originFlowId` (with `draftId` as optional log context), so overlapping flows remain isolated without introducing a second analytics identity. The in-memory state is capped at 100 recently used flows; this remains structured-log observability, not durable analytics storage.
 - Per-component latency budgets (`src/lib/observability/latency-budgets.ts`) define P50/P95 ceilings for transcribe, music_generate, llm_edit, and db query paths. When a component exceeds its P95, structured logs carry a `budget_exceeded` flag.
 - Language is negotiated before first paint from the explicit `murmur.lang`
   cookie first, then the request `Accept-Language` header, then the product

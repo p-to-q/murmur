@@ -221,6 +221,7 @@ export function HumScreen() {
     setHumStyleBlob,
     setCurrentDraftId,
     setCurrentFlowId,
+    currentFlowId,
     setProcessingMessage,
     processingMessage,
     resetFlow,
@@ -229,6 +230,8 @@ export function HumScreen() {
   const t = useTranslator();
   const i18nHydrated = useI18nStore((state) => state.hydrated);
   const router = useRouter();
+  const freshFlowIdRef = useRef<string | null>(null);
+  const stageTrackedRef = useRef(false);
 
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0);
   const [humError, setHumError] = useState<HumErrorState | null>(null);
@@ -344,12 +347,15 @@ export function HumScreen() {
     // A direct visit to `/` is an explicit request for a fresh Create surface.
     // Draft recovery still lives in the nav controls, where the user is asking
     // to resume the creation journey rather than load the public home route.
-    // Stage tracking resets with the flow so a completed (or abandoned) run
-    // cannot leak stale `from`/`dwellMs` attribution into the new funnel.
+    if (stageTrackedRef.current) return;
+    stageTrackedRef.current = true;
+    const flowId = freshFlowIdRef.current ?? crypto.randomUUID();
+    freshFlowIdRef.current = flowId;
     resetFlow();
-    resetStageTracking();
-    trackStageEntered("hum");
-  }, [resetFlow]);
+    setCurrentFlowId(flowId);
+    resetStageTracking(flowId);
+    trackStageEntered(flowId, "hum");
+  }, [resetFlow, setCurrentFlowId]);
 
   useEffect(() => {
     unmountingRef.current = false;
@@ -573,7 +579,7 @@ export function HumScreen() {
         },
       });
       const draftId = crypto.randomUUID();
-      const flowId = crypto.randomUUID();
+      const flowId = currentFlowId ?? crypto.randomUUID();
       const selectedMelody = selectGenerationMelody(result, { repairBias });
       // Magenta is the only music engine. If the worker is unreachable after
       // all health-probe retries we stop with an honest error card — never

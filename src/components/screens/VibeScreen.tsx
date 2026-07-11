@@ -185,9 +185,9 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     if (stageTrackedRef.current) return;
     const flowId = currentFlowId ?? sourceVersion?.originFlowId;
     const draftId = currentDraftId ?? sourceVersion?.draftId;
-    if (!flowId && !draftId) return;
+    if (!flowId) return;
     stageTrackedRef.current = true;
-    trackStageEntered("vibe", { flowId, draftId });
+    trackStageEntered(flowId, "vibe", { draftId });
   }, [currentDraftId, currentFlowId, sourceVersion]);
 
   /* ── Arrival sequence ─────────────────────────────────────────── */
@@ -466,17 +466,16 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   const handleBack = useCallback(() => {
     versionPreview.stop();
     setAuditioning(null);
+    const flowId = currentFlowId ?? sourceVersion?.originFlowId;
     resetFlow();
-    // Abandoning the flow here: clear stage state so the next funnel run does
-    // not inherit a stale "vibe" origin.
-    resetStageTracking();
+    if (flowId) resetStageTracking(flowId);
     const sourceSongId = sourceVersion?.parentSongId ?? sourceVersion?.draftId;
     if (fromSavedSong && sourceSongId) {
       router.push(`/song/${sourceSongId}`);
       return;
     }
     router.push("/");
-  }, [fromSavedSong, resetFlow, router, setAuditioning, sourceVersion]);
+  }, [currentFlowId, fromSavedSong, resetFlow, router, setAuditioning, sourceVersion]);
 
   const visualBatchSeed = hashString(
     vibeVersions.map((candidate) => candidate.id).join(":"),

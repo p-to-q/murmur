@@ -318,8 +318,9 @@ cadentially awkward.
   retry vs. fail-fast decisions across routes, workers, and client;
 - **latency budgets**: `src/lib/observability/latency-budgets.ts` enforces
   P50/P95 ceilings on transcribe, music_generate, llm_edit, db operations;
-- **stage tracking**: `src/lib/observability/stage-tracking.ts` records every
-  funnel transition (hum → vibe → studio → save → gallery) with dwell times.
+- **stage tracking**: `src/lib/observability/stage-tracking.ts` records funnel
+  transitions (hum → vibe → studio → save → gallery) with dwell times, keyed by
+  the existing creation `originFlowId` and bounded to 100 recently used flows.
 
 ### Still open
 

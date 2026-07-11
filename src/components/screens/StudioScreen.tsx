@@ -74,8 +74,7 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
   useEffect(() => {
     if (stageTrackedRef.current || !currentVersion) return;
     stageTrackedRef.current = true;
-    trackStageEntered("studio", {
-      flowId: currentVersion.originFlowId,
+    trackStageEntered(currentVersion.originFlowId, "studio", {
       draftId: currentVersion.draftId,
     });
   }, [currentVersion]);
