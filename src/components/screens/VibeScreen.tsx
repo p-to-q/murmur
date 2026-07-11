@@ -171,6 +171,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     resetFlow,
     humStyleBlob,
     restoredDraftAt,
+    hasHydratedDraft,
   } = useMurmurStore();
 
   const [phase, setPhase] = useState<Phase>("closing");
@@ -248,10 +249,18 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   ]);
 
   useEffect(() => {
-    if (vibeVersions.length === 0 && !demoEnabled) {
-      router.replace("/");
-    }
-  }, [demoEnabled, vibeVersions.length, router]);
+    // Gate the empty-state redirect on restoration completion (#315): only
+    // bounce home once draft hydration has run AND there is genuinely nothing
+    // to show. Defer a tick and re-read the store so a same-tick navigation
+    // handoff (Hum → Vibe populating versions) is never mistaken for empty.
+    if (demoEnabled || !hasHydratedDraft || vibeVersions.length > 0) return;
+    const id = window.setTimeout(() => {
+      if (useMurmurStore.getState().vibeVersions.length === 0) {
+        router.replace("/");
+      }
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [demoEnabled, hasHydratedDraft, vibeVersions.length, router]);
 
   useEffect(() => {
     if (!restoredDraftAt || restoredRegenerationRef.current === restoredDraftAt) {
