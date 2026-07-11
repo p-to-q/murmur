@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import Image from "next/image";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { trackStageEntered } from "@/lib/observability/stage-tracking";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
 import { generateStrummerCode } from "@/modules/strummer/generate-code";
@@ -18,6 +19,7 @@ import {
   type EditToken,
 } from "@/modules/strummer/apply-edit";
 import { classifyPromptWithLLM, StrummerEditRequestError } from "@/lib/api/strummer";
+import { formatStudioSupportCode } from "@/lib/observability/support-code";
 import { studioPromptRecoveryForCode } from "@/components/screens/studio-prompt-recovery";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { memory } from "@/lib/platform/memory";
@@ -65,6 +67,18 @@ export function StudioScreen({ initialDemo = false }: { initialDemo?: boolean })
       setActiveCreationRoute("/studio");
     }
   }, [currentVersion, setActiveCreationRoute]);
+
+  // Track once per mount, but only after a version exists — demo seeding fills
+  // the store asynchronously, and firing earlier would drop the flow context.
+  const stageTrackedRef = useRef(false);
+  useEffect(() => {
+    if (stageTrackedRef.current || !currentVersion) return;
+    stageTrackedRef.current = true;
+    trackStageEntered("studio", {
+      flowId: currentVersion.originFlowId,
+      draftId: currentVersion.draftId,
+    });
+  }, [currentVersion]);
 
   useRestoredVersionAudio(currentVersion, restoredDraftAt);
 
@@ -242,11 +256,15 @@ function StudioContent({ version }: { version: VibeVersion }) {
       if (error instanceof StrummerEditRequestError) {
         const recovery = studioPromptRecoveryForCode(error.code);
         if (recovery.refreshBalance) void refreshBalance();
-        toast.error(t(recovery.messageKey));
+        toast.error(t(recovery.messageKey), {
+          description: formatStudioSupportCode({ code: error.code, requestId: error.requestId }),
+        });
         if (recovery.navigateTo) router.push(recovery.navigateTo);
         return;
       }
-      toast.error(t("studio.prompt.llm_unavailable"));
+      toast.error(t("studio.prompt.llm_unavailable"), {
+        description: formatStudioSupportCode({ code: "prompt_failed", requestId: null }),
+      });
     } finally {
       setPromptBusy(false);
     }
@@ -296,10 +314,12 @@ function StudioContent({ version }: { version: VibeVersion }) {
   const handleSave = () => {
     const saveBlockReason = getSaveBlockReason(currentVersion);
     if (!canSaveHeardVersion(currentVersion)) {
-      toast(
-        saveBlockReason === "generation_failed"
-          ? (t("studio.magenta.save_failed") || "This take did not finish rendering. Brew it again before saving.")
-          : (t("studio.magenta.save_pending") || "Let this take finish rendering before saving."),
+      const failedMsg = saveBlockReason === "generation_failed"
+        ? (t("studio.magenta.save_failed") || "This take did not finish rendering. Brew it again before saving.")
+        : (t("studio.magenta.save_pending") || "Let this take finish rendering before saving.");
+      toast(failedMsg, saveBlockReason === "generation_failed" && currentVersion.generation?.errorCode
+        ? { description: formatStudioSupportCode({ code: currentVersion.generation.errorCode, requestId: null }) }
+        : undefined,
       );
       return;
     }

@@ -5,13 +5,25 @@
 All UI calls `transcribeWithStainer(input)` from
 `src/modules/stainer/transcribe.ts`. Screens do not import providers directly.
 
-The facade now has exactly two paths:
+The facade now has exactly three paths:
 
-- `input.audioBlob` present: upload to server `/api/transcribe`.
+- `input.audioBlob` present + server reachable: upload to `/api/transcribe`.
+- `input.audioBlob` present + server transient failure: fall back to
+  browser-side pYIN via Essentia.js WASM (`src/lib/audio/client-pitch-fallback.ts`),
+  then run the result through the same melody-polisher + humming-engine pipeline
+  (`src/lib/audio/build-client-transcription-result.ts`).
 - `input.audioBlob` absent: use `fixture` for the explicit demo melody.
 
-This is the Phase 1 boundary cut. Real recordings never fall through to fixture
-inside the browser.
+The client fallback architecture is:
+```
+remote RMVPE (best model, Fly.io)
+  → local SwiftF0 (worker-side fallback)
+    → client pYIN (browser-side WASM, last resort)
+```
+
+This is the current boundary cut. Real recordings never fall through to fixture
+inside the browser — they stop at the WASM pYIN layer at worst, preserving a
+usable transcription result with a degraded-quality warning.
 
 Before live recordings are uploaded, HumScreen runs a client-side preparation
 step:
@@ -32,7 +44,7 @@ defensively and remains authoritative for transcription.
 
 ```ts
 {
-  provider: "rmvpe" | "swiftf0" | "pyin" | "yin" | "parselmouth" | "fixture";
+  provider: "rmvpe" | "swiftf0" | "pyin" | "yin" | "parselmouth" | "client_pyin" | "fixture";
   rawNotes: MelodyNote[];
   contour?: TranscriptionContour;
   melodyIntent?: MelodyIntentProfile;
@@ -103,6 +115,28 @@ client and UI send `auto` and do not expose detector selection. Production test
 APIs still require `MURMUR_ENABLE_MELO_LAB=1` and never route to the product
 worker.
 
+## Client-side fallback
+
+When the remote worker is unavailable due to a transient failure (network error,
+worker unavailable, billing unavailable), Murmur now falls back to browser-side
+pYIN pitch detection via Essentia.js WASM (`src/lib/audio/client-pitch-fallback.ts`):
+
+- `essentia.js` is lazy-loaded on first use; never inflates the initial bundle.
+- Runs pYIN probabilistic pitch detection at 256-hop / 2048-frame with
+  80–800 Hz range and 0.3 voiced threshold.
+- Merges adjacent notes within 80 cents to avoid oversegmentation.
+- Output is a `ClientPitchResult` with `provider: "client_pyin"`.
+- `buildClientTranscriptionResult()` runs the raw notes through the standard
+  melody-polisher + humming-engine pipeline to produce a complete
+  `TranscriptionResult` — so the rest of the app (Vibe → Studio → Save) sees
+  a normal TranscriptionResult regardless of where pitch detection happened.
+- Results carry `warnings: ["Transcribed using browser-side pitch detection (degraded quality)"]`.
+
+This is the third tier of a three-tier fallback hierarchy:
+```
+RMVPE (best, server) → SwiftF0 (worker fallback) → pYIN in WASM (browser last resort)
+```
+
 ## Worker Roadmap
 
 The current product worker defaults to `auto`: RMVPE primary with SwiftF0 and
@@ -132,7 +166,7 @@ It also has an independent denoise provider seam selected by
 - `deepfilternet`: require DeepFilterNet and fail loudly when dependencies or
   model files are missing.
 
-The next Phase 1 stops deepen the implementation behind the same route:
+The next milestones deepen the implementation behind the same route:
 
 1. worker rename/containerization under `workers/audio-engine/`;
 2. silence trim and optional DeepFilterNet-family denoise;

@@ -47,6 +47,7 @@ import {
 } from "@/lib/hooks/use-browser-notification";
 import { NAV_ITEMS, computeTrail, type ComputedStep } from "./nav-items";
 import { MurmurMark } from "./murmur-mark";
+import { NotificationBadge } from "@/components/ui/notification-badge";
 import { ShareCardModal } from "./share-card-modal";
 import { Fragment } from "react";
 
@@ -262,13 +263,18 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                     collapsed ? "opacity-100" : "opacity-0 pointer-events-none"
                   }`}
                 >
-                  <span
-                    className={`h-[8px] w-[8px] rounded-full transition-all duration-200 ${
-                      isActive
-                        ? "bg-[#FF5924] scale-100"
-                        : "bg-transparent border border-[#B6B0A4] scale-90 group-hover:border-[#1A1A1A] group-hover:scale-100"
-                    }`}
-                  />
+                  <span className="relative">
+                    <span
+                      className={`block h-[8px] w-[8px] rounded-full transition-all duration-200 ${
+                        isActive
+                          ? "bg-[#FF5924] scale-100"
+                          : "bg-transparent border border-[#B6B0A4] scale-90 group-hover:border-[#1A1A1A] group-hover:scale-100"
+                      }`}
+                    />
+                    {item.href === "/gallery" && (
+                      <NotificationBadge className="absolute -top-1.5 -right-2.5 scale-75" />
+                    )}
+                  </span>
                 </div>
                 {/* Text — crossfades in when expanded */}
                 <div
@@ -290,9 +296,10 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                     </motion.span>
                   )}
                   <span
-                    className={`transition-all duration-200 group-hover:translate-x-[3px] ${textCls}`}
+                    className={`inline-flex items-center gap-1.5 transition-all duration-200 group-hover:translate-x-[3px] ${textCls}`}
                   >
                     {label}
+                    {item.href === "/gallery" && <NotificationBadge />}
                   </span>
                 </div>
               </div>

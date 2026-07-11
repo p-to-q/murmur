@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useInView } from "react-intersection-observer";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { CanvasCoverArt } from "./CanvasCoverArt";
-import { mulberry32, hashStringDjb2 } from "@/lib/music/seeded-random";
+import { mulberry32, hashString } from "@/lib/music/seeded-random";
 import type { VisualArtwork } from "@/modules/shared/types";
 
 export interface SongCardProps {
@@ -18,40 +18,40 @@ export interface SongCardProps {
   bpm?: number;
   createdAt: string;
   index: number;
-  onClick: () => void;
+  /** Receives the song id so parents can pass one stable handler to every
+   *  card — inline per-card closures would defeat the React.memo below. */
+  onClick: (id: string) => void;
   /** When provided, shows a corner delete affordance on the cover. */
-  onDelete?: () => void;
+  onDelete?: (id: string) => void;
 }
 
-const entryVariants = {
-  hidden: { opacity: 0, scale: 0.82, y: 18 },
-  visible: (i: number) => ({
-    opacity: 1,
-    scale: 1,
-    y: 0,
-    transition: {
-      type: "spring" as const,
-      stiffness: 380,
-      damping: 28,
-      delay: i * 0.06,
-    },
-  }),
-};
+function makeEntryVariants(reduceMotion: boolean | null) {
+  return {
+    hidden: { opacity: 0, scale: reduceMotion ? 1 : 0.82, y: reduceMotion ? 0 : 18 },
+    visible: (i: number) => ({
+      opacity: 1,
+      scale: 1,
+      y: 0,
+      transition: reduceMotion
+        ? { duration: 0.15, delay: i * 0.02 }
+        : { type: "spring" as const, stiffness: 380, damping: 28, delay: i * 0.06 },
+    }),
+  };
+}
 
-const labelVariants = {
-  hidden: { opacity: 0, scale: 0, y: 8 },
-  visible: (i: number) => ({
-    opacity: 1,
-    scale: 1,
-    y: 0,
-    transition: {
-      type: "spring" as const,
-      stiffness: 420,
-      damping: 22,
-      delay: i * 0.06 + 0.15,
-    },
-  }),
-};
+function makeLabelVariants(reduceMotion: boolean | null) {
+  return {
+    hidden: { opacity: 0, scale: reduceMotion ? 1 : 0, y: reduceMotion ? 0 : 8 },
+    visible: (i: number) => ({
+      opacity: 1,
+      scale: 1,
+      y: 0,
+      transition: reduceMotion
+        ? { duration: 0.15, delay: i * 0.02 + 0.05 }
+        : { type: "spring" as const, stiffness: 420, damping: 22, delay: i * 0.06 + 0.15 },
+    }),
+  };
+}
 
 function splitTitleForCover(title: string) {
   const words = title.trim().split(/\s+/).filter(Boolean);
@@ -77,7 +77,7 @@ function splitTitleForCover(title: string) {
   return [words.slice(0, bestSplit).join(" "), words.slice(bestSplit).join(" ")];
 }
 
-export function SongCard({
+export const SongCard = memo(function SongCard({
   id,
   title,
   vibe,
@@ -89,15 +89,19 @@ export function SongCard({
   onDelete,
 }: SongCardProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const { ref, inView } = useInView({ threshold: 0.1, triggerOnce: true });
 
-  // Seeded rotation for sticker feel. Must stay on the legacy djb2 hash:
-  // existing songs' cover gradients/rotations were minted with it.
-  const seed = hashStringDjb2(id);
-  const rand = mulberry32(seed);
-  const labelRotation = (rand() - 0.5) * 4; // -2 to 2 degrees
-  const titleLines = splitTitleForCover(title);
+  // Seeded rotation for sticker feel — memoize hash + RNG
+  const labelRotation = useMemo(() => {
+    const seed = hashString(id);
+    const rand = mulberry32(seed);
+    return (rand() - 0.5) * 4; // -2 to 2 degrees
+  }, [id]);
+  const titleLines = useMemo(() => splitTitleForCover(title), [title]);
+  const entryVariants = useMemo(() => makeEntryVariants(reduceMotion), [reduceMotion]);
+  const labelVariants = useMemo(() => makeLabelVariants(reduceMotion), [reduceMotion]);
 
   return (
     <motion.div
@@ -111,9 +115,9 @@ export function SongCard({
       <motion.button
         onHoverStart={() => setIsHovered(true)}
         onHoverEnd={() => setIsHovered(false)}
-        onClick={onClick}
-        whileHover={{ y: -6, transition: { type: "spring", stiffness: 400, damping: 25 } }}
-        whileTap={{ scale: 0.97, transition: { duration: 0.1 } }}
+        onClick={() => onClick(id)}
+        whileHover={reduceMotion ? undefined : { y: -6, transition: { type: "spring", stiffness: 400, damping: 25 } }}
+        whileTap={reduceMotion ? undefined : { scale: 0.97, transition: { duration: 0.1 } }}
         className="group relative block w-full text-left"
       >
         {/* Cover — rounded square with record-label detail */}
@@ -200,7 +204,7 @@ export function SongCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onDelete();
+            onDelete(id);
           }}
           aria-label={`Delete ${title}`}
           className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A]/35 text-white/90 backdrop-blur-sm transition-all hover:bg-[#1A1A1A]/60 opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
@@ -212,4 +216,4 @@ export function SongCard({
       )}
     </motion.div>
   );
-}
+});

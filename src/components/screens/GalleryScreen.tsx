@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { formatSupportCode } from "@/lib/observability/support-code";
+import {
+  ApiEnvelopeError,
+  apiErrorEnvelopeFrom,
+  readApiErrorEnvelope,
+} from "@/lib/api/error-envelope";
 import { memory } from "@/lib/platform/memory";
 import {
   clearLocalCreatorBootstrapFlag,
@@ -17,6 +23,8 @@ import type { SongCard as SongCardType } from "@/modules/shared/types";
 import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indicator";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
+import { trackStageEntered } from "@/lib/observability/stage-tracking";
+import { useNotificationStore } from "@/lib/store/notification-store";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
 import { ARTWORK_CATALOG } from "@/presets/artworks/catalog";
 
@@ -147,6 +155,12 @@ export function GalleryScreen() {
   const displaySongs = songs.length > 0 ? songs : DEMO_SONGS;
   const isShowingDemo = songs.length === 0;
 
+  const markAllRead = useNotificationStore((s) => s.markAllRead);
+  useEffect(() => {
+    trackStageEntered("gallery");
+    markAllRead();
+  }, [markAllRead]);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -178,21 +192,36 @@ export function GalleryScreen() {
     );
   }, [displaySongs, sort]);
 
+  // Stable id-based handlers keep SongCard's React.memo effective — inline
+  // per-card closures would give every card fresh props on each render.
+  const handleSongClick = useCallback(
+    (id: string) => {
+      const song = displaySongs.find((s) => s.id === id);
+      if (!song) return;
+      memory
+        .reportAction({
+          content: `Opened "${song.title}" from gallery`,
+          event_type: "navigate",
+          page: "gallery",
+          metadata: { type: "open_song", song_id: song.id },
+        })
+        .catch(() => {});
+      router.push(`/song/${song.id}`);
+    },
+    [displaySongs, router],
+  );
+
+  const handleDeleteRequest = useCallback(
+    (id: string) => {
+      const song = displaySongs.find((s) => s.id === id);
+      if (song) setDeleteTarget(song);
+    },
+    [displaySongs],
+  );
+
   if (isLoading) {
     return <GlobalLoadingIndicator />;
   }
-
-  const handleSongClick = (song: SongWithMeta) => {
-    memory
-      .reportAction({
-        content: `Opened "${song.title}" from gallery`,
-        event_type: "navigate",
-        page: "gallery",
-        metadata: { type: "open_song", song_id: song.id },
-      })
-      .catch(() => {});
-    router.push(`/song/${song.id}`);
-  };
 
   const handleConfirmDelete = async () => {
     const target = deleteTarget;
@@ -200,7 +229,9 @@ export function GalleryScreen() {
     setIsDeleting(true);
     try {
       const res = await fetch(`/api/songs/${target.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`delete HTTP ${res.status}`);
+      if (!res.ok) {
+        throw new ApiEnvelopeError(await readApiErrorEnvelope(res, "delete_failed"));
+      }
       setSongs((prev) => prev.filter((s) => s.id !== target.id));
       setDeleteTarget(null);
       memory
@@ -212,8 +243,16 @@ export function GalleryScreen() {
         })
         .catch(() => {});
       toast.success(t("gallery.delete.done") || "Deleted.");
-    } catch {
-      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?");
+    } catch (error) {
+      console.error("[Gallery] delete failed:", error);
+      const envelope = apiErrorEnvelopeFrom(error);
+      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?", {
+        description: formatSupportCode({
+          area: "GALLERY",
+          error: envelope?.code ?? "delete_failed",
+          requestId: envelope?.requestId ?? null,
+        }),
+      });
     } finally {
       setIsDeleting(false);
     }
@@ -247,10 +286,7 @@ export function GalleryScreen() {
                 bpm: s.bpm,
                 createdAt: s.createdAt,
               }))}
-              onSongClick={(id) => {
-                const song = displaySongs.find((s) => s.id === id);
-                if (song) handleSongClick(song);
-              }}
+              onSongClick={handleSongClick}
             />
           </motion.div>
         )}
@@ -301,10 +337,8 @@ export function GalleryScreen() {
                 bpm={song.bpm}
                 createdAt={song.createdAt}
                 index={i}
-                onClick={() => handleSongClick(song)}
-                onDelete={
-                  isShowingDemo ? undefined : () => setDeleteTarget(song)
-                }
+                onClick={handleSongClick}
+                onDelete={isShowingDemo ? undefined : handleDeleteRequest}
               />
             ))}
           </div>
@@ -393,14 +427,14 @@ function SortToggle({
     <div className="flex shrink-0 items-center gap-3 text-[12px] tracking-[0.04em]">
       <button
         onClick={() => onChange("newest")}
-        className={`font-ui-label transition-colors ${sort === "newest" ? "text-[#1A1A1A]" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
+        className={`transition-colors ${sort === "newest" ? "text-[#1A1A1A] font-medium" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
       >
         ↑ {t("gallery.sort.newest") || "newest"}
       </button>
       <span className="text-[#D2C9B6]">·</span>
       <button
         onClick={() => onChange("alpha")}
-        className={`font-ui-label transition-colors ${sort === "alpha" ? "text-[#1A1A1A]" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
+        className={`transition-colors ${sort === "alpha" ? "text-[#1A1A1A] font-medium" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
       >
         a–z
       </button>

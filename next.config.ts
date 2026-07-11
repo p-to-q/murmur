@@ -51,9 +51,23 @@ const nextConfig: NextConfig = {
     "172.31.*.*",
   ],
   images: {
+    formats: ["image/avif", "image/webp"],
+    // deviceSizes/imageSizes stay at Next defaults: StudioScreen and the song
+    // canvas render full-viewport artwork (sizes="100vw"), so capping the
+    // srcset below 1920/2x would blur retina and large screens.
+    minimumCacheTTL: 3600,
     remotePatterns: [
       { protocol: "https", hostname: "lh3.googleusercontent.com", pathname: "/**" },
     ],
+  },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+      };
+    }
+    return config;
   },
   async headers() {
     return [

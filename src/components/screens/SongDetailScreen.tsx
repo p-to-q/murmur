@@ -55,6 +55,12 @@ import {
   type SongShareRequestErrorCode,
 } from "@/lib/api/song-share";
 import { hasSongShareAudio } from "@/lib/share/song-share";
+import { formatShareSupportCode, formatSupportCode } from "@/lib/observability/support-code";
+import {
+  ApiEnvelopeError,
+  apiErrorEnvelopeFrom,
+  readApiErrorEnvelope,
+} from "@/lib/api/error-envelope";
 import type { SongCard } from "@/modules/shared/types";
 
 type Song = SongCard & {
@@ -201,7 +207,9 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       await player.play(melodyNotes, song.arrangementState, chords, bpm);
     } catch (err) {
       console.error("[SongDetail] tone play error:", err);
-      toast.error(t("song.export.err"));
+      toast.error(t("song.export.err"), {
+        description: formatSupportCode({ area: "SONG", error: "playback_failed", requestId: null }),
+      });
       setIsPlaying(false);
     }
   }, [song, isPlaying, t]);
@@ -293,7 +301,9 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         .catch(() => {});
     } catch (e) {
       console.error(e);
-      toast.error(t("song.export.err"));
+      toast.error(t("song.export.err"), {
+        description: formatShareSupportCode({ code: "export_failed", requestId: null }),
+      });
     } finally {
       setBusy(null);
     }
@@ -364,7 +374,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         error instanceof SongShareRequestError
           ? error.code
           : "server_error";
-      toast.error(shareLinkErrorMessage(code, t));
+      const reqId = error instanceof SongShareRequestError ? error.requestId : null;
+      toast.error(shareLinkErrorMessage(code, t), {
+        description: formatShareSupportCode({ code, requestId: reqId }),
+      });
     } finally {
       setBusy(null);
     }
@@ -377,7 +390,9 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     setIsDeleting(true);
     try {
       const res = await fetch(`/api/songs/${song.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`delete HTTP ${res.status}`);
+      if (!res.ok) {
+        throw new ApiEnvelopeError(await readApiErrorEnvelope(res, "delete_failed"));
+      }
       memory
         .reportAction({
           content: `Deleted "${song.title}"`,
@@ -389,7 +404,14 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       router.push("/gallery");
     } catch (e) {
       console.error(e);
-      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?");
+      const envelope = apiErrorEnvelopeFrom(e);
+      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?", {
+        description: formatSupportCode({
+          area: "SONG",
+          error: envelope?.code ?? "delete_failed",
+          requestId: envelope?.requestId ?? null,
+        }),
+      });
       setIsDeleting(false);
     }
   };
@@ -593,7 +615,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               />
 
               <div className="absolute left-6 top-6 right-6">
-                <p className="font-ui-label text-white/72">
+                <p className="text-[10px] uppercase tracking-[0.32em] text-white/72">
                   {displayVibeLabel(song.vibe, song.tags, lang)}
                 </p>
                 <h1
@@ -628,15 +650,15 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1, duration: 0.55 }}
-              className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] text-[#8C8780]"
+              className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] uppercase tracking-[0.22em] text-[#8C8780]"
             >
-              <span className="font-ui-label tabular-nums">{song.bpm ?? 80} BPM</span>
+              <span className="tabular-nums">{song.bpm ?? 80} BPM</span>
               <span className="text-[#D2C9B6]">·</span>
-              <span className="font-ui-label">{song.keySignature ?? "C"}</span>
+              <span>{song.keySignature ?? "C"}</span>
               <span className="text-[#D2C9B6]">·</span>
-              <span className="font-ui-label tabular-nums">{durLabel}</span>
+              <span className="tabular-nums">{durLabel}</span>
               <span className="text-[#D2C9B6]">·</span>
-              <span className="font-ui-label">{dateLabel}</span>
+              <span>{dateLabel}</span>
             </motion.div>
 
             <motion.div
@@ -645,11 +667,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               transition={{ delay: 0.13, duration: 0.55 }}
               className="mt-4 rounded-[20px] border border-[#E5DDD0] bg-[#FFFEFB]/80 px-4 py-3"
             >
-              <p className="font-ui-label text-[#B7AEA1]">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
                 {t("song.melody_origin.eyebrow") || "MELODY SHAPE"}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-3">
-                <span className="font-ui-label rounded-full bg-[#F3E7D9] px-3 py-1 text-[#A56A3A]">
+                <span className="rounded-full bg-[#F3E7D9] px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[#A56A3A]">
                   {melodyOrigin.label}
                 </span>
                 <p className="font-serif-italic text-[14px] leading-[1.45] text-[#6F6A63]">
@@ -691,7 +713,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.24, duration: 0.5 }}
-              className="eyebrow font-ui-label mt-12 text-[#FF8A5C]"
+              className="eyebrow mt-12 text-[#FF8A5C]"
             >
               {t("song.export.eyebrow") || "EXPORT"}
             </motion.p>
@@ -765,7 +787,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               </button>
               <button
                 onClick={() => router.push("/gallery")}
-                className="text-[12px] tracking-[0.04em] text-[#8C8780] hover:text-[#1A1A1A] transition-colors"
+                className="font-serif-italic text-[15px] text-[#8C8780] hover:text-[#1A1A1A] underline-mm transition-colors"
               >
                 {t("song.back_to_gallery") || "Back to gallery"}
               </button>
@@ -800,7 +822,9 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         }}
         onImageDownloadError={(error) => {
           console.error(error);
-          toast.error(t("song.export.err"));
+          toast.error(t("song.export.err"), {
+            description: formatShareSupportCode({ code: "export_failed", requestId: null }),
+          });
         }}
         onDownloadVideo={exportVideo}
         videoExporting={busy === "video"}
@@ -824,7 +848,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               onClick={(e) => e.stopPropagation()}
               className="mm-card w-full max-w-sm px-6 py-7 text-center"
             >
-              <p className="eyebrow font-ui-label text-[#FF8A5C] mb-3">{t("song.delete.eyebrow") || "REMOVE"}</p>
+              <p className="eyebrow text-[#FF8A5C] mb-3">{t("song.delete.eyebrow") || "REMOVE"}</p>
               <h3 className="font-serif text-[24px] text-[#1A1A1A] leading-tight">
                 {t("song.delete.title") || "Delete this little song?"}
               </h3>
@@ -913,7 +937,7 @@ function ExportRow({
         </p>
       </div>
       <div className="flex items-center gap-3 shrink-0">
-        <span className="font-ui-label text-[#B6B0A4]">
+        <span className="text-[11px] uppercase tracking-[0.22em] text-[#B6B0A4]">
           {cost}
         </span>
         {busy ? (
@@ -967,7 +991,7 @@ function LineagePanel({
         transition={{ delay: 0.21, duration: 0.55 }}
         className="mt-6 rounded-[20px] border border-[#E5DDD0] bg-white/78 px-4 py-4"
       >
-        <summary className="cursor-pointer list-none font-ui-label text-[#B7AEA1]">
+        <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
           {t("song.lineage.reveal") || "Open song path"}
         </summary>
         <p className="mt-3 font-serif-italic text-[14px] leading-[1.5] text-[#6F6A63]">
@@ -984,7 +1008,7 @@ function LineagePanel({
       transition={{ delay: 0.21, duration: 0.55 }}
       className="mt-6 rounded-[20px] border border-[#E5DDD0] bg-white/78 px-4 py-4"
     >
-      <summary className="cursor-pointer list-none font-ui-label text-[#B7AEA1]">
+      <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
         {t("song.lineage.reveal") || "Open song path"}
       </summary>
       <p className="mt-3 font-serif-italic text-[14px] leading-[1.5] text-[#6F6A63]">
@@ -1042,7 +1066,7 @@ function SourceTracePanel({
       transition={{ delay: 0.2, duration: 0.55 }}
       className="mt-6 rounded-[20px] border border-[#E5DDD0] bg-white/78 px-4 py-4"
     >
-      <summary className="cursor-pointer list-none font-ui-label text-[#B7AEA1]">
+      <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
         {t("song.trace.reveal") || "Open source trace"}
       </summary>
       <p className="mt-3 font-serif-italic text-[14px] leading-[1.5] text-[#6F6A63]">
@@ -1087,7 +1111,7 @@ function TraceCard({
 }) {
   return (
     <div className="rounded-[18px] border border-[#ECE2D5] bg-[#FFFCF8] px-4 py-4">
-      <p className="font-ui-label text-[#B7AEA1]">
+      <p className="text-[10px] uppercase tracking-[0.18em] text-[#B7AEA1]">
         {eyebrow}
       </p>
       <p className="mt-2 font-serif text-[18px] leading-tight text-[#1A1A1A]">
@@ -1124,7 +1148,7 @@ function LineageTrailCard({
           : "border-[#E8DECF] bg-[#FFFEFB] enabled:hover:border-[#FF8A5C]"
       } disabled:opacity-100`}
     >
-      <p className="font-ui-label text-[#B3AA9C]">{label}</p>
+      <p className="text-[10px] uppercase tracking-[0.18em] text-[#B3AA9C]">{label}</p>
       <p
         className={`mt-1 ${titleSerifClass(song.title, {
           latin: "font-serif-latin",
