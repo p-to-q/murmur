@@ -1,110 +1,81 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { setTestNodeEnv } from "@/test-utils/env";
 
 import { shouldUseDevBalanceFallback } from "./dev-balance";
 
+const original = {
+  nodeEnv: process.env.NODE_ENV,
+  productionPreview: process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW,
+  devBillingFallback: process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK,
+  vercel: process.env.VERCEL,
+};
+
+afterEach(() => {
+  setTestNodeEnv(original.nodeEnv);
+  restore("MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW", original.productionPreview);
+  restore("MURMUR_ALLOW_DEV_BILLING_FALLBACK", original.devBillingFallback);
+  restore("VERCEL", original.vercel);
+});
+
 describe("shouldUseDevBalanceFallback", () => {
-  it("ignores explicit production opt-in on public hosts", () => {
-    const prevNode = process.env.NODE_ENV;
-    const prev = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+  it("rejects forged loopback hosts in non-Vercel production", () => {
+    setTestNodeEnv("production");
+    delete process.env.VERCEL;
+    delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+
+    expect(shouldUseDevBalanceFallback({ host: "localhost" })).toBe(false);
+    expect(shouldUseDevBalanceFallback({ host: "127.0.0.1" })).toBe(false);
+    expect(shouldUseDevBalanceFallback({ host: "::1" })).toBe(false);
+  });
+
+  it("rejects forged loopback hosts in Vercel production", () => {
+    setTestNodeEnv("production");
+    process.env.VERCEL = "1";
+    delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+
+    expect(shouldUseDevBalanceFallback({ host: "localhost" })).toBe(false);
+    expect(shouldUseDevBalanceFallback({ host: "127.0.0.1" })).toBe(false);
+    expect(shouldUseDevBalanceFallback({ host: "::1" })).toBe(false);
+  });
+
+  it("does not treat the development billing flag as production opt-in", () => {
     setTestNodeEnv("production");
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
+    delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
 
-    try {
-      expect(shouldUseDevBalanceFallback({ host: "murmur.ptoq.io" })).toBe(false);
-    } finally {
-      setTestNodeEnv(prevNode);
-      if (prev === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-      else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prev;
-    }
+    expect(shouldUseDevBalanceFallback({ host: "localhost" })).toBe(false);
   });
 
-  it("still allows loopback hosts on local production builds", () => {
-    const prevNode = process.env.NODE_ENV;
-    const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    const prevVercel = process.env.VERCEL;
+  it("allows an explicitly opted-in production demo on any host", () => {
     setTestNodeEnv("production");
-    delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    delete process.env.VERCEL;
+    process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW = "true";
 
-    try {
-      expect(shouldUseDevBalanceFallback({ host: "127.0.0.1" })).toBe(true);
-    } finally {
-      setTestNodeEnv(prevNode);
-      if (prevFlag === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-      else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
-      if (prevVercel === undefined) delete process.env.VERCEL;
-      else process.env.VERCEL = prevVercel;
-    }
-  });
-
-  it("ignores a spoofed loopback host on managed cloud (Vercel)", () => {
-    const prevNode = process.env.NODE_ENV;
-    const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    const prevVercel = process.env.VERCEL;
-    setTestNodeEnv("production");
-    delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    process.env.VERCEL = "1";
-
-    try {
-      expect(shouldUseDevBalanceFallback({ host: "localhost" })).toBe(false);
-      expect(shouldUseDevBalanceFallback({ host: "127.0.0.1" })).toBe(false);
-      expect(shouldUseDevBalanceFallback({ host: "::1" })).toBe(false);
-    } finally {
-      setTestNodeEnv(prevNode);
-      if (prevFlag === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-      else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
-      if (prevVercel === undefined) delete process.env.VERCEL;
-      else process.env.VERCEL = prevVercel;
-    }
+    expect(shouldUseDevBalanceFallback({ host: "murmur.ptoq.io" })).toBe(true);
   });
 
   it("allows explicit opt-in outside production", () => {
-    const prevNode = process.env.NODE_ENV;
-    const prev = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     setTestNodeEnv("staging");
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "true";
 
-    try {
-      expect(shouldUseDevBalanceFallback({ host: "preview.test" })).toBe(true);
-    } finally {
-      setTestNodeEnv(prevNode);
-      if (prev === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-      else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prev;
-    }
+    expect(shouldUseDevBalanceFallback({ host: "preview.test" })).toBe(true);
   });
 
-  it("keeps test runs on ledger paths even when local env files enable fallback", () => {
-    const prevNode = process.env.NODE_ENV;
-    const prev = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+  it("keeps test runs on ledger paths even when env files enable fallback", () => {
     setTestNodeEnv("test");
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "true";
+    process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW = "true";
 
-    try {
-      expect(shouldUseDevBalanceFallback({ host: "preview.test" })).toBe(false);
-    } finally {
-      setTestNodeEnv(prevNode);
-      if (prev === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-      else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prev;
-    }
+    expect(shouldUseDevBalanceFallback({ host: "preview.test" })).toBe(false);
   });
 
-  it("keeps loopback fallback available in test for local route fixtures", () => {
-    const prevNode = process.env.NODE_ENV;
-    const prev = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    const prevVercel = process.env.VERCEL;
+  it("keeps loopback fallback available only as a test fixture", () => {
     setTestNodeEnv("test");
-    delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    delete process.env.VERCEL;
 
-    try {
-      expect(shouldUseDevBalanceFallback({ host: "localhost" })).toBe(true);
-    } finally {
-      setTestNodeEnv(prevNode);
-      if (prev === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-      else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prev;
-      if (prevVercel === undefined) delete process.env.VERCEL;
-      else process.env.VERCEL = prevVercel;
-    }
+    expect(shouldUseDevBalanceFallback({ host: "localhost" })).toBe(true);
   });
 });
+
+function restore(key: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}

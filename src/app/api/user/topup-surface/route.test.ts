@@ -33,10 +33,13 @@ const { GET } = await import("./route");
 
 let originalNodeEnv: string | undefined;
 let originalDevBillingFallback: string | undefined;
+let originalProductionPreview: string | undefined;
 
 beforeEach(() => {
   originalNodeEnv = process.env.NODE_ENV;
   originalDevBillingFallback = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+  originalProductionPreview = process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+  delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
 });
 
 afterEach(() => {
@@ -45,6 +48,11 @@ afterEach(() => {
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
   } else {
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = originalDevBillingFallback;
+  }
+  if (originalProductionPreview === undefined) {
+    delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+  } else {
+    process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW = originalProductionPreview;
   }
   nextAuth = {
     ok: true,
@@ -90,13 +98,13 @@ describe("GET /api/user/topup-surface", () => {
     expect(body.error).toBe("topup_surface_unavailable");
   });
 
-  it("keeps localhost previews usable when the surface query fails", async () => {
+  it("keeps explicitly enabled production previews usable when the surface query fails", async () => {
     setTestNodeEnv("production");
-    delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW = "1";
     nextSnapshotError = new Error("db unavailable");
 
     const response = await GET(
-      new Request("http://127.0.0.1:3100/api/user/topup-surface") as unknown as NextRequest,
+      new Request("https://preview.example/api/user/topup-surface") as unknown as NextRequest,
     );
 
     expect(response.status).toBe(200);

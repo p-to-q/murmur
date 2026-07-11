@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import type {
   BalanceResult,
@@ -44,6 +44,8 @@ const lastSpendInputs: SpendNotesInput[] = [];
 const lastRefundInputs: RefundNotesInput[] = [];
 const lastPendingRefundInputs: Array<{ userId: string; originalLedgerId: string }> = [];
 let lastResolveAuthOptions: { allowGuestPreview?: boolean } | null = null;
+const originalProductionPreview = process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+const originalVercel = process.env.VERCEL;
 
 const stubTranscription: TranscriptionResult = {
   provider: "swiftf0",
@@ -293,6 +295,8 @@ async function drainNdjson(response: Response): Promise<StreamEvent[]> {
 
 beforeEach(() => {
   delete process.env.MURMUR_RATE_LIMIT_DRIVER;
+  delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+  delete process.env.VERCEL;
   resetCachedRateLimitStore();
   getRateLimitStore().resetAll();
   nextAuth = {
@@ -327,6 +331,16 @@ beforeEach(() => {
   lastPendingRefundInputs.length = 0;
   lastResolveAuthOptions = null;
 });
+
+afterEach(() => {
+  restoreEnv("MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW", originalProductionPreview);
+  restoreEnv("VERCEL", originalVercel);
+});
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}
 
 describe("POST /api/transcribe", () => {
   it("returns the polished melody and debits a note on success", async () => {
@@ -411,7 +425,10 @@ describe("POST /api/transcribe", () => {
     expect(lastSpendInputs).toHaveLength(1);
   });
 
-  it("spends Local Creator ledger notes on localhost when a balance row exists", async () => {
+  it("spends Local Creator ledger notes in an explicitly enabled production preview", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    setTestNodeEnv("production");
+    process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW = "1";
     nextAuth = {
       ok: true,
       user: {
@@ -436,21 +453,26 @@ describe("POST /api/transcribe", () => {
     const form = new FormData();
     form.append("audio", audioFile());
 
-    const response = await POST(
-      buildRequest(form, {
-        requestId: "req_local_creator",
-        url: "http://localhost:3000/api/transcribe",
-      }),
-    );
+    try {
+      const response = await POST(
+        buildRequest(form, {
+          requestId: "req_local_creator",
+          url: "https://preview.example/api/transcribe",
+        }),
+      );
 
-    expect(response.status).toBe(200);
-    expect(lastResolveAuthOptions?.allowGuestPreview).toBe(true);
-    expect(lastSpendInputs).toHaveLength(1);
-    expect(lastSpendInputs[0]).toMatchObject({
-      userId: "lc_test",
-      reason: "spend:hum",
-      cost: 1,
-    });
+      expect(response.status).toBe(200);
+      expect(lastResolveAuthOptions?.allowGuestPreview).toBe(true);
+      expect(lastSpendInputs).toHaveLength(1);
+      expect(lastSpendInputs[0]).toMatchObject({
+        userId: "lc_test",
+        reason: "spend:hum",
+        cost: 1,
+      });
+    } finally {
+      setTestNodeEnv(prevNodeEnv);
+      delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+    }
   });
 
   it("rejects missing audio with audio_required", async () => {
@@ -662,11 +684,11 @@ describe("POST /api/transcribe", () => {
     }
   });
 
-  it("keeps localhost previews usable when billing is unavailable outside dev mode", async () => {
+  it("rejects a forged localhost URL in non-Vercel production", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
-    const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     setTestNodeEnv("production");
-    process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
+    delete process.env.VERCEL;
+    delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
     nextBalanceThrows = new Error("db offline");
 
     try {
@@ -674,20 +696,67 @@ describe("POST /api/transcribe", () => {
       form.append("audio", audioFile());
       const response = await POST(
         buildRequest(form, {
-          requestId: "req_localhost_bypass",
+          requestId: "req_non_vercel_localhost",
           url: "http://localhost:3000/api/transcribe",
         }),
       );
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(503);
+      expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
       expect(lastSpendInputs).toHaveLength(0);
       expect(lastRefundInputs).toHaveLength(0);
     } finally {
       setTestNodeEnv(prevNodeEnv);
-      if (prevFlag === undefined) {
-        delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-      } else {
-        process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
-      }
+    }
+  });
+
+  it("rejects a forged localhost URL in Vercel production", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    setTestNodeEnv("production");
+    process.env.VERCEL = "1";
+    delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+    nextBalanceThrows = new Error("db offline");
+
+    try {
+      const form = new FormData();
+      form.append("audio", audioFile());
+      const response = await POST(
+        buildRequest(form, {
+          requestId: "req_vercel_localhost",
+          url: "http://127.0.0.1:3000/api/transcribe",
+        }),
+      );
+      expect(response.status).toBe(503);
+      expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
+      expect(lastSpendInputs).toHaveLength(0);
+      expect(lastRefundInputs).toHaveLength(0);
+    } finally {
+      setTestNodeEnv(prevNodeEnv);
+      delete process.env.VERCEL;
+    }
+  });
+
+  it("allows billing fallback only after explicit production opt-in", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    setTestNodeEnv("production");
+    process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW = "1";
+    nextBalanceThrows = new Error("db offline");
+
+    try {
+      const form = new FormData();
+      form.append("audio", audioFile());
+      const response = await POST(
+        buildRequest(form, {
+          requestId: "req_explicit_production_preview",
+          url: "https://preview.example/api/transcribe",
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect(lastResolveAuthOptions?.allowGuestPreview).toBe(true);
+      expect(lastSpendInputs).toHaveLength(0);
+      expect(lastRefundInputs).toHaveLength(0);
+    } finally {
+      setTestNodeEnv(prevNodeEnv);
+      delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
     }
   });
 

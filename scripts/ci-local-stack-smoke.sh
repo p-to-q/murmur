@@ -47,6 +47,10 @@ export MURMUR_RATE_LIMIT_DRIVER="${MURMUR_RATE_LIMIT_DRIVER:-memory}"
 # This smoke test intentionally runs without Postgres or OAuth. Exercise the
 # local/demo fallback path; production auth strictness is covered by unit tests.
 export MURMUR_AUTH_MODE="${MURMUR_AUTH_MODE:-local}"
+# `bun start` runs with NODE_ENV=production. Opt this isolated local-stack
+# harness into the production preview fallback explicitly; runtime requests
+# must never gain the same privilege from their Host or URL.
+export MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW="${MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW:-1}"
 export MURMUR_ENABLE_DEBUG_SURFACE="${MURMUR_ENABLE_DEBUG_SURFACE:-1}"
 unset GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET 2>/dev/null || true
 
