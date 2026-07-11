@@ -6,10 +6,11 @@ maintainable, and safe to iterate on.
 For the short, current-state product-engineering assessment, also see
 [docs/closure-audit.md](./closure-audit.md).
 
-## Out of scope
+## Scope
 
-This document does not choose a deployment vendor or define product roadmap
-priority. It covers repository hygiene, review entry points, and automation.
+This document covers repository hygiene, review entry points, automation, and
+the **production deployment and migration topology** as it actually runs today.
+It does not define product roadmap priority.
 
 ## Baseline automation
 
@@ -67,6 +68,136 @@ The split between `ci.yml` and `audio-acceptance.yml` is intentional:
   shells (`/`, `/gallery`, `/me`, `/studio`, `/vibe`), so repo health is not
   inferred from APIs alone.
 
+## Production topology and deployment
+
+This is the settled state, not a proposal. A new maintainer should be able to act
+from this section.
+
+### Hosting and deploy
+
+Production runs on **Vercel's native Git integration** connected to this repo.
+There is no separate deploy workflow in `.github/workflows/` — the Git
+integration is the deploy path:
+
+- **Preview:** every pull request gets its own Preview deployment.
+- **Production:** every push to `main` gets a Production deployment.
+- **Build command:** `bun run env:audit && bun run build` (see `vercel.json`).
+  `env:audit` (`scripts/env-audit.ts`) fails the production build when a required
+  environment variable is missing, so a misconfigured production deploy fails
+  closed at build time rather than booting broken.
+
+### Migrations
+
+Database migrations do **not** run as part of the Vercel deploy. They run in
+[`.github/workflows/migrate.yml`](../.github/workflows/migrate.yml):
+
+- **Trigger:** every push to `main`, plus manual `workflow_dispatch`.
+- **What it runs:** `bun run db:migrate`, which applies the Drizzle migrations in
+  [`src/lib/db/migrations/`](../src/lib/db/migrations/) tracked by the journal
+  `src/lib/db/migrations/meta/_journal.json`.
+- **Fail-closed:** a "Validate migration configuration" step exits 1 when the
+  `DATABASE_URL_UNPOOLED` secret is absent, so a green run always means the
+  migration command was actually attempted against a configured target. This
+  closed the earlier migration-secret gap (issue #305) where a missing secret
+  produced a misleadingly green run.
+- **Connection target:** the direct, non-pooled endpoint (`DATABASE_URL_UNPOOLED`)
+  — see [Database connection contract](#database-connection-contract) below for
+  the full DSN precedence.
+
+### Known ordering gap (issue #307)
+
+`migrate.yml` and the native Vercel Production deploy **start independently and
+in parallel** on each `main` push. There is no ordering between them, so new
+application code can go live before the schema it depends on has finished
+migrating. This is a real race, documented honestly rather than assumed
+harmless: existing migrations create tables, alter columns, delete rows, and add
+constraints that runtime code can depend on immediately.
+
+The **recommended target cutover** (not yet implemented — a deliberate
+owner/admin action tracked in #307) is:
+
+1. disable native Production auto-deploy — either in the Vercel dashboard, or by
+   setting `git.deploymentEnabled.main = false` in `vercel.json`;
+2. add a workflow that migrates first and, only on success, triggers a
+   Production deploy via a Vercel **Deploy Hook** (`VERCEL_DEPLOY_HOOK_URL`
+   secret);
+3. leave **Preview** deployments on the native integration (they carry no
+   production schema risk).
+
+Do not implement this here. Activation is an owner action because it changes how
+production ships; it is tracked in #307.
+
+### Branch protection (issue #308)
+
+`main` currently has **no ruleset** — direct pushes are possible even though
+[WORKFLOW.md](../WORKFLOW.md) says there should be none, and nothing enforces it.
+Because every `main` push triggers both the native Production deploy and
+`migrate.yml`, an unreviewed direct push reaches production before review or CI
+can stop it.
+
+The **required ruleset** (an admin action the owner applies under
+**Settings → Rules → Rulesets** in GitHub — it is a repository setting, not
+application code) is:
+
+- require a pull request before merging to `main`;
+- require the CI **`verify`** status check (the job in
+  [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) to pass;
+- require at least one approving review for non-emergency changes;
+- define a named emergency-bypass owner with an audit expectation for any bypass.
+
+This is tracked in #308.
+
+### Vercel cron constraint (learned empirically)
+
+The Vercel account **rejects sub-daily cron schedules** — a Hobby-tier
+restriction. An hourly cron previously broke the Production deploy and had to be
+changed to daily. Cron entries in `vercel.json` must therefore stay **daily**
+(the billing reconcile/refunds crons run once per day for this reason) unless and
+until the project is confirmed on a plan that permits sub-daily crons. Do not add
+sub-daily crons on the current plan.
+
+### Object storage for saved audio
+
+New-save audio is written to object storage **only** when the production storage
+env is set: `MURMUR_STORAGE_DRIVER=s3-compatible` plus the S3 bucket credentials
+and a public URL base (`MURMUR_STORAGE_S3_PUBLIC_URL_BASE`). When those are not
+configured, a save falls back to embedding the audio as a data URL. On Vercel
+production the env audit **requires** `MURMUR_STORAGE_DRIVER=s3-compatible`, so
+the data-URL fallback is a local/dev path, not a production one.
+
+### Required secrets and environment
+
+The authoritative list is enforced by `bun run env:audit`
+([`scripts/env-audit.ts`](../scripts/env-audit.ts)) on every production build and
+by `collectDatabaseEnvAuditIssues` in
+[`src/lib/db/config.ts`](../src/lib/db/config.ts); cross-check against those
+rather than trusting this summary to stay complete:
+
+| Purpose | Variables |
+|---------|-----------|
+| Production migrations (direct/unpooled) | `DATABASE_URL_UNPOOLED` (repo secret for `migrate.yml`; `POSTGRES_URL_NON_POOLING` also accepted) |
+| Runtime DB (pooled) | `DATABASE_URL` or `POSTGRES_URL` — must be a Neon pooler host in production |
+| Cron routes | `CRON_SECRET` (non-placeholder) |
+| Web push notifications | `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, `WEB_PUSH_SUBJECT` |
+| Object storage | `MURMUR_STORAGE_DRIVER=s3-compatible`, `MURMUR_STORAGE_S3_BUCKET`, `MURMUR_STORAGE_S3_REGION`, `MURMUR_STORAGE_S3_ACCESS_KEY_ID`, `MURMUR_STORAGE_S3_SECRET_ACCESS_KEY`, `MURMUR_STORAGE_S3_PUBLIC_URL_BASE` |
+| Audio / music workers | `AUDIO_WORKER_URL`, `AUDIO_WORKER_TOKEN`, `RUNPOD_SERVERLESS_ENDPOINT_ID`, `RUNPOD_API_KEY` |
+| Payments | `WAFFO_MERCHANT_ID`, `WAFFO_PRIVATE_KEY` (or `_BASE64`), `WAFFO_TOPUP_PRODUCT_ID`; `ZPAY_PID`/`ZPAY_KEY` (both or neither) |
+| Auth | one of `AUTH_URL`/`NEXTAUTH_URL`/`MURMUR_APP_URL`/`VERCEL_URL`; `AUTH_SECRET` when an OAuth provider is configured |
+
+### Rollback and incident ownership
+
+- **Deploy rollback is automatic-ish:** if a new Vercel deploy fails to build or
+  boot, Vercel keeps the last successful deployment serving. A failed deploy does
+  not take production down.
+- **Migrations are not auto-rolled-back:** each migration has a `.down.sql`
+  pair, but the workflow only rolls forward. Reversing a migration is a manual,
+  owner-run operation against the direct endpoint, and it is only safe when no
+  already-live code depends on the reverted schema — which is exactly why the
+  ordering gap (#307) matters.
+- **Ownership:** the production release path — merges to `main`, the migration
+  workflow, and any manual migration reversal — is owned by the repository owner
+  (Murmur maintainer). Preview deployments are self-service per PR.
+
 ## Database connection contract
 
 Production migrations run in
@@ -100,8 +231,12 @@ limits are different:
 - CodeQL still runs in best-effort mode because plan / entitlement mismatches
   on some private repos can create false red builds unrelated to source
   regressions.
-- There is still no deployment workflow because hosting is intentionally not
-  locked yet.
+- Production deploy (Vercel native Git integration) and the migration workflow
+  still start in parallel on each `main` push, so there is an unresolved
+  migrate-before-deploy ordering race (issue #307); see
+  [Production topology and deployment](#production-topology-and-deployment).
+- `main` has no branch-protection ruleset yet, so direct pushes remain possible
+  (issue #308).
 - Audio acceptance is automated, but the dataset mix is still bounded by what
   can be checked in or deterministically scaffolded inside CI.
 - `next build` is green through the configured webpack command path, and
@@ -126,15 +261,24 @@ default place to land without relying on oral tradition.
 
 ## What is intentionally not automated yet
 
-We are not adding deployment automation until the deploy path is chosen.
-`packaging-and-release.md` keeps that decision open between:
+The deploy path is settled (Vercel native Git integration). What remains
+deliberately un-automated is governance that requires an owner/admin decision, not
+a hosting choice:
 
-- Vercel Pro
-- prebuilt Vercel deploy
-- self-hosted/container deploy
+- **Ordered migrate-then-deploy** (issue #307): production migrations and the
+  native deploy still race. The recommended Deploy-Hook cutover is documented in
+  [Production topology and deployment](#production-topology-and-deployment) but
+  intentionally not implemented in code, because disabling native production
+  auto-deploy is an owner action.
+- **Branch protection on `main`** (issue #308): the required ruleset is a GitHub
+  repository setting the owner applies; it cannot be committed as application
+  code.
+- **Tag-triggered release**: there is no workflow that cuts a GitHub Release on
+  `v*` tags yet; tagging is a manual post-merge step (see
+  [packaging-and-release.md](./packaging-and-release.md)).
 
-That means current automation is strong on validation and hygiene, but neutral
-on delivery target.
+Current automation is strong on validation, hygiene, and schema migration; the
+gap is ordering and enforcement, not delivery target.
 
 ## Optional hardening (not yet adopted)
 
@@ -196,15 +340,17 @@ Per release candidate:
 - do one manual walkthrough of the critical user path:
   `Hum -> Vibe -> Studio -> Save -> Gallery -> Song detail`
 
-## Future additions once hosting is chosen
+## Future additions
 
-The next layer should depend on deployment reality, not guesswork:
+Hosting is chosen (Vercel) and preview deployments, a production migration
+workflow, and this rollback/runbook documentation already exist. The next layer,
+in rough priority order:
 
-1. preview deployment checks
-2. production deployment workflow
-3. rollback/runbook documentation
-4. environment drift detection
-5. uptime and error-budget alerting
+1. the ordered migrate-then-deploy cutover (issue #307)
+2. the `main` branch-protection ruleset (issue #308)
+3. environment drift detection between the documented contract and Vercel's
+   configured env
+4. uptime and error-budget alerting
 
-Until then, the repo should optimize for correctness, reviewability, and fast
-maintenance rather than pretend CD is settled.
+These build on deployment reality rather than guesswork; until they land, the
+repo should keep optimizing for correctness, reviewability, and fast maintenance.
