@@ -2,11 +2,10 @@ import { ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV } from "@/lib/billing/zpay";
 import { collectDatabaseEnvAuditIssues } from "@/lib/db/config";
 
 const REQUIRED_IN_PRODUCTION = [
-  {
-    keys: ["DATABASE_URL", "POSTGRES_URL"],
-    label: "DATABASE_URL or POSTGRES_URL",
-    anyOf: true,
-  },
+  // The database DSN contract (DATABASE_URL / POSTGRES_URL precedence, pooler
+  // hostname) lives in one place: collectDatabaseEnvAuditIssues() in
+  // src/lib/db/config.ts, which this script folds into `missing` below. Keeping
+  // it out of this table avoids two competing definitions of the DB contract.
   {
     keys: ["AUTH_URL", "NEXTAUTH_URL", "MURMUR_APP_URL", "VERCEL_URL"],
     label: "AUTH_URL, NEXTAUTH_URL, MURMUR_APP_URL, or VERCEL_URL",

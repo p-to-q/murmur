@@ -1,12 +1,18 @@
 import { config } from "dotenv";
 import { defineConfig } from "drizzle-kit";
 
+import { isExplicitLocalDev, resolveServerDsn } from "./src/lib/db/config";
+
 config({ path: ".env" });
 
-const databaseUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
-if (!databaseUrl) {
-  throw new Error("DATABASE_URL or POSTGRES_URL must be set for Drizzle.");
-}
+// Drizzle Kit (generate / migrate / studio / push) is migration tooling, so it
+// shares the one fail-closed resolver (issue #316): prefer the explicit unpooled
+// endpoint, accept the documented POSTGRES_URL fallback, and refuse to silently
+// target localhost outside explicit local development.
+const databaseUrl = resolveServerDsn(process.env, {
+  isMigration: true,
+  isExplicitLocalDev: isExplicitLocalDev(process.env),
+});
 
 export default defineConfig({
   schema: "./src/lib/db/schema/index.ts",
