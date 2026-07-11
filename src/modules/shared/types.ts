@@ -165,6 +165,7 @@ export type VisualConfig = {
 
 export type VersionGenerationStatus = "pending" | "ready" | "error";
 export type VersionGenerationErrorCode =
+  | "background_canceled"
   | "insufficient_notes"
   | "rate_limited"
   | "billing_unavailable"

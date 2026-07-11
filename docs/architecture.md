@@ -157,7 +157,12 @@ flowchart TB
   still client-orchestrated clip-by-clip; sibling clips share a browser-minted
   generation batch id (`x-generation-batch-id`) so their pushes and inbox
   entries collapse to one per batch (see "Generation Batch Semantics" in
-  `docs/notifications.md`). Generation batch pushes are now collapsed per batch
+  `docs/notifications.md`). After 60 seconds continuously hidden, the browser
+  cancels active requests and turns remaining pending Vibe cards into an
+  explicit retry state; it does not auto-retry because a new attempt may have
+  paid-generation consequences. Durable paid clip identity and resume/query
+  recovery remain tracked separately in issue #300. Generation batch pushes
+  are now collapsed per batch
   (`src/app/api/notifications/cron/route.ts`). Fully durable "batch finished
   after browser exit" notifications still require a future server-side generation
   job queue.
