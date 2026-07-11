@@ -122,19 +122,8 @@ export async function POST(request: NextRequest) {
 
   const eventRowId = eventRow.id;
 
-  // Parse our out_trade_no format: {userId}:{skuId}:{uuid}
-  const parts = outTradeNo.split(":");
-  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
-    log("billing.zpay_notify_failed", { stage: "parse", outTradeNo }, { route: ROUTE, requestId, level: "error" });
-    await markEventFailed(eventRowId, "invalid out_trade_no format");
-    return zpayResponse("success", requestId);
-  }
-
-  const outUserId = parts[0]!;
-  const outSkuId = parts[1]!;
-
-  // Resolve notes from the pending_zpay_orders metadata stored at checkout time
-  // We look up the purchase record created during checkout
+  // The provider id is opaque. User, SKU, amount, and currency provenance all
+  // come from the purchase row created before checkout handoff.
   const [pendingPurchase] = await db
     .select({
       id: purchases.id,
@@ -180,25 +169,17 @@ export async function POST(request: NextRequest) {
     return zpayResponse("success", requestId);
   }
 
-  if (
-    pendingPurchase.userId !== outUserId ||
-    pendingPurchase.productId !== outSkuId ||
-    pendingPurchase.currency.toUpperCase() !== "CNY"
-  ) {
+  if (pendingPurchase.currency.toUpperCase() !== "CNY") {
     log(
       "billing.zpay_notify_failed",
       {
-        stage: "purchase_mismatch",
+        stage: "currency_mismatch",
         outTradeNo,
-        expectedUserId: pendingPurchase.userId,
-        expectedSkuId: pendingPurchase.productId,
         expectedCurrency: pendingPurchase.currency,
-        actualUserId: outUserId,
-        actualSkuId: outSkuId,
       },
       { route: ROUTE, requestId, level: "error" },
     );
-    await markEventFailed(eventRowId, "purchase mismatch");
+    await markEventFailed(eventRowId, "purchase currency mismatch");
     return zpayResponse("success", requestId);
   }
 

@@ -5,11 +5,12 @@
  * API docs: https://zpayz.cn/doc.html
  */
 
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 export type ZpayPaymentType = "alipay" | "wxpay";
 
 const ZPAY_API_URL = "https://zpayz.cn/mapi.php";
+export const ZPAY_OUT_TRADE_NO_MAX_LENGTH = 32;
 export const ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV =
   "MURMUR_ALLOW_PRODUCTION_ZPAY_WITHOUT_REFUNDS";
 
@@ -103,11 +104,23 @@ function zpaySign(params: Record<string, string>, key: string): string {
   return createHash("md5").update(`${str}${key}`).digest("hex");
 }
 
+export function createZpayOrderId(): string {
+  return randomUUID().replaceAll("-", "");
+}
+
 export async function zpayCreateOrder(
   input: ZpayCreateOrderInput,
 ): Promise<{ payUrl: string; tradeNo: string }> {
   const config = getZpayConfig();
   if (!config) throw new Error("zpay not configured");
+  if (
+    !input.outTradeNo ||
+    input.outTradeNo.length > ZPAY_OUT_TRADE_NO_MAX_LENGTH
+  ) {
+    throw new Error(
+      `zpay out_trade_no must be 1-${ZPAY_OUT_TRADE_NO_MAX_LENGTH} characters`,
+    );
+  }
 
   const params: Record<string, string> = {
     pid: config.pid,

@@ -43,6 +43,7 @@ import {
 } from "@/lib/billing/waffo";
 import { waffoPendingProviderRef } from "@/lib/billing/topup-purchase";
 import {
+  createZpayOrderId,
   isZpayCheckoutEnabled,
   isZpayConfigured,
   zpayCreateOrder,
@@ -438,7 +439,7 @@ async function handleZpayCheckout(
   sessionId: string | null,
 ) {
   const origin = resolveAppOrigin(request);
-  const outTradeNo = `${userId}:${product.skuId}:${randomUUID()}`;
+  const outTradeNo = createZpayOrderId();
   const moneyYuan = (product.amountCents / 100).toFixed(2);
   const notifyUrl = `${origin}/api/billing/zpay-notify`;
   const returnUrl = `${origin}/topup/checkout?${product.successQuery}&status=success`;
