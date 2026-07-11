@@ -141,7 +141,7 @@ beforeEach(() => {
   zpayConfigured = true;
   verifiedNotify = {
     trade_status: "TRADE_SUCCESS",
-    out_trade_no: "usr_zpay:topup_120_notes:order_1",
+    out_trade_no: "0123456789abcdef0123456789abcdef",
     trade_no: "trade_zpay_1",
     type: "wxpay",
     money: "42.90",
@@ -194,7 +194,7 @@ async function expectZpayResponse(
 }
 
 describe("POST /api/billing/zpay-notify", () => {
-  it("grants notes when the paid amount matches the pending purchase", async () => {
+  it("resolves user and SKU from the persisted purchase for an opaque order id", async () => {
     const response = await POST(request());
 
     await expectZpayResponse(response, 200, "success");
@@ -203,7 +203,10 @@ describe("POST /api/billing/zpay-notify", () => {
       userId: "usr_zpay",
       amount: 130,
       reason: "purchase:topup",
-      externalRef: "usr_zpay:topup_120_notes:order_1",
+      externalRef: "0123456789abcdef0123456789abcdef",
+      metadata: {
+        skuId: "topup_120_notes",
+      },
     });
     expect(purchaseUpdates.at(-1)).toMatchObject({ status: "succeeded" });
     expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
@@ -274,10 +277,10 @@ describe("POST /api/billing/zpay-notify", () => {
     expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
   });
 
-  it("rejects out_trade_no values that do not match the pending purchase", async () => {
+  it("rejects non-CNY purchase rows before granting notes", async () => {
     pendingPurchase = {
       ...pendingPurchase!,
-      userId: "usr_other",
+      currency: "USD",
     };
 
     const response = await POST(request());
@@ -287,7 +290,20 @@ describe("POST /api/billing/zpay-notify", () => {
     expect(purchaseUpdates).toHaveLength(0);
     expect(eventUpdates.at(-1)).toMatchObject({
       status: "failed",
-      error: "purchase mismatch",
+      error: "purchase currency mismatch",
+    });
+  });
+
+  it("fails closed when the opaque order id has no persisted purchase", async () => {
+    pendingPurchase = null;
+
+    const response = await POST(request());
+
+    await expectZpayResponse(response, 200, "success");
+    expect(grantInputs).toHaveLength(0);
+    expect(eventUpdates.at(-1)).toMatchObject({
+      status: "failed",
+      error: "no pending purchase",
     });
   });
 

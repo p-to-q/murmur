@@ -1,13 +1,69 @@
 import { createHash } from "crypto";
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { setTestNodeEnv } from "@/test-utils/env";
+import { createFetchMock } from "@/test-utils/fetch";
 
 import {
   __resetZpayConfigForTesting,
+  createZpayOrderId,
   isZpayCheckoutEnabled,
+  zpayCreateOrder,
   zpayVerifyNotify,
+  ZPAY_OUT_TRADE_NO_MAX_LENGTH,
   ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV,
 } from "./zpay";
+
+describe("ZPay order identity provider contract", () => {
+  const originalFetch = globalThis.fetch;
+  let previousPid: string | undefined;
+  let previousKey: string | undefined;
+
+  beforeEach(() => {
+    previousPid = process.env.ZPAY_PID;
+    previousKey = process.env.ZPAY_KEY;
+    process.env.ZPAY_PID = "pid_test";
+    process.env.ZPAY_KEY = "key_test";
+    __resetZpayConfigForTesting();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    restoreOptionalEnv("ZPAY_PID", previousPid);
+    restoreOptionalEnv("ZPAY_KEY", previousKey);
+    __resetZpayConfigForTesting();
+  });
+
+  it("generates unique opaque ids within ZPay's 32-character limit", () => {
+    const ids = Array.from({ length: 100 }, () => createZpayOrderId());
+
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ids) {
+      expect(id).toMatch(/^[0-9a-f]+$/);
+      expect(id.length).toBeLessThanOrEqual(ZPAY_OUT_TRADE_NO_MAX_LENGTH);
+      expect(id).not.toContain(":");
+    }
+  });
+
+  it("refuses an out_trade_no that exceeds the provider contract", async () => {
+    const fetchImplementation = mock(async () =>
+      Response.json({ code: 1, msg: "ok", payurl: "https://zpay.test/pay" }),
+    );
+    globalThis.fetch = createFetchMock(fetchImplementation);
+
+    await expect(
+      zpayCreateOrder({
+        outTradeNo: "x".repeat(ZPAY_OUT_TRADE_NO_MAX_LENGTH + 1),
+        money: "42.90",
+        name: "Murmur",
+        type: "wxpay",
+        notifyUrl: "https://murmur.test/api/billing/zpay-notify",
+        returnUrl: "https://murmur.test/topup/checkout",
+        clientIp: "127.0.0.1",
+      }),
+    ).rejects.toThrow("zpay out_trade_no must be 1-32 characters");
+    expect(fetchImplementation).not.toHaveBeenCalled();
+  });
+});
 
 describe("ZPay checkout launch gate", () => {
   it("requires an explicit production allow flag while refund webhooks are missing", () => {
@@ -100,7 +156,7 @@ function restoreOptionalEnv(key: string, value: string | undefined) {
 const BASE_NOTIFY = {
   pid: "pid_test",
   trade_no: "trade_zpay_1",
-  out_trade_no: "usr_zpay:topup_120_notes:order_1",
+  out_trade_no: "0123456789abcdef0123456789abcdef",
   type: "wxpay",
   name: "Murmur",
   money: "42.90",
@@ -150,7 +206,7 @@ describe("zpayVerifyNotify", () => {
     expect(verified).toMatchObject({
       pid: "pid_test",
       trade_no: "trade_zpay_1",
-      out_trade_no: "usr_zpay:topup_120_notes:order_1",
+      out_trade_no: "0123456789abcdef0123456789abcdef",
       sign_type: "MD5",
     });
   });
