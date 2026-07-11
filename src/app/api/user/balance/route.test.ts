@@ -74,10 +74,13 @@ const { GET } = await import("./route");
 
 let originalNodeEnv: string | undefined;
 let originalDevBillingFallback: string | undefined;
+let originalProductionPreview: string | undefined;
 
 beforeEach(() => {
   originalNodeEnv = process.env.NODE_ENV;
   originalDevBillingFallback = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+  originalProductionPreview = process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+  delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
 });
 
 afterEach(() => {
@@ -86,6 +89,11 @@ afterEach(() => {
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
   } else {
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = originalDevBillingFallback;
+  }
+  if (originalProductionPreview === undefined) {
+    delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+  } else {
+    process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW = originalProductionPreview;
   }
   nextAuth = {
     ok: true,
@@ -138,16 +146,15 @@ describe("GET /api/user/balance", () => {
     expect(body.unlimited).toBe(false);
   });
 
-  it("keeps localhost previews usable when the ledger is unavailable outside dev mode", async () => {
+  it("keeps explicitly enabled production previews usable when the ledger is unavailable", async () => {
     const prevNode = process.env.NODE_ENV;
-    const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     setTestNodeEnv("production");
-    delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
+    process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW = "1";
     nextBalanceError = new Error("ECONNREFUSED");
 
     try {
       const response = await GET(
-        new Request("http://127.0.0.1:3100/api/user/balance") as unknown as NextRequest,
+        new Request("https://preview.example/api/user/balance") as unknown as NextRequest,
       );
 
       expect(response.status).toBe(200);
@@ -163,8 +170,6 @@ describe("GET /api/user/balance", () => {
       expect(body.planTier).toBe("free");
     } finally {
       setTestNodeEnv(prevNode);
-      if (prevFlag === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-      else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
     }
   });
 
