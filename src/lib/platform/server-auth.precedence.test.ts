@@ -130,15 +130,22 @@ describe("resolveRequestAuth precedence (Local Creator vs Google)", () => {
     if (auth.ok) expect(auth.user.id).toBe("lc_1");
   });
 
-  it("returns 503 when the session lookup fails on normal authenticated routes", async () => {
+  it("falls through to Google when the session lookup fails on normal authenticated routes (#313)", async () => {
+    // A valid Auth.js session must authenticate even when the Murmur session
+    // DB is down — the request should NOT collapse to 503 with an OAuth login
+    // present. Mirrors the guest-preview fall-through.
     const auth = await resolveRequestAuth(
       reqWithSession(),
       {},
       deps({ sessionError: new Error("db down"), nextAuth: googleSession("g_1") }),
     );
 
-    expect(auth.ok).toBe(false);
-    if (!auth.ok) expect(auth.response.status).toBe(503);
+    expect(auth.ok).toBe(true);
+    if (auth.ok) {
+      expect(auth.user.id).toBe("g_1");
+      expect(auth.user.accountKind).toBe("registered");
+      expect(auth.source).toBe("session");
+    }
   });
 
   it("falls through to Google when a guest-preview route cannot read the local cookie session", async () => {
@@ -204,5 +211,86 @@ describe("resolveRequestAuth precedence (Local Creator vs Google)", () => {
       expect(auth.user.id).toBe("g_1");
       expect(auth.sessionId).toBeNull();
     }
+  });
+});
+
+// Issue #313: precedence when Murmur session infrastructure is unavailable.
+// The invariant: a valid Auth.js session authenticates before any 503 is
+// returned; an invalid local token never becomes guest access; and when
+// neither source is valid, 503 (infra down) vs 401 (unauthorized) stays
+// honest. All four cases run on a NORMAL authenticated route (no
+// allowGuestPreview) in production mode.
+describe("resolveRequestAuth precedence on Murmur session outage (#313)", () => {
+  it("DB failure + valid OAuth -> authenticates via Auth.js (not 503)", async () => {
+    const auth = await resolveRequestAuth(
+      reqWithSession(),
+      {},
+      deps({ sessionError: new Error("db down"), nextAuth: googleSession("g_1") }),
+    );
+
+    expect(auth.ok).toBe(true);
+    if (auth.ok) {
+      expect(auth.user.id).toBe("g_1");
+      expect(auth.user.accountKind).toBe("registered");
+      expect(auth.source).toBe("session");
+      expect(auth.sessionId).toBeNull();
+    }
+  });
+
+  it("DB failure + invalid cookie (no rescuing OAuth) -> honest 503, not guest", async () => {
+    // The Murmur session DB is down and no Auth.js session resolves. This is
+    // an infrastructure outage, so the request must fail 503 — not silently
+    // degrade to guest access and not masquerade as a 401 unauthorized.
+    const auth = await resolveRequestAuth(
+      reqWithSession(),
+      {},
+      deps({ sessionError: new Error("db down"), nextAuthThrows: true }),
+    );
+
+    expect(auth.ok).toBe(false);
+    if (!auth.ok) {
+      expect(auth.response.status).toBe(503);
+      const body = (await auth.response.json()) as { error: string };
+      expect(body.error).toBe("session_unavailable");
+    }
+  });
+
+  it("valid OAuth (session infra healthy) -> authenticates via Auth.js", async () => {
+    const auth = await resolveRequestAuth(
+      new Request("http://murmur.test/api"),
+      {},
+      deps({ nextAuth: googleSession("g_1") }),
+    );
+
+    expect(auth.ok).toBe(true);
+    if (auth.ok) {
+      expect(auth.user.id).toBe("g_1");
+      expect(auth.user.accountKind).toBe("registered");
+      expect(auth.source).toBe("session");
+    }
+  });
+
+  it("no session at all -> honest 401 unauthorized, not guest", async () => {
+    const auth = await resolveRequestAuth(
+      new Request("http://murmur.test/api"),
+      {},
+      deps({ nextAuthThrows: true }),
+    );
+
+    expect(auth.ok).toBe(false);
+    if (!auth.ok) expect(auth.response.status).toBe(401);
+  });
+
+  it("invalid local token + no OAuth -> 401, never falls through to guest", async () => {
+    // Guards the second requirement explicitly: a present-but-invalid cookie
+    // (DB healthy, token resolves to no session) must not become guest access.
+    const auth = await resolveRequestAuth(
+      reqWithSession(),
+      {},
+      deps({ session: null, nextAuthThrows: true }),
+    );
+
+    expect(auth.ok).toBe(false);
+    if (!auth.ok) expect(auth.response.status).toBe(401);
   });
 });
