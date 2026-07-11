@@ -58,6 +58,19 @@ export function invalidateMusicEngineCache(): void {
   healthCache = null;
 }
 
+/**
+ * Abort any in-flight generation requests. Call on VibeScreen unmount or
+ * when navigating away so server-side RunPod jobs are cancelled promptly
+ * instead of running until their execution timeout.
+ */
+export function cancelActiveGeneration(): void {
+  if (activeAbort) {
+    activeAbort.abort();
+    activeAbort = null;
+  }
+  activeBatchId = null;
+}
+
 /** Warm the status cache as soon as the hum screen mounts. */
 export function prefetchMusicEngineStatus(): void {
   void fetchMusicEngineStatus(true);
@@ -436,6 +449,8 @@ function mapMusicGenerateErrorCode(
     case "worker_http_error":
     case "worker_unauthorized":
       return "worker_unavailable";
+    case "worker_overloaded":
+      return "worker_overloaded";
     case "server_error":
       return "server_error";
     default:
@@ -485,9 +500,14 @@ function notifyIfBatchComplete(): void {
 }
 
 /** Patch a version's generation in the store; false if it's no longer there. */
+type VersionGenerationPatch =
+  | Partial<Pick<VersionGeneration, "audioUrl" | "currentBalance" | "cost">> &
+    ({ status: "pending" | "ready"; error?: undefined; errorCode?: undefined }
+    | { status: "error"; error: string; errorCode: VersionGenerationErrorCode });
+
 function patchGeneration(
   versionId: string,
-  patch: Partial<VersionGeneration>,
+  patch: VersionGenerationPatch,
 ): boolean {
   const store = useMurmurStore.getState();
   const target = store.vibeVersions.find((v) => v.id === versionId);
@@ -497,7 +517,7 @@ function patchGeneration(
 
   const next: VibeVersion = {
     ...base,
-    generation: { ...base.generation, ...patch },
+    generation: { ...base.generation, ...patch } as VersionGeneration,
   };
   if (target) {
     store.setVibeVersions(

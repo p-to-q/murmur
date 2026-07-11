@@ -73,9 +73,6 @@
   --murmur-font-serif: var(--font-instrument-serif), Georgia, "Iowan Old Style", "Times New Roman", Times, serif;
   --murmur-font-chinese-system: "PingFang SC", "PingFang TC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --murmur-font-chinese: "LXGW WenKai TC", "LXGW WenKai GB Screen 300", var(--murmur-font-chinese-system);
-  --murmur-font-ui: "Murmur Datatype", var(--font-geist-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  --murmur-ui-font-weight: 600;
-  --murmur-ui-letter-spacing: 0;
   --radius: 0.625rem; /* mymind cards are tight — 10px feels right */
   --background: #F5F1EB;
   --foreground: #1A1A1A;
@@ -121,7 +118,6 @@
     touch-action: manipulation;
     overscroll-behavior: none;
     font-feature-settings: "kern", "ss01";
-    font-variation-settings: "wght" 400;
   }
   html {
     @apply font-sans;
@@ -164,20 +160,6 @@
     font-family: var(--font-serif);
     font-style: italic;
     letter-spacing: -0.005em;
-  }
-  .font-ui {
-    font-family: var(--murmur-font-ui);
-    font-weight: var(--murmur-ui-font-weight);
-    letter-spacing: 0;
-  }
-  .font-ui-label {
-    font-family: var(--murmur-font-ui);
-    font-weight: 600;
-    letter-spacing: 0;
-  }
-  .font-ui-label-caps {
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
   }
   .underline-mm {
     text-decoration: underline;
@@ -283,7 +265,7 @@
   .eyebrow {
     text-transform: uppercase;
     letter-spacing: 0.32em;
-    font-weight: var(--murmur-ui-font-weight);
+    font-weight: 500;
     font-size: 0.6875rem;
     color: var(--color-murmur-mute);
   }
@@ -298,8 +280,8 @@
     background: var(--color-murmur-bg-warm);
     color: var(--color-murmur-ink);
     font-size: 0.75rem;
-    font-weight: var(--murmur-ui-font-weight);
-    letter-spacing: var(--murmur-ui-letter-spacing);
+    font-weight: 500;
+    letter-spacing: 0.02em;
   }
 
   /* ── Accent button — vivid coral, no shadow, hover scale ───── */

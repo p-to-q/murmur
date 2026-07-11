@@ -74,21 +74,16 @@ function stripSessionAudio(
   if (!generation) return undefined;
   // Browser blob URLs only live for the current tab session. Persist the shape
   // of the generation, then let restored screens request a fresh playable clip.
-  const hasSessionAudio =
-    typeof generation.audioUrl === "string" && generation.audioUrl.length > 0;
+  if (generation.status === "error") {
+    return { ...generation, audioUrl: undefined };
+  }
+  // "ready" clips lose their session audio, so restored screens re-request.
   return {
     ...generation,
     audioUrl: undefined,
-    status:
-      generation.status === "ready" && hasSessionAudio
-        ? "pending"
-        : generation.status === "ready"
-          ? "pending"
-          : generation.status,
-    error:
-      generation.status === "ready" && hasSessionAudio
-        ? undefined
-        : generation.error,
+    status: "pending",
+    error: undefined,
+    errorCode: undefined,
   };
 }
 

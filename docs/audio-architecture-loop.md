@@ -1,6 +1,6 @@
 # Murmur Audio Architecture Loop
 
-Last updated: 2026-06-05
+Last updated: 2026-07-11
 
 This is the architecture-level control document for Murmur's audio system.
 It is meant to keep product intent, engineering boundaries, fallback strategy,
@@ -23,10 +23,12 @@ flowchart LR
     capture["Capture\nbrowser / app"] --> gate["Input quality gate"]
     gate --> route["/api/transcribe"]
     route --> worker["Audio worker"]
+    route --> clientFallback["Client pYIN WASM\n(transient failure only)"]
     worker --> denoise["Optional denoise"]
     denoise --> pitch["Pitch detector\nRMVPE / SwiftF0 / pYIN fallback"]
     pitch --> contour["Contour + raw notes"]
     contour --> engine["Humming engine\nintent / corrected / musical"]
+    clientFallback --> engine
     engine --> arrange["Arrange / render"]
     arrange --> save["Save / gallery / reopen"]
 ```
@@ -123,7 +125,7 @@ Responsibilities:
 | SwiftF0 returns no notes in `auto` | `swiftf0` | retry with `pyin` |
 | Billing unavailable in local dev | ledger | dev billing bypass |
 | Denoise unavailable | configured denoise | continue with provider warnings |
-| Worker missing entirely | `/api/transcribe` | user-facing setup / retry copy, not silent fixture |
+| Worker missing entirely (transient) | `/api/transcribe` | client pYIN WASM fallback (`client-pitch-fallback.ts`), then user-facing retry copy if repetition fails |
 | Main-path complexity too high | expose nothing extra | keep advanced control in `Me!`, `Gallery`, saved-song surfaces |
 
 ## 4.1 Latency boundary
@@ -308,13 +310,22 @@ cadentially awkward.
 - worker-side acceptance rerun that can escalate from configured provider to
   repair hypotheses and alternate-provider review;
 - synthetic local audio audit;
-- server-authoritative error and billing fallbacks.
+- server-authoritative error and billing fallbacks;
+- **client-side pitch fallback**: browser pYIN via Essentia.js WASM
+  (`src/lib/audio/client-pitch-fallback.ts`) when the remote worker is
+  transiently unavailable; results fed through the same humming-engine pipeline;
+- **transient error classification**: `src/lib/errors/transient.ts` centralizes
+  retry vs. fail-fast decisions across routes, workers, and client;
+- **latency budgets**: `src/lib/observability/latency-budgets.ts` enforces
+  P50/P95 ceilings on transcribe, music_generate, llm_edit, db operations;
+- **stage tracking**: `src/lib/observability/stage-tracking.ts` records every
+  funnel transition (hum → vibe → studio → save → gallery) with dwell times.
 
 ### Still open
 
 - note-proposal layer inspired by Basic Pitch;
 - real eval-set comparison across providers;
-- front-end capture quality hints;
+- front-end capture quality hints in capture layer (level, clipping, SNR);
 - stronger saved-song provenance around repair decisions;
 - worker-side alternate-detector reruns triggered by acceptance, not only
   melody-layer repair after one detector pass;

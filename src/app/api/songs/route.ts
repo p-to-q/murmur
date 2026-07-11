@@ -27,6 +27,7 @@ import {
 } from "@/lib/notifications/notification-copy";
 import { notifications } from "@/lib/platform/notifications-server";
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
+import { ulid } from "ulid";
 import { COST } from "@murmur/core";
 import { deriveEditDepth, normalizeEditCount } from "@/modules/music/edit-depth";
 import { normalizeLineageDepth, resolveParentSongId, resolveRootSongId } from "@/modules/music/lineage";
@@ -39,8 +40,14 @@ const ROUTE = "/api/songs";
 const SONG_CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
 const MELODY_SELECTION_KINDS = new Set<MelodySelectionKind>(["intent", "corrected", "musical"]);
 
+// Client-minted draft ids double as the idempotency key for save retries
+// (see handleSongIdConflict), so they must be accepted — but only in a
+// bounded, URL-safe shape. Covers every id the app mints today: raw UUIDs,
+// `demo-<uuid>` drafts, and server-generated `song_<ulid>` fallbacks.
+const SONG_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
 const songPayloadSchema = z.object({
-  id: z.string().min(1).max(100),
+  id: z.string().regex(SONG_ID_PATTERN, "Invalid song id").optional(),
   title: z.string().min(1).max(200),
   vibe: z.string().min(1).max(500),
   vibeEn: z.string().min(1).max(500),
@@ -65,6 +72,7 @@ type SongInput = typeof songs.$inferInsert;
 type OkAuth = Extract<ResolvedRequestAuth, { ok: true }>;
 
 export async function GET(req: NextRequest) {
+  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
   const requestHost = getRequestHostname(req);
   const auth = await resolveRequestAuth(req, {
     allowGuestPreview: shouldAllowLocalPreviewFallback(req),
@@ -100,11 +108,14 @@ export async function GET(req: NextRequest) {
     });
     if (isDatabaseUnavailable(err)) {
       return NextResponse.json(
-        { error: "songs_unavailable", message: "Database unavailable" },
-        { status: 503 },
+        { error: "songs_unavailable", message: "Database unavailable", requestId },
+        { status: 503, headers: { "X-Request-Id": requestId } },
       );
     }
-    return NextResponse.json({ error: "Failed to fetch songs" }, { status: 500 });
+    return NextResponse.json(
+      { error: "server_error", message: "Failed to fetch songs", requestId },
+      { status: 500, headers: { "X-Request-Id": requestId } },
+    );
   }
 }
 
@@ -158,7 +169,7 @@ export async function POST(req: NextRequest) {
       level: "warn",
     });
     return NextResponse.json(
-      { error: "Failed to read song payload", requestId },
+      { error: "validation_error", message: "Failed to read song payload", requestId },
       { status: 400, headers: { "X-Request-Id": requestId } },
     );
   }
@@ -329,24 +340,27 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: "Failed to save song", requestId },
+      { error: "server_error", message: "Failed to save song", requestId },
       { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
 }
 
 function buildSongInput(body: SongPayload, userId: string): SongInput {
+  // Prefer the client-minted draft id (idempotent retry key); mint a
+  // server-side id only when the payload omits one.
+  const id = body.id ?? `song_${ulid()}`;
   const editCount = normalizeEditCount(body.editCount);
   const lineageDepth = normalizeLineageDepth(body.lineageDepth);
   const sourceMelodyKind = isMelodySelectionKind(body.sourceMelodyKind)
     ? body.sourceMelodyKind
     : "corrected";
   const editDepth = deriveEditDepth(editCount);
-  const parentSongId = resolveParentSongId({ id: body.id, parentSongId: body.parentSongId });
-  const rootSongId = resolveRootSongId({ id: body.id, rootSongId: body.rootSongId });
+  const parentSongId = resolveParentSongId({ id, parentSongId: body.parentSongId });
+  const rootSongId = resolveRootSongId({ id, rootSongId: body.rootSongId });
 
   return {
-    id: body.id,
+    id,
     userId,
     title: body.title,
     vibe: body.vibe,

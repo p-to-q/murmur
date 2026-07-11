@@ -215,17 +215,23 @@ export async function POST(request: NextRequest) {
     return new NextResponse("fail", { status: 500 });
   }
 
-  // Mark purchase as succeeded
-  await db
-    .update(purchases)
-    .set({
-      status: "succeeded",
-      rawPayload: verified as unknown as Record<string, unknown>,
-      updatedAt: new Date(),
-    })
-    .where(eq(purchases.id, pendingPurchase.id));
+  // Mark purchase succeeded and event processed atomically so a mid-flight
+  // crash never leaves purchase in "pending" while notes are already granted.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(purchases)
+      .set({
+        status: "succeeded",
+        rawPayload: verified as unknown as Record<string, unknown>,
+        updatedAt: new Date(),
+      })
+      .where(eq(purchases.id, pendingPurchase.id));
 
-  await db.update(eventsWebhook).set({ status: "processed", processedAt: new Date() }).where(eq(eventsWebhook.id, eventRowId));
+    await tx
+      .update(eventsWebhook)
+      .set({ status: "processed", processedAt: new Date() })
+      .where(eq(eventsWebhook.id, eventRowId));
+  });
 
   log(
     "notes.granted",

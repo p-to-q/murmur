@@ -98,8 +98,12 @@ async function transcodeGeneratedClip(
         .webkitAudioContext;
     if (!Ctx) throw new Error("AudioContext unavailable");
     const ctx = new Ctx();
-    const buffer = await ctx.decodeAudioData(wavBytes.slice(0));
-    await ctx.close();
+    let buffer: AudioBuffer;
+    try {
+      buffer = await ctx.decodeAudioData(wavBytes.slice(0));
+    } finally {
+      await ctx.close().catch(() => {});
+    }
     const mp3Blob = await encodeMp3(buffer);
     return {
       dataUrl: await blobToDataUrl(mp3Blob),

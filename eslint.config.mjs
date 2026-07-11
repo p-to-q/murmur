@@ -23,6 +23,7 @@ const eslintConfig = defineConfig([
     ".cache/**",
     ".claude/**",
     "**/.venv/**",
+    "src/_recovered/**",
   ]),
 ]);
 

@@ -120,7 +120,9 @@ describe("GET /api/public/songs/[shareCode]", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("X-Robots-Tag")).toBeNull();
-    expect(response.headers.get("Cache-Control")).toBe("public, max-age=60, s-maxage=300");
+    expect(response.headers.get("Cache-Control")).toBe(
+      "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+    );
   });
 
   it("returns 404 with noindex for historical shares without audio", async () => {

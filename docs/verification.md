@@ -3,7 +3,7 @@
 ## Status
 
 ### Tested
-- [x] `bun install` — passes (684 packages, +1 lamejs)
+- [x] `bun install` — passes (684 packages, +1 lamejs, +essentia.js)
 - [x] `bunx tsc --noEmit` — 0 errors
 - [x] `bun run build` — Next.js build completes through the configured
   webpack command path
@@ -30,9 +30,23 @@
   health plus every shared QA route contract
 - [x] First transient hum worker failure now stays human-first; support code is
   reserved for hard faults or repeated transient failures
+- [x] Client-side pitch fallback: browser pYIN via Essentia.js WASM when worker
+  is transiently unavailable (`src/lib/audio/client-pitch-fallback.ts`)
+- [x] Transient error classification service (`src/lib/errors/transient.ts`) with
+  centralized `isTransient()`, `classifyError()`, `classifyHttpStatus()` for
+  retry decisions across routes, workers, and client
+- [x] Per-component latency budgets (`src/lib/observability/latency-budgets.ts`)
+  with P50/P95 ceilings for transcribe, music_generate, llm_edit, db.query, db.transaction
+- [x] Stage-based funnel tracking (`src/lib/observability/stage-tracking.ts`)
+  for hum → vibe → studio → save → gallery drop-off observability
+- [x] SongCard memo + reduced-motion preference support + ISR caching (`minimumCacheTTL: 3600`)
+  and AVIF/WebP image optimization
+- [x] Per-route error boundaries (`src/components/murmur/route-error-screen.tsx`)
+  for Gallery, Studio, Song, Topup, Me with contextual retry + back actions
+- [x] CSP security headers (report-only) applied globally, XSS hardening
 - [x] Music engine v2: rhythm-engine + chord-engine + bass-engine + drum-engine + assemble-song wired through both live preview and offline render
 - [x] Hum demo → Stainer facade → fixture → 3 VibeVersions
-- [ ] Live hum → `/api/transcribe` → audio worker → 3 VibeVersions
+- [x] Live hum → `/api/transcribe` → audio worker → 3 VibeVersions
 - [x] VersionCardsOverlay shows 3 cards, audition with synth, "Pick" routes to Studio
 - [x] StudioScreen mixer + 8 scene presets + restore button
 - [x] StudioScreen prompt bar — rule parser + LLM fallback (/api/strummer/edit)
@@ -72,9 +86,13 @@
 - Songs saved before the music-engine v2 (no `gen:<vibeId>` marker in
   `chords.currentPattern`) fall back to tag-based vibe inference inside
   `assemble-song`. Re-save migrates them.
+- Client-side pitch fallback requires `essentia.js` WASM (~2.5 MB lazy-loaded),
+  only triggered on transient server failures — not a replacement for full
+  quality transcription.
 
 ### Demo safety
-Three demo modes still work without any network:
+Four demo modes still work without any network:
 1. Live hum → `/api/transcribe` → 3 cards → Studio → save (MP3 rendered) → Gallery
-2. Mic denied → "Try with an example melody" → fixture → identical flow
-3. Pre-saved songs visible in Gallery with sticker record wall layout
+2. Live hum → worker transient failure → client pYIN WASM → 3 cards → Studio → save
+3. Mic denied → "Try with an example melody" → fixture → identical flow
+4. Pre-saved songs visible in Gallery with sticker record wall layout

@@ -28,9 +28,11 @@ import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { resetStageTracking, trackStageEntered } from "@/lib/observability/stage-tracking";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import { versionPreview } from "@/lib/music/version-preview";
 import {
+  cancelActiveGeneration,
   createMagentaVersions,
   regenerateVersionAudio,
   shouldUseMagentaEngine,
@@ -44,6 +46,8 @@ import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { MurmurWave } from "@/components/murmur/murmur-wave";
 import { hashString } from "@/lib/music/seeded-random";
 import { VIBE_PRESETS } from "@/presets/vibes";
+import { formatVibeSupportCode } from "@/lib/observability/support-code";
+import { usePreferencesStore } from "@/lib/store/preferences-store";
 
 /** Visual phases of the route arrival. */
 type Phase = "closing" | "opening" | "cards";
@@ -167,6 +171,19 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     }
   }, [setActiveCreationRoute, vibeVersions.length]);
 
+  // Track once per mount, but wait until the flow/draft ids exist — the demo
+  // seeding and draft restoration effects populate them asynchronously, and a
+  // bare mount effect would emit `stage.entered` with both fields undefined.
+  const stageTrackedRef = useRef(false);
+  useEffect(() => {
+    if (stageTrackedRef.current) return;
+    const flowId = currentFlowId ?? sourceVersion?.originFlowId;
+    const draftId = currentDraftId ?? sourceVersion?.draftId;
+    if (!flowId && !draftId) return;
+    stageTrackedRef.current = true;
+    trackStageEntered("vibe", { flowId, draftId });
+  }, [currentDraftId, currentFlowId, sourceVersion]);
+
   /* ── Arrival sequence ─────────────────────────────────────────── */
   useEffect(() => {
     const t1 = window.setTimeout(() => {
@@ -222,7 +239,27 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     }
   }, [restoredDraftAt, vibeVersions]);
 
-  /* ── Stop preview on unmount ──────────────────────────────────── */
+  /* ── Auto-audition: play the first ready clip as soon as it lands ── */
+  const autoAuditionedRef = useRef(false);
+  useEffect(() => {
+    if (autoAuditionedRef.current) return;
+    if (auditioningVersionId) return;
+    const firstReady = vibeVersions.find(
+      (v) => v.generation?.status === "ready" && v.generation.audioUrl,
+    );
+    if (!firstReady) return;
+    autoAuditionedRef.current = true;
+    try {
+      setAuditioning(firstReady.id);
+      if (!versionPreview.play(firstReady)) {
+        setAuditioning(null);
+      }
+    } catch {
+      setAuditioning(null);
+    }
+  }, [vibeVersions, auditioningVersionId, setAuditioning]);
+
+  /* ── Stop preview + cancel in-flight generation on unmount ────── */
   useEffect(() => {
     return () => {
       if (auditionStartTimerRef.current !== null) {
@@ -230,6 +267,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       }
       versionPreview.stop();
       setAuditioning(null);
+      cancelActiveGeneration();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -238,12 +276,16 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     (version: VibeVersion) => {
       const code = version.generation?.errorCode;
       if (code === "insufficient_notes") {
-        toast(t("vibe.gen.insufficient_toast") || "Top up notes before brewing more.");
+        toast(t("vibe.gen.insufficient_toast") || "Top up notes before brewing more.", {
+          description: formatVibeSupportCode({ code: "insufficient_notes", requestId: null }),
+        });
         router.push("/topup");
         return;
       }
       if (code === "rate_limited") {
-        toast(t("vibe.gen.rate_limited_toast") || "Too many generations in a row. Try again shortly.");
+        toast(t("vibe.gen.rate_limited_toast") || "Too many generations in a row. Try again shortly.", {
+          description: formatVibeSupportCode({ code: "rate_limited", requestId: null }),
+        });
         return;
       }
     },
@@ -330,7 +372,9 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
         }
       } catch (err) {
         console.error("[Vibe] audition error:", err);
-        toast.error(t("cards.play_error") || "Couldn't play that preview.");
+        toast.error(t("cards.play_error") || "Couldn't play that preview.", {
+          description: formatVibeSupportCode({ code: "playback_error", requestId: null }),
+        });
         setAuditioning(null);
       }
     },
@@ -378,6 +422,9 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     versionPreview.stop();
     setAuditioning(null);
     resetFlow();
+    // Abandoning the flow here: clear stage state so the next funnel run does
+    // not inherit a stale "vibe" origin.
+    resetStageTracking();
     const sourceSongId = sourceVersion?.parentSongId ?? sourceVersion?.draftId;
     if (fromSavedSong && sourceSongId) {
       router.push(`/song/${sourceSongId}`);
@@ -598,6 +645,7 @@ function VibeCard({
 }) {
   const lang = useCurrentLang();
   const t = useTranslator();
+  const developerMode = usePreferencesStore((s) => s.developerMode);
   const vibePreset = VIBE_PRESETS.find((p) => p.id === version.vibe);
   const vibeLabel =
     version.generation?.vibeLabel[lang] || vibePreset?.label[lang] || version.vibe;
@@ -701,6 +749,11 @@ function VibeCard({
               ? t(errorRecovery.detailKey) || errorRecovery.detailFallback
               : version.tags.slice(0, 3).join(" · ")}
         </p>
+        {isError && developerMode && version.generation?.errorCode && (
+          <p className="mt-1 text-[8px] tracking-[0.18em] uppercase text-white/30">
+            code · {formatVibeSupportCode({ code: version.generation.errorCode, requestId: null })}
+          </p>
+        )}
       </div>
 
       {/* ── Buttons — always sharp ── */}
@@ -814,6 +867,13 @@ function generationErrorRecovery(version: VibeVersion): {
         ctaFallback: "Retry",
         detailKey: "vibe.gen.worker_unconfigured",
         detailFallback: "Music engine is not connected yet.",
+      };
+    case "worker_overloaded":
+      return {
+        ctaKey: "vibe.retry",
+        ctaFallback: "Retry",
+        detailKey: "vibe.gen.worker_overloaded",
+        detailFallback: "Music engine is busy — please try again shortly.",
       };
     default:
       return {

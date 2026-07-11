@@ -170,32 +170,26 @@ export type VersionGenerationErrorCode =
   | "billing_unavailable"
   | "worker_unconfigured"
   | "worker_unavailable"
+  | "worker_overloaded"
   | "server_error"
   | "network_error";
 
-/**
- * Present when the version's audio comes from the Magenta RealTime worker
- * instead of the legacy Tone.js synth. The randomized prompt is the vibe;
- * `audioUrl` is a session-scoped object URL filled in once the clip lands.
- */
-export type VersionGeneration = {
+type VersionGenerationBase = {
   engine: "magenta";
-  /** English style prompt fed to MusicCoCa. */
   prompt: string;
-  /** Bilingual display label for the generated vibe. */
   vibeLabel: { zh: string; en: string };
-  status: VersionGenerationStatus;
   audioUrl?: string;
   durationSec: number;
-  /** Which "换一批" batch this vibe belongs to (0 = first three). */
   batchIndex: number;
-  /** Weight of the hum's audio embedding blended into the text style. */
   styleMix: number;
-  error?: string;
-  errorCode?: VersionGenerationErrorCode;
   currentBalance?: number;
   cost?: number;
 };
+
+export type VersionGeneration = VersionGenerationBase & (
+  | { status: "pending" | "ready"; error?: undefined; errorCode?: undefined }
+  | { status: "error"; error: string; errorCode: VersionGenerationErrorCode }
+);
 
 export type VibeVersion = {
   id: string;
@@ -251,6 +245,7 @@ export type TranscriptionProvider =
   | "rmvpe"
   | "swiftf0"
   | "pyin"
+  | "client_pyin"
   | "yin"
   | "parselmouth"
   | "fixture";

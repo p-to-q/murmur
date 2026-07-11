@@ -1,3 +1,4 @@
+import type { TranscribeStreamEvent } from "@/app/api/transcribe/route";
 import type { TranscriptionResult } from "@/modules/shared/types";
 import { request } from "./request";
 
@@ -163,4 +164,124 @@ function statusToFallbackCode(status: number): TranscribeRequestErrorCode {
   if (status === 413) return "audio_too_large";
   if (status >= 500) return "worker_unavailable";
   return "server_error";
+}
+
+export type TranscribePhase = "billing_ok" | "worker_started" | "complete";
+export type TranscribeProgressCallback = (phase: TranscribePhase) => void;
+
+/**
+ * Streaming variant of `transcribeRecording`. Sends `Accept: text/x-ndjson`
+ * and reads JSON-Lines progress events so the caller can update UI phase
+ * indicators as each stage completes. Falls back to the classic JSON
+ * response if the server doesn't support streaming.
+ */
+export async function transcribeRecordingStreaming(
+  audioBlob: Blob,
+  options: {
+    targetInstrument?: string;
+    onProgress?: TranscribeProgressCallback;
+  } = {},
+): Promise<TranscriptionResult> {
+  const form = new FormData();
+  form.append("audio", audioBlob, filenameForBlob(audioBlob));
+  if (options.targetInstrument) {
+    form.append("targetInstrument", options.targetInstrument);
+  }
+
+  let response: Response;
+  try {
+    response = await request("/api/transcribe", {
+      method: "POST",
+      body: form,
+      headers: { Accept: "text/x-ndjson" },
+      signal: AbortSignal.timeout(55_000),
+    });
+  } catch (cause) {
+    throw new TranscribeRequestError({
+      code: "network_error",
+      status: 0,
+      message:
+        cause instanceof Error
+          ? `Transcription request failed: ${cause.message}`
+          : "Transcription request failed",
+    });
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("text/x-ndjson")) {
+    if (!response.ok) throw await buildTranscribeError(response);
+    return (await response.json()) as TranscriptionResult;
+  }
+
+  return consumeTranscribeStream(response, options.onProgress);
+}
+
+async function consumeTranscribeStream(
+  response: Response,
+  onProgress?: TranscribeProgressCallback,
+): Promise<TranscriptionResult> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new TranscribeRequestError({
+      code: "network_error",
+      status: 0,
+      message: "No response body for streaming transcription",
+    });
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: TranscriptionResult | null = null;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (value) buffer += decoder.decode(value, { stream: true });
+
+    let newlineIdx: number;
+    while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, newlineIdx).trim();
+      buffer = buffer.slice(newlineIdx + 1);
+      if (!line) continue;
+
+      let event: TranscribeStreamEvent;
+      try {
+        event = JSON.parse(line) as TranscribeStreamEvent;
+      } catch {
+        continue;
+      }
+
+      switch (event.phase) {
+        case "billing_ok":
+        case "worker_started":
+          onProgress?.(event.phase);
+          break;
+        case "complete":
+          onProgress?.("complete");
+          result = event.result as TranscriptionResult;
+          break;
+        case "error": {
+          const mapped = SERVER_ERROR_TO_CLIENT[event.error];
+          throw new TranscribeRequestError({
+            code: mapped ?? statusToFallbackCode(event.status),
+            status: event.status,
+            message: event.message,
+            requestId: event.requestId,
+            currentBalance: event.currentBalance,
+          });
+        }
+      }
+    }
+
+    if (done) break;
+  }
+
+  if (!result) {
+    throw new TranscribeRequestError({
+      code: "server_error",
+      status: 500,
+      message: "Streaming transcription ended without a result",
+    });
+  }
+
+  return result;
 }

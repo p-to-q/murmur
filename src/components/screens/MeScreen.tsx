@@ -98,7 +98,7 @@ export function MeScreen() {
       {/* ── Body cards ─────────────────────────────────────────────── */}
       <div className="relative z-10 px-5 md:px-12 max-w-3xl mx-auto space-y-5 pb-8">
         <Card className="relative z-20 overflow-visible">
-          <SectionLabel className="font-ui-label-caps">{t("me.profile.title") || "Profile"}</SectionLabel>
+          <SectionLabel>{t("me.profile.title") || "Profile"}</SectionLabel>
           <div className="space-y-4">
             <UserBadge />
             <p className="text-[13px] leading-[1.55] text-[#8C8780] md:text-[14px]">
@@ -110,7 +110,7 @@ export function MeScreen() {
 
         {/* Notes balance + Top up */}
         <Card>
-          <SectionLabel className="font-ui-label-caps">{t("me.notes.title") || "MURMUR NOTES"}</SectionLabel>
+          <SectionLabel>{t("me.notes.title") || "MURMUR NOTES"}</SectionLabel>
           <p className="font-serif text-[#1A1A1A] text-[52px] leading-none tabular-nums md:text-[56px] mb-2">
             {isLoading
               ? "—"
@@ -148,7 +148,7 @@ export function MeScreen() {
         <Card>
           <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div className="flex-1 space-y-3">
-              <SectionLabel className="font-ui-label-caps">{lang === "zh" ? milestone.stageZh : milestone.stage}</SectionLabel>
+              <SectionLabel>{lang === "zh" ? milestone.stageZh : milestone.stage}</SectionLabel>
               <p className="text-[13px] leading-[1.55] text-[#8C8780] md:text-[14px]">
                 {lang === "zh" ? milestone.insightZh : milestone.insight}
               </p>
@@ -168,7 +168,7 @@ export function MeScreen() {
 
         {/* Language */}
         <Card>
-          <SectionLabel className="font-ui-label-caps">{t("me.language.title")}</SectionLabel>
+          <SectionLabel>{t("me.language.title")}</SectionLabel>
           <div className="flex gap-2">
             <LangPill
               active={lang === "zh"}
@@ -187,7 +187,7 @@ export function MeScreen() {
       {/* ── Manifesto (keep — best copy in the product) ────────────── */}
       <div className="relative z-10 px-5 md:px-12 max-w-3xl mx-auto pb-10">
         <div className="mm-manifesto">
-          <p className="eyebrow font-ui-label-caps text-[#FF8A5C] mb-5">{t("me.manifesto.eyebrow") || "A QUIET PLACE"}</p>
+          <p className="eyebrow text-[#FF8A5C] mb-5">{t("me.manifesto.eyebrow") || "A QUIET PLACE"}</p>
           <p className="font-serif text-[28px] md:text-[34px] leading-[1.15] text-[#F5F1EB]">
             No <span className="mm-strike">ads</span>, no{" "}
             <span className="mm-strike">feeds</span>, no{" "}
@@ -204,14 +204,14 @@ export function MeScreen() {
       {/* ── About ──────────────────────────────────────────────────── */}
       <div className="relative z-10 px-5 md:px-12 max-w-3xl mx-auto pb-10">
         <Card>
-          <SectionLabel className="font-ui-label-caps">{t("me.about.title")}</SectionLabel>
+          <SectionLabel>{t("me.about.title")}</SectionLabel>
           <p className="font-serif text-[#1A1A1A] text-[22px] leading-tight mb-2">
             {t("app.title")}
           </p>
           <p className="text-[#3A3A3A] text-[14px] leading-[1.55]">
             {t("me.about.desc")}
           </p>
-          <p className="font-ui-label-caps text-[#B6B0A4] mt-4" suppressHydrationWarning>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-[#B6B0A4] mt-4" suppressHydrationWarning>
             {formatAppVersion(developerMode)}
           </p>
         </Card>
@@ -429,7 +429,7 @@ function NotificationPanel({
     <Card className="p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <SectionLabel className="font-ui-label-caps">{t("me.notifications") || "Notifications"}</SectionLabel>
+          <SectionLabel>{t("me.notifications") || "Notifications"}</SectionLabel>
         </div>
       </div>
 

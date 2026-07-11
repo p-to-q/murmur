@@ -46,6 +46,180 @@ start here:
 - Verification notes:
   [docs/verification.md](./docs/verification.md)
 
+## Architecture
+
+### System Overview
+
+```mermaid
+flowchart TB
+    classDef browser fill:#F5F1EB,stroke:#D2C9B6,stroke-width:2px,color:#1A1A1A
+    classDef api fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef worker fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C
+    classDef infra fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef accent fill:#FFF3E0,stroke:#FF5924,stroke-width:2px,color:#BF360C
+    classDef user fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef anchor fill:transparent,stroke:transparent
+
+    User(["🎤 User"]):::user
+
+    subgraph Browser["🌐 Browser  ·  Next.js 16  ·  React 19"]
+        direction LR
+        Screens["Screens<br/>Hum · Vibe · Studio · Name · Gallery · Song Detail · Me"]
+        ClientPitch["WASM pYIN<br/>Essentia.js · browser fallback"]
+        ToneSynth["Tone.js · SimpleSynth<br/>live preview & playback"]
+        Store["State<br/>Zustand · localStorage"]
+        bBot[ ]:::anchor
+    end
+
+    subgraph API["⚡ API Routes  ·  Vercel  ·  Node.js"]
+        direction LR
+        aTop[ ]:::anchor
+        Transcribe["/api/transcribe"]
+        MusicGen["/api/music/generate"]
+        Strummer["/api/strummer/edit"]
+        Songs["/api/songs · CRUD"]
+        Auth["/api/auth · NextAuth"]
+        BillingAPI["/api/billing · Waffo"]
+        Notifs["/api/notifications · Web Push"]
+        aBot[ ]:::anchor
+    end
+
+    subgraph Workers["🐍 Python Workers"]
+        direction LR
+        wTop[ ]:::anchor
+        AE["Audio Engine  ·  Fly.io<br/>RMVPE → SwiftF0 → pYIN<br/>DeepFilterNet denoise · FastAPI"]
+        ME["Music Engine  ·  RunPod Serverless<br/>Magenta RT2 · GPU<br/>scale-to-zero · JAX/CUDA"]
+        wBot[ ]:::anchor
+    end
+
+    subgraph Infra["🗄️ Infrastructure"]
+        direction LR
+        iTop[ ]:::anchor
+        DB[("PostgreSQL<br/>Drizzle ORM")]
+        Storage[("Object Storage<br/>S3 / R2")]
+        AI[("AI Gateway<br/>OpenAI-compatible")]
+        Waffo[("Waffo Pancake<br/>Billing")]
+    end
+
+    bBot --- aTop
+    aBot --- wTop
+    wBot --- iTop
+
+    User -->|"capture hum"| Screens
+    Screens -->|"transcribe audio"| Transcribe
+    Screens -->|"select vibe"| MusicGen
+    Screens -->|"edit arrangement"| Strummer
+    Screens -->|"CRUD songs"| Songs
+    Screens -.->|"transient failure"| ClientPitch
+
+    ClientPitch -.->|"degraded notes"| Screens
+    ToneSynth -->|"live preview"| Screens
+    Screens -->|"persist draft"| Store
+
+    Transcribe -->|"raw audio"| AE
+    MusicGen -->|"melody + vibe"| ME
+    Strummer -->|"prompt"| AI
+
+    Songs --> DB
+    BillingAPI --> Waffo
+    Transcribe --> Storage
+    MusicGen --> Storage
+    Notifs --> DB
+
+    AE -->|"contour + notes"| Transcribe
+    ME -->|"WAV clip"| MusicGen
+```
+
+### Hum → Song Pipeline
+
+```mermaid
+flowchart LR
+    classDef stage fill:#FFF3E0,stroke:#FF5924,stroke-width:2px,color:#BF360C
+    classDef transform fill:#F5F1EB,stroke:#D2C9B6,stroke-width:2px,color:#1A1A1A
+    classDef output fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef module fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+
+    Start(["🎤 Raw Hum"]):::stage
+
+    Transcribe["Audio Worker<br/>pYIN · RMVPE · SwiftF0"]:::module
+    Transcribe -->|"RawNote[]"| Polish
+
+    Polish["Melody Polisher<br/>denoise · pitch correction · tonal inference"]:::module
+    Polish -->|CleanMelody| Intent
+
+    Intent["Humming Engine<br/>intent / corrected / musical"]:::module
+    Intent -->|selected| Versions
+
+    Versions["Generate Versions<br/>3 per vibe · 2 ensembles · seeded"]:::module
+    Versions -->|VibeVersion ×3| Assemble
+
+    Assemble["Assemble Song<br/>chords · bass · drums · bpm"]:::module
+    Assemble -->|AssembledSong| Live
+
+    Live["Live Preview<br/>SimpleSynth · Web Audio"]:::output
+    Assemble -->|AssembledSong| Save
+
+    Save["Export<br/>MP3 · WAV · poster PNG · share HTML · video"]:::output
+
+    Start --> Transcribe
+```
+
+### Transcription Fallback & Resilience
+
+```mermaid
+flowchart TB
+    classDef tier1 fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20
+    classDef tier2 fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#4A148C
+    classDef tier3 fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1
+    classDef tier4 fill:#FFF8E1,stroke:#F57F17,stroke-width:2px,color:#E65100
+    classDef obs fill:#E0F7FA,stroke:#006064,stroke-width:1px,color:#004D40
+
+    Capture(["🎤 User captures"]):::tier1
+
+    Capture --> Tier1
+
+    subgraph Tier1["Tier 1 · Server (primary)"]
+        RMVPE["RMVPE ONNX<br/>Fly.io · GPU-capable"]:::tier1
+        RMVPE -->|"confident"| Result["✅ Full Quality<br/>TranscriptionResult"]
+    end
+
+    Capture --> Tier2
+
+    subgraph Tier2["Tier 2 · Server (fallback)"]
+        SwiftF0["SwiftF0<br/>Fast contour"]:::tier2
+        pYIN["pYIN<br/>Conservative"]
+    end
+
+    RMVPE -.->|"weak / model absent"| SwiftF0
+    SwiftF0 -->|"normal"| Result
+    SwiftF0 -.->|"unstable"| pYIN
+    pYIN --> Result
+
+    Capture --> Tier3
+
+    subgraph Tier3["Tier 3 · Browser WASM<br/>transient failure only"]
+        Essentia["Essentia.js WASM pYIN<br/>lazy-loaded · ~2.5 MB"]:::tier3
+        Essentia -->|"degraded"| Degraded["⚠️ Degraded Quality<br/>+ warning in result"]
+        Degraded --> Polisher["Melody Polisher<br/>same server-side pipeline"]
+        Polisher -->|"usable"| Result
+    end
+
+    Capture --> Tier4
+
+    subgraph Tier4["Tier 4 · Explicit Demo<br/>never auto-triggered"]
+        Demo["Fixture melody<br/>user chooses 'try an example'"]:::tier4
+        Demo --> Result
+    end
+
+    subgraph Observability["Observability across all tiers"]
+        Latency["Latency Budgets<br/>P50 / P95 per component"]:::obs
+        Stage["Stage Tracking<br/>hum → vibe → studio → save → gallery"]:::obs
+        Errors["Error Classification<br/>transient.ts · isTransient()"]:::obs
+    end
+
+    Result -.-> Observability
+```
+
 ## What We Tried To Make Deliberately
 
 - A creation flow with a clear emotional arc:

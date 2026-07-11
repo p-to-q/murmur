@@ -6,13 +6,21 @@ import {
   transcribeWithAudioWorker,
 } from "@/lib/platform/audio-worker";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
-import { resolveRequestAuth } from "@/lib/auth";
+import { resolveRequestAuth, type ResolvedRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
+import { classifyError } from "@/lib/errors/transient";
 import { log } from "@/lib/observability/log";
+import { checkBudget } from "@/lib/observability/latency-budgets";
 import { COST } from "@murmur/core";
+
+export type TranscribeStreamEvent =
+  | { phase: "billing_ok"; balanceBefore: number | null }
+  | { phase: "worker_started" }
+  | { phase: "complete"; result: unknown }
+  | { phase: "error"; error: string; message: string; status: number; requestId: string; currentBalance?: number | null };
 
 export const runtime = "nodejs";
 // Pitch detection on the worker can take tens of seconds for long hums.
@@ -44,6 +52,288 @@ type BillingMode = "ledger" | "dev_fallback";
  * a polished/scored melody. Fixture fallback is deliberately absent here.
  */
 export async function POST(request: NextRequest) {
+  const wantsStream = request.headers.get("accept")?.includes("text/x-ndjson");
+  if (wantsStream) return streamingTranscribe(request);
+  return classicTranscribe(request);
+}
+
+async function streamingTranscribe(request: NextRequest): Promise<Response> {
+  const startedAt = performance.now();
+  const requestId = getRequestId(request);
+  const spendRef = createSpendReference("hum");
+  const encoder = new TextEncoder();
+
+  function emit(controller: ReadableStreamDefaultController, event: TranscribeStreamEvent) {
+    controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+  }
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        const auth = await resolveRequestAuth(request, {
+          allowGuestPreview: shouldAllowGuestTranscribePreview(request),
+        });
+        if (!auth.ok) {
+          emit(controller, { phase: "error", error: "unauthorized", message: "Authentication required", status: 401, requestId });
+          controller.close();
+          return;
+        }
+        const userId = auth.user.id;
+        const rateLimitUserId =
+          auth.source === "guest"
+            ? `${userId}:${clientIpFromHeaders(request.headers)}`
+            : userId;
+        const rateLimit = await checkApiRateLimit({
+          route: ROUTE,
+          bucket: "user",
+          userId: rateLimitUserId,
+          requestId,
+          sessionId: auth.sessionId,
+          options: TRANSCRIBE_RATE_LIMIT,
+        });
+        if (!rateLimit.allowed) {
+          emit(controller, { phase: "error", error: "rate_limited", message: "Too many requests", status: 429, requestId });
+          controller.close();
+          return;
+        }
+
+        const formData = await request.formData();
+        const audio = formData.get("audio");
+        const targetInstrumentRaw = formData.get("targetInstrument");
+        const targetInstrument =
+          typeof targetInstrumentRaw === "string" && targetInstrumentRaw.trim()
+            ? targetInstrumentRaw.trim()
+            : "piano";
+
+        if (!(audio instanceof File) || audio.size === 0) {
+          emit(controller, { phase: "error", error: "audio_required", message: "Audio file is required", status: 400, requestId });
+          controller.close();
+          return;
+        }
+        if (audio.size > MAX_AUDIO_BYTES) {
+          emit(controller, { phase: "error", error: "audio_too_large", message: "Audio file must be 2 MB or smaller", status: 413, requestId });
+          controller.close();
+          return;
+        }
+        if (!isInstrumentId(targetInstrument) || !isMelodyCarrier(targetInstrument)) {
+          emit(controller, { phase: "error", error: "validation_error", message: "targetInstrument must be a valid melody instrument", status: 400, requestId });
+          controller.close();
+          return;
+        }
+
+        const billingResult = await resolveBilling(request, auth, userId, requestId, startedAt, spendRef, targetInstrument);
+        if (!billingResult.ok) {
+          emit(controller, { phase: "error", error: billingResult.errorCode, message: billingResult.message, status: billingResult.status, requestId, currentBalance: billingResult.currentBalance });
+          controller.close();
+          return;
+        }
+
+        emit(controller, { phase: "billing_ok", balanceBefore: billingResult.balanceBefore });
+
+        log("transcribe.requested", {
+          bytes: audio.size,
+          format: audio.type || "unknown",
+          targetInstrument,
+          cost: COST.hum,
+          balanceBefore: billingResult.balanceBefore,
+          billingMode: billingResult.billingMode,
+          streaming: true,
+        }, {
+          route: ROUTE,
+          requestId,
+          userId,
+          sessionId: auth.sessionId,
+        });
+
+        emit(controller, { phase: "worker_started" });
+
+        let result: Awaited<ReturnType<typeof transcribeWithAudioWorker>>;
+        try {
+          result = await transcribeWithAudioWorker({
+            audio,
+            targetInstrument,
+            requestId,
+          });
+        } catch (error) {
+          await refundSpendIfNeeded({
+            spend: billingResult.spend,
+            requestId,
+            userId,
+            sessionId: auth.sessionId,
+            targetInstrument,
+          });
+          throw error;
+        }
+
+        const totalDurationMs = Math.round(performance.now() - startedAt);
+        const budget = checkBudget("transcribe", totalDurationMs);
+        log("transcribe.completed", {
+          provider: result.provider,
+          noteCount: result.cleanMelody.notes.length,
+          rawNoteCount: result.rawNotes.length,
+          warningCount: result.warnings.length,
+          targetInstrument,
+          cost: COST.hum,
+          balanceAfter: billingResult.spend.ok ? billingResult.spend.balanceAfter : null,
+          billingMode: billingResult.billingMode,
+          budget_exceeded: budget.budget_exceeded,
+          budget_p95: budget.budget_p95,
+          streaming: true,
+        }, {
+          route: ROUTE,
+          requestId,
+          userId,
+          sessionId: auth.sessionId,
+          durationMs: totalDurationMs,
+        });
+
+        emit(controller, { phase: "complete", result });
+        controller.close();
+      } catch (error) {
+        const classified = classifyError(error);
+        if (error instanceof AudioWorkerError) {
+          emit(controller, { phase: "error", error: error.code, message: error.message, status: error.status, requestId });
+        } else {
+          log("transcribe.failed", {
+            error_code: "server_error",
+            phase: "route",
+            message: error instanceof Error ? error.message : String(error),
+            error_class: classified.class,
+          }, {
+            route: ROUTE,
+            requestId,
+            durationMs: Math.round(performance.now() - startedAt),
+            level: "error",
+          });
+          emit(controller, { phase: "error", error: "server_error", message: "Transcription failed", status: 500, requestId });
+        }
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/x-ndjson; charset=utf-8",
+      "X-Request-Id": requestId,
+      "Cache-Control": "no-cache",
+    },
+  });
+}
+
+type BillingOk = {
+  ok: true;
+  billingMode: BillingMode;
+  balanceBefore: number | null;
+  spend: Awaited<ReturnType<typeof spendNotes>> | {
+    ok: true;
+    ledgerId: null;
+    balanceBefore: null;
+    balanceAfter: null;
+    duplicate: false;
+  };
+};
+
+type BillingFailed = {
+  ok: false;
+  errorCode: TranscribeRouteError;
+  message: string;
+  status: number;
+  currentBalance?: number | null;
+};
+
+type OkAuth = Extract<ResolvedRequestAuth, { ok: true }>;
+
+async function resolveBilling(
+  request: NextRequest,
+  auth: OkAuth,
+  userId: string,
+  requestId: string,
+  startedAt: number,
+  spendRef: string,
+  targetInstrument: string,
+): Promise<BillingOk | BillingFailed> {
+  let balance: Awaited<ReturnType<typeof getNotesBalance>>;
+  let billingMode: BillingMode = "ledger";
+
+  if (shouldSkipNotesBilling(auth)) {
+    billingMode = "dev_fallback";
+    balance = devFallbackBalance(userId);
+  } else {
+    try {
+      balance = await getNotesBalance(userId);
+    } catch {
+      if (shouldBypassBillingForLocalDemo(request)) {
+        billingMode = "dev_fallback";
+        balance = devFallbackBalance(userId);
+      } else {
+        return { ok: false, errorCode: "billing_unavailable", message: "User balance is unavailable", status: 503 };
+      }
+    }
+
+    if (!balance.ok) {
+      if (shouldBypassBillingForLocalDemo(request)) {
+        billingMode = "dev_fallback";
+        balance = devFallbackBalance(userId);
+      } else {
+        return { ok: false, errorCode: "billing_unavailable", message: "User balance is unavailable", status: 503 };
+      }
+    }
+    if (
+      billingMode === "ledger"
+      && auth.user.accountKind !== "local_creator"
+      && shouldBypassBillingForLocalDemo(request)
+    ) {
+      billingMode = "dev_fallback";
+      balance = devFallbackBalance(userId);
+    }
+  }
+  if (balance.notes < COST.hum) {
+    return { ok: false, errorCode: "insufficient_notes", message: "Not enough Murmur Notes", status: 402, currentBalance: balance.notes };
+  }
+
+  let spend: BillingOk["spend"];
+  if (billingMode === "dev_fallback") {
+    spend = { ok: true, ledgerId: null, balanceBefore: null, balanceAfter: null, duplicate: false };
+  } else {
+    try {
+      const spendResult = await spendNotes({
+        userId,
+        cost: COST.hum,
+        reason: "spend:hum",
+        externalRef: spendRef,
+        metadata: { requestId, route: ROUTE, phase: "preflight", targetInstrument },
+      });
+      if (!spendResult.ok) {
+        return { ok: false, errorCode: "insufficient_notes", message: "Not enough Murmur Notes", status: 402, currentBalance: spendResult.currentBalance };
+      }
+      spend = spendResult;
+    } catch {
+      return { ok: false, errorCode: "billing_unavailable", message: "Could not spend Murmur Notes", status: 503 };
+    }
+  }
+
+  return {
+    ok: true,
+    billingMode,
+    balanceBefore: Number.isFinite(balance.notes) ? balance.notes : null,
+    spend,
+  };
+}
+
+function devFallbackBalance(userId: string) {
+  return {
+    ok: true as const,
+    userId,
+    notes: Number.POSITIVE_INFINITY,
+    accountNotes: Number.POSITIVE_INFINITY,
+    dailyFreeNotes: 0,
+    planTier: "free" as const,
+    freeNotesGrantedAt: new Date(),
+  };
+}
+
+async function classicTranscribe(request: NextRequest) {
   const startedAt = performance.now();
   const requestId = getRequestId(request);
   const spendRef = createSpendReference("hum");
@@ -320,6 +610,8 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
+    const totalDurationMs = Math.round(performance.now() - startedAt);
+    const budget = checkBudget("transcribe", totalDurationMs);
     log("transcribe.completed", {
       provider: result.provider,
       noteCount: result.cleanMelody.notes.length,
@@ -338,24 +630,28 @@ export async function POST(request: NextRequest) {
       cost: COST.hum,
       balanceAfter: spend.balanceAfter,
       billingMode,
+      budget_exceeded: budget.budget_exceeded,
+      budget_p95: budget.budget_p95,
     }, {
       route: ROUTE,
       requestId,
       userId,
       sessionId: auth.sessionId,
-      durationMs: Math.round(performance.now() - startedAt),
+      durationMs: totalDurationMs,
     });
 
     return NextResponse.json(result, {
       headers: { "X-Request-Id": requestId },
     });
   } catch (error) {
+    const classified = classifyError(error);
     if (error instanceof AudioWorkerError) {
       return fail(error.code, error.message, error.status, {
         requestId,
         userId,
         startedAt,
         phase: "worker",
+        ext: { error_class: classified.class },
       });
     }
 
@@ -364,7 +660,7 @@ export async function POST(request: NextRequest) {
       userId,
       startedAt,
       phase: "route",
-      ext: { message: error instanceof Error ? error.message : String(error) },
+      ext: { message: error instanceof Error ? error.message : String(error), error_class: classified.class },
     });
   }
 }

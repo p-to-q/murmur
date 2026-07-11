@@ -130,6 +130,7 @@ describe("version save contract", () => {
         batchIndex: 0,
         styleMix: 0.6,
         error: "worker timeout",
+        errorCode: "server_error",
       },
     });
 

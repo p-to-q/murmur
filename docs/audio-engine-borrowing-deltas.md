@@ -1,6 +1,6 @@
 # Murmur Audio Engine Borrowing Deltas
 
-Last updated: 2026-06-05
+Last updated: 2026-07-11
 
 This note compares Murmur's current humming pipeline with the strongest nearby
 reference implementations and records the highest-value next moves.
@@ -11,10 +11,13 @@ reference implementations and records the highest-value next moves.
 |---|---|---|---|
 | Continuous contour truth | RMVPE / SwiftF0 / CREPE | `RMVPE` primary path when a model is available, `SwiftF0` / `pYIN` fallback, contour frames returned through worker contract | offline CREPE benchmark on Murmur eval sets |
 | Note proposals | Basic Pitch | contour-driven hypothesis bundle (`balanced` / `agile` / `steady` plus glide / wobble / urgent flavors) | true onset-evidence stream, bend-aware proposal objects |
+| Browser-side pitch detection | Essentia.js (pYIN WASM) | `client-pitch-fallback.ts` provides third-tier fallback when server worker is transiently unavailable; notes fed through standard melody-polisher + humming-engine pipeline | latency optimization for aggressive WASM paths, multi-model browser inference |
 | Front-end cleanup | DeepFilterNet | denoise seam + capture diagnostics + optional repair reruns | stricter policy for when to denoise vs. ask for rerecord |
 | Confidence-first repair | pYIN / modern pitch stacks | contour-aware melody choice, acceptance scores, repair-biased selection | full stage-by-stage confidence map and note provenance |
 | Real-data closure | public datasets | `vocadito` integrated into local closure, smoke + full closure runnable | real `HumTrans` subset still missing locally |
 | “像我唱的 / 更好听” product control | Auto-Tune / Voloco-style taste axis | `Me` page repair-bias slider feeding melody selection | drive more downstream arrangement/render choices from the same axis |
+| Latency observability | industry SLO practice | per-component P50/P95 budgets (`latency-budgets.ts`) with `budget_exceeded` flag in structured logs | dynamic budget tuning per deployment profile |
+| Funnel analytics | product telemetry standards | stage-based funnel tracking (`stage-tracking.ts`) for hum → vibe → studio → save → gallery | server-side funnel aggregation, cohort analysis |
 
 ## 1. Murmur current state
 
@@ -237,6 +240,10 @@ Why it matters:
 4. Add optional note-proposal support inspired by Basic Pitch.
 5. Push more of Murmur's repair toward confidence-driven phrase correction.
 6. Upgrade sound sources and mix presets before advanced timbre modeling.
+7. Extend client-side WASM pitch detection to cover more detectors (CREPE,
+   SwiftF0 ports) for a production-grade device-mode execution path.
+8. Persist repair provenance and melody-choice stance in saved-song metadata
+   for longitudinal comparison across edits and regenerations.
 
 ## 8. Bottom line
 
@@ -247,4 +254,5 @@ The highest-leverage borrowing path is:
 - `SwiftF0` for contour truth,
 - `Basic Pitch` ideas for note proposals,
 - `DeepFilterNet` for careful pre-clean,
+- `Essentia.js` for browser-side WASM pYIN backup,
 - Murmur itself for the final musical judgment.
