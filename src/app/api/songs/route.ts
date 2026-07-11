@@ -41,16 +41,16 @@ import {
   arrangementStateSchema,
   cleanMelodySchema,
   songProvenanceSchema,
+  songTagsSchema,
+  sourceMelodyKindSchema,
   visualConfigSchema,
 } from "./schema";
-import type { MelodySelectionKind } from "@/modules/shared/types";
 import type { songs } from "@/lib/db/schema/songs";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
 const ROUTE = "/api/songs";
 const SONG_LIST_RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
 const SONG_CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
-const MELODY_SELECTION_KINDS = new Set<MelodySelectionKind>(["intent", "corrected", "musical"]);
 
 // Client-minted draft ids double as the idempotency key for save retries
 // (see handleSongIdConflict), so they must be accepted — but only in a
@@ -70,7 +70,9 @@ const songPayloadSchema = z.object({
   parentSongId: z.string().min(1).max(100).nullable().optional(),
   rootSongId: z.string().min(1).max(100).nullable().optional(),
   lineageDepth: z.number().int().optional(),
-  sourceMelodyKind: z.string().max(100).optional(),
+  // Shared enum with the update route (#311): an unknown kind is now an
+  // explicit validation error, not a silent fallback to "corrected".
+  sourceMelodyKind: sourceMelodyKindSchema.optional(),
   editCount: z.number().int().optional(),
   editDepth: z.enum(["fresh", "shaped", "reworked"]).optional(),
   mp3DataUrl: z.string().nullable().optional(),
@@ -78,7 +80,7 @@ const songPayloadSchema = z.object({
   provenance: songProvenanceSchema.nullable().optional(),
   visualConfig: visualConfigSchema,
   arrangementState: arrangementStateSchema,
-  tags: z.array(z.string().max(100)),
+  tags: songTagsSchema,
 }).passthrough();
 
 type SongPayload = z.infer<typeof songPayloadSchema>;
@@ -392,9 +394,8 @@ async function buildSongInput(body: SongPayload, userId: string): Promise<SongIn
   // server-side id only when the payload omits one.
   const id = body.id ?? `song_${ulid()}`;
   const editCount = normalizeEditCount(body.editCount);
-  const sourceMelodyKind = isMelodySelectionKind(body.sourceMelodyKind)
-    ? body.sourceMelodyKind
-    : "corrected";
+  // Validated by sourceMelodyKindSchema (#311); default only when omitted.
+  const sourceMelodyKind = body.sourceMelodyKind ?? "corrected";
   const editDepth = deriveEditDepth(editCount);
   // Derive + validate lineage server-side from the owned parent (#297) rather
   // than trusting client-supplied root/depth.
@@ -655,6 +656,3 @@ function truncateNotificationText(value: string, maxLength: number): string {
   return `${trimmed.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
 
-function isMelodySelectionKind(value: unknown): value is MelodySelectionKind {
-  return typeof value === "string" && MELODY_SELECTION_KINDS.has(value as MelodySelectionKind);
-}

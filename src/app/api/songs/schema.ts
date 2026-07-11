@@ -1,6 +1,22 @@
 import { z } from "zod";
 import { VISUAL_ARTWORK_BUCKETS, VISUAL_ARTWORK_SOURCES } from "@/modules/shared/types";
 
+// Shared, bounded field schemas used by BOTH the create and update song routes
+// (#311) so the two boundaries can never drift. Collections are bounded by
+// count as well as element length; invalid values raise an explicit validation
+// error rather than silently falling back.
+export const sourceMelodyKindSchema = z.enum(["intent", "corrected", "musical"]);
+
+const TAG_MAX_LENGTH = 100;
+const TAG_MAX_COUNT = 32;
+export const songTagsSchema = z.array(z.string().max(TAG_MAX_LENGTH)).max(TAG_MAX_COUNT);
+
+const PALETTE_MAX_LENGTH = 64;
+const PALETTE_MAX_COUNT = 16;
+export const artworkPaletteSchema = z
+  .array(z.string().max(PALETTE_MAX_LENGTH))
+  .max(PALETTE_MAX_COUNT);
+
 export const trackStateSchema = z.object({
   enabled: z.boolean(),
   intensity: z.number(),
@@ -40,7 +56,7 @@ export const visualArtworkSchema = z.object({
     y: z.number(),
     scale: z.number().min(0.1),
   }),
-  palette: z.array(z.string()).optional(),
+  palette: artworkPaletteSchema.optional(),
   renderTreatment: z.object({
     intent: z.string().max(200).optional(),
     cropFormat: z.string().max(100).optional(),

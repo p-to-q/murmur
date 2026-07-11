@@ -21,7 +21,12 @@ import {
   shouldUseGuestSongFallback,
 } from "@/app/api/songs/db-fallback";
 import { log } from "@/lib/observability/log";
-import { strictArrangementStateSchema, strictVisualConfigSchema } from "../schema";
+import {
+  songTagsSchema,
+  sourceMelodyKindSchema,
+  strictArrangementStateSchema,
+  strictVisualConfigSchema,
+} from "../schema";
 
 const ROUTE = "/api/songs/[id]";
 const READ_RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
@@ -38,7 +43,8 @@ const updateSongSchema = z.object({
   parentSongId: z.string().min(1).max(100).nullable().optional(),
   rootSongId: z.string().min(1).max(100).nullable().optional(),
   lineageDepth: z.number().int().nonnegative().optional(),
-  sourceMelodyKind: z.enum(["intent", "corrected", "musical"]).optional(),
+  // Shared with the create route (#311) so the two contracts cannot drift.
+  sourceMelodyKind: sourceMelodyKindSchema.optional(),
   editCount: z.number().int().nonnegative().optional(),
   editDepth: z.enum(["fresh", "shaped", "reworked"]).optional(),
   mp3DataUrl: z.string().nullable().optional(),
@@ -46,7 +52,7 @@ const updateSongSchema = z.object({
   mp3StorageKey: z.string().max(1024).nullable().optional(),
   visualConfig: strictVisualConfigSchema.optional(),
   arrangementState: strictArrangementStateSchema.optional(),
-  tags: z.array(z.string()).optional(),
+  tags: songTagsSchema.optional(),
 }).strict();
 
 type SongUpdatePayload = z.infer<typeof updateSongSchema>;

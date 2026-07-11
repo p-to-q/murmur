@@ -274,7 +274,31 @@ describe("POST /api/songs", () => {
     expect(body.visualConfig).toEqual(expect.objectContaining({ artwork }));
   });
 
-  it("falls back to corrected when the request sends an unknown melody kind", async () => {
+  it("rejects an unknown source melody kind with an explicit validation error (#311)", async () => {
+    const response = await POST(buildRequest({
+      id: "song_bad_kind",
+      title: "Plain Draft",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      sourceMelodyKind: "unknown",
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    // Explicit validation error, not a silent fallback to "corrected".
+    expect(response.status).toBe(400);
+    expect(createdSongs).toHaveLength(0);
+    const body = await response.json() as { error: string; issues: Array<{ path: string }> };
+    expect(body.error).toBe("validation_error");
+    expect(body.issues.some((issue) => issue.path === "sourceMelodyKind")).toBe(true);
+  });
+
+  it("defaults to corrected and normalizes lineage/edit counts when the kind is omitted", async () => {
     const response = await POST(buildRequest({
       id: "song_2",
       title: "Plain Draft",
@@ -285,22 +309,9 @@ describe("POST /api/songs", () => {
       scaleType: "major",
       duration: 20,
       lineageDepth: -3,
-      sourceMelodyKind: "unknown",
       editCount: -9,
-      visualConfig: {
-        preset: "soft_gradient",
-        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
-        particleDensity: 0.4,
-        pulseSource: "energy",
-      },
-      arrangementState: {
-        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
-        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
-        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
-        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
-        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
-        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
-      },
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
       tags: [],
     }));
 
@@ -315,6 +326,65 @@ describe("POST /api/songs", () => {
     const body = await response.json() as Record<string, unknown>;
     expect(body.sourceMelodyKind).toBe("corrected");
     expect(body.editDepth).toBe("fresh");
+  });
+
+  it("rejects more tags than the bound allows (#311)", async () => {
+    const response = await POST(buildRequest({
+      id: "song_too_many_tags",
+      title: "Tag Flood",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: Array.from({ length: 40 }, (_, i) => `tag-${i}`),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(createdSongs).toHaveLength(0);
+    const body = await response.json() as { error: string; issues: Array<{ path: string }> };
+    expect(body.error).toBe("validation_error");
+    expect(body.issues.some((issue) => issue.path === "tags")).toBe(true);
+  });
+
+  it("rejects an artwork palette that exceeds the item bound (#311)", async () => {
+    const response = await POST(buildRequest({
+      id: "song_palette_flood",
+      title: "Palette Flood",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: {
+        ...BASE_VISUAL_CONFIG,
+        artwork: {
+          id: "art_1",
+          bucket: "tidal_mineral",
+          title: "Test",
+          artist: "Tester",
+          year: "2026",
+          source: "met",
+          sourceUrl: "https://example.com/art",
+          imagePath: "/artworks/x.jpg",
+          license: "Public Domain",
+          crop: { x: 0.5, y: 0.5, scale: 1 },
+          palette: Array.from({ length: 40 }, () => "#abcdef"),
+        },
+      },
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(400);
+    expect(createdSongs).toHaveLength(0);
+    const body = await response.json() as { error: string; issues: Array<{ path: string }> };
+    expect(body.error).toBe("validation_error");
+    expect(body.issues.some((issue) => issue.path.includes("palette"))).toBe(true);
   });
 
   it("rejects malformed payloads instead of forwarding raw JSON into persistence", async () => {
