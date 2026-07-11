@@ -52,6 +52,8 @@ import {
   shouldAutoRescueWithFixture,
 } from "@/lib/audio/fixture-rescue-policy";
 import { humErrorLogLevel } from "@/lib/audio/hum-error-log-level";
+import { shouldShowClientFallbackIndicator } from "@/lib/audio/client-fallback-indicator";
+import { showInfoNotification } from "@/lib/platform/app-notifications";
 import { shouldShowHumSupportCode } from "@/lib/audio/hum-support-visibility";
 import {
   TranscribeRequestError,
@@ -278,6 +280,7 @@ export function HumScreen() {
   const heardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPhaseRef = useRef<CapturePhase>("idle");
   const cancelPendingStartRef = useRef(false);
+  const clientFallbackIndicatorShownRef = useRef(false);
 
   // Audio-reactive aurora. The analyser drives amplitude only while capture
   // is active; the refs below are reset together by stopAudioAnalyser.
@@ -626,6 +629,21 @@ export function HumScreen() {
       if (blob) {
         void clearRecordingBlob();
         setCachedRecordingAvailable(false);
+      }
+      if (
+        shouldShowClientFallbackIndicator({
+          provider: result.provider,
+          alreadyShown: clientFallbackIndicatorShownRef.current,
+        })
+      ) {
+        clientFallbackIndicatorShownRef.current = true;
+        showInfoNotification(t("hum.client_fallback.toast"));
+        log("transcribe.client_fallback_shown", {
+          provider: result.provider,
+          indicator: "toast",
+        }, {
+          route: "/",
+        });
       }
       setRecordingState("done");
       // Vibe is its own route in v2; hand the journey off so the iris-close
