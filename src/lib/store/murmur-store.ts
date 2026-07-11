@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { VibeVersion, VersionGeneration } from "@/modules/shared/types";
+import { clearAllClipArtifacts } from "@/lib/store/generation-artifact-store";
 
 export type RecordingState = "idle" | "recording" | "processing" | "done" | "error";
 export type CreationRoute = "/vibe" | "/studio" | "/studio/name";
@@ -72,16 +73,17 @@ function stripSessionAudio(
   generation: VersionGeneration | undefined,
 ): VersionGeneration | undefined {
   if (!generation) return undefined;
-  // Browser blob URLs only live for the current tab session. Persist the shape
-  // of the generation, then let restored screens request a fresh playable clip.
+  // Browser blob URLs only live for the current tab session, so we always drop
+  // audioUrl. But we PRESERVE status + the stable operation identity (#300): a
+  // "ready" clip stays ready and is rehydrated from the durable artifact store
+  // (or resumed via its operationId) on restore — never turned back into a
+  // fresh pending clip that would be re-generated and re-charged.
   if (generation.status === "error") {
     return { ...generation, audioUrl: undefined };
   }
-  // "ready" clips lose their session audio, so restored screens re-request.
   return {
     ...generation,
     audioUrl: undefined,
-    status: "pending",
     error: undefined,
     errorCode: undefined,
   };
@@ -243,6 +245,8 @@ export const useMurmurStore = create<MurmurStore>((set, get) => {
         auditioningVersionId: null,
       });
       writeDraftSnapshot(get());
+      // The flow's clips are no longer reachable — release their durable bytes.
+      void clearAllClipArtifacts();
     },
   };
 });

@@ -37,6 +37,7 @@ import {
   createMagentaVersions,
   fetchMusicEngineStatus,
   getCachedMusicEngineStatus,
+  recoverVersionAudio,
   regenerateVersionAudio,
   shouldUseMagentaEngine,
 } from "@/modules/magenta/generate-magenta-versions";
@@ -256,16 +257,19 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     if (!restoredDraftAt || restoredRegenerationRef.current === restoredDraftAt) {
       return;
     }
-    const needsRegeneration = vibeVersions.filter(
+    // Restored clips lost their session blob URL. Recover each ready/pending
+    // clip from its durable artifact (exact audio, no charge) or resume its
+    // existing paid operation — never re-purchase a completed clip (#300).
+    const needsRecovery = vibeVersions.filter(
       (version) =>
         version.generation &&
-        version.generation.status === "pending" &&
+        version.generation.status !== "error" &&
         !version.generation.audioUrl,
     );
-    if (needsRegeneration.length === 0) return;
+    if (needsRecovery.length === 0) return;
     restoredRegenerationRef.current = restoredDraftAt;
-    for (const version of needsRegeneration) {
-      regenerateVersionAudio(version);
+    for (const version of needsRecovery) {
+      void recoverVersionAudio(version);
     }
   }, [restoredDraftAt, vibeVersions]);
 
