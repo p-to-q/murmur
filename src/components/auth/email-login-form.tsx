@@ -28,6 +28,7 @@ const VERIFY_CODE_COPY: Partial<Record<AuthRequestErrorCode, string>> = {
   invalid_code: "auth.code_invalid",
   expired: "auth.code_expired",
   max_attempts: "auth.code_max_attempts",
+  rate_limit: "auth.code_rate_limit",
 };
 
 interface EmailLoginFormProps {

@@ -350,8 +350,9 @@ export function GalleryScreen() {
             className="mt-12 flex justify-center"
           >
             <button
+              type="button"
               onClick={() => router.push("/")}
-              className="font-serif-italic text-[15px] text-[#D9421A] underline-mm transition-colors"
+              className="font-serif-italic text-[15px] text-[#B83212] underline-mm transition-colors"
             >
               ↻ {isShowingDemo
                 ? (t("gallery.start_hum") || "开始哼唱")

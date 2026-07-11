@@ -774,18 +774,21 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2"
             >
               <button
+                type="button"
                 onClick={handleRemixAgain}
-                className="font-serif-italic text-[15px] text-[#1A1A1A] hover:text-[#D9421A] underline-mm transition-colors"
+                className="font-serif-italic text-[15px] text-[#1A1A1A] hover:text-[#B83212] underline-mm transition-colors"
               >
                 {t("song.remix_again") || "Try new versions"}
               </button>
               <button
+                type="button"
                 onClick={handleEditAgain}
-                className="font-serif-italic text-[15px] text-[#D9421A] underline-mm transition-colors"
+                className="font-serif-italic text-[15px] text-[#B83212] underline-mm transition-colors"
               >
                 {t("song.edit_again") || "Edit again"}
               </button>
               <button
+                type="button"
                 onClick={() => router.push("/gallery")}
                 className="font-serif-italic text-[15px] text-[#8C8780] hover:text-[#1A1A1A] underline-mm transition-colors"
               >
