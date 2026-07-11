@@ -227,6 +227,61 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+const CLEAN_MELODY_SCALES = new Set<CleanMelody["scale"]>([
+  "major",
+  "minor",
+  "pentatonic",
+  "dorian",
+  "phrygian",
+]);
+const CLEAN_MELODY_CONTOURS = new Set<CleanMelody["contour"]>([
+  "rising",
+  "falling",
+  "wave",
+  "flat",
+]);
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function parseCleanMelody(value: unknown): CleanMelody | null {
+  if (!isRecord(value) || !Array.isArray(value.notes) || value.notes.length === 0) {
+    return null;
+  }
+  if (
+    typeof value.key !== "string" ||
+    !CLEAN_MELODY_SCALES.has(value.scale as CleanMelody["scale"]) ||
+    !isFiniteNumber(value.bpm) ||
+    !isFiniteNumber(value.duration) ||
+    !CLEAN_MELODY_CONTOURS.has(value.contour as CleanMelody["contour"])
+  ) {
+    return null;
+  }
+  const notes = value.notes;
+  if (
+    !notes.every(
+      (note) =>
+        isRecord(note) &&
+        isFiniteNumber(note.pitch) &&
+        isFiniteNumber(note.start) &&
+        isFiniteNumber(note.duration) &&
+        isFiniteNumber(note.velocity) &&
+        isFiniteNumber(note.confidence),
+    )
+  ) {
+    return null;
+  }
+  return {
+    notes: notes as CleanMelody["notes"],
+    key: value.key,
+    scale: value.scale as CleanMelody["scale"],
+    bpm: value.bpm,
+    duration: value.duration,
+    contour: value.contour as CleanMelody["contour"],
+  };
+}
+
 /**
  * Runtime-validate a parsed NDJSON line against the `TranscribeStreamEvent`
  * contract before dispatching (#224). Returns the typed event, or null when the
@@ -251,20 +306,8 @@ function parseStreamEvent(value: unknown): TranscribeStreamEvent | null {
     case "worker_started":
       return { phase: "worker_started" };
     case "interim_melody": {
-      const melody = value.melody;
-      if (!isRecord(melody) || !Array.isArray(melody.notes) || melody.notes.length === 0) {
-        return null;
-      }
-      if (
-        typeof melody.key !== "string" ||
-        typeof melody.scale !== "string" ||
-        typeof melody.bpm !== "number" ||
-        typeof melody.duration !== "number" ||
-        typeof melody.contour !== "string"
-      ) {
-        return null;
-      }
-      return { phase: "interim_melody", melody: melody as CleanMelody };
+      const melody = parseCleanMelody(value.melody);
+      return melody ? { phase: "interim_melody", melody } : null;
     }
     case "complete":
       if (!("result" in value)) return null;

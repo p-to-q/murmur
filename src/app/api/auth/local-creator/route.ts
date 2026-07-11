@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomUUID } from "crypto";
 import { LOCAL_CREATOR_FREE_NOTES } from "@murmur/core";
+import { getRequestId } from "@/lib/api/request-id";
 import {
   checkApiRateLimit,
   rateLimitedResponse,
@@ -26,7 +26,7 @@ export const runtime = "nodejs";
 const ROUTE = "/api/auth/local-creator";
 
 export async function POST(request: NextRequest) {
-  const requestId = request.headers.get("x-request-id") || randomUUID();
+  const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request, { allowGuestPreview: true });
   if (auth.ok && auth.source !== "guest" && auth.user.id !== "guest") {
     return NextResponse.json(
