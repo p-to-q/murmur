@@ -36,7 +36,9 @@ function hasStoredAudioUnlock() {
 function storeAudioUnlock() {
   try {
     sessionStorage.setItem(AUDIO_UNLOCK_STORAGE_KEY, "1");
-  } catch {}
+  } catch (e) {
+    console.warn("[audio-unlock] failed to persist unlock state:", e);
+  }
 }
 
 export function AudioUnlock() {

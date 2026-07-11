@@ -21,15 +21,30 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { visibility, title } = await resolveShareMeta(shareCode);
   const shouldIndex = visibility === "public";
 
+  const ogTitle = title ? `${title} – Murmur` : "Shared song – Murmur";
+  const ogDescription = "Listen to a song made from a hum in Murmur.";
+
   return {
     title: title ? `${title} – Murmur` : "Shared song",
-    description: "Listen to a song made from a hum in Murmur.",
+    description: ogDescription,
     robots: {
       index: shouldIndex,
       follow: shouldIndex,
     },
     alternates: {
       canonical: `/s/${shareCode}`,
+    },
+    openGraph: {
+      title: ogTitle,
+      description: ogDescription,
+      url: `/s/${shareCode}`,
+      images: ["/og?title=Shared+Song"],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: ogTitle,
+      description: ogDescription,
+      images: ["/og?title=Shared+Song"],
     },
   };
 }
