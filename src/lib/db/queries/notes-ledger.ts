@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { and, asc, eq, gt, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { db } from "../client";
 import { notesLedger } from "../schema/notes-ledger";
 import { users } from "../schema/users";
@@ -12,18 +12,23 @@ import {
 import {
   decideBillingAccountMaintenance,
   decideGrant,
+  decideOperationDelivery,
   decideRefundPoolsForOriginalSpend,
   decideRefund,
   decideSpend,
   decideSpendPoolsForCost,
   decideTopupReversal,
   dailyFreeAfterGrant,
+  deliveredReferenceFor,
+  deriveOperationState,
+  rechargeReferenceFor,
   refundReferenceFor,
   pendingRefundReferenceFor,
   originalLedgerIdFromPendingRef,
   trimDailyFreeAfterTopupReversal,
   accountNotesFromTotal,
   type ExistingLedgerRow,
+  type OperationState,
 } from "@/lib/billing/notes-ledger-decisions";
 
 // Re-export so existing imports `from "@/lib/db/queries/notes-ledger"`
@@ -31,22 +36,30 @@ import {
 // shadow the pure decisions, which live in their own module.
 export {
   decideGrant,
+  decideOperationDelivery,
   decideRefundPoolsForOriginalSpend,
   decideRefund,
   decideSpend,
   decideSpendPoolsForCost,
   decideTopupReversal,
   dailyFreeAfterGrant,
+  deliveredReferenceFor,
+  deriveOperationState,
+  rechargeReferenceFor,
   refundReferenceFor,
   pendingRefundReferenceFor,
   originalLedgerIdFromPendingRef,
   trimDailyFreeAfterTopupReversal,
   accountNotesFromTotal,
   type ExistingLedgerRow,
+  type OperationState,
 } from "@/lib/billing/notes-ledger-decisions";
 
 /** Ledger reason for the durable "a spend refund is owed" marker (#232). */
 const PENDING_REFUND_REASON: NotesReason = "refund:pending";
+
+/** Ledger reason for the durable "operation delivered" marker (#298). */
+const OPERATION_DELIVERED_REASON: NotesReason = "operation:delivered";
 
 export type SpendReason = Extract<NotesReason, `spend:${string}`>;
 export type GrantReason = Exclude<NotesReason, SpendReason>;
@@ -109,6 +122,13 @@ export type RefundNotesResult =
       balanceAfter: number;
       amount: number;
       duplicate: boolean;
+      /**
+       * True when the refund was skipped because the operation was already
+       * delivered (#298). Reported as a no-op (duplicate: true) so callers
+       * treat it as "nothing owed" — refunding delivered work is the exact bug
+       * the operation state machine prevents.
+       */
+      delivered: boolean;
     }
   | {
       ok: false;
@@ -394,10 +414,28 @@ export async function refundNotes(input: RefundNotesInput): Promise<RefundNotesR
       refundExternalRef,
     );
 
+    // #298: a refund must never reverse an operation that already reached the
+    // user. The delivered marker is read under the same user-row lock the
+    // refund would take, so a reconcile refund and a concurrent delivery
+    // settlement serialize — whichever wins, the operation ends at one net
+    // charge. Only checked when refunding to the default `refund:spend` reason
+    // (the delivered marker is keyed to that spend); custom-reason refunds are
+    // unaffected.
+    const deliveredMarker =
+      refundReason === "refund:spend"
+        ? await findIdempotentLedger(
+            tx,
+            original.userId,
+            OPERATION_DELIVERED_REASON,
+            deliveredReferenceFor(original.id),
+          )
+        : null;
+
     const decision = decideRefund({
       currentBalance: user.notesBalance,
       original,
       existingRefund,
+      delivered: deliveredMarker !== null,
     });
 
     if (decision.kind === "original_missing") {
@@ -405,6 +443,21 @@ export async function refundNotes(input: RefundNotesInput): Promise<RefundNotesR
     }
     if (decision.kind === "original_not_spend") {
       return { ok: false, reason: "original_not_a_spend" };
+    }
+
+    if (decision.kind === "delivered") {
+      // Operation already delivered — report a no-op so the reconciler counts it
+      // as settled instead of refunding delivered work.
+      return {
+        ok: true,
+        refundLedgerId: "",
+        originalLedgerId: original.id,
+        balanceBefore: user.notesBalance,
+        balanceAfter: user.notesBalance,
+        amount: decision.amount,
+        duplicate: true,
+        delivered: true,
+      };
     }
 
     if (decision.kind === "duplicate") {
@@ -416,6 +469,7 @@ export async function refundNotes(input: RefundNotesInput): Promise<RefundNotesR
         balanceAfter: decision.balanceAfter,
         amount: decision.amount,
         duplicate: true,
+        delivered: false,
       };
     }
 
@@ -455,6 +509,202 @@ export async function refundNotes(input: RefundNotesInput): Promise<RefundNotesR
       balanceAfter: decision.balanceAfter,
       amount: decision.amount,
       duplicate: false,
+      delivered: false,
+    };
+  });
+}
+
+// ─── Operation delivery settlement (#298) ──────────────────────────
+
+export type SettleOperationDeliveryInput = {
+  userId: string;
+  /** Ledger id of the operation's spend row (from spendNotes, fresh or duplicate). */
+  spendLedgerId: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type SettleOperationDeliveryResult =
+  | {
+      ok: true;
+      state: OperationState;
+      /** True once the durable `operation:delivered` marker exists for the spend. */
+      delivered: boolean;
+      /** True when a re-charge was written to restore the net charge after a prior refund. */
+      recharged: boolean;
+      /** True when this call found the operation already settled (idempotent replay). */
+      duplicate: boolean;
+      rechargeLedgerId: string | null;
+      balanceAfter: number;
+    }
+  | { ok: false; reason: "invalid_operation" | "user_not_found" };
+
+/**
+ * Settle a successfully delivered operation so it ends in exactly one net charge
+ * and no reconcile pass will refund it (#298).
+ *
+ * Called when a charged operation's work reaches the user. It writes a durable
+ * `operation:delivered` marker keyed to the spend, and — if a prior failed
+ * attempt had already *refunded* the spend (failure → refund → retry succeeded)
+ * — a re-charge that restores the single net charge. When the earlier failure
+ * only left a `refund:pending` marker (the refund never actually applied), the
+ * balance is already at one net charge, so no re-charge is written; the
+ * delivered marker simply makes `refundNotes` / the reconciler skip the owed
+ * refund for delivered work.
+ *
+ * Concurrency: everything runs under the user-row lock, so a delivery racing a
+ * reconcile refund (or a concurrent retry) serializes to one coherent outcome.
+ * Idempotent: the delivered marker and re-charge dedupe on their external_refs,
+ * so a replayed delivery is a no-op.
+ */
+export async function settleOperationDelivery(
+  input: SettleOperationDeliveryInput,
+): Promise<SettleOperationDeliveryResult> {
+  if (!input.spendLedgerId) return { ok: false, reason: "invalid_operation" };
+
+  return db.transaction(async (tx) => {
+    const [spend] = await tx
+      .select({
+        id: notesLedger.id,
+        userId: notesLedger.userId,
+        delta: notesLedger.delta,
+        reason: notesLedger.reason,
+        metadata: notesLedger.metadata,
+      })
+      .from(notesLedger)
+      .where(eq(notesLedger.id, input.spendLedgerId))
+      .limit(1);
+
+    // The row must be this user's spend (negative delta). A grant/refund/marker
+    // id, another user's row, or a missing id is never a settleable operation.
+    if (!spend || spend.userId !== input.userId || spend.delta >= 0) {
+      return { ok: false, reason: "invalid_operation" };
+    }
+
+    const user = await lockUserRow(tx, input.userId);
+    if (!user) return { ok: false, reason: "user_not_found" };
+
+    const refundRef = refundReferenceFor(spend.id);
+    const pendingRef = pendingRefundReferenceFor(spend.id);
+    const deliveredRef = deliveredReferenceFor(spend.id);
+    const rechargeRef = rechargeReferenceFor(spend.id);
+
+    // One locked read of every row keyed to this operation. external_refs are
+    // role-distinct (refund: / refund_pending: / op_delivered: / recharge:), so
+    // keying the result by external_ref classifies them unambiguously — and the
+    // lookup runs under the user-row lock taken above, so a concurrent delivery
+    // or reconcile refund sees a coherent snapshot.
+    const relatedRows = await tx
+      .select({ id: notesLedger.id, externalRef: notesLedger.externalRef })
+      .from(notesLedger)
+      .where(
+        and(
+          eq(notesLedger.userId, spend.userId),
+          inArray(notesLedger.externalRef, [refundRef, pendingRef, deliveredRef, rechargeRef]),
+        ),
+      );
+    const relatedByRef = new Map(
+      relatedRows.filter((row) => row.externalRef).map((row) => [row.externalRef!, row]),
+    );
+    const existingRefund = relatedByRef.get(refundRef) ?? null;
+    const existingPending = relatedByRef.get(pendingRef) ?? null;
+    const existingDelivered = relatedByRef.get(deliveredRef) ?? null;
+    const existingRecharge = relatedByRef.get(rechargeRef) ?? null;
+
+    const state = deriveOperationState({
+      hasSpend: true,
+      hasRefund: existingRefund !== null,
+      hasPending: existingPending !== null,
+      hasDelivered: existingDelivered !== null,
+    });
+
+    const decision = decideOperationDelivery({
+      spend: { delta: spend.delta, metadata: spend.metadata },
+      hasRefund: existingRefund !== null,
+      hasDelivered: existingDelivered !== null,
+      hasRecharge: existingRecharge !== null,
+      currentBalance: user.notesBalance,
+      currentDailyFree: user.dailyFreeNotesBalance,
+    });
+
+    if (decision.kind === "already_delivered") {
+      return {
+        ok: true,
+        state,
+        delivered: true,
+        recharged: existingRecharge !== null,
+        duplicate: true,
+        rechargeLedgerId: existingRecharge?.id ?? null,
+        balanceAfter: user.notesBalance,
+      };
+    }
+
+    // Record delivery. onConflictDoNothing keeps a racing/replayed settlement a
+    // no-op against the (user, reason, external_ref) idempotency index.
+    await tx
+      .insert(notesLedger)
+      .values({
+        id: createLedgerId(),
+        userId: spend.userId,
+        delta: 0,
+        reason: OPERATION_DELIVERED_REASON,
+        externalRef: deliveredRef,
+        metadata: {
+          ...(input.metadata ?? {}),
+          settles: spend.id,
+          priorState: state,
+        },
+      })
+      .onConflictDoNothing();
+
+    let rechargeLedgerId: string | null = null;
+    let balanceAfter = user.notesBalance;
+
+    if (decision.writeRecharge) {
+      const newRechargeId = createLedgerId();
+      const inserted = await tx
+        .insert(notesLedger)
+        .values({
+          id: newRechargeId,
+          userId: spend.userId,
+          delta: -decision.rechargeAmount,
+          reason: spend.reason,
+          externalRef: rechargeRef,
+          metadata: {
+            ...(input.metadata ?? {}),
+            recharges: spend.id,
+            spendPools: decision.rechargePools,
+            reason: "operation_delivery_recharge",
+          },
+        })
+        .onConflictDoNothing()
+        .returning({ id: notesLedger.id });
+
+      // Only move the balance when THIS call wrote the re-charge; a concurrent
+      // settlement that already inserted it must not double-debit.
+      if (inserted[0]) {
+        rechargeLedgerId = newRechargeId;
+        balanceAfter = decision.balanceAfter;
+        await tx
+          .update(users)
+          .set({
+            notesBalance: decision.balanceAfter,
+            dailyFreeNotesBalance: decision.dailyFreeAfter,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, spend.userId));
+      } else {
+        rechargeLedgerId = existingRecharge?.id ?? null;
+      }
+    }
+
+    return {
+      ok: true,
+      state: "delivered",
+      delivered: true,
+      recharged: rechargeLedgerId !== null,
+      duplicate: false,
+      rechargeLedgerId,
+      balanceAfter,
     };
   });
 }
