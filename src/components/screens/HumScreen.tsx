@@ -185,6 +185,9 @@ function variantForCode(code: TranscribeRequestErrorCode): HumErrorVariant {
     case "billing_unavailable":
     case "server_error":
     case "network_error":
+    // In-request refund failed, but a durable refund:pending marker was written
+    // (#232) so reconcile restores the note — surface a retryable error card.
+    case "refund_pending":
       return "unavailable";
   }
 }
