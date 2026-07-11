@@ -15,6 +15,15 @@ let pendingPurchase: {
 let eventInsertConflicts = false;
 let reclaimedEvent: { id: string; status: string } | null = null;
 let selectCalls = 0;
+let grantResult: { ok: boolean; reason?: string; ledgerId?: string; balanceAfter?: number; duplicate?: boolean } = {
+  ok: true,
+  ledgerId: "nle_zpay_tx",
+  balanceAfter: 130,
+  duplicate: false,
+};
+// When set, the purchase-succeeded UPDATE throws to simulate a crash between
+// the in-transaction grant and the settlement writes (#319).
+let failPurchaseSettlement = false;
 
 const eventInserts: Array<Record<string, unknown>> = [];
 const eventUpdates: Array<Record<string, unknown>> = [];
@@ -62,8 +71,10 @@ const dbMock = {
   update: () => ({
     set: (row: Record<string, unknown>) => ({
       where: async () => {
-        if ("rawPayload" in row || row.status === "succeeded") purchaseUpdates.push(row);
-        else eventUpdates.push(row);
+        if ("rawPayload" in row || row.status === "succeeded") {
+          if (failPurchaseSettlement) throw new Error("settlement update failed");
+          purchaseUpdates.push(row);
+        } else eventUpdates.push(row);
         return [];
       },
     }),
@@ -84,13 +95,13 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
       duplicate: false,
     };
   }),
-  grantNotesInTransaction: mock(async () => ({
-    ok: true as const,
-    ledgerId: "nle_zpay_tx",
-    balanceBefore: 0,
-    balanceAfter: 0,
-    duplicate: false,
-  })),
+  grantNotesInTransaction: mock(async (_tx: unknown, input: Record<string, unknown>) => {
+    grantInputs.push(input);
+    return {
+      balanceBefore: 0,
+      ...grantResult,
+    };
+  }),
   getNotesBalance: async () => ({
     ok: true as const,
     userId: "usr_zpay",
@@ -162,6 +173,13 @@ beforeEach(() => {
   eventInsertConflicts = false;
   reclaimedEvent = null;
   selectCalls = 0;
+  failPurchaseSettlement = false;
+  grantResult = {
+    ok: true,
+    ledgerId: "nle_zpay_tx",
+    balanceAfter: 130,
+    duplicate: false,
+  };
   eventInserts.length = 0;
   eventUpdates.length = 0;
   purchaseUpdates.length = 0;
@@ -210,6 +228,46 @@ describe("POST /api/billing/zpay-notify", () => {
     });
     expect(purchaseUpdates.at(-1)).toMatchObject({ status: "succeeded" });
     expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
+  it("grants notes and settles purchase + event in one transaction (#319)", async () => {
+    const response = await POST(request());
+
+    await expectZpayResponse(response, 200, "success");
+    // The grant ran through the in-transaction boundary, not its own commit.
+    expect(grantInputs).toHaveLength(1);
+    expect(grantInputs[0]).toMatchObject({ reason: "purchase:topup", amount: 130 });
+    // Both settlement writes landed alongside the grant.
+    expect(purchaseUpdates.at(-1)).toMatchObject({ status: "succeeded" });
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
+  });
+
+  it("rolls the grant back and stays retryable when settlement fails mid-transaction (#319)", async () => {
+    // Inject a crash between the grant and the purchase/event settlement.
+    failPurchaseSettlement = true;
+
+    const response = await POST(request());
+
+    // Retryable 500 so ZPay redelivers (or the reconcile cron completes it);
+    // the purchase-succeeded write never committed, so no partial state leaks.
+    await expectZpayResponse(response, 500, "fail");
+    expect(purchaseUpdates).toHaveLength(0);
+    // The webhook event is recorded failed (outside the rolled-back tx) so the
+    // durable trail shows the settlement did not complete.
+    expect(eventUpdates.at(-1)).toMatchObject({ status: "failed" });
+  });
+
+  it("stays retryable and records failure when the in-transaction grant fails (#319)", async () => {
+    grantResult = { ok: false, reason: "user_not_found" };
+
+    const response = await POST(request());
+
+    await expectZpayResponse(response, 500, "fail");
+    expect(purchaseUpdates).toHaveLength(0);
+    expect(eventUpdates.at(-1)).toMatchObject({
+      status: "failed",
+      error: "grant failed: user_not_found",
+    });
   });
 
   it("rejects amount mismatches before granting notes", async () => {
