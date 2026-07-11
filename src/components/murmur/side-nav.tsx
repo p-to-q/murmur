@@ -90,7 +90,9 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
   const lang = useCurrentLang();
   const setLang = useI18nStore((s) => s.setLang);
   const { balance } = useUserBalance();
-  const { auditioningVersionId } = useMurmurStore();
+  const auditioningVersionId = useMurmurStore(
+    (state) => state.auditioningVersionId,
+  );
   const audioActive = auditioningVersionId !== null;
   const { isRegistered } = useCurrentAccount();
   const isLoggedIn = isRegistered;

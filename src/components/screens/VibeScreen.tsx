@@ -48,6 +48,7 @@ import { hashString } from "@/lib/music/seeded-random";
 import { VIBE_PRESETS } from "@/presets/vibes";
 import { formatVibeSupportCode } from "@/lib/observability/support-code";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
+import { useShallow } from "zustand/react/shallow";
 
 /** Visual phases of the route arrival. */
 type Phase = "closing" | "opening" | "cards";
@@ -161,7 +162,23 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     resetFlow,
     humStyleBlob,
     restoredDraftAt,
-  } = useMurmurStore();
+  } = useMurmurStore(
+    useShallow((state) => ({
+      vibeVersions: state.vibeVersions,
+      setVibeVersions: state.setVibeVersions,
+      setCurrentVersion: state.setCurrentVersion,
+      setCurrentDraftId: state.setCurrentDraftId,
+      setCurrentFlowId: state.setCurrentFlowId,
+      setActiveCreationRoute: state.setActiveCreationRoute,
+      currentDraftId: state.currentDraftId,
+      currentFlowId: state.currentFlowId,
+      auditioningVersionId: state.auditioningVersionId,
+      setAuditioning: state.setAuditioning,
+      resetFlow: state.resetFlow,
+      humStyleBlob: state.humStyleBlob,
+      restoredDraftAt: state.restoredDraftAt,
+    })),
+  );
 
   const [phase, setPhase] = useState<Phase>("closing");
   const [pickingId, setPickingId] = useState<string | null>(null);

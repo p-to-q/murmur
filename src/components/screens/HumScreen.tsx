@@ -13,6 +13,7 @@ import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
 import { HumOnboardingOverlay } from "@/components/screens/hum-onboarding";
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import { useShallow } from "zustand/react/shallow";
 import { resetStageTracking, trackStageEntered } from "@/lib/observability/stage-tracking";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
 import {
@@ -227,7 +228,20 @@ export function HumScreen() {
     setProcessingMessage,
     processingMessage,
     resetFlow,
-  } = useMurmurStore();
+  } = useMurmurStore(
+    useShallow((state) => ({
+      recordingState: state.recordingState,
+      setRecordingState: state.setRecordingState,
+      setVibeVersions: state.setVibeVersions,
+      setHumStyleBlob: state.setHumStyleBlob,
+      setCurrentDraftId: state.setCurrentDraftId,
+      setCurrentFlowId: state.setCurrentFlowId,
+      currentFlowId: state.currentFlowId,
+      setProcessingMessage: state.setProcessingMessage,
+      processingMessage: state.processingMessage,
+      resetFlow: state.resetFlow,
+    })),
+  );
   const repairBias = usePreferencesStore((state) => state.repairBias);
   const t = useTranslator();
   const i18nHydrated = useI18nStore((state) => state.hydrated);
