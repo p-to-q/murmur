@@ -175,17 +175,29 @@ function request(): NextRequest {
 function requestWithBody(body: string): NextRequest {
   return new Request("http://test.local/api/billing/zpay-notify", {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-request-id": "req_zpay_notify",
+    },
     body,
   }) as unknown as NextRequest;
+}
+
+async function expectZpayResponse(
+  response: Response,
+  status: number,
+  body: string,
+): Promise<void> {
+  expect(response.status).toBe(status);
+  expect(response.headers.get("X-Request-Id")).toBe("req_zpay_notify");
+  expect(await response.text()).toBe(body);
 }
 
 describe("POST /api/billing/zpay-notify", () => {
   it("grants notes when the paid amount matches the pending purchase", async () => {
     const response = await POST(request());
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe("success");
+    await expectZpayResponse(response, 200, "success");
     expect(grantInputs).toHaveLength(1);
     expect(grantInputs[0]).toMatchObject({
       userId: "usr_zpay",
@@ -205,8 +217,7 @@ describe("POST /api/billing/zpay-notify", () => {
 
     const response = await POST(request());
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe("success");
+    await expectZpayResponse(response, 200, "success");
     expect(grantInputs).toHaveLength(0);
     expect(purchaseUpdates).toHaveLength(0);
     expect(eventUpdates.at(-1)).toMatchObject({
@@ -223,8 +234,7 @@ describe("POST /api/billing/zpay-notify", () => {
 
     const response = await POST(request());
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe("success");
+    await expectZpayResponse(response, 200, "success");
     expect(grantInputs).toHaveLength(0);
     expect(purchaseUpdates).toHaveLength(0);
     expect(eventUpdates.at(-1)).toMatchObject({
@@ -241,8 +251,7 @@ describe("POST /api/billing/zpay-notify", () => {
 
     const response = await POST(request());
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe("success");
+    await expectZpayResponse(response, 200, "success");
     expect(grantInputs).toHaveLength(0);
     expect(purchaseUpdates).toHaveLength(0);
     expect(eventUpdates.at(-1)).toMatchObject({
@@ -259,8 +268,7 @@ describe("POST /api/billing/zpay-notify", () => {
 
     const response = await POST(request());
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe("success");
+    await expectZpayResponse(response, 200, "success");
     expect(grantInputs).toHaveLength(0);
     expect(purchaseUpdates).toHaveLength(0);
     expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
@@ -274,8 +282,7 @@ describe("POST /api/billing/zpay-notify", () => {
 
     const response = await POST(request());
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe("success");
+    await expectZpayResponse(response, 200, "success");
     expect(grantInputs).toHaveLength(0);
     expect(purchaseUpdates).toHaveLength(0);
     expect(eventUpdates.at(-1)).toMatchObject({
@@ -287,8 +294,7 @@ describe("POST /api/billing/zpay-notify", () => {
   it("rejects duplicate form keys before recording a webhook event", async () => {
     const response = await POST(requestWithBody("money=42.90&money=0.01"));
 
-    expect(response.status).toBe(400);
-    expect(await response.text()).toBe("fail");
+    await expectZpayResponse(response, 400, "fail");
     expect(eventInserts).toHaveLength(0);
     expect(grantInputs).toHaveLength(0);
   });
@@ -299,8 +305,7 @@ describe("POST /api/billing/zpay-notify", () => {
 
     const response = await POST(request());
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe("success");
+    await expectZpayResponse(response, 200, "success");
     expect(grantInputs).toHaveLength(1);
     expect(eventUpdates.at(-1)).toMatchObject({ status: "processed" });
   });
@@ -311,8 +316,7 @@ describe("POST /api/billing/zpay-notify", () => {
 
     const response = await POST(request());
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe("success");
+    await expectZpayResponse(response, 200, "success");
     expect(grantInputs).toHaveLength(0);
     expect(eventUpdates).toHaveLength(0);
   });
@@ -322,8 +326,7 @@ describe("POST /api/billing/zpay-notify", () => {
 
     const response = await POST(request());
 
-    expect(response.status).toBe(200);
-    expect(await response.text()).toBe("success");
+    await expectZpayResponse(response, 200, "success");
     expect(eventInserts).toHaveLength(0);
     expect(grantInputs).toHaveLength(0);
   });
@@ -333,8 +336,7 @@ describe("POST /api/billing/zpay-notify", () => {
 
     const response = await POST(request());
 
-    expect(response.status).toBe(202);
-    expect(await response.text()).toBe("pending");
+    await expectZpayResponse(response, 202, "pending");
     expect(eventInserts).toHaveLength(0);
     expect(grantInputs).toHaveLength(0);
   });

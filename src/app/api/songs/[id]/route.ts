@@ -57,13 +57,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const demo = getDemoSong(id);
     if (!demo) return errorResponse("not_found", 404, requestId);
     const { mp3Url, ...rest } = demo;
-    return NextResponse.json({ ...rest, mp3DataUrl: null, mp3Url });
+    return NextResponse.json(
+      { ...rest, mp3DataUrl: null, mp3Url },
+      { headers: { "X-Request-Id": requestId } },
+    );
   }
 
   const auth = await resolveRequestAuth(req, {
     allowGuestPreview: shouldAllowLocalPreviewFallback(req),
   });
-  if (!auth.ok) return auth.response;
+  if (!auth.ok) {
+    auth.response.headers.set("X-Request-Id", requestId);
+    return auth.response;
+  }
   const userId = auth.user.id;
 
   const rateLimit = await checkApiRateLimit({
@@ -89,7 +95,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!song) {
       return errorResponse("not_found", 404, requestId);
     }
-    return NextResponse.json(song);
+    return NextResponse.json(song, {
+      headers: { "X-Request-Id": requestId },
+    });
   } catch (err) {
     if (shouldUseGuestSongFallback(req, userId) && isDatabaseUnavailable(err)) {
       const fallbackSong = getLocalSongByIdForUserFallback(id, userId);
@@ -97,7 +105,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         return errorResponse("not_found", 404, requestId);
       }
       return NextResponse.json(fallbackSong, {
-        headers: { "X-Murmur-Fallback": "local-guest-song" },
+        headers: {
+          "X-Murmur-Fallback": "local-guest-song",
+          "X-Request-Id": requestId,
+        },
       });
     }
     log("song.get_failed", {
@@ -118,7 +129,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const auth = await resolveRequestAuth(req, {
     allowGuestPreview: shouldAllowLocalPreviewFallback(req),
   });
-  if (!auth.ok) return auth.response;
+  if (!auth.ok) {
+    auth.response.headers.set("X-Request-Id", requestId);
+    return auth.response;
+  }
   const userId = auth.user.id;
   const { id } = await params;
 
@@ -173,7 +187,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!updated) {
       return errorResponse("not_found", 404, requestId);
     }
-    return NextResponse.json(updated);
+    return NextResponse.json(updated, {
+      headers: { "X-Request-Id": requestId },
+    });
   } catch (err) {
     if (shouldUseGuestSongFallback(req, userId) && isDatabaseUnavailable(err)) {
       const updated = updateLocalSongForUserFallback(id, userId, body);
@@ -181,7 +197,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         return errorResponse("not_found", 404, requestId);
       }
       return NextResponse.json(updated, {
-        headers: { "X-Murmur-Fallback": "local-guest-song" },
+        headers: {
+          "X-Murmur-Fallback": "local-guest-song",
+          "X-Request-Id": requestId,
+        },
       });
     }
 
@@ -203,7 +222,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const auth = await resolveRequestAuth(req, {
     allowGuestPreview: shouldAllowLocalPreviewFallback(req),
   });
-  if (!auth.ok) return auth.response;
+  if (!auth.ok) {
+    auth.response.headers.set("X-Request-Id", requestId);
+    return auth.response;
+  }
   const userId = auth.user.id;
   const { id } = await params;
 
@@ -224,7 +246,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (!deleted) {
       return errorResponse("not_found", 404, requestId);
     }
-    return NextResponse.json({ success: true });
+    return NextResponse.json(
+      { success: true },
+      { headers: { "X-Request-Id": requestId } },
+    );
   } catch (err) {
     if (shouldUseGuestSongFallback(req, userId) && isDatabaseUnavailable(err)) {
       const deleted = deleteLocalSongForUserFallback(id, userId);
@@ -233,7 +258,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       }
       return NextResponse.json(
         { success: true },
-        { headers: { "X-Murmur-Fallback": "local-guest-song" } },
+        {
+          headers: {
+            "X-Murmur-Fallback": "local-guest-song",
+            "X-Request-Id": requestId,
+          },
+        },
       );
     }
     log("song.delete_failed", {
@@ -275,5 +305,4 @@ function requestedView(req: NextRequest): string | null {
     return null;
   }
 }
-
 

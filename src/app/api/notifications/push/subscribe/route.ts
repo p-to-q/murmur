@@ -42,7 +42,10 @@ const MUTATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
 export async function POST(request: NextRequest) {
   const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
-  if (!auth.ok) return auth.response;
+  if (!auth.ok) {
+    auth.response.headers.set("X-Request-Id", requestId);
+    return auth.response;
+  }
 
   const rateLimit = await checkApiRateLimit({
     route: ROUTE,
@@ -66,7 +69,7 @@ export async function POST(request: NextRequest) {
         message: "Invalid push subscription payload",
         issues: error instanceof z.ZodError ? error.issues : undefined,
       },
-      { status: 400 },
+      { status: 400, headers: { "X-Request-Id": requestId } },
     );
   }
 
@@ -80,11 +83,14 @@ export async function POST(request: NextRequest) {
       timezone: body.timezone,
     });
 
-    return NextResponse.json({
-      ok: true,
-      subscriptionId: row.id,
-      endpointHost: safeEndpointHost(row.endpoint),
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        subscriptionId: row.id,
+        endpointHost: safeEndpointHost(row.endpoint),
+      },
+      { headers: { "X-Request-Id": requestId } },
+    );
   } catch (error) {
     log("notifications.subscribe_failed", {
       phase: "subscribe",
@@ -97,14 +103,18 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json(
       { error: "push_subscribe_failed" },
-      { status: 500 },
+      { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
 }
 
 export async function DELETE(request: NextRequest) {
+  const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
-  if (!auth.ok) return auth.response;
+  if (!auth.ok) {
+    auth.response.headers.set("X-Request-Id", requestId);
+    return auth.response;
+  }
 
   let body: z.infer<typeof unsubscribeSchema>;
   try {
@@ -116,7 +126,7 @@ export async function DELETE(request: NextRequest) {
         message: "Invalid push unsubscribe payload",
         issues: error instanceof z.ZodError ? error.issues : undefined,
       },
-      { status: 400 },
+      { status: 400, headers: { "X-Request-Id": requestId } },
     );
   }
 
@@ -125,7 +135,10 @@ export async function DELETE(request: NextRequest) {
       endpoint: body.endpoint,
       userId: auth.user.id,
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json(
+      { ok: true },
+      { headers: { "X-Request-Id": requestId } },
+    );
   } catch (error) {
     log("notifications.unsubscribe_failed", {
       phase: "unsubscribe",
@@ -139,7 +152,7 @@ export async function DELETE(request: NextRequest) {
     });
     return NextResponse.json(
       { error: "push_unsubscribe_failed" },
-      { status: 500 },
+      { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
 }
