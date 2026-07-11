@@ -348,6 +348,42 @@ describe("POST /api/music/generate", () => {
     expect(lastRefundInputs).toHaveLength(0);
   });
 
+  it("keys spend idempotency on the clip operation id so a resumed clip reuses the ref (#300)", async () => {
+    nextEngineMode = "serverless";
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_music", email: null, name: "Music", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_music",
+    };
+    const clipId = "clip-op-abcdef123456";
+
+    await POST(buildRequest("req_clip_a", { "x-generation-clip-id": clipId }));
+    await POST(buildRequest("req_clip_b", { "x-generation-clip-id": clipId }));
+
+    expect(lastSpendInputs).toHaveLength(2);
+    // Same clip id → identical spend idempotency key across requests, so the
+    // ledger dedupes a resumed/retried clip instead of double-charging it.
+    expect(lastSpendInputs[0]?.externalRef).toBe(`music_generate:${clipId}`);
+    expect(lastSpendInputs[1]?.externalRef).toBe(`music_generate:${clipId}`);
+  });
+
+  it("ignores a malformed clip id and falls back to a per-request spend ref (#300)", async () => {
+    nextEngineMode = "serverless";
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_music", email: null, name: "Music", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_music",
+    };
+
+    await POST(buildRequest("req_bad_clip", { "x-generation-clip-id": "not a valid id!" }));
+
+    expect(lastSpendInputs).toHaveLength(1);
+    expect(lastSpendInputs[0]?.externalRef).toStartWith("music_generate:");
+    expect(lastSpendInputs[0]?.externalRef).not.toContain("not a valid id");
+  });
+
   it("returns 402 before RunPod when notes are insufficient", async () => {
     nextEngineMode = "serverless";
     nextBalance = {

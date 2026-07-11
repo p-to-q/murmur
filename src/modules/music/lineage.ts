@@ -29,6 +29,62 @@ export function resolveParentSongId(input: LineageLike): string | null {
     : null;
 }
 
+export type ResolvedServerLineage = {
+  parentSongId: string | null;
+  rootSongId: string;
+  lineageDepth: number;
+};
+
+type ParentLineageRow = {
+  id: string;
+  userId: string;
+  rootSongId: string | null;
+  lineageDepth: number | null;
+};
+
+/**
+ * Derive and validate parent → root → depth lineage on the server (#297).
+ *
+ * When the payload names a parent the caller owns, root and depth are computed
+ * authoritatively from that parent (`root = parent.root ?? parent.id`,
+ * `depth = parent.depth + 1`) rather than trusting client-supplied values.
+ * When the parent is absent or not owned (e.g. remixing a demo), we fall back
+ * to the client's normalized values so those flows keep working.
+ *
+ * `loadParent` is injected so this module stays free of DB imports and usable
+ * from the client bundle.
+ */
+export async function deriveServerLineage(input: {
+  id: string;
+  userId: string;
+  parentSongId?: string | null;
+  rootSongId?: string | null;
+  lineageDepth?: number | null;
+  loadParent: (parentSongId: string) => Promise<ParentLineageRow | null>;
+}): Promise<ResolvedServerLineage> {
+  const parentSongId = resolveParentSongId(input);
+
+  if (parentSongId) {
+    const parent = await input.loadParent(parentSongId);
+    if (parent && parent.userId === input.userId) {
+      return {
+        parentSongId,
+        rootSongId:
+          typeof parent.rootSongId === "string" && parent.rootSongId.length > 0
+            ? parent.rootSongId
+            : parent.id,
+        lineageDepth: normalizeLineageDepth(parent.lineageDepth) + 1,
+      };
+    }
+  }
+
+  return {
+    parentSongId,
+    rootSongId: resolveRootSongId(input),
+    lineageDepth: normalizeLineageDepth(input.lineageDepth),
+  };
+}
+
 export function buildRemixLineage(song: SongCard) {
   return {
     parentSongId: song.id,

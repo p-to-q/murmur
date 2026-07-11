@@ -185,6 +185,15 @@ type VersionGenerationBase = {
   styleMix: number;
   currentBalance?: number;
   cost?: number;
+  /**
+   * Stable per-clip operation identity for durable recovery + spend
+   * idempotency (#300). Persists across reload in the draft; the paid unit is
+   * this id, so resuming the same clip never double-charges. Optional for
+   * legacy drafts minted before #300.
+   */
+  operationId?: string;
+  /** Stable per-batch (fan-out) operation identity; shared by sibling clips. */
+  batchOperationId?: string;
 };
 
 export type VersionGeneration = VersionGenerationBase & (
@@ -222,10 +231,36 @@ export type VibeVersion = {
   captureQuality?: "reduced";
 };
 
+/**
+ * Creation provenance persisted alongside a saved song (#297). Records where
+ * the artifact came from so lineage, recovery, and audits can reconstruct the
+ * exact flow/recording/generation that produced it. Every field is optional so
+ * legacy rows (which have none) and partial captures stay valid.
+ */
+export type SongProvenance = {
+  /** originFlowId of the creation flow. */
+  flow?: string;
+  /** Draft id — the client's stable identity for this recording session. */
+  draftId?: string;
+  /** Recording/transcription operation, when the client retains one. */
+  recordingOperationId?: string;
+  /** Stable generation batch operation id (see generation identity, #300). */
+  generationBatchId?: string;
+  /** Stable generation clip/slot operation id — the audited clip (#300). */
+  generationClipId?: string;
+  /** Which batch this clip belonged to (0 for the first fan-out). */
+  generationBatchIndex?: number;
+  sourceType?: "hum" | "demo" | "library";
+  /** "reduced" when the seed melody came from the client-side pitch fallback. */
+  captureQuality?: "reduced";
+};
+
 export type SongCard = {
   id: string;
   title: string;
   mp3Url?: string;
+  /** False for an incomplete/draft song whose audio never rendered (#291). */
+  hasAudio?: boolean;
   visibility?: "private" | "unlisted" | "public";
   shareCode?: string | null;
   visualHtmlUrl?: string;

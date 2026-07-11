@@ -46,6 +46,7 @@ import {
   buildSavedSongRemixVersions,
 } from "@/modules/music/saved-song-version";
 import { buildLineageTrail } from "@/modules/music/lineage";
+import { isIncompleteSongArtifact } from "@/modules/music/song-artifact";
 import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
@@ -80,6 +81,15 @@ type RelatedSong = Pick<Song, "id" | "title" | "vibe" | "tags">;
 type ExportKey = "audio" | "video" | "share" | "link";
 type ShareCardMode = "image" | "video";
 const CJK_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
+
+// Pick the download extension for an audio source. Handles both legacy base64
+// data URLs (`data:audio/wav;\u2026`) and object-storage URLs (`\u2026/master.wav`);
+// defaults to mp3, which is what the renderer emits on the happy path.
+function audioFileExtension(audioSrc: string): "wav" | "mp3" {
+  if (/^data:audio\/(wav|x-wav|wave)/i.test(audioSrc)) return "wav";
+  if (/\.wav(?:[?#]|$)/i.test(audioSrc)) return "wav";
+  return "mp3";
+}
 
 // Shared entry-motion vocabulary for the detail screen: a staggered
 // fade + slide-up on the app's signature ease. Honors reduced-motion by
@@ -293,7 +303,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     }
     setBusy("audio");
     try {
-      const ext = audioSrc.startsWith("data:audio/wav") ? "wav" : "mp3";
+      const ext = audioFileExtension(audioSrc);
       const a = document.createElement("a");
       a.href = audioSrc;
       a.download = `${slug}.${ext}`;
@@ -728,6 +738,22 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               onOpenSong={(id) => router.push(`/song/${id}`)}
               reduceMotion={reduceMotion}
             />
+
+            {/* Incomplete/draft state — audio never rendered (#291) */}
+            {isIncompleteSongArtifact(song) && (
+              <motion.div
+                {...entryMotion(reduceMotion, { y: 6, delay: 0.2 })}
+                className="mt-10 rounded-[18px] border border-[#E7C9B3] bg-[#FBF1E9] px-5 py-4"
+              >
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[#B26B45]">
+                  {t("song.incomplete.badge") || "Incomplete draft"}
+                </p>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-[#8A6A57]">
+                  {t("song.incomplete.body") ||
+                    "This song's audio didn't finish rendering, so it can't be shared or downloaded yet. Reopen it in the studio to finish it."}
+                </p>
+              </motion.div>
+            )}
 
             {/* Export list */}
             <motion.p

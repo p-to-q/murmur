@@ -162,6 +162,20 @@
       "when": 1783685389762,
       "tag": "0022_push_subscriptions_active_id_index",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786000000000,
+      "tag": "0024_song_object_audio",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1786000000001,
+      "tag": "0025_song_artifact_provenance",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { regenerateVersionAudio } from "@/modules/magenta/generate-magenta-versions";
+import { recoverVersionAudio } from "@/modules/magenta/generate-magenta-versions";
 import type { VibeVersion } from "@/modules/shared/types";
 
 export function useRestoredVersionAudio(
@@ -15,10 +15,14 @@ export function useRestoredVersionAudio(
     if (!restoredDraftAt || restoredRegenerationRef.current === restoredDraftAt) {
       return;
     }
-    if (version?.generation?.status !== "pending" || version.generation.audioUrl) {
+    const generation = version?.generation;
+    // Recover the restored clip without re-purchasing it: rehydrate the exact
+    // audited clip from durable storage, or resume its existing paid
+    // operation (#300). Error clips keep their explicit retry affordance.
+    if (!generation || generation.status === "error" || generation.audioUrl) {
       return;
     }
     restoredRegenerationRef.current = restoredDraftAt;
-    regenerateVersionAudio(version);
+    void recoverVersionAudio(version!);
   }, [restoredDraftAt, version]);
 }

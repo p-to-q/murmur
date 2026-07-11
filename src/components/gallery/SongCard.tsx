@@ -23,6 +23,10 @@ export interface SongCardProps {
   onClick: (id: string) => void;
   /** When provided, shows a corner delete affordance on the cover. */
   onDelete?: (id: string) => void;
+  /** Incomplete/draft song — audio never rendered (#291). Shows a badge. */
+  isDraft?: boolean;
+  /** Localized "Draft" label for the badge. */
+  draftLabel?: string;
 }
 
 function makeEntryVariants(reduceMotion: boolean | null) {
@@ -87,6 +91,8 @@ export const SongCard = memo(function SongCard({
   index,
   onClick,
   onDelete,
+  isDraft,
+  draftLabel,
 }: SongCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -140,6 +146,13 @@ export const SongCard = memo(function SongCard({
             animate={{ scale: isHovered ? 1.035 : 1 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
           />
+
+          {/* Incomplete/draft badge — audio never rendered (#291) */}
+          {isDraft && (
+            <div className="absolute top-2 left-2 z-10 rounded-full bg-[#1A1A1A]/55 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.16em] text-white/95 backdrop-blur-sm">
+              {draftLabel || "Draft"}
+            </div>
+          )}
 
           <div className="absolute inset-[42%] rounded-full bg-[#F5F1EB]/70 shadow-[inset_0_1px_5px_rgba(26,26,26,0.16)] ring-1 ring-[#1A1A1A]/10 backdrop-blur-[1px]" />
           <div className="absolute inset-[48.5%] rounded-full bg-[#1A1A1A]/20" />

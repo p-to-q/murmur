@@ -20,6 +20,7 @@ import {
   getLocalSongSummariesByUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
 import { isDatabaseUnavailable, objectFieldAsString } from "@/app/api/songs/db-fallback";
+import { uploadSongMasterFromDataUrl } from "@/lib/storage/song-audio";
 import { isObject } from "@/lib/utils/is-object";
 import { log } from "@/lib/observability/log";
 import {
@@ -31,16 +32,25 @@ import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { ulid } from "ulid";
 import { COST } from "@murmur/core";
 import { deriveEditDepth, normalizeEditCount } from "@/modules/music/edit-depth";
-import { normalizeLineageDepth, resolveParentSongId, resolveRootSongId } from "@/modules/music/lineage";
-import { arrangementStateSchema, visualConfigSchema } from "./schema";
-import type { MelodySelectionKind } from "@/modules/shared/types";
+import { deriveServerLineage } from "@/modules/music/lineage";
+import {
+  SONG_ARTIFACT_VERSION,
+  computeSaveFingerprint,
+} from "@/modules/music/song-artifact";
+import {
+  arrangementStateSchema,
+  cleanMelodySchema,
+  songProvenanceSchema,
+  songTagsSchema,
+  sourceMelodyKindSchema,
+  visualConfigSchema,
+} from "./schema";
 import type { songs } from "@/lib/db/schema/songs";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
 
 const ROUTE = "/api/songs";
 const SONG_LIST_RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
 const SONG_CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
-const MELODY_SELECTION_KINDS = new Set<MelodySelectionKind>(["intent", "corrected", "musical"]);
 
 // Client-minted draft ids double as the idempotency key for save retries
 // (see handleSongIdConflict), so they must be accepted — but only in a
@@ -60,13 +70,17 @@ const songPayloadSchema = z.object({
   parentSongId: z.string().min(1).max(100).nullable().optional(),
   rootSongId: z.string().min(1).max(100).nullable().optional(),
   lineageDepth: z.number().int().optional(),
-  sourceMelodyKind: z.string().max(100).optional(),
+  // Shared enum with the update route (#311): an unknown kind is now an
+  // explicit validation error, not a silent fallback to "corrected".
+  sourceMelodyKind: sourceMelodyKindSchema.optional(),
   editCount: z.number().int().optional(),
   editDepth: z.enum(["fresh", "shaped", "reworked"]).optional(),
   mp3DataUrl: z.string().nullable().optional(),
+  melody: cleanMelodySchema.nullable().optional(),
+  provenance: songProvenanceSchema.nullable().optional(),
   visualConfig: visualConfigSchema,
   arrangementState: arrangementStateSchema,
-  tags: z.array(z.string().max(100)),
+  tags: songTagsSchema,
 }).passthrough();
 
 type SongPayload = z.infer<typeof songPayloadSchema>;
@@ -189,7 +203,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const songInput = buildSongInput(body, userId);
+  const resolvedAudio = await resolveSongAudioForSave(await buildSongInput(body, userId), body, {
+    requestId,
+    userId,
+    sessionId: auth.sessionId,
+  });
+  // Fingerprint the fully resolved payload so save replay (idempotent) is
+  // distinguishable from a same-id/different-payload conflict (#297).
+  const songInput: SongInput = {
+    ...resolvedAudio.input,
+    saveFingerprint: computeSaveFingerprint(resolvedAudio.input),
+  };
+  const audioStorageHeaders =
+    resolvedAudio.audioStorage === "data_url_fallback"
+      ? { "X-Murmur-Audio-Storage": "fallback-data-url" }
+      : undefined;
 
   try {
     const skipBilling =
@@ -208,11 +236,11 @@ export async function POST(req: NextRequest) {
         }));
 
         return NextResponse.json(song, {
-          headers: { "X-Request-Id": requestId },
+          headers: { "X-Request-Id": requestId, ...audioStorageHeaders },
         });
       } catch (dbError) {
         if (isSongIdUniqueConstraintViolation(dbError)) {
-          return handleSongIdConflict(songInput.id, userId, requestId);
+          return handleSongIdConflict(songInput.id, userId, requestId, songInput.saveFingerprint);
         }
         if (
           shouldUseLocalSongFallback(auth, requestHost)
@@ -306,7 +334,7 @@ export async function POST(req: NextRequest) {
     }));
 
     return NextResponse.json(result.song, {
-      headers: { "X-Request-Id": requestId },
+      headers: { "X-Request-Id": requestId, ...audioStorageHeaders },
     });
   } catch (err) {
     if (shouldUseLocalSongFallback(auth, requestHost) && isDatabaseUnavailable(err)) {
@@ -351,7 +379,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (isSongIdUniqueConstraintViolation(err)) {
-      return handleSongIdConflict(songInput.id, userId, requestId);
+      return handleSongIdConflict(songInput.id, userId, requestId, songInput.saveFingerprint);
     }
 
     return NextResponse.json(
@@ -361,18 +389,34 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function buildSongInput(body: SongPayload, userId: string): SongInput {
+async function buildSongInput(body: SongPayload, userId: string): Promise<SongInput> {
   // Prefer the client-minted draft id (idempotent retry key); mint a
   // server-side id only when the payload omits one.
   const id = body.id ?? `song_${ulid()}`;
   const editCount = normalizeEditCount(body.editCount);
-  const lineageDepth = normalizeLineageDepth(body.lineageDepth);
-  const sourceMelodyKind = isMelodySelectionKind(body.sourceMelodyKind)
-    ? body.sourceMelodyKind
-    : "corrected";
+  // Validated by sourceMelodyKindSchema (#311); default only when omitted.
+  const sourceMelodyKind = body.sourceMelodyKind ?? "corrected";
   const editDepth = deriveEditDepth(editCount);
-  const parentSongId = resolveParentSongId({ id, parentSongId: body.parentSongId });
-  const rootSongId = resolveRootSongId({ id, rootSongId: body.rootSongId });
+  // Derive + validate lineage server-side from the owned parent (#297) rather
+  // than trusting client-supplied root/depth.
+  const lineage = await deriveServerLineage({
+    id,
+    userId,
+    parentSongId: body.parentSongId,
+    rootSongId: body.rootSongId,
+    lineageDepth: body.lineageDepth,
+    loadParent: async (parentSongId) => {
+      const parent = await getSongById(parentSongId);
+      return parent
+        ? {
+            id: parent.id,
+            userId: parent.userId,
+            rootSongId: parent.rootSongId,
+            lineageDepth: parent.lineageDepth,
+          }
+        : null;
+    },
+  });
 
   return {
     id,
@@ -384,16 +428,90 @@ function buildSongInput(body: SongPayload, userId: string): SongInput {
     keySignature: body.keySignature,
     scaleType: body.scaleType,
     duration: body.duration,
-    parentSongId,
-    rootSongId,
-    lineageDepth,
+    parentSongId: lineage.parentSongId,
+    rootSongId: lineage.rootSongId,
+    lineageDepth: lineage.lineageDepth,
     sourceMelodyKind,
     editCount,
     editDepth,
-    mp3DataUrl: body.mp3DataUrl ?? null,
+    artifactVersion: SONG_ARTIFACT_VERSION,
+    melody: body.melody ?? null,
+    provenance: body.provenance ?? null,
     visualConfig: body.visualConfig,
     arrangementState: body.arrangementState,
     tags: body.tags,
+  };
+}
+
+/**
+ * Resolve the persisted audio artifact for a save (#292). Newly rendered
+ * audio is uploaded through the object-storage adapter and stored as an
+ * `mp3Url` + `mp3StorageKey`; the base64 `mp3DataUrl` is no longer written to
+ * Postgres on the happy path.
+ *
+ * Storage-unavailable behavior is explicit and demo-safe: if the upload
+ * throws (unconfigured driver, network) we fall back to embedding the legacy
+ * data URL so the demo/offline flow never loses the user's audio, and flag it
+ * on the response via the caller. A payload with no audio persists no audio at
+ * all (an incomplete draft — see #291).
+ */
+type ResolvedSongAudio = {
+  input: SongInput;
+  audioStorage: "object" | "data_url_fallback" | "none";
+};
+
+async function resolveSongAudioForSave(
+  base: SongInput,
+  body: SongPayload,
+  ctx: { requestId: string; userId: string; sessionId: string | null },
+): Promise<ResolvedSongAudio> {
+  const dataUrl =
+    typeof body.mp3DataUrl === "string" && body.mp3DataUrl.length > 0
+      ? body.mp3DataUrl
+      : null;
+
+  if (!dataUrl) {
+    return {
+      input: { ...base, mp3Url: null, mp3StorageKey: null, mp3DataUrl: null },
+      audioStorage: "none",
+    };
+  }
+
+  try {
+    const uploaded = await uploadSongMasterFromDataUrl({
+      userId: base.userId,
+      songId: base.id!,
+      dataUrl,
+    });
+    if (uploaded) {
+      return {
+        input: {
+          ...base,
+          mp3Url: uploaded.mp3Url,
+          mp3StorageKey: uploaded.mp3StorageKey,
+          mp3DataUrl: null,
+        },
+        audioStorage: "object",
+      };
+    }
+  } catch (err) {
+    log("song.audio_upload_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      songId: base.id,
+    }, {
+      route: ROUTE,
+      requestId: ctx.requestId,
+      userId: ctx.userId,
+      sessionId: ctx.sessionId,
+      level: "warn",
+    });
+  }
+
+  // Demo-safe fallback: keep the rendered audio as an embedded data URL rather
+  // than dropping it. Legacy read paths already accept mp3DataUrl.
+  return {
+    input: { ...base, mp3Url: null, mp3StorageKey: null, mp3DataUrl: dataUrl },
+    audioStorage: "data_url_fallback",
   };
 }
 
@@ -427,9 +545,28 @@ function isSongIdUniqueConstraintViolation(error: unknown): boolean {
   return false;
 }
 
-async function handleSongIdConflict(songId: string, userId: string, requestId: string) {
+async function handleSongIdConflict(
+  songId: string,
+  userId: string,
+  requestId: string,
+  incomingFingerprint: string | null | undefined,
+) {
   const existing = await getSongById(songId);
-  if (existing?.userId === userId) {
+  if (!existing || existing.userId !== userId) {
+    // A different user already owns this id — never disclose or overwrite it.
+    return songIdConflictResponse(requestId);
+  }
+
+  // Same user, same id: distinguish an exact save replay (idempotent retry of
+  // the same content) from a same-id/different-payload conflict (#297). Legacy
+  // rows have no stored fingerprint — treat those as replays to preserve the
+  // pre-#297 idempotent-save behavior.
+  const existingFingerprint = existing.saveFingerprint;
+  const isExactReplay =
+    !existingFingerprint ||
+    !incomingFingerprint ||
+    existingFingerprint === incomingFingerprint;
+  if (isExactReplay) {
     return NextResponse.json(existing, {
       headers: {
         "X-Request-Id": requestId,
@@ -438,7 +575,7 @@ async function handleSongIdConflict(songId: string, userId: string, requestId: s
     });
   }
 
-  return songIdConflictResponse(requestId);
+  return songPayloadConflictResponse(requestId);
 }
 
 function songIdConflictResponse(requestId: string) {
@@ -446,6 +583,18 @@ function songIdConflictResponse(requestId: string) {
     {
       error: "song_id_conflict",
       message: "Could not save this draft because its song id already exists.",
+      requestId,
+    },
+    { status: 409, headers: { "X-Request-Id": requestId } },
+  );
+}
+
+function songPayloadConflictResponse(requestId: string) {
+  return NextResponse.json(
+    {
+      error: "song_payload_conflict",
+      message:
+        "This song id was already saved with different content. Reload the song before editing.",
       requestId,
     },
     { status: 409, headers: { "X-Request-Id": requestId } },
@@ -507,6 +656,3 @@ function truncateNotificationText(value: string, maxLength: number): string {
   return `${trimmed.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
 
-function isMelodySelectionKind(value: unknown): value is MelodySelectionKind {
-  return typeof value === "string" && MELODY_SELECTION_KINDS.has(value as MelodySelectionKind);
-}
