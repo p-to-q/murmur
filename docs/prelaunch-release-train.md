@@ -24,13 +24,26 @@ should update their checklists instead of claiming to close the whole umbrella.
 
 ## Pull request sequence
 
+### Active review-debt PRs
+
+| PR | Purpose | Merge rule |
+| --- | --- | --- |
+| #295 | Close the streaming and worker contract comments posted after #289 merged | Merge before extending the interim stream or audio-worker adapter. |
+| #296 | Close user-facing auth, deletion, contrast, and disabled-state comments from #253/#285/#288 | Merge independently from billing and persistence work. |
+
+### Planned lanes
+
 | Lane | Proposed PR | Issues | Outcome | Depends on |
 | --- | --- | --- | --- | --- |
 | R0 | Backlog truth and stale-issue reconciliation | #202, #194, #215, #237 | Every audit item points to a live issue, merged PR, or explicit deferral | none |
 | R1 | Restore test type checking | #221 | `bunx tsc --noEmit` checks application and tests without excluding test files | R0 |
 | R2 | Restore critical unit/evaluation coverage | #214, #196 | Client fallback and melody-polisher behavior have direct regression tests | R1 |
 | R3 | Add browser golden-path release gate | #247 | A deterministic browser test covers create, save, and public share | R1, R2 |
+| R3a | Close transcribe operation accounting | #298 | Retry, refund, delivery, and reconciliation produce exactly one valid net charge | R1 |
+| R3b | Decouple pending spend refunds from Waffo | #299 | Product refunds recover through a provider-neutral idempotent worker | R1 |
+| R3c | Make generation recovery durable | #300 | Refresh resumes paid clips instead of purchasing and sampling them again | R3a, R3b |
 | R4 | Harden Waffo purchase provenance | #237 | Checkout creates server-side expected purchase state before redirect | R1 |
+| R4a | Version saved-song artifacts and provenance | #297 | Playback, editable source, lineage, and save replay have explicit durable contracts | R3c, R4 |
 | R5 | Close database and worker launch contracts | #235, #220 | Pooled DB URL and worker health/deploy semantics are explicit and verifiable | R1 |
 | R6 | Restore music quality evaluation | #201 | Evaluation suite is live; GPU deploy restoration remains a separate opt-in step | R2, R5 |
 | R7 | Make generation degradation legible | #211, #216, #217 | Users see fallback quality and wait state; auto-audition becomes a preference | R2 |
@@ -93,6 +106,10 @@ Status values:
 | #198 Poster/HTML export | active | R10 | Reactivate each recovered module separately with current artifact tests. |
 | #196 Melody-polisher tests | active | R2 | Follow the recovered-file checklist and restore the archived test only. |
 | #194 Product UX audit | partial | R0 | Keep as an index; link focused issues and remove findings already fixed. |
+| #298 Transcribe operation accounting | active | R3a | A stable spend key alone is insufficient; model delivered/refunded/pending transitions at the ledger boundary. |
+| #299 Provider-neutral pending refunds | active | R3b | Product-spend compensation must not depend on Waffo credentials or availability. |
+| #300 Durable generation recovery | active | R3c | Persist/reuse paid clip identity and artifact; do not restore every ready clip as a new pending purchase. |
+| #297 Saved-song artifact provenance | design-first | R4a | Add a versioned compatibility reader before changing persisted arrangement or lineage semantics. |
 
 ## Newly confirmed gaps
 
