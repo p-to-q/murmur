@@ -64,7 +64,11 @@ const sendNotification = mock(async (subscription: { endpoint: string }, payload
 
 const webpushMock = { setVapidDetails, sendNotification };
 mock.module("web-push", () => ({ default: webpushMock, ...webpushMock }));
-mock.module("@/lib/observability/log", () => ({ log: () => {} }));
+// NOTE: do not mock "@/lib/observability/log" here. bun's `mock.module` is
+// process-global, and neutralizing `log` leaks into other files in the same
+// run — notably stage-tracking.test.ts, which captures the real console
+// output that `log` emits. The real `log` is a harmless JSON-to-console sink,
+// so we let it run; these tests assert on delivery behavior, not logging.
 
 const { notifications } = await import("./notifications-server");
 
