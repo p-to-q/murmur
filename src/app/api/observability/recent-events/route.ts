@@ -30,17 +30,17 @@ const ROUTE = "/api/observability/recent-events";
 const RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const requestId = getRequestId(request);
   if (!isDebugSurfaceEnabled()) {
-    return debugSurfaceDisabledResponse();
+    return withRequestId(debugSurfaceDisabledResponse(), requestId);
   }
 
-  const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) {
-    return debugSurfaceUnauthorizedResponse();
+    return withRequestId(debugSurfaceUnauthorizedResponse(), requestId);
   }
   if (!canAccessDebugSurface(auth, request)) {
-    return debugSurfaceForbiddenResponse();
+    return withRequestId(debugSurfaceForbiddenResponse(), requestId);
   }
 
   const rateLimit = await checkApiRateLimit({
@@ -55,8 +55,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return rateLimitedResponse(rateLimit, requestId);
   }
 
-  return NextResponse.json({
-    events: getRecentEvents(),
-    captured_at: new Date().toISOString(),
-  });
+  return NextResponse.json(
+    {
+      events: getRecentEvents(),
+      captured_at: new Date().toISOString(),
+    },
+    { headers: { "X-Request-Id": requestId } },
+  );
+}
+
+function withRequestId(response: NextResponse, requestId: string): NextResponse {
+  response.headers.set("X-Request-Id", requestId);
+  return response;
 }

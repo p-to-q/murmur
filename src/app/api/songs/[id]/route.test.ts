@@ -66,7 +66,10 @@ function request(
 ): NextRequest {
   return new Request(url, {
     method,
-    headers: body ? { "content-type": "application/json" } : undefined,
+    headers: {
+      "x-request-id": "req_song_detail",
+      ...(body ? { "content-type": "application/json" } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   }) as unknown as NextRequest;
 }
@@ -106,6 +109,7 @@ describe("GET /api/songs/[id]", () => {
     const response = await GET(request("GET"), ctx("song_owner"));
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("X-Request-Id")).toBe("req_song_detail");
     expect(getSongByIdForUserMock).toHaveBeenCalledWith("song_owner", "usr_owner");
     const body = await response.json() as Record<string, unknown>;
     expect(body.userId).toBe("usr_owner");
@@ -128,6 +132,7 @@ describe("GET /api/songs/[id]", () => {
     const response = await GET(request("GET"), ctx("song_guest"));
 
     expect(response.status).toBe(404);
+    expect(response.headers.get("X-Request-Id")).toBe("req_song_detail");
     expect(getSongByIdForUserMock).toHaveBeenCalledWith("song_guest", "usr_owner");
   });
 });
@@ -137,6 +142,7 @@ describe("PATCH /api/songs/[id]", () => {
     const response = await PATCH(request("PATCH", { title: "Renamed Song" }), ctx());
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("X-Request-Id")).toBe("req_song_detail");
     expect(updateSongForUserMock).toHaveBeenCalledWith(
       "song_owner",
       "usr_owner",
@@ -197,6 +203,7 @@ describe("PATCH /api/songs/[id]", () => {
     );
 
     expect(response.status).toBe(400);
+    expect(response.headers.get("X-Request-Id")).toBe("req_song_detail");
     expect(updateSongForUserMock).not.toHaveBeenCalled();
     const body = await response.json() as { error: string };
     expect(body.error).toBe("validation_error");
@@ -250,6 +257,7 @@ describe("PATCH /api/songs/[id]", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("X-Murmur-Fallback")).toBe("local-guest-song");
+    expect(response.headers.get("X-Request-Id")).toBe("req_song_detail");
     const body = await response.json() as Record<string, unknown>;
     expect(body.title).toBe("After Rename");
   });
@@ -260,6 +268,7 @@ describe("DELETE /api/songs/[id]", () => {
     const response = await DELETE(request("DELETE"), ctx());
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("X-Request-Id")).toBe("req_song_detail");
     expect(deleteSongForUserMock).toHaveBeenCalledWith("song_owner", "usr_owner");
   });
 
@@ -269,6 +278,22 @@ describe("DELETE /api/songs/[id]", () => {
     const response = await DELETE(request("DELETE"), ctx("song_other"));
 
     expect(response.status).toBe(404);
+    expect(response.headers.get("X-Request-Id")).toBe("req_song_detail");
     expect(deleteSongForUserMock).toHaveBeenCalledWith("song_other", "usr_owner");
+  });
+
+  it("echoes the request id on auth errors", async () => {
+    nextAuth = {
+      ok: false,
+      response: new Response(
+        JSON.stringify({ error: "unauthorized" }),
+        { status: 401, headers: { "content-type": "application/json" } },
+      ),
+    };
+
+    const response = await DELETE(request("DELETE"), ctx());
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("X-Request-Id")).toBe("req_song_detail");
   });
 });

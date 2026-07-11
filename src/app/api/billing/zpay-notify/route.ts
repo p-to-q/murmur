@@ -9,6 +9,7 @@ import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 
+import { getRequestId } from "@/lib/api/request-id";
 import { isZpayConfigured, zpayVerifyNotify } from "@/lib/billing/zpay";
 import { db } from "@/lib/db/client";
 import { eventsWebhook } from "@/lib/db/schema/events-webhook";
@@ -49,23 +50,23 @@ async function markEventFailed(eventRowId: string, error: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const requestId = crypto.randomUUID();
+  const requestId = getRequestId(request);
 
   if (!isZpayConfigured()) {
-    return new NextResponse("zpay not configured", { status: 503 });
+    return zpayResponse("zpay not configured", requestId, 503);
   }
 
   const body = await request.text();
   const params = parseUniqueFormParams(body);
   if (!params) {
     log("billing.zpay_notify_failed", { stage: "params" }, { route: ROUTE, requestId, level: "warn" });
-    return new NextResponse("fail", { status: 400 });
+    return zpayResponse("fail", requestId, 400);
   }
 
   const verified = zpayVerifyNotify(params);
   if (!verified) {
     log("billing.zpay_notify_failed", { stage: "signature" }, { route: ROUTE, requestId, level: "warn" });
-    return new NextResponse("fail", { status: 401 });
+    return zpayResponse("fail", requestId, 401);
   }
 
   // Only TRADE_SUCCESS proceeds to fulfillment below. For every other status
@@ -90,9 +91,9 @@ export async function POST(request: NextRequest) {
       { route: ROUTE, requestId, level: "warn" },
     );
     if (terminal) {
-      return new NextResponse("success");
+      return zpayResponse("success", requestId);
     }
-    return new NextResponse("pending", { status: 202 });
+    return zpayResponse("pending", requestId, 202);
   }
 
   const outTradeNo = verified.out_trade_no;
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
 
   const eventRow = insertedRows[0] ?? (await reclaimUnprocessedEvent(providerEventId));
   if (!eventRow) {
-    return new NextResponse("success");
+    return zpayResponse("success", requestId);
   }
 
   const eventRowId = eventRow.id;
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
   if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
     log("billing.zpay_notify_failed", { stage: "parse", outTradeNo }, { route: ROUTE, requestId, level: "error" });
     await markEventFailed(eventRowId, "invalid out_trade_no format");
-    return new NextResponse("success");
+    return zpayResponse("success", requestId);
   }
 
   const outUserId = parts[0]!;
@@ -161,12 +162,12 @@ export async function POST(request: NextRequest) {
   if (!pendingPurchase) {
     log("billing.zpay_notify_failed", { stage: "no_pending", outTradeNo }, { route: ROUTE, requestId, level: "error" });
     await markEventFailed(eventRowId, "no pending purchase");
-    return new NextResponse("success");
+    return zpayResponse("success", requestId);
   }
 
   if (pendingPurchase.status === "succeeded") {
     await db.update(eventsWebhook).set({ status: "processed", processedAt: new Date() }).where(eq(eventsWebhook.id, eventRowId));
-    return new NextResponse("success");
+    return zpayResponse("success", requestId);
   }
 
   if (pendingPurchase.status !== "pending") {
@@ -176,7 +177,7 @@ export async function POST(request: NextRequest) {
       { route: ROUTE, requestId, level: "error" },
     );
     await markEventFailed(eventRowId, "invalid purchase status");
-    return new NextResponse("success");
+    return zpayResponse("success", requestId);
   }
 
   if (
@@ -198,7 +199,7 @@ export async function POST(request: NextRequest) {
       { route: ROUTE, requestId, level: "error" },
     );
     await markEventFailed(eventRowId, "purchase mismatch");
-    return new NextResponse("success");
+    return zpayResponse("success", requestId);
   }
 
   const notesGranted = pendingPurchase.notesGranted;
@@ -219,7 +220,7 @@ export async function POST(request: NextRequest) {
     // retry would re-fail identically. Ack with 200 (like the other
     // post-lookup validation failures) to stop ZPay's retry loop; the event is
     // recorded as failed for manual review.
-    return new NextResponse("success");
+    return zpayResponse("success", requestId);
   }
 
   // Grant notes
@@ -240,7 +241,7 @@ export async function POST(request: NextRequest) {
   if (!grant.ok) {
     log("billing.zpay_notify_failed", { stage: "grant", outTradeNo, reason: grant.reason }, { route: ROUTE, requestId, level: "error" });
     await markEventFailed(eventRowId, `grant failed: ${grant.reason}`);
-    return new NextResponse("fail", { status: 500 });
+    return zpayResponse("fail", requestId, 500);
   }
 
   // Mark purchase succeeded and event processed atomically so a mid-flight
@@ -275,7 +276,18 @@ export async function POST(request: NextRequest) {
   );
 
   // zpay requires plain text "success" response
-  return new NextResponse("success");
+  return zpayResponse("success", requestId);
+}
+
+function zpayResponse(
+  body: string,
+  requestId: string,
+  status = 200,
+): NextResponse {
+  return new NextResponse(body, {
+    status,
+    headers: { "X-Request-Id": requestId },
+  });
 }
 
 async function reclaimUnprocessedEvent(
