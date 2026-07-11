@@ -115,7 +115,7 @@ export function DeleteAccountScreen() {
             type="button"
             disabled={!isRegistered || isSubmitting}
             onClick={() => setConfirmOpen(true)}
-            className="inline-flex items-center gap-2 justify-center w-full max-w-sm rounded-full px-6 py-3.5 text-[14px] font-medium text-white bg-[#C43B3B] transition-all hover:bg-[#A32D2D] hover:-translate-y-px hover:shadow-[0_8px_22px_rgba(196,59,59,0.32)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-2 justify-center w-full max-w-sm rounded-full px-6 py-3.5 text-[14px] font-medium text-white bg-[#C43B3B] transition-all enabled:hover:bg-[#A32D2D] enabled:hover:-translate-y-px enabled:hover:shadow-[0_8px_22px_rgba(196,59,59,0.32)] disabled:cursor-not-allowed disabled:opacity-60"
             aria-disabled={!isRegistered || isSubmitting}
           >
             {isSubmitting ? t("delete.cta.working") : t("delete.cta")}

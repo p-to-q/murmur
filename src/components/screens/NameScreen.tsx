@@ -413,6 +413,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                 {suggestions.map((s, i) => (
                   <span key={s} className="inline-flex items-baseline gap-3">
                     <button
+                      type="button"
                       onClick={() => {
                         setTitleVersionId(currentVersionId);
                         setTitleMode("suggested");
@@ -420,7 +421,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                         inputRef.current?.focus();
                       }}
                       disabled={isSaving}
-                      className="font-serif-italic text-[16px] text-[#8C8780] hover:text-[#D9421A] underline-mm transition-colors disabled:opacity-50"
+                      className="font-serif-italic text-[16px] text-[#8C8780] hover:text-[#B83212] underline-mm transition-colors disabled:opacity-50"
                     >
                       {s}
                     </button>
