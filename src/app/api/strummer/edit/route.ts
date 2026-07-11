@@ -7,10 +7,10 @@ import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { getNotesBalance, refundNotes, spendNotes } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
-import { checkBudget } from "@/lib/observability/latency-budgets";
+import { reportBudget } from "@/lib/observability/latency-budgets";
 import { ai } from "@/lib/platform/ai-server";
 import { type EditToken, ALL_EDIT_TOKENS } from "@/modules/strummer/apply-edit";
-import { STRUMMER_EDIT_SYSTEM_PROMPT } from "@/modules/strummer/edit-system-prompt";
+import { STRUMMER_EDIT_SYSTEM_BLOCKS } from "@/modules/strummer/edit-system-prompt";
 import { COST } from "@murmur/core";
 
 // Strummer prompt → EditToken classifier.
@@ -192,7 +192,13 @@ export async function POST(req: NextRequest) {
       ai.chat({
         model: "deepseek.v3.1",
         messages: [
-          { role: "system", content: STRUMMER_EDIT_SYSTEM_PROMPT },
+          // System prompt sent as OpenAI-compatible content-parts so the large,
+          // stable prefix carries a `cache_control` breakpoint through the AI
+          // gateway (#207). `ai.chat` types message content as `string`; the
+          // gateway also accepts the array form, so we widen only at this call
+          // site rather than reshaping the shared client. Providers that don't
+          // support cache_control ignore the field — behavior is unchanged.
+          { role: "system", content: STRUMMER_EDIT_SYSTEM_BLOCKS as unknown as string },
           { role: "user", content: prompt },
         ],
         temperature: 0.1,
@@ -206,7 +212,15 @@ export async function POST(req: NextRequest) {
     const text = completion.choices[0]?.message?.content ?? "";
     const tokens = extractTokens(text);
     const editDurationMs = Math.round(performance.now() - llmStartedAt);
-    const editBudget = checkBudget("llm_edit", editDurationMs);
+    // reportBudget emits the dedicated, pageable `latency.budget_exceeded`
+    // alert when the LLM call blows its P95 (#210), and returns the check so we
+    // keep the component-specific completion breadcrumb below.
+    const editBudget = reportBudget("llm_edit", editDurationMs, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+    });
     if (editBudget.budget_exceeded) {
       log("strummer.edit_completed", {
         budget_exceeded: true,
