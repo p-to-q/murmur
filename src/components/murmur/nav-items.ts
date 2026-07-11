@@ -78,6 +78,21 @@ export function resolveMobileJourneyStage(pathname: string | null | undefined): 
   return -1;
 }
 
+/**
+ * Single source of truth for which routes own the product-journey navigation
+ * — the mobile bottom rail and any sibling shell chrome scoped to the flow.
+ *
+ * Journey routes are the create → gallery flow: `/`, `/vibe`, `/studio`,
+ * `/studio/name`, `/gallery`, and song detail (`/song/*`). Every other
+ * surface — top-up and its checkout, the `/me` account hub and its sub-pages,
+ * privacy, auth, and share-landing pages — is *not* a journey route and must
+ * not render the bottom rail. Consumers should call this predicate instead of
+ * sprinkling ad-hoc `pathname === "/topup"`-style checks around the shell.
+ */
+export function ownsJourneyNav(pathname: string | null | undefined): boolean {
+  return resolveMobileJourneyStage(pathname) >= 0;
+}
+
 /* ── Nested nav model ────────────────────────────────────────────────
  *
  * The side nav grows like a small document outline. Sub-steps are

@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
   computeTrail,
+  ownsJourneyNav,
   resolveMobileJourneyStage,
 } from "./nav-items";
 
@@ -47,5 +48,40 @@ describe("resolveMobileJourneyStage", () => {
     expect(resolveMobileJourneyStage("/gallery")).toBe(4);
     expect(resolveMobileJourneyStage("/song/song_123")).toBe(4);
     expect(resolveMobileJourneyStage("/me")).toBe(-1);
+  });
+});
+
+describe("ownsJourneyNav", () => {
+  it("claims the create → gallery journey routes", () => {
+    for (const route of [
+      "/",
+      "/vibe",
+      "/studio",
+      "/studio/name",
+      "/gallery",
+      "/song/song_123",
+    ]) {
+      expect(ownsJourneyNav(route)).toBe(true);
+    }
+  });
+
+  it("releases top-up + checkout so the bottom rail hides there", () => {
+    expect(ownsJourneyNav("/topup")).toBe(false);
+    expect(ownsJourneyNav("/topup/checkout")).toBe(false);
+  });
+
+  it("releases the /me account hub and its sub-pages", () => {
+    expect(ownsJourneyNav("/me")).toBe(false);
+    expect(ownsJourneyNav("/me/settings")).toBe(false);
+    expect(ownsJourneyNav("/me/payments")).toBe(false);
+  });
+
+  it("releases other non-journey surfaces and empty paths", () => {
+    expect(ownsJourneyNav("/privacy")).toBe(false);
+    expect(ownsJourneyNav("/auth/error")).toBe(false);
+    expect(ownsJourneyNav("/s/share_abc")).toBe(false);
+    expect(ownsJourneyNav("")).toBe(false);
+    expect(ownsJourneyNav(null)).toBe(false);
+    expect(ownsJourneyNav(undefined)).toBe(false);
   });
 });

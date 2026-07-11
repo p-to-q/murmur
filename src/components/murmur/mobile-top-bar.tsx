@@ -20,6 +20,7 @@ export function MobileTopBar() {
 
       <div className="pointer-events-auto flex items-baseline gap-1.5">
         <button
+          type="button"
           onClick={() => setLang("zh")}
           className={`text-[13px] transition-colors ${
             lang === "zh"
@@ -31,6 +32,7 @@ export function MobileTopBar() {
         </button>
         <span className="text-[16px] leading-none text-[#B6B0A4]">/</span>
         <button
+          type="button"
           onClick={() => setLang("en")}
           className={`text-[13px] transition-colors ${
             lang === "en"
