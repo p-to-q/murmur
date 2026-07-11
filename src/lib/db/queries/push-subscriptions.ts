@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull } from "drizzle-orm";
 
 import { db } from "../client";
 import { pushSubscriptions } from "../schema/push-subscriptions";
@@ -103,12 +103,41 @@ export async function getActivePushSubscriptionsForUser(userId: string) {
     .orderBy(desc(pushSubscriptions.lastSeenAt));
 }
 
-export async function getActivePushSubscriptions(limit = 1000) {
+/**
+ * Default page size for walking every active subscription. Kept modest so a
+ * single broadcast never buffers the entire population in memory.
+ */
+export const ACTIVE_PUSH_SUBSCRIPTIONS_PAGE_SIZE = 500;
+
+/**
+ * Fetch one keyset page of active (non-disabled) subscriptions, ordered by the
+ * immutable primary key. Pass the last returned row's `id` as `after` to fetch
+ * the next page; an empty result means the walk is complete.
+ *
+ * Keying on `id` (rather than `last_seen_at`, which is rewritten on every
+ * heartbeat/upsert) makes the walk stable: each active subscription is visited
+ * exactly once even while rows are concurrently inserted, re-subscribed, or
+ * disabled mid-broadcast. Backed by the `push_subscriptions_active_id_idx`
+ * partial index (`WHERE disabled_at IS NULL`).
+ */
+export async function getActivePushSubscriptionsPage(options?: {
+  after?: string | null;
+  limit?: number;
+}): Promise<PushSubscriptionRecord[]> {
+  const after = options?.after ?? null;
+  const limit = options?.limit ?? ACTIVE_PUSH_SUBSCRIPTIONS_PAGE_SIZE;
+  const predicate =
+    after == null
+      ? isNull(pushSubscriptions.disabledAt)
+      : and(
+          isNull(pushSubscriptions.disabledAt),
+          gt(pushSubscriptions.id, after),
+        );
   return db
     .select()
     .from(pushSubscriptions)
-    .where(isNull(pushSubscriptions.disabledAt))
-    .orderBy(desc(pushSubscriptions.lastSeenAt))
+    .where(predicate)
+    .orderBy(asc(pushSubscriptions.id))
     .limit(limit);
 }
 
