@@ -24,17 +24,30 @@ should update their checklists instead of claiming to close the whole umbrella.
 
 ## Pull request sequence
 
-### Active review-debt PRs
+### Recently completed review-debt PRs
 
-| PR | Purpose | Merge rule |
+| PR | Purpose | Result |
 | --- | --- | --- |
-| #295 | Close the streaming and worker contract comments posted after #289 merged | Merge before extending the interim stream or audio-worker adapter. |
-| #296 | Close user-facing auth, deletion, contrast, and disabled-state comments from #253/#285/#288 | Merge independently from billing and persistence work. |
+| #294 | Establish this release-train routing artifact | Merged. |
+| #295 | Close the streaming and worker contract comments posted after #289 merged | Merged; all five #289 review findings are covered. |
+| #296 | Close user-facing auth, deletion, contrast, and disabled-state comments from #253/#285/#288 | Merged. |
+| #301 | Restore honest TypeScript coverage for active tests | Merged after rebasing over #302/#303 and revalidating 745 tests. |
+| #302 | Cover the client transcription result contract | Merged. |
+| #303 | Reactivate melody-polisher regression coverage | Merged. |
+
+The application and test TypeScript gates are now active in CI. New test-only
+PRs must pass both rather than relying on the application config to exclude
+fixtures.
 
 ### Planned lanes
 
 | Lane | Proposed PR | Issues | Outcome | Depends on |
 | --- | --- | --- | --- | --- |
+| G0 | Protect the release path | #308 | Main requires reviewed PRs and the CI gate; emergency bypass is explicit and auditable | none |
+| G1 | Fail closed on missing migration credentials | #305 | Production migration cannot report success without its required DSN | G0 |
+| G2 | Serialize migrate-before-deploy | #307 | One production path migrates, then promotes the exact tested SHA | G0, G1 |
+| G3 | Reconcile production operations docs | #309 | Runbooks describe the actual hosting, migration, rollback, and ownership model | G2 |
+| G4 | Enforce release artifact readiness | #306 | Declared versions have matching notes and an explicit tag/release operation | G0 |
 | R0 | Backlog truth and stale-issue reconciliation | #202, #194, #215, #237 | Every audit item points to a live issue, merged PR, or explicit deferral | none |
 | R1 | Restore test type checking | #221 | `bunx tsc --noEmit` checks application and tests without excluding test files | R0 |
 | R2 | Restore critical unit/evaluation coverage | #214, #196 | Client fallback and melody-polisher behavior have direct regression tests | R1 |
@@ -42,15 +55,19 @@ should update their checklists instead of claiming to close the whole umbrella.
 | R3a | Close transcribe operation accounting | #298 | Retry, refund, delivery, and reconciliation produce exactly one valid net charge | R1 |
 | R3b | Decouple pending spend refunds from Waffo | #299 | Product refunds recover through a provider-neutral idempotent worker | R1 |
 | R3c | Make generation recovery durable | #300 | Refresh resumes paid clips instead of purchasing and sampling them again | R3a, R3b |
-| R4 | Harden Waffo purchase provenance | #237 | Checkout creates server-side expected purchase state before redirect | R1 |
+| R3d | Validate draft restoration | #315 | Persisted drafts are parsed/versioned and redirects wait for hydration | R3c |
+| R4 | Harden Waffo purchase lifecycle | #237, #314 | Checkout provenance and out-of-order refund handling are durable and idempotent | R1 |
 | R4a | Version saved-song artifacts and provenance | #297 | Playback, editable source, lineage, and save replay have explicit durable contracts | R3c, R4 |
-| R5 | Close database and worker launch contracts | #235, #220 | Pooled DB URL and worker health/deploy semantics are explicit and verifiable | R1 |
+| R4b | Bound saved-song API input | #311 | Create/update share one explicit schema with bounded collections and strings | R1 |
+| R5 | Close database and worker launch contracts | #235, #220, #316 | DB URL precedence, pooled runtime use, and worker deploy semantics are explicit | G2, R1 |
+| R5a | Preserve auth precedence through partial outages | #313 | A valid Auth.js session survives Murmur session DB failure without guest fail-open | R1 |
 | R6 | Restore music quality evaluation | #201 | Evaluation suite is live; GPU deploy restoration remains a separate opt-in step | R2, R5 |
 | R7 | Make generation degradation legible | #211, #216, #217 | Users see fallback quality and wait state; auto-audition becomes a preference | R2 |
 | R8 | Design durable generation jobs | #244 | Job/status contract is documented before SSE or queue implementation | R5, R7 |
 | R9 | Observability and AI operational follow-through | #207, #208, #210 | Cache behavior, durable stage events, and latency alerts have measurable sinks | R5 |
+| R9a | Complete notification delivery | #293, #312 | Locale selection and paginated broadcast cover every active subscription | R5 |
 | R10 | Restore export capabilities safely | #198 | Poster and standalone HTML export return behind existing export boundaries | R2 |
-| R11 | Establish product layout contracts | #256, #257, #266, #269, #272 | Shared empty, header, loading, navigation, and bottom-spacing contracts | R3 |
+| R11 | Establish product layout contracts | #256, #257, #266, #269, #272, #310 | Shared empty, header, loading, navigation, and bottom-spacing contracts | R3 |
 | R12 | Improve creation feedback | #260, #262, #263, #268, #271 | Recording, generation, entry, and transition feedback share motion rules | R11 |
 | R13 | Complete visual consistency pass | #258, #259, #264, #265, #270 | Billing, settings, auth, navigation, and toast styling match design language | R11 |
 | R14 | Split code only along active product seams | #225, #242, #243, #245, #246 | Boundaries become clearer without a repository-wide rewrite or dependency churn | R3-R13 |
@@ -67,6 +84,18 @@ Status values:
 
 | Issue | Status | Release lane | Maintainer disposition |
 | --- | --- | --- | --- |
+| #316 Shared DB URL resolver | active | R5 | Use one fail-closed precedence contract across migration and runtime tooling. |
+| #315 Persisted draft validation | active | R3d | Parse/version nested draft data and wait for hydration before redirecting. |
+| #314 Out-of-order Waffo refunds | active | R4 | Keep unknown-purchase refunds retryable or pending until association is possible. |
+| #313 Auth session outage precedence | active | R5a | Try a valid Auth.js session before returning infrastructure failure. |
+| #312 Notification broadcast completeness | active | R9a | Paginate all active subscriptions and add the forward partial index. |
+| #311 Saved-song API bounds | active | R4b | Share strict enums and bounded collection/string schemas across create/update. |
+| #310 Navigation shell semantics | active | R11 | Scope journey navigation by route and close explicit button-type debt. |
+| #309 Production operations runbook | active | G3 | Document the settled deployment topology after G2 lands. |
+| #308 Main protection | active | G0 | Apply a repository ruleset; code review policy without enforcement is insufficient. |
+| #307 Migrate-before-deploy | active | G2 | Replace independent production triggers with one ordered release path. |
+| #306 Release artifact readiness | active | G4 | Require versioned release notes before the separate tag/release operation. |
+| #305 Missing migration secret | active | G1 | Required production credentials must fail closed, never produce a green no-op. |
 | #272 Footer/bottom spacing | active | R11 | Define one shell spacing contract, then remove page-local exceptions. |
 | #271 Missing micro-interactions | active | R12 | Apply shared hover/press/focus rules; respect reduced motion. |
 | #270 Toast editorial styling | active | R13 | Style the existing Sonner boundary; do not add a second toast system. |
@@ -91,7 +120,7 @@ Status values:
 | #237 Waffo pending purchase | active | R4 | Persist expected amount/SKU before checkout and validate webhook against it. |
 | #235 Database pooler | partial | R5 | Enforce/document pooled production URL and a safe per-instance connection cap. |
 | #225 Split mega-store | opportunistic | R14 | Preserve selectors and persisted draft compatibility; extract one concern per PR. |
-| #221 Broken test type checking | active | R1 | Add Bun types, fix env mutation helpers, then repair fixtures in bounded batches. |
+| #221 Broken test type checking | verify-close | R1 | PR #301 restored an explicit application/test split and CI coverage over the current suite. |
 | #220 Worker deploy/monitor architecture | partial | R5 | Separate topology, health/readiness, graceful drain, and alerting contracts. |
 | #217 Auto-audition preference | active | R7 | Put the preference in the existing preference store and honor mute/accessibility. |
 | #216 `estimatedWaitMs` UX | active | R7 | Display honest ranges and record predicted versus actual wait. |
@@ -104,7 +133,7 @@ Status values:
 | #202 Full-repo audit | partial | R0 | Keep as an index; remove merged findings and link deferred clusters. |
 | #201 Evaluation/GPU scripts | partial | R6 | Restore evaluation first; treat GPU deployment as a separate operational PR. |
 | #198 Poster/HTML export | active | R10 | Reactivate each recovered module separately with current artifact tests. |
-| #196 Melody-polisher tests | active | R2 | Follow the recovered-file checklist and restore the archived test only. |
+| #196 Melody-polisher tests | verify-close | R2 | PR #303 restored the archived suite and removed only its manifest entry. |
 | #194 Product UX audit | partial | R0 | Keep as an index; link focused issues and remove findings already fixed. |
 | #298 Transcribe operation accounting | active | R3a | A stable spend key alone is insufficient; model delivered/refunded/pending transitions at the ledger boundary. |
 | #299 Provider-neutral pending refunds | active | R3b | Product-spend compensation must not depend on Waffo credentials or availability. |
@@ -113,9 +142,8 @@ Status values:
 
 ## Newly confirmed gaps
 
-These findings are visible in current `main` but do not have focused GitHub
-issues yet. They should be opened before implementation so they do not disappear
-inside an umbrella PR.
+These findings were confirmed by the wider review-thread and direct-push audit.
+Each now has a focused issue so it does not disappear inside an umbrella PR.
 
 | Gap | Evidence | Proposed lane | Required shape |
 | --- | --- | --- | --- |
@@ -123,6 +151,25 @@ inside an umbrella PR.
 | #291 A render failure can save a song with no shareable audio | Save logs the render failure and continues | R7b | Explicit retry-or-draft choice; draft state must be visible in Gallery/detail. |
 | #293 Daily digest always uses Chinese copy | Cron calls `dailyDigestNotificationCopy("zh")` | R9b | Broadcast by persisted subscription locale with a defined fallback. |
 | #290 Stage tracking uses one global mutable state | `lastStage` and timestamp are module singletons | R9c | Key state by flow id and bound its lifetime. |
+
+## Audit coverage
+
+The current train is not limited to PR #280-#289:
+
+- review threads were checked across PR #120-#296, including unresolved,
+  non-outdated comments and high-risk merged state machines;
+- the latest 140 first-parent commits were checked for GitHub PR provenance;
+- 33 commits in that window had no associated PR and were reviewed as direct
+  pushes, with deploy, migration, release, payment, auth, notification, and
+  creation-flow changes prioritized;
+- direct-push findings are routed through G0-G4 and issues #310-#316 rather
+  than treated as historical exceptions.
+
+The incomplete transcribe operation-id patch is intentionally not a release
+candidate. A stable spend key does not model delivered, refunded,
+refund-pending, or concurrent retry states. Issue #298 owns a transactionally
+locked billing-operation state machine; issue #299 owns provider-neutral refund
+reconciliation.
 
 ## PR rules
 
