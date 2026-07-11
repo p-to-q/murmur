@@ -75,7 +75,7 @@ const dbMock = {
       },
     }),
   }),
-  transaction: async <T,>(fn: (tx: typeof dbMock) => Promise<T>): Promise<T> =>
+  transaction: async <T,>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
     fn(dbMock),
 };
 

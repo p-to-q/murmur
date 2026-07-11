@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+import { createFetchMock } from "@/test-utils/fetch";
+import { setTestNodeEnv } from "@/test-utils/env";
 
 const originalFetch = globalThis.fetch;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -32,7 +34,7 @@ function request(url = "http://test.local/api/qa/health"): NextRequest {
 
 beforeEach(() => {
   if (originalNodeEnv === "production") {
-    process.env.NODE_ENV = "test";
+    setTestNodeEnv("test");
   }
   if (originalDebugSurface === undefined) {
     delete process.env.MURMUR_ENABLE_DEBUG_SURFACE;
@@ -56,11 +58,7 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
-  if (originalNodeEnv === undefined) {
-    delete process.env.NODE_ENV;
-  } else {
-    process.env.NODE_ENV = originalNodeEnv;
-  }
+  setTestNodeEnv(originalNodeEnv);
   if (originalDebugSurface === undefined) {
     delete process.env.MURMUR_ENABLE_DEBUG_SURFACE;
   } else {
@@ -75,11 +73,11 @@ afterEach(() => {
 
 describe("GET /api/qa/health", () => {
   it("returns an ok health snapshot when the worker responds healthy", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       Response.json({
         status: "ok",
         service: "murmur-audio-engine",
-      })) as typeof fetch;
+      }));
 
     const response = await GET(request());
     expect(response.status).toBe(200);
@@ -115,7 +113,7 @@ describe("GET /api/qa/health", () => {
   });
 
   it("is disabled by default in production", async () => {
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     delete process.env.MURMUR_ENABLE_DEBUG_SURFACE;
 
     const response = await GET(request("https://murmur.example/api/qa/health"));
@@ -125,7 +123,7 @@ describe("GET /api/qa/health", () => {
   });
 
   it("requires a non-guest session when production debug is explicitly enabled", async () => {
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     process.env.MURMUR_ENABLE_DEBUG_SURFACE = "true";
     nextAuth = {
       ok: true,
@@ -141,7 +139,7 @@ describe("GET /api/qa/health", () => {
   });
 
   it("allows authenticated loopback smoke checks when production debug is explicitly enabled", async () => {
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     process.env.MURMUR_ENABLE_DEBUG_SURFACE = "true";
     nextAuth = {
       ok: true,

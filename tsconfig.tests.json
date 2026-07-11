@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "types": ["bun"]
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/**/*.ts",
+    "packages/**/*.tsx"
+  ],
+  "exclude": ["node_modules", "scripts", "src/_recovered"]
+}

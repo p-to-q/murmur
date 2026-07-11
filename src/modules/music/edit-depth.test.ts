@@ -15,6 +15,7 @@ const baseVersion: VibeVersion = {
   originFlowId: "f1",
   sourceType: "hum",
   sourceMelodyKind: "corrected",
+  lineageDepth: 0,
   editCount: 0,
   editDepth: "fresh",
   versionSeed: "seed",

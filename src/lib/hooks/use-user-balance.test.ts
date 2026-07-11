@@ -3,6 +3,7 @@ import {
   __resetUserBalanceCacheForTesting,
   fetchUserBalance,
 } from "@/lib/hooks/use-user-balance";
+import { createFetchMock } from "@/test-utils/fetch";
 
 const originalFetch = globalThis.fetch;
 
@@ -24,7 +25,7 @@ describe("fetchUserBalance", () => {
   });
 
   it("returns the parsed balance for the happy path", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse(
         {
           notes: 12,
@@ -34,7 +35,7 @@ describe("fetchUserBalance", () => {
           nextRefillAt: "2026-06-04T16:00:00.000Z",
         },
         200,
-      )) as typeof fetch;
+      ));
 
     const result = await fetchUserBalance({ force: true });
     expect(result.ok).toBe(true);
@@ -46,11 +47,11 @@ describe("fetchUserBalance", () => {
   });
 
   it("derives account notes for older balance payloads without pool fields", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse(
         { notes: 12, planTier: "free", nextRefillAt: "2026-06-04T16:00:00.000Z" },
         200,
-      )) as typeof fetch;
+      ));
 
     const result = await fetchUserBalance({ force: true });
     expect(result.ok).toBe(true);
@@ -60,8 +61,8 @@ describe("fetchUserBalance", () => {
   });
 
   it("surfaces unauthorized on 401 without throwing", async () => {
-    globalThis.fetch = (async () =>
-      jsonResponse({ error: "unauthorized" }, 401)) as typeof fetch;
+    globalThis.fetch = createFetchMock(async () =>
+      jsonResponse({ error: "unauthorized" }, 401));
 
     const result = await fetchUserBalance({ force: true });
     expect(result.ok).toBe(false);
@@ -71,13 +72,13 @@ describe("fetchUserBalance", () => {
 
   it("keeps the last successful balance when a forced refresh is unauthorized", async () => {
     let status = 200;
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       status === 200
         ? jsonResponse(
             { notes: 5, planTier: "free", nextRefillAt: "2026-06-04T16:00:00.000Z" },
             200,
           )
-        : jsonResponse({ error: "unauthorized" }, 401)) as typeof fetch;
+        : jsonResponse({ error: "unauthorized" }, 401));
 
     const first = await fetchUserBalance({ force: true });
     expect(first.ok).toBe(true);
@@ -91,8 +92,8 @@ describe("fetchUserBalance", () => {
   });
 
   it("surfaces unavailable on 5xx without throwing", async () => {
-    globalThis.fetch = (async () =>
-      jsonResponse({ error: "balance_unavailable" }, 503)) as typeof fetch;
+    globalThis.fetch = createFetchMock(async () =>
+      jsonResponse({ error: "balance_unavailable" }, 503));
 
     const result = await fetchUserBalance({ force: true });
     expect(result.ok).toBe(false);
@@ -100,22 +101,22 @@ describe("fetchUserBalance", () => {
   });
 
   it("normalizes an unknown planTier to free", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse(
         { notes: 4, planTier: "lifetime", nextRefillAt: "2026-06-04T16:00:00.000Z" },
         200,
-      )) as typeof fetch;
+      ));
 
     const result = await fetchUserBalance({ force: true });
     expect(result.balance?.planTier).toBe("free");
   });
 
   it("rejects unlimited-only payloads without a numeric balance", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse(
         { unlimited: true, planTier: "free", nextRefillAt: "2026-06-04T16:00:00.000Z" },
         200,
-      )) as typeof fetch;
+      ));
 
     const result = await fetchUserBalance({ force: true });
     expect(result.ok).toBe(false);
@@ -125,14 +126,14 @@ describe("fetchUserBalance", () => {
 
   it("dedupes concurrent fetches via the in-flight promise", async () => {
     let calls = 0;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = createFetchMock(async () => {
       calls += 1;
       await new Promise((resolve) => setTimeout(resolve, 5));
       return jsonResponse(
         { notes: 7, planTier: "free", nextRefillAt: "2026-06-04T16:00:00.000Z" },
         200,
       );
-    }) as typeof fetch;
+    });
 
     const [a, b] = await Promise.all([
       fetchUserBalance({ force: true }),

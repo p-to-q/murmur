@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { setTestNodeEnv } from "@/test-utils/env";
 
 import { shouldUseDevBalanceFallback } from "./dev-balance";
 
@@ -6,14 +7,13 @@ describe("shouldUseDevBalanceFallback", () => {
   it("ignores explicit production opt-in on public hosts", () => {
     const prevNode = process.env.NODE_ENV;
     const prev = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
 
     try {
       expect(shouldUseDevBalanceFallback({ host: "murmur.ptoq.io" })).toBe(false);
     } finally {
-      if (prevNode === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = prevNode;
+      setTestNodeEnv(prevNode);
       if (prev === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prev;
     }
@@ -23,14 +23,14 @@ describe("shouldUseDevBalanceFallback", () => {
     const prevNode = process.env.NODE_ENV;
     const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     const prevVercel = process.env.VERCEL;
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     delete process.env.VERCEL;
 
     try {
       expect(shouldUseDevBalanceFallback({ host: "127.0.0.1" })).toBe(true);
     } finally {
-      process.env.NODE_ENV = prevNode;
+      setTestNodeEnv(prevNode);
       if (prevFlag === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
       if (prevVercel === undefined) delete process.env.VERCEL;
@@ -42,7 +42,7 @@ describe("shouldUseDevBalanceFallback", () => {
     const prevNode = process.env.NODE_ENV;
     const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     const prevVercel = process.env.VERCEL;
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     process.env.VERCEL = "1";
 
@@ -51,7 +51,7 @@ describe("shouldUseDevBalanceFallback", () => {
       expect(shouldUseDevBalanceFallback({ host: "127.0.0.1" })).toBe(false);
       expect(shouldUseDevBalanceFallback({ host: "::1" })).toBe(false);
     } finally {
-      process.env.NODE_ENV = prevNode;
+      setTestNodeEnv(prevNode);
       if (prevFlag === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
       if (prevVercel === undefined) delete process.env.VERCEL;
@@ -62,14 +62,13 @@ describe("shouldUseDevBalanceFallback", () => {
   it("allows explicit opt-in outside production", () => {
     const prevNode = process.env.NODE_ENV;
     const prev = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    process.env.NODE_ENV = "staging";
+    setTestNodeEnv("staging");
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "true";
 
     try {
       expect(shouldUseDevBalanceFallback({ host: "preview.test" })).toBe(true);
     } finally {
-      if (prevNode === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = prevNode;
+      setTestNodeEnv(prevNode);
       if (prev === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prev;
     }
@@ -78,14 +77,13 @@ describe("shouldUseDevBalanceFallback", () => {
   it("keeps test runs on ledger paths even when local env files enable fallback", () => {
     const prevNode = process.env.NODE_ENV;
     const prev = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    process.env.NODE_ENV = "test";
+    setTestNodeEnv("test");
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "true";
 
     try {
       expect(shouldUseDevBalanceFallback({ host: "preview.test" })).toBe(false);
     } finally {
-      if (prevNode === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = prevNode;
+      setTestNodeEnv(prevNode);
       if (prev === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prev;
     }
@@ -95,15 +93,14 @@ describe("shouldUseDevBalanceFallback", () => {
     const prevNode = process.env.NODE_ENV;
     const prev = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     const prevVercel = process.env.VERCEL;
-    process.env.NODE_ENV = "test";
+    setTestNodeEnv("test");
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     delete process.env.VERCEL;
 
     try {
       expect(shouldUseDevBalanceFallback({ host: "localhost" })).toBe(true);
     } finally {
-      if (prevNode === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = prevNode;
+      setTestNodeEnv(prevNode);
       if (prev === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prev;
       if (prevVercel === undefined) delete process.env.VERCEL;

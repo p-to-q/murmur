@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+import { setTestNodeEnv } from "@/test-utils/env";
 
 let nextAuth: ResolvedRequestAuth = {
   ok: true,
@@ -9,7 +10,10 @@ let nextAuth: ResolvedRequestAuth = {
   sessionId: "sess_surface",
 };
 let nextSnapshotError: unknown = null;
-let nextSnapshot = {
+let nextSnapshot: {
+  lifetimeTopupCents: number;
+  latestPlanSkuId: string | null;
+} = {
   lifetimeTopupCents: 2197,
   latestPlanSkuId: "topup_120_notes",
 };
@@ -36,8 +40,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
-  else process.env.NODE_ENV = originalNodeEnv;
+  setTestNodeEnv(originalNodeEnv);
   if (originalDevBillingFallback === undefined) {
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
   } else {
@@ -74,7 +77,7 @@ describe("GET /api/user/topup-surface", () => {
   });
 
   it("returns 503 when the topup surface query fails", async () => {
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     nextSnapshotError = new Error("db unavailable");
 
@@ -88,7 +91,7 @@ describe("GET /api/user/topup-surface", () => {
   });
 
   it("keeps localhost previews usable when the surface query fails", async () => {
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     nextSnapshotError = new Error("db unavailable");
 

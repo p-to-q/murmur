@@ -4,6 +4,7 @@ import {
   transcribeRecording,
   transcribeRecordingStreaming,
 } from "@/lib/api/transcribe";
+import { createFetchMock } from "@/test-utils/fetch";
 
 const originalFetch = globalThis.fetch;
 
@@ -24,7 +25,7 @@ describe("transcribeRecording typed error mapping", () => {
   });
 
   it("maps 402 insufficient_notes into a typed error with balance", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse(
         {
           error: "insufficient_notes",
@@ -34,7 +35,7 @@ describe("transcribeRecording typed error mapping", () => {
           cost: 1,
         },
         402,
-      )) as typeof fetch;
+      ));
 
     try {
       await transcribeRecording(blob());
@@ -50,7 +51,7 @@ describe("transcribeRecording typed error mapping", () => {
   });
 
   it("maps the worker's no_voiced_frames 422 to the same client code", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse(
         {
           error: "no_voiced_frames",
@@ -58,7 +59,7 @@ describe("transcribeRecording typed error mapping", () => {
           requestId: "req_422",
         },
         422,
-      )) as typeof fetch;
+      ));
 
     try {
       await transcribeRecording(blob());
@@ -71,7 +72,7 @@ describe("transcribeRecording typed error mapping", () => {
   });
 
   it("collapses unexpected worker http errors into worker_unavailable", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse(
         {
           error: "worker_http_error",
@@ -79,7 +80,7 @@ describe("transcribeRecording typed error mapping", () => {
           requestId: "req_502",
         },
         502,
-      )) as typeof fetch;
+      ));
 
     try {
       await transcribeRecording(blob());
@@ -92,7 +93,7 @@ describe("transcribeRecording typed error mapping", () => {
   });
 
   it("preserves worker_unconfigured so the UI can explain local setup issues", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse(
         {
           error: "worker_unconfigured",
@@ -100,7 +101,7 @@ describe("transcribeRecording typed error mapping", () => {
           requestId: "req_unconfigured",
         },
         503,
-      )) as typeof fetch;
+      ));
 
     try {
       await transcribeRecording(blob());
@@ -114,7 +115,7 @@ describe("transcribeRecording typed error mapping", () => {
   });
 
   it("preserves billing_unavailable so local and prod copy stay honest", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse(
         {
           error: "billing_unavailable",
@@ -122,7 +123,7 @@ describe("transcribeRecording typed error mapping", () => {
           requestId: "req_billing",
         },
         503,
-      )) as typeof fetch;
+      ));
 
     try {
       await transcribeRecording(blob());
@@ -136,14 +137,14 @@ describe("transcribeRecording typed error mapping", () => {
   });
 
   it("maps auth failures separately from worker outages", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse(
         {
           error: "unauthorized",
           message: "Authentication required",
         },
         401,
-      )) as typeof fetch;
+      ));
 
     try {
       await transcribeRecording(blob());
@@ -156,7 +157,7 @@ describe("transcribeRecording typed error mapping", () => {
   });
 
   it("falls back to status-derived codes when the body lacks a typed error", async () => {
-    globalThis.fetch = (async () => new Response("nope", { status: 429 })) as typeof fetch;
+    globalThis.fetch = createFetchMock(async () => new Response("nope", { status: 429 }));
     try {
       await transcribeRecording(blob());
       throw new Error("expected transcribeRecording to throw");
@@ -168,9 +169,9 @@ describe("transcribeRecording typed error mapping", () => {
   });
 
   it("wraps low-level fetch failures as network_error", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = createFetchMock(async () => {
       throw new TypeError("Failed to fetch");
-    }) as typeof fetch;
+    });
 
     try {
       await transcribeRecording(blob());
@@ -197,12 +198,12 @@ describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
 
   it("dispatches progress phases and returns the completed result", async () => {
     const phases: string[] = [];
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       ndjsonResponse([
         JSON.stringify({ phase: "billing_ok", balanceBefore: 9 }),
         JSON.stringify({ phase: "worker_started" }),
         JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
-      ])) as typeof fetch;
+      ]));
 
     const result = await transcribeRecordingStreaming(blob(), {
       onProgress: (phase) => phases.push(phase),
@@ -213,12 +214,12 @@ describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
   });
 
   it("skips an unparseable (non-JSON) line instead of rejecting the transcription", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       ndjsonResponse([
         JSON.stringify({ phase: "billing_ok", balanceBefore: 9 }),
         "<html>502 Bad Gateway</html>",
         JSON.stringify({ phase: "complete", result: { provider: "rmvpe" } }),
-      ])) as typeof fetch;
+      ]));
 
     const result = await transcribeRecordingStreaming(blob());
     expect((result as { provider: string }).provider).toBe("rmvpe");
@@ -226,7 +227,7 @@ describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
 
   it("skips a well-formed line with an unrecognized phase (schema mismatch)", async () => {
     const phases: string[] = [];
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       ndjsonResponse([
         // A future/foreign event shape must not be dispatched to onProgress.
         JSON.stringify({ phase: "interim_melody", melody: { notes: "bad" } }),
@@ -254,7 +255,7 @@ describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
         }),
         JSON.stringify({ phase: "worker_started" }),
         JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
-      ])) as typeof fetch;
+      ]));
 
     const result = await transcribeRecordingStreaming(blob(), {
       onProgress: (phase) => phases.push(phase),
@@ -274,11 +275,11 @@ describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
       duration: 1,
       contour: "flat",
     };
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       ndjsonResponse([
         JSON.stringify({ phase: "interim_melody", melody }),
         JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
-      ])) as typeof fetch;
+      ]));
 
     await transcribeRecordingStreaming(blob(), {
       onProgress: (phase, data) => progress.push({ phase, data }),
@@ -288,19 +289,19 @@ describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
   });
 
   it("skips a malformed error event (missing fields) rather than throwing a bogus typed error", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       ndjsonResponse([
         // Missing message/status/requestId — not a usable error event.
         JSON.stringify({ phase: "error", error: "server_error" }),
         JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
-      ])) as typeof fetch;
+      ]));
 
     const result = await transcribeRecordingStreaming(blob());
     expect((result as { provider: string }).provider).toBe("swiftf0");
   });
 
   it("still surfaces a well-formed error event as a typed transport error", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       ndjsonResponse([
         JSON.stringify({ phase: "billing_ok", balanceBefore: 0 }),
         JSON.stringify({
@@ -311,7 +312,7 @@ describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
           requestId: "req_stream_402",
           currentBalance: 0,
         }),
-      ])) as typeof fetch;
+      ]));
 
     try {
       await transcribeRecordingStreaming(blob());
@@ -327,12 +328,12 @@ describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
   });
 
   it("does not reject the transcription when onProgress throws (keeps the client-pitch fallback reachable)", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       ndjsonResponse([
         JSON.stringify({ phase: "billing_ok", balanceBefore: 9 }),
         JSON.stringify({ phase: "worker_started" }),
         JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
-      ])) as typeof fetch;
+      ]));
 
     const result = await transcribeRecordingStreaming(blob(), {
       onProgress: () => {

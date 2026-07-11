@@ -8,6 +8,7 @@ import type {
 } from "@/lib/db/queries/notes-ledger";
 import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+import { setTestNodeEnv } from "@/test-utils/env";
 import type { TranscriptionResult } from "@/modules/shared/types";
 
 // State each test case mutates before invoking the route. Module mocks
@@ -330,7 +331,7 @@ beforeEach(() => {
 describe("POST /api/transcribe", () => {
   it("returns the polished melody and debits a note on success", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     const form = new FormData();
     form.append("audio", audioFile());
     form.append("targetInstrument", "piano");
@@ -354,13 +355,13 @@ describe("POST /api/transcribe", () => {
       expect(lastSpendInputs[0]?.metadata?.requestId).toBe("req_happy");
       expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
     } finally {
-      process.env.NODE_ENV = prevNodeEnv;
+      setTestNodeEnv(prevNodeEnv);
     }
   });
 
   it("does not reuse client request ids as spend idempotency keys", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
 
     try {
       for (let i = 0; i < 2; i += 1) {
@@ -380,20 +381,24 @@ describe("POST /api/transcribe", () => {
       expect(lastSpendInputs[0]?.metadata?.requestId).toBe("req_replayed");
       expect(lastSpendInputs[1]?.metadata?.requestId).toBe("req_replayed");
     } finally {
-      process.env.NODE_ENV = prevNodeEnv;
+      setTestNodeEnv(prevNodeEnv);
     }
   });
 
   it("allows RMVPE worker results through the stable transcribe route", async () => {
-    nextWorkerImpl = async () => ({
+    const rmvpeResult: TranscriptionResult = {
       ...stubTranscription,
       provider: "rmvpe",
       diagnostics: {
         ...stubTranscription.diagnostics,
+        duration: stubTranscription.diagnostics?.duration ?? stubTranscription.cleanMelody.duration,
+        snr: stubTranscription.diagnostics?.snr ?? null,
+        voicedRatio: stubTranscription.diagnostics?.voicedRatio ?? null,
         rmvpeFrames: 120,
         rmvpeVoicedFrames: 98,
       },
-    });
+    };
+    nextWorkerImpl = async () => rmvpeResult;
     const form = new FormData();
     form.append("audio", audioFile());
     form.append("targetInstrument", "piano");
@@ -602,7 +607,7 @@ describe("POST /api/transcribe", () => {
   it("keeps local demos usable when billing is unavailable in development", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
     const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    process.env.NODE_ENV = "development";
+    setTestNodeEnv("development");
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
     nextBalanceThrows = new Error("db offline");
 
@@ -616,7 +621,7 @@ describe("POST /api/transcribe", () => {
       expect(lastSpendInputs).toHaveLength(0);
       expect(lastRefundInputs).toHaveLength(0);
     } finally {
-      process.env.NODE_ENV = prevNodeEnv;
+      setTestNodeEnv(prevNodeEnv);
       if (prevFlag === undefined) {
         delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       } else {
@@ -628,7 +633,7 @@ describe("POST /api/transcribe", () => {
   it("bypasses insufficient balance in development when dev billing fallback is enabled", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
     const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    process.env.NODE_ENV = "development";
+    setTestNodeEnv("development");
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
     nextBalance = {
       ok: true,
@@ -648,7 +653,7 @@ describe("POST /api/transcribe", () => {
       expect(lastSpendInputs).toHaveLength(0);
       expect(lastRefundInputs).toHaveLength(0);
     } finally {
-      process.env.NODE_ENV = prevNodeEnv;
+      setTestNodeEnv(prevNodeEnv);
       if (prevFlag === undefined) {
         delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       } else {
@@ -660,7 +665,7 @@ describe("POST /api/transcribe", () => {
   it("keeps localhost previews usable when billing is unavailable outside dev mode", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
     const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
     nextBalanceThrows = new Error("db offline");
 
@@ -677,7 +682,7 @@ describe("POST /api/transcribe", () => {
       expect(lastSpendInputs).toHaveLength(0);
       expect(lastRefundInputs).toHaveLength(0);
     } finally {
-      process.env.NODE_ENV = prevNodeEnv;
+      setTestNodeEnv(prevNodeEnv);
       if (prevFlag === undefined) {
         delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       } else {
@@ -688,7 +693,7 @@ describe("POST /api/transcribe", () => {
 
   it("respects the auth resolver returning a 401 envelope", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     nextAuth = {
       ok: false,
       response: new Response(
@@ -704,7 +709,7 @@ describe("POST /api/transcribe", () => {
       expect(lastSpendInputs).toHaveLength(0);
       expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
     } finally {
-      process.env.NODE_ENV = prevNodeEnv;
+      setTestNodeEnv(prevNodeEnv);
     }
   });
 
@@ -736,7 +741,7 @@ describe("POST /api/transcribe", () => {
 
   it("streams progress events and returns the melody without refunding (happy path)", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     nextWorkerImpl = async () => stubTranscription;
 
     try {
@@ -759,13 +764,13 @@ describe("POST /api/transcribe", () => {
       expect(lastSpendInputs).toHaveLength(1);
       expect(lastRefundInputs).toHaveLength(0);
     } finally {
-      process.env.NODE_ENV = prevNodeEnv;
+      setTestNodeEnv(prevNodeEnv);
     }
   });
 
   it("refunds and emits an error event when the worker fails mid-stream", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     nextWorkerImpl = async () => {
       throw new AudioWorkerError("worker_http_error", "Audio worker unreachable", 502);
     };
@@ -786,13 +791,13 @@ describe("POST /api/transcribe", () => {
       expect(lastRefundInputs).toHaveLength(1);
       expect(lastRefundInputs[0]?.originalLedgerId).toBe("nle_test");
     } finally {
-      process.env.NODE_ENV = prevNodeEnv;
+      setTestNodeEnv(prevNodeEnv);
     }
   });
 
   it("refunds the spent note exactly once when the client disconnects mid-stream (#206)", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     const abort = new AbortController();
     // Resolve `workerEntered` the moment the route reaches the worker call —
     // this is strictly after billing/spend — then hang forever so the client
@@ -840,13 +845,13 @@ describe("POST /api/transcribe", () => {
       expect(lastRefundInputs).toHaveLength(1);
       expect(lastRefundInputs[0]?.originalLedgerId).toBe("nle_test");
     } finally {
-      process.env.NODE_ENV = prevNodeEnv;
+      setTestNodeEnv(prevNodeEnv);
     }
   });
 
   it("emits refund_pending on the stream when the worker fails and the refund also fails (#232)", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     nextRefundResult = { ok: false, reason: "original_not_found" };
     nextWorkerImpl = async () => {
       throw new AudioWorkerError("worker_http_error", "Audio worker unreachable", 502);
@@ -870,7 +875,7 @@ describe("POST /api/transcribe", () => {
       expect(lastPendingRefundInputs).toHaveLength(1);
       expect(lastPendingRefundInputs[0]?.originalLedgerId).toBe("nle_test");
     } finally {
-      process.env.NODE_ENV = prevNodeEnv;
+      setTestNodeEnv(prevNodeEnv);
     }
   });
 });

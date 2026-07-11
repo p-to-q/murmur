@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
+import { setTestNodeEnv } from "@/test-utils/env";
 
 let getCallCount = 0;
 
@@ -31,14 +32,14 @@ const params = Promise.resolve({ key: ["private", "song.wav"] });
 afterEach(() => {
   delete process.env.MURMUR_STORAGE_DRIVER;
   if (process.env.NODE_ENV === "production") {
-    process.env.NODE_ENV = "test";
+    setTestNodeEnv("test");
   }
   getCallCount = 0;
 });
 
 describe("GET /api/storage/local/[...key]", () => {
   it("refuses to serve local-fs objects in production even when explicitly configured", async () => {
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     process.env.MURMUR_STORAGE_DRIVER = "local-fs";
 
     const response = await GET(new Request("https://murmur.example/api/storage/local/private/song.wav"), {
@@ -50,7 +51,7 @@ describe("GET /api/storage/local/[...key]", () => {
   });
 
   it("serves local-fs objects outside production", async () => {
-    process.env.NODE_ENV = "test";
+    setTestNodeEnv("test");
     process.env.MURMUR_STORAGE_DRIVER = "local-fs";
 
     const response = await GET(new Request("http://localhost/api/storage/local/private/song.wav"), {

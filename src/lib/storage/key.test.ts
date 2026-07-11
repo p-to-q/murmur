@@ -33,15 +33,15 @@ describe("objectKey", () => {
   ] as const)(
     "rejects invalid segment shape (%j)",
     (override) => {
+      const validInput = {
+        kind: "song-master",
+        userId: "usr_a",
+        songId: "sng_a",
+        id: "asset",
+        ext: "mp3",
+      } as const;
       expect(() =>
-        objectKey({
-          kind: "song-master",
-          userId: "usr_a",
-          songId: "sng_a",
-          id: "asset",
-          ext: "mp3",
-          ...override,
-        }),
+        objectKey(Object.assign({}, validInput, override)),
       ).toThrow(StorageError);
     },
   );

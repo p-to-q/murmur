@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, beforeEach } from "bun:test";
+import { setTestNodeEnv } from "@/test-utils/env";
 
 import { createMemoryRateLimitStore } from "./adapters/memory";
 import { getRateLimitStore, resetCachedRateLimitStore } from "./index";
-import { RateLimitError, type RateLimitStore } from "./types";
+import { RateLimitError, type RateLimitDriver, type RateLimitStore } from "./types";
 
 /**
  * Contract test suite. Every adapter passes through here so adding
@@ -10,7 +11,7 @@ import { RateLimitError, type RateLimitStore } from "./types";
  * adapters list — no behavioural drift between backends.
  */
 
-const adapters: Array<{ name: string; build: () => RateLimitStore }> = [
+const adapters: Array<{ name: RateLimitDriver; build: () => RateLimitStore }> = [
   { name: "memory", build: () => createMemoryRateLimitStore() },
 ];
 
@@ -135,12 +136,12 @@ describe("getRateLimitStore (env-driven factory)", () => {
   it("defaults to postgres in production when env is unset", () => {
     const previousNodeEnv = process.env.NODE_ENV;
     try {
-      process.env.NODE_ENV = "production";
+      setTestNodeEnv("production");
       resetCachedRateLimitStore();
       const store = getRateLimitStore();
       expect(store.driver).toBe("postgres");
     } finally {
-      process.env.NODE_ENV = previousNodeEnv;
+      setTestNodeEnv(previousNodeEnv);
       resetCachedRateLimitStore();
     }
   });

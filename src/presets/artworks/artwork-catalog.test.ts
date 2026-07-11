@@ -25,7 +25,7 @@ function publicAssetExists(path: string): boolean {
 
 describe("artwork catalog", () => {
   it("loads the archived v0.5 seed pack", () => {
-    const ids = new Set(ARTWORK_CATALOG.map((entry) => entry.id));
+    const ids = new Set<string>(ARTWORK_CATALOG.map((entry) => entry.id));
 
     expect(ARTWORK_CATALOG).toHaveLength(68);
     expect(ids.size).toBe(68);
@@ -42,10 +42,10 @@ describe("artwork catalog", () => {
 
   it("keeps active artwork image files wired to public assets", () => {
     const missingAssets = ARTWORK_CATALOG.flatMap((entry) => {
-      const paths = [entry.imagePath, entry.backgroundImagePath].filter(
+      const paths: Array<string | undefined> = [entry.imagePath, entry.backgroundImagePath];
+      return paths.filter(
         (path): path is string => Boolean(path),
-      );
-      return paths.filter((path) => !publicAssetExists(path));
+      ).filter((path) => !publicAssetExists(path));
     });
 
     expect(missingAssets).toEqual([]);

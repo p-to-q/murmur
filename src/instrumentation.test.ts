@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
 import { collectEnvWarnings, register } from "@/instrumentation";
+import { setTestNodeEnv } from "@/test-utils/env";
 
 // register() reads process.env at call time; snapshot and restore the keys we
 // touch so cases don't leak into each other (or into other suites).
@@ -24,6 +25,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const key of KEYS) {
     if (saved[key] === undefined) delete process.env[key];
+    else if (key === "NODE_ENV") setTestNodeEnv(saved[key]);
     else process.env[key] = saved[key];
   }
 });
@@ -83,7 +85,7 @@ describe("collectEnvWarnings", () => {
 
 describe("register", () => {
   it("warns loudly but never throws for a bare production env", async () => {
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
       // Preview deployments run NODE_ENV=production without the full prod
@@ -110,7 +112,7 @@ describe("register", () => {
   });
 
   it("skips validation outside the Node.js runtime", async () => {
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     process.env.NEXT_RUNTIME = "edge";
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {

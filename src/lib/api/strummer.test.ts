@@ -3,6 +3,7 @@ import {
   classifyPromptWithLLM,
   StrummerEditRequestError,
 } from "@/lib/api/strummer";
+import { createFetchMock } from "@/test-utils/fetch";
 
 const originalFetch = globalThis.fetch;
 
@@ -20,12 +21,12 @@ describe("classifyPromptWithLLM typed error mapping", () => {
 
   it("returns validated edit tokens on success", async () => {
     let receivedHeaders: HeadersInit | undefined;
-    globalThis.fetch = (async (_input, init) => {
+    globalThis.fetch = createFetchMock(async (_input, init) => {
       receivedHeaders = init?.headers;
       return jsonResponse({
         tokens: ["warmer", "not_allowed", "less_drums", "more_bass", "more_strings"],
       });
-    }) as typeof fetch;
+    });
 
     const tokens = await classifyPromptWithLLM("make it warmer");
 
@@ -34,15 +35,15 @@ describe("classifyPromptWithLLM typed error mapping", () => {
   });
 
   it("keeps the local no-key fallback as an empty token result", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse({ tokens: [], reason: "LLM disabled", requestId: "req_disabled" }, 503)
-    ) as typeof fetch;
+    );
 
     await expect(classifyPromptWithLLM("make it warmer")).resolves.toEqual([]);
   });
 
   it("maps 402 insufficient_notes into a typed error with balance and cost", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse(
         {
           error: "insufficient_notes",
@@ -53,7 +54,7 @@ describe("classifyPromptWithLLM typed error mapping", () => {
         },
         402,
       )
-    ) as typeof fetch;
+    );
 
     try {
       await classifyPromptWithLLM("more strings");
@@ -70,7 +71,7 @@ describe("classifyPromptWithLLM typed error mapping", () => {
   });
 
   it("preserves billing_unavailable so Studio does not blame the prompt", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse(
         {
           error: "billing_unavailable",
@@ -79,7 +80,7 @@ describe("classifyPromptWithLLM typed error mapping", () => {
         },
         503,
       )
-    ) as typeof fetch;
+    );
 
     try {
       await classifyPromptWithLLM("more strings");
@@ -93,9 +94,9 @@ describe("classifyPromptWithLLM typed error mapping", () => {
   });
 
   it("maps rate limits into a typed recovery code", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse({ error: "rate_limited", requestId: "req_rate" }, 429)
-    ) as typeof fetch;
+    );
 
     try {
       await classifyPromptWithLLM("more strings");
@@ -109,9 +110,9 @@ describe("classifyPromptWithLLM typed error mapping", () => {
   });
 
   it("maps LLM failures into llm_unavailable", async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       jsonResponse({ error: "LLM timeout", requestId: "req_llm" }, 502)
-    ) as typeof fetch;
+    );
 
     try {
       await classifyPromptWithLLM("more strings");
@@ -125,9 +126,9 @@ describe("classifyPromptWithLLM typed error mapping", () => {
   });
 
   it("wraps low-level fetch failures as network_error", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = createFetchMock(async () => {
       throw new TypeError("Failed to fetch");
-    }) as typeof fetch;
+    });
 
     try {
       await classifyPromptWithLLM("more strings");

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
+import { setTestEnv } from "@/test-utils/env";
 
 let cronSecret = "cron_test";
 let merchantId: string | null = "merchant_test";
@@ -91,8 +92,8 @@ describe("GET /api/billing/cron/reconcile", () => {
 
   it("runs a read-only reconciliation", async () => {
     process.env.CRON_SECRET = cronSecret;
-    process.env.WAFFO_MERCHANT_ID = merchantId;
-    process.env.WAFFO_PRIVATE_KEY = privateKey;
+    setTestEnv("WAFFO_MERCHANT_ID", merchantId ?? undefined);
+    setTestEnv("WAFFO_PRIVATE_KEY", privateKey ?? undefined);
 
     const response = await GET(
       buildRequest({ authorization: "Bearer cron_test" }, "http://test.local/api/billing/cron/reconcile?limit=20"),
@@ -115,8 +116,8 @@ describe("GET /api/billing/cron/reconcile", () => {
 
   it("returns 207 when reconciliation finds mismatches", async () => {
     process.env.CRON_SECRET = cronSecret;
-    process.env.WAFFO_MERCHANT_ID = merchantId;
-    process.env.WAFFO_PRIVATE_KEY = privateKey;
+    setTestEnv("WAFFO_MERCHANT_ID", merchantId ?? undefined);
+    setTestEnv("WAFFO_PRIVATE_KEY", privateKey ?? undefined);
     reconcileSummary = {
       ...reconcileSummary,
       issueCount: 1,
@@ -133,8 +134,8 @@ describe("GET /api/billing/cron/reconcile", () => {
 
   it("returns 500 when limit is invalid", async () => {
     process.env.CRON_SECRET = cronSecret;
-    process.env.WAFFO_MERCHANT_ID = merchantId;
-    process.env.WAFFO_PRIVATE_KEY = privateKey;
+    setTestEnv("WAFFO_MERCHANT_ID", merchantId ?? undefined);
+    setTestEnv("WAFFO_PRIVATE_KEY", privateKey ?? undefined);
 
     const response = await GET(
       buildRequest({ authorization: "Bearer cron_test" }, "http://test.local/api/billing/cron/reconcile?limit=0"),
@@ -145,8 +146,8 @@ describe("GET /api/billing/cron/reconcile", () => {
 
   it("stays report-only by default and enables autoFix via env or ?autoFix (#238)", async () => {
     process.env.CRON_SECRET = cronSecret;
-    process.env.WAFFO_MERCHANT_ID = merchantId;
-    process.env.WAFFO_PRIVATE_KEY = privateKey;
+    setTestEnv("WAFFO_MERCHANT_ID", merchantId ?? undefined);
+    setTestEnv("WAFFO_PRIVATE_KEY", privateKey ?? undefined);
 
     // Default: report-only.
     await GET(buildRequest({ authorization: "Bearer cron_test" }));
@@ -169,8 +170,8 @@ describe("GET /api/billing/cron/reconcile", () => {
 
   it("returns 200 once autoFix resolves the detected drift", async () => {
     process.env.CRON_SECRET = cronSecret;
-    process.env.WAFFO_MERCHANT_ID = merchantId;
-    process.env.WAFFO_PRIVATE_KEY = privateKey;
+    setTestEnv("WAFFO_MERCHANT_ID", merchantId ?? undefined);
+    setTestEnv("WAFFO_PRIVATE_KEY", privateKey ?? undefined);
     // Drift was detected (errorCount 1) but auto-fix repaired it all.
     reconcileSummary = { ...reconcileSummary, issueCount: 1, errorCount: 1 };
     nextAutoFix = {
@@ -198,8 +199,8 @@ describe("GET /api/billing/cron/reconcile", () => {
 
   it("returns 207 when autoFix still leaves items for manual review", async () => {
     process.env.CRON_SECRET = cronSecret;
-    process.env.WAFFO_MERCHANT_ID = merchantId;
-    process.env.WAFFO_PRIVATE_KEY = privateKey;
+    setTestEnv("WAFFO_MERCHANT_ID", merchantId ?? undefined);
+    setTestEnv("WAFFO_PRIVATE_KEY", privateKey ?? undefined);
     reconcileSummary = { ...reconcileSummary, issueCount: 1, errorCount: 1 };
     nextAutoFix = {
       enabled: true,

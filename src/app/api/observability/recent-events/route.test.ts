@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+import { setTestNodeEnv } from "@/test-utils/env";
 
 let nextAuth: ResolvedRequestAuth = {
   ok: true,
@@ -43,7 +44,7 @@ beforeEach(() => {
     sessionId: "sess_debug",
   };
   if (process.env.NODE_ENV === "production") {
-    process.env.NODE_ENV = "test";
+    setTestNodeEnv("test");
   }
 });
 

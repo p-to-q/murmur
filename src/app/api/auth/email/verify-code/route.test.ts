@@ -15,10 +15,14 @@ let nextAuth: ResolvedRequestAuth = {
   sessionId: "ses_local",
 };
 
-let upsertResult = {
+let upsertResult: {
+  userId: string;
+  created: boolean;
+  registrationKind: "new_user" | "existing_user";
+} = {
   userId: "usr_invitee",
   created: true,
-  registrationKind: "new_user" as const,
+  registrationKind: "new_user",
 };
 
 const settleRegistrationShareReferralMock = mock(async () => ({

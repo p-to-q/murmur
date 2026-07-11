@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
+import { setTestNodeEnv } from "@/test-utils/env";
 
 import type {
   BalanceResult,
@@ -510,7 +511,7 @@ describe("POST /api/music/generate", () => {
 
   it("does not use dev billing fallback for Local Creator sessions", async () => {
     const previousNodeEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = "development";
+    setTestNodeEnv("development");
     nextEngineMode = "serverless";
     nextAuth = {
       ok: true,
@@ -532,7 +533,7 @@ describe("POST /api/music/generate", () => {
       expect(lastSpendInputs[0]?.userId).toBe("lc_music");
       expect(runJobCallCount).toBe(1);
     } finally {
-      process.env.NODE_ENV = previousNodeEnv;
+      setTestNodeEnv(previousNodeEnv);
     }
   });
 });

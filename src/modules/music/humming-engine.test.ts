@@ -643,7 +643,9 @@ describe("humming-engine musical layer", () => {
 
     expect(musicalAwkwardLeaps).toBeLessThan(correctedAwkwardLeaps);
     expect(musicalTimingRoughness).toBeLessThan(correctedTimingRoughness);
-    expect(melodies.musical.notes.at(-1)?.pitch % 12).toBe(4);
+    const finalNote = melodies.musical.notes.at(-1);
+    expect(finalNote).toBeDefined();
+    expect(finalNote!.pitch % 12).toBe(4);
   });
 
   it("keeps the broad contour while making musical timing more grid-stable", () => {
@@ -718,7 +720,9 @@ describe("humming-engine musical layer", () => {
     expect(localDirectionChanges(melodies.musical.notes)).toBeLessThan(
       localDirectionChanges(melodies.corrected.notes),
     );
-    expect([0, 4, 7]).toContain(melodies.musical.notes.at(-1)?.pitch % 12);
+    const finalNote = melodies.musical.notes.at(-1);
+    expect(finalNote).toBeDefined();
+    expect([0, 4, 7]).toContain(finalNote!.pitch % 12);
   });
 
   it("keeps recognizable hum anchors when musical repair makes the phrase more songlike", () => {
@@ -796,7 +800,9 @@ describe("humming-engine musical layer", () => {
       localDirectionChanges(melodies.corrected.notes),
     );
     expect(melodies.musical.notes.length).toBeGreaterThanOrEqual(5);
-    expect([0, 4, 7]).toContain(melodies.musical.notes.at(-1)?.pitch % 12);
+    const finalNote = melodies.musical.notes.at(-1);
+    expect(finalNote).toBeDefined();
+    expect([0, 4, 7]).toContain(finalNote!.pitch % 12);
   });
 
   it("keeps true short passing tones while removing embedded noise fragments", () => {

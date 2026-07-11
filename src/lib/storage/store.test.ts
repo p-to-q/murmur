@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { createLocalFsStore } from "@/lib/storage/adapters/local-fs";
+import { setTestNodeEnv } from "@/test-utils/env";
 import { createMemoryStore } from "@/lib/storage/adapters/memory";
 import {
   __resetObjectStoreForTesting,
@@ -167,8 +168,7 @@ describe("getObjectStore factory", () => {
   afterEach(() => {
     if (originalEnv === undefined) delete process.env[ENV_KEY];
     else process.env[ENV_KEY] = originalEnv;
-    if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
-    else process.env.NODE_ENV = originalNodeEnv;
+    setTestNodeEnv(originalNodeEnv);
     for (const key of S3_ENV_KEYS) {
       const value = originalS3Env[key];
       if (value === undefined) delete process.env[key];
@@ -185,7 +185,7 @@ describe("getObjectStore factory", () => {
 
   it("defaults to memory in test environments", () => {
     delete process.env[ENV_KEY];
-    process.env.NODE_ENV = "test";
+    setTestNodeEnv("test");
     const store = getObjectStore();
     expect(store.driver).toBe("memory");
   });
@@ -203,7 +203,7 @@ describe("getObjectStore factory", () => {
 
   it("refuses an unset driver in production", () => {
     delete process.env[ENV_KEY];
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     expect(() => getObjectStore()).toThrow(StorageError);
   });
 });
