@@ -698,7 +698,7 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
   const [mounted, setMounted] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ left: 0, top: 0, isCollapsed: false, width: 240 });
+  const [position, setPosition] = useState({ left: 0, top: 0, isCollapsed: false, width: 300 });
 
   useEffect(() => {
     const timer = setTimeout(() => setMounted(true), 0);
@@ -711,11 +711,11 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
       if (!buttonRef.current) return;
       const button = buttonRef.current.getBoundingClientRect();
       const isCollapsed = document.documentElement.classList.contains("nav-collapsed");
-      const popoverHeight = 70;
+      const popoverHeight = 96;
       if (isCollapsed) {
-        setPosition({ left: button.right + 12, top: button.top - 4, isCollapsed: true, width: 264 });
+        setPosition({ left: button.right + 12, top: button.top - 4, isCollapsed: true, width: 300 });
       } else {
-        setPosition({ left: 28, top: button.top - popoverHeight - 8, isCollapsed: false, width: 264 });
+        setPosition({ left: 28, top: button.top - popoverHeight - 8, isCollapsed: false, width: 300 });
       }
     };
     updatePosition();
@@ -777,7 +777,7 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
           zIndex: 9999,
           width: `${position.width}px`,
         }}
-        className="min-h-[70px] rounded-[14px] border border-[#E5DDD0] bg-white p-4 shadow-[0_12px_36px_rgba(26,26,26,0.12)]"
+        className="min-h-[96px] rounded-[14px] border border-[#E5DDD0] bg-white p-5 shadow-[0_12px_36px_rgba(26,26,26,0.12)]"
       >
         {position.isCollapsed && (
           <>
