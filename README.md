@@ -460,6 +460,7 @@ cp .env.example .env
 | `MELO_LAB_AUDIO_WORKER_URL` | Optional loopback audio worker override for `/api/test/melo-lab/transcribe`. Defaults to `http://127.0.0.1:8001`. |
 | `MELO_LAB_MUSIC_WORKER_URL` | Optional loopback music worker override for `/api/test/melo-lab/music`. Defaults to `http://127.0.0.1:8002`. |
 | `DATABASE_URL` | Postgres connection string for Drizzle. In production point this at the Neon **pooler** endpoint (`-pooler.neon.tech`) — see [Database connections](#database-connections). |
+| `DATABASE_URL_UNPOOLED` | Required GitHub Actions secret for production migrations. Use the direct, non-pooler Postgres endpoint; the migration workflow fails when it is absent. |
 | `POSTGRES_URL` | Vercel Postgres-compatible fallback accepted by DB scripts and production env audit. |
 | `MURMUR_RATE_LIMIT_DRIVER` | Rate-limit backend. Production defaults to `postgres` for shared route-level buckets; local/test default to `memory`. `redis` remains reserved until an adapter lands. |
 | `CRON_SECRET` | Shared secret for cron routes; production must use a non-placeholder value. |
