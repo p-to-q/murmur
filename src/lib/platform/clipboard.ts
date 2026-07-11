@@ -13,7 +13,11 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   return copyTextWithSelection(text);
 }
 
-function copyTextWithSelection(text: string): boolean {
+/**
+ * Legacy `execCommand("copy")` fallback for environments without the async
+ * Clipboard API. Exported so `share-invite.ts` reuses the same implementation.
+ */
+export function copyTextWithSelection(text: string): boolean {
   const textarea = document.createElement("textarea");
   textarea.value = text;
   textarea.setAttribute("readonly", "");

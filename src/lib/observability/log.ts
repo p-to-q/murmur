@@ -70,6 +70,7 @@ export type LogEvent =
   | "share.referral_failed"
   | "storage.local_serve_failed"
   | "strummer.edit_completed"
+  | "strummer.edit_llm_failed"
   | "stage.entered"
   | "stage.completed"
   | "stage.dropped"

@@ -39,6 +39,9 @@ export const ai = {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(params),
+      // Backstop so a hung upstream can't pin the request indefinitely. Aborts
+      // reject with a TimeoutError, surfaced by callers as a normal chat failure.
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!res.ok) {
