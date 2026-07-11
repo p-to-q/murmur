@@ -76,28 +76,26 @@ breaks one of them, it is wrong.
 
 ### 2.2 Typography
 
-Three type families, four roles.
+Two type families, three roles. The editorial (art) face always wins a
+tie: anything with a voice — titles, named artifacts, captions, editorial
+links — is serif/WenKai. Everything functional is sans. There is no third
+label family; a micro-label is just small, tracked, uppercase sans.
+(A third face, `Murmur Datatype`, was trialed for micro-labels and
+retired: its `@font-face` was never wired up, it had no CJK glyphs — so
+Chinese labels silently mixed two faces inside one string — and it broke
+the tracked-caps label rhythm that Studio / Vibe / Name / PublicSong
+kept. Don't reintroduce a label-only family.)
 
 | Role | Family | When |
 |---|---|---|
-| **Hero serif** | `Charter` / `Iowan` / `Songti SC` | page anchors — the one big editorial moment per screen |
-| **Hero serif italic** | same, italic | song titles, named artifacts, mymind-flavored captions |
-| **Sans body** | `Geist Sans` / `PingFang SC` / system sans | all regular body text |
-| **UI micro-label** | `Murmur Datatype`, 600 | very short labels, chips, compact state text |
-
-`Murmur Datatype` is self-hosted from `/public/fonts/datatype/` and declared
-in `src/app/fonts/datatype.css`. The local `.woff2` files are first choice,
-Google Fonts `gstatic` files remain in the same `@font-face` rules as a web
-fallback, and `Geist Sans` / system CJK fonts stay last in the CSS token stack.
-Keep future sans changes at the token/font-face layer unless a component has a
-real local exception. Use it sparingly: it should read like a label face, not a
-body face.
+| **Hero serif** | `Instrument Serif` (en) / `LXGW WenKai` (zh) | page anchors — the one big editorial moment per screen |
+| **Hero serif italic** | same, italic (zh stays upright WenKai) | song titles, named artifacts, mymind-flavored captions, editorial links |
+| **Sans body** | `Geist Sans` / `PingFang SC` / system sans | all other text, incl. micro-labels (small + uppercase + 0.14–0.32em tracking) |
 
 Font loading is a product pipeline, not a component detail:
 
-- `src/lib/fonts/font-assets.ts` is the asset registry for preload targets,
-  critical samples, and readiness timeout.
-- `src/app/layout.tsx` owns critical `<link rel="preload" as="font">` tags.
+- `src/app/layout.tsx` registers the brand faces (`next/font` for
+  Instrument Serif + Geist, `@fontsource` CSS for LXGW WenKai).
 - `FontHydrator` owns `document.fonts.load(...)` readiness and sets
   `html[data-fonts]`.
 - `.font-critical` text keeps its layout space but stays invisible while
@@ -117,7 +115,7 @@ Scale (Pixel, mobile / desktop):
 | Body | 14–15 | 0 |
 | Meta | 12–13 | 0 |
 | Eyebrow (uppercase) | 11 | 0.32em |
-| Micro-label | 11–12 | 0–0.08em |
+| Micro-label (uppercase sans) | 10–12 | 0.14–0.32em |
 | Tabular numeric | 12–13 | 0 (font-feature `tnum`) |
 
 **Rules:**

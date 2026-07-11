@@ -85,7 +85,10 @@ _preload_outcomes: dict[str, str] = {}
 def _detectors_ready() -> bool:
     if not _preload_outcomes:
         return True
-    return any(outcome == "ok" for outcome in _preload_outcomes.values())
+    provider = configured_pitch_provider()
+    if provider == "auto":
+        return any(outcome == "ok" for outcome in _preload_outcomes.values())
+    return _preload_outcomes.get(provider, "ok") == "ok"
 
 
 def _preload_pitch_model() -> None:

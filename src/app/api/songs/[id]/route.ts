@@ -24,15 +24,15 @@ import { strictArrangementStateSchema, strictVisualConfigSchema } from "../schem
 const ROUTE = "/api/songs/[id]";
 
 const updateSongSchema = z.object({
-  title: z.string().min(1).optional(),
-  vibe: z.string().min(1).optional(),
-  vibeEn: z.string().min(1).optional(),
+  title: z.string().min(1).max(200).optional(),
+  vibe: z.string().min(1).max(500).optional(),
+  vibeEn: z.string().min(1).max(500).optional(),
   bpm: z.number().int().optional(),
-  keySignature: z.string().min(1).optional(),
-  scaleType: z.string().min(1).optional(),
+  keySignature: z.string().min(1).max(100).optional(),
+  scaleType: z.string().min(1).max(100).optional(),
   duration: z.number().int().nonnegative().optional(),
-  parentSongId: z.string().min(1).nullable().optional(),
-  rootSongId: z.string().min(1).nullable().optional(),
+  parentSongId: z.string().min(1).max(100).nullable().optional(),
+  rootSongId: z.string().min(1).max(100).nullable().optional(),
   lineageDepth: z.number().int().nonnegative().optional(),
   sourceMelodyKind: z.enum(["intent", "corrected", "musical"]).optional(),
   editCount: z.number().int().nonnegative().optional(),
@@ -47,10 +47,11 @@ type SongUpdatePayload = z.infer<typeof updateSongSchema>;
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
 
   if (isDemoSongId(id)) {
     const demo = getDemoSong(id);
-    if (!demo) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!demo) return errorResponse("not_found", 404, requestId);
     const { mp3Url, ...rest } = demo;
     return NextResponse.json({ ...rest, mp3DataUrl: null, mp3Url });
   }
@@ -70,14 +71,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         ? await getSongSummaryByIdForUser(id, userId)
         : await getSongByIdForUser(id, userId);
     if (!song) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return errorResponse("not_found", 404, requestId);
     }
     return NextResponse.json(song);
   } catch (err) {
     if (shouldUseGuestSongFallback(req, userId) && isDatabaseUnavailable(err)) {
       const fallbackSong = getLocalSongByIdForUserFallback(id, userId);
       if (!fallbackSong) {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+        return errorResponse("not_found", 404, requestId);
       }
       return NextResponse.json(fallbackSong, {
         headers: { "X-Murmur-Fallback": "local-guest-song" },
@@ -92,7 +93,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       sessionId: auth.sessionId,
       level: "error",
     });
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    return errorResponse("server_error", 500, requestId);
   }
 }
 
@@ -103,6 +104,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const { id } = await params;
+  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
 
   let body: SongUpdatePayload;
   try {
@@ -113,13 +115,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         {
           error: "validation_error",
           message: "Invalid song update payload",
+          requestId,
           issues: err.issues.map((issue) => ({
             path: issue.path.join("."),
             code: issue.code,
             message: issue.message,
           })),
         },
-        { status: 400 },
+        { status: 400, headers: { "X-Request-Id": requestId } },
       );
     }
 
@@ -132,20 +135,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       sessionId: auth.sessionId,
       level: "warn",
     });
-    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    return errorResponse("validation_error", 400, requestId, {
+      message: "Invalid payload",
+    });
   }
 
   try {
     const updated = await updateSongForUser(id, userId, body);
     if (!updated) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return errorResponse("not_found", 404, requestId);
     }
     return NextResponse.json(updated);
   } catch (err) {
     if (shouldUseGuestSongFallback(req, userId) && isDatabaseUnavailable(err)) {
       const updated = updateLocalSongForUserFallback(id, userId, body);
       if (!updated) {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+        return errorResponse("not_found", 404, requestId);
       }
       return NextResponse.json(updated, {
         headers: { "X-Murmur-Fallback": "local-guest-song" },
@@ -161,7 +166,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       sessionId: auth.sessionId,
       level: "error",
     });
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    return errorResponse("server_error", 500, requestId);
   }
 }
 
@@ -172,17 +177,18 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
   const { id } = await params;
+  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
   try {
     const deleted = await deleteSongForUser(id, userId);
     if (!deleted) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return errorResponse("not_found", 404, requestId);
     }
     return NextResponse.json({ success: true });
   } catch (err) {
     if (shouldUseGuestSongFallback(req, userId) && isDatabaseUnavailable(err)) {
       const deleted = deleteLocalSongForUserFallback(id, userId);
       if (!deleted) {
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+        return errorResponse("not_found", 404, requestId);
       }
       return NextResponse.json(
         { success: true },
@@ -198,8 +204,24 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       sessionId: auth.sessionId,
       level: "error",
     });
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    return errorResponse("server_error", 500, requestId);
   }
+}
+
+function errorResponse(
+  error: "validation_error" | "not_found" | "server_error",
+  status: number,
+  requestId: string,
+  input: { message?: string } = {},
+) {
+  return NextResponse.json(
+    {
+      error,
+      ...(input.message ? { message: input.message } : {}),
+      requestId,
+    },
+    { status, headers: { "X-Request-Id": requestId } },
+  );
 }
 
 function requestedView(req: NextRequest): string | null {

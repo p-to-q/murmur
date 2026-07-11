@@ -49,3 +49,13 @@ Before merging:
 See [docs/delivery-cadence.md](./docs/delivery-cadence.md).
 Default rhythm is one visible outcome per week, with smaller PRs merged along
 the way.
+
+### Notable v0.6.0 workflow changes
+
+- Client-side WASM pYIN fallback introduces a new failure mode — review gates
+  now check that transient error handling is tested alongside the happy path.
+- Stage tracking and latency budgets are now required observability for any
+  new async route or background job.
+- Error boundaries per route (`src/components/murmur/route-error-screen.tsx`)
+  are the default pattern for new pages; new screen components should follow
+  the existing boundary contract.

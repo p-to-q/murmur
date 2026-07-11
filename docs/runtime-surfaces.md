@@ -36,12 +36,19 @@ Examples:
 - `src/modules/`
   Product-specific logic that should remain understandable outside framework
   glue, especially export and music-generation flows.
+- `src/lib/`
+  Core shared libraries including audio pipeline, error handling, and
+  observability infrastructure.
 
 Examples:
 
-- `src/modules/export/render-share-html.ts`
 - `src/modules/export/export-video.ts`
 - `src/modules/strummer/generate-versions.ts`
+- `src/lib/audio/client-pitch-fallback.ts`
+- `src/lib/audio/build-client-transcription-result.ts`
+- `src/lib/errors/transient.ts`
+- `src/lib/observability/latency-budgets.ts`
+- `src/lib/observability/stage-tracking.ts`
 
 ### Shared runtime libraries
 
@@ -55,6 +62,9 @@ Important subgroups:
 - `src/lib/db/` — persistence and queries
 - `src/lib/music/` — lower-level music helpers and assembly
 - `src/lib/api/` — client-side API wrappers
+- `src/lib/audio/` — client-side pitch detection fallback and transcription result builders
+- `src/lib/errors/` — shared error classification for retry/observability decisions
+- `src/lib/observability/` — latency budgets, stage tracking, logging
 - `src/lib/store/` — client application state
 
 ### Worker/runtime-adjacent services
@@ -145,9 +155,8 @@ These are produced by code under:
 
 - `src/modules/export/render-mp3.ts`
 - `src/modules/export/render-wav.ts`
-- `src/modules/export/render-poster.ts`
-- `src/modules/export/render-share-html.ts`
 - `src/modules/export/export-video.ts`
+- `src/components/song-detail/ShareTicketCard.tsx`
 
 ## 7. What belongs where
 

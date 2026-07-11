@@ -120,9 +120,14 @@ The transcription side is built with explicit runtime awareness and fallbacks.
 
 The hierarchy is:
 
-- best available real provider first
-- backup provider next
-- fixture only as last resort
+- best available real provider first (RMVPE on Fly.io)
+- backup provider next (SwiftF0 worker-side)
+- browser-side WASM pYIN (Essentia.js, transient failures only)
+- fixture only as last resort (explicit demo path)
+
+This means real recordings never silently fall through to fixture inside
+the browser. The system now degrades cleanly across three tiers before
+surfacing a human-readable error.
 
 See:
 
@@ -195,12 +200,16 @@ The system distinguishes between:
 
 - microphone failure
 - transcription provider unavailability
+- transient vs. permanent server failures (classified centrally by
+  `src/lib/errors/transient.ts`)
 - render failure
 - audio missing during export
 - browser capability missing for preferred video container
+- latency budget exceeded per component (tracked in `latency-budgets.ts`)
 
 That separation is important because it lets the app degrade instead of simply
-collapsing.
+collapsing. Transient failures trigger retry or client-side WASM fallback;
+permanent failures surface human-readable support codes.
 
 ## 6. Suggested Review Path
 
@@ -212,7 +221,8 @@ If you only have a few minutes, read in this order:
 4. [src/components/screens/HumScreen.tsx](../src/components/screens/HumScreen.tsx)
 5. [src/components/screens/StudioScreen.tsx](../src/components/screens/StudioScreen.tsx)
 6. [src/components/screens/SongDetailScreen.tsx](../src/components/screens/SongDetailScreen.tsx)
-7. [src/modules/export/export-video.ts](../src/modules/export/export-video.ts)
+7. [src/lib/audio/client-pitch-fallback.ts](../src/lib/audio/client-pitch-fallback.ts)
+8. [src/modules/export/export-video.ts](../src/modules/export/export-video.ts)
 
 ## 7. Short Summary
 

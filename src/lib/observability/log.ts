@@ -17,6 +17,7 @@ export type LogEvent =
   | "auth.local_creator_failed"
   | "auth.session_revoked"
   | "auth.signin_failed"
+  | "auth.jwt_identity_lookup_failed"
   | "auth.user_provisioned"
   | "auth.email_code_sent"
   | "auth.email_send_code_failed"
@@ -67,7 +68,17 @@ export type LogEvent =
   | "billing.webhook_received"
   | "billing.webhook_failed"
   | "share.referral_failed"
-  | "storage.local_serve_failed";
+  | "storage.local_serve_failed"
+  | "strummer.edit_completed"
+  | "stage.entered"
+  | "stage.completed"
+  | "stage.dropped"
+  | "client_pitch.wasm_loaded"
+  | "client_pitch.wasm_unavailable"
+  | "client_pitch.completed"
+  | "transcribe.client_fallback_unavailable"
+  | "transcribe.client_fallback_starting"
+  | "transcribe.client_fallback_failed";
 
 export interface LogContext {
   requestId?: string;

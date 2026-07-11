@@ -1,4 +1,4 @@
-import { and, eq, ilike, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { ulid } from "ulid";
 import { db } from "../client";
 import { users, type User } from "../schema/users";
@@ -10,13 +10,8 @@ import { DAILY_REFILL, GRANTS, LOCAL_CREATOR_FREE_NOTES } from "@murmur/core";
 import { currentNotesRefillWindowStart, notesRefillWindowKey } from "@/lib/billing/notes-clock";
 import type { UserRegistrationKind } from "@/lib/auth/registration-kind";
 
-export async function getUserById(id: string): Promise<User | undefined> {
+async function getUserById(id: string): Promise<User | undefined> {
   const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
-  return rows[0];
-}
-
-export async function getUserByEmail(email: string): Promise<User | undefined> {
-  const rows = await db.select().from(users).where(eq(users.email, email)).limit(1);
   return rows[0];
 }
 
@@ -229,11 +224,24 @@ export async function upsertOAuthUser(
   }
 
   return db.transaction(async (tx) => {
-    const [existingByEmail] = await tx
+    // Fast path: emails are written normalized (lowercase), so an exact match
+    // can use the users_email_idx btree index.
+    let [existingByEmail] = await tx
       .select({ id: users.id, deletedAt: users.deletedAt })
       .from(users)
-      .where(ilike(users.email, email))
+      .where(eq(users.email, email))
       .limit(1);
+
+    if (!existingByEmail) {
+      // Legacy fallback: rows written before normalizeEmail existed may carry
+      // mixed-case emails. A case-insensitive miss here would silently fork a
+      // duplicate account, so pay the sequential-scan cost on the rare miss.
+      [existingByEmail] = await tx
+        .select({ id: users.id, deletedAt: users.deletedAt })
+        .from(users)
+        .where(sql`lower(${users.email}) = ${email}`)
+        .limit(1);
+    }
 
     let userId: string;
     let created: boolean;

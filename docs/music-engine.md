@@ -4,7 +4,7 @@ How a hum becomes a finished little song. Five engines in series, one
 assembler, two players.
 
 ```
-RAW BLOB (mic / fixture)
+RAW BLOB (mic / fixture / client WASM fallback)
   ↓ stainer/transcribe
 RawNote[]              (pitch + start + duration + velocity + confidence)
   ↓ melody-intent profile
@@ -212,8 +212,9 @@ arrangements per vibe instead of the same template every time.
 
 ## Bundle cost
 
-Net added: ~10 KB of source code, **0** new npm deps. lamejs (50 KB) was
-added in the prior change; everything in this pass is pure TypeScript.
+Net added: ~12 KB of source code, **0** new npm deps. lamejs (50 KB) and
+essentia.js (~2.5 MB WASM, lazy-loaded on first use) were added in prior
+changes; everything in the engine pass is pure TypeScript.
 
 ## Determinism guarantees
 

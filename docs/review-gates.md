@@ -46,4 +46,6 @@ Repository automation that reinforces these gates lives in
 - saved song compatibility changes
 - export behavior changes in a durable way
 - auth, AI, or notifications ownership changes
+- a new client-side WASM path or device-mode execution path changes the
+  transcription fallback contract
 - a new external system becomes operationally central

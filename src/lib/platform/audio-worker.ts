@@ -10,6 +10,7 @@ import {
   buildTranscriptionMelodies,
   chooseGenerationMelodyKind,
 } from "@/modules/music/humming-engine";
+import { isObject } from "@/lib/utils/is-object";
 import type {
   CleanMelody,
   MelodyNote,
@@ -403,6 +404,7 @@ function normalizeProvider(value: string | undefined): TranscriptionProvider {
   if (lower.includes("rmvpe")) return "rmvpe";
   if (lower.includes("swift")) return "swiftf0";
   if (lower.includes("parselmouth") || lower.includes("praat")) return "parselmouth";
+  if (lower === "client_pyin") return "client_pyin";
   if (lower.includes("pyin")) return "pyin";
   if (lower === "yin" || lower.includes("librosa_yin")) return "yin";
   return "pyin";
@@ -446,10 +448,6 @@ async function readWorkerError(
       message: `Audio worker returned HTTP ${response.status}`,
     };
   }
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function normalizeNotes(

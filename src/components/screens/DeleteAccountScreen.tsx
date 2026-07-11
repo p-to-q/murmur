@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { formatSupportCode } from "@/lib/observability/support-code";
 
 import { useTranslator } from "@/lib/i18n";
 import { request } from "@/lib/api/request";
@@ -45,7 +46,9 @@ export function DeleteAccountScreen() {
       toast.success(t("delete.toast.done"));
       router.push("/");
     } catch {
-      toast.error(t("delete.toast.failed"));
+      toast.error(t("delete.toast.failed"), {
+        description: formatSupportCode({ area: "ACCOUNT", error: "delete_failed", requestId: null }),
+      });
       setIsSubmitting(false);
     }
   }

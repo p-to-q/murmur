@@ -1,6 +1,6 @@
 # Murmur Audio Dataset Ingestion
 
-Last updated: 2026-06-05
+Last updated: 2026-07-11
 
 This note explains how to turn a downloaded public dataset or an internal hum
 recording folder into a Murmur audit manifest that the worker can run without
@@ -270,7 +270,12 @@ This helper does not:
 - download datasets for us;
 - parse every academic annotation format automatically;
 - decide the perfect threshold;
-- replace an internal Murmur eval set.
+- replace an internal Murmur eval set;
+- validate client-side WASM pYIN fallback quality against public datasets.
+
+Closing the client-side WASM evaluation gap is a future work item: the same
+manifest format and audit harness should eventually support running the WASM
+detector path against staged datasets for cross-platform quality comparison.
 
 It only removes the mechanical friction between "dataset on disk" and "same
 audit loop Murmur already trusts".
