@@ -103,6 +103,13 @@ flowchart TB
 ### 4. Platform concerns
 
 - Auth is session-based in production.
+- Logout is fail-closed across the client/server boundary. When the Murmur
+  cookie contains an active token, the logout route attempts server revocation;
+  if that operation is unavailable, it returns a non-success response without
+  clearing the cookie. A successful response means revocation processing
+  completed and the cookie was cleared (`revoked: false` is valid when no
+  active token existed). The client preserves its local identity and offers a
+  retry unless it receives that successful response.
 - Local Creator is a lightweight account with a real `users.id`, a Murmur
   session cookie, and 5 notes once for the current browser. Live hums spend
   that finite server ledger when the Local Creator session exists; pure guest
