@@ -48,6 +48,8 @@ export async function POST(request: NextRequest) {
   const lang = langFromAcceptLanguage(request.headers.get("accept-language"));
   const copy = pushTestNotificationCopy(lang, callerLabel);
 
+  const requestId = crypto.randomUUID();
+
   try {
     const result = await notifications.publish({
       title: copy.title,
@@ -67,8 +69,11 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     if (err instanceof NotificationPublishError) {
       return NextResponse.json(
-        { error: err.message, code: err.code },
-        { status: err.code >= 400 && err.code < 600 ? err.code : 500 },
+        { error: err.code, message: err.message, requestId },
+        {
+          status: err.status >= 400 && err.status < 600 ? err.status : 500,
+          headers: { "X-Request-Id": requestId },
+        },
       );
     }
     log("notifications.publish_failed", {
@@ -79,6 +84,9 @@ export async function POST(request: NextRequest) {
       userId: auth.user.id,
       level: "error",
     });
-    return NextResponse.json({ error: "publish failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: "server_error", message: "publish failed", requestId },
+      { status: 500, headers: { "X-Request-Id": requestId } },
+    );
   }
 }

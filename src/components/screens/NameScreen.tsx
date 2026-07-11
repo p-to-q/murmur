@@ -22,6 +22,12 @@ import { toast } from "sonner";
 import { memory } from "@/lib/platform/memory";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 
+import { formatStudioSupportCode } from "@/lib/observability/support-code";
+import {
+  ApiEnvelopeError,
+  apiErrorEnvelopeFrom,
+  readApiErrorEnvelope,
+} from "@/lib/api/error-envelope";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { trackStageEntered, trackStageCompleted } from "@/lib/observability/stage-tracking";
 import { addMurmurNotification } from "@/lib/store/notification-store";
@@ -253,7 +259,9 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
           tags: versionWithName.tags,
         }),
       });
-      if (!response.ok) throw new Error(`Save HTTP ${response.status}`);
+      if (!response.ok) {
+        throw new ApiEnvelopeError(await readApiErrorEnvelope(response, "save_failed"));
+      }
       const savedSong = await response.json().catch(() => null) as { id?: unknown } | null;
       const savedSongId = typeof savedSong?.id === "string" ? savedSong.id : id;
 
@@ -293,7 +301,13 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       router.push(`/song/${savedSongId}`);
     } catch (error) {
       console.error("[Name] save failed:", error);
-      toast.error(t("studio.save_err"));
+      const envelope = apiErrorEnvelopeFrom(error);
+      toast.error(t("studio.save_err"), {
+        description: formatStudioSupportCode({
+          code: envelope?.code ?? "save_failed",
+          requestId: envelope?.requestId ?? null,
+        }),
+      });
       setIsSaving(false);
     }
   };

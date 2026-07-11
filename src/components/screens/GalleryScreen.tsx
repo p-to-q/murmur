@@ -4,6 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { formatSupportCode } from "@/lib/observability/support-code";
+import {
+  ApiEnvelopeError,
+  apiErrorEnvelopeFrom,
+  readApiErrorEnvelope,
+} from "@/lib/api/error-envelope";
 import { memory } from "@/lib/platform/memory";
 import {
   clearLocalCreatorBootstrapFlag,
@@ -223,7 +229,9 @@ export function GalleryScreen() {
     setIsDeleting(true);
     try {
       const res = await fetch(`/api/songs/${target.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`delete HTTP ${res.status}`);
+      if (!res.ok) {
+        throw new ApiEnvelopeError(await readApiErrorEnvelope(res, "delete_failed"));
+      }
       setSongs((prev) => prev.filter((s) => s.id !== target.id));
       setDeleteTarget(null);
       memory
@@ -235,8 +243,16 @@ export function GalleryScreen() {
         })
         .catch(() => {});
       toast.success(t("gallery.delete.done") || "Deleted.");
-    } catch {
-      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?");
+    } catch (error) {
+      console.error("[Gallery] delete failed:", error);
+      const envelope = apiErrorEnvelopeFrom(error);
+      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?", {
+        description: formatSupportCode({
+          area: "GALLERY",
+          error: envelope?.code ?? "delete_failed",
+          requestId: envelope?.requestId ?? null,
+        }),
+      });
     } finally {
       setIsDeleting(false);
     }

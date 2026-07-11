@@ -72,6 +72,7 @@ type SongInput = typeof songs.$inferInsert;
 type OkAuth = Extract<ResolvedRequestAuth, { ok: true }>;
 
 export async function GET(req: NextRequest) {
+  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
   const requestHost = getRequestHostname(req);
   const auth = await resolveRequestAuth(req, {
     allowGuestPreview: shouldAllowLocalPreviewFallback(req),
@@ -107,11 +108,14 @@ export async function GET(req: NextRequest) {
     });
     if (isDatabaseUnavailable(err)) {
       return NextResponse.json(
-        { error: "songs_unavailable", message: "Database unavailable" },
-        { status: 503 },
+        { error: "songs_unavailable", message: "Database unavailable", requestId },
+        { status: 503, headers: { "X-Request-Id": requestId } },
       );
     }
-    return NextResponse.json({ error: "Failed to fetch songs" }, { status: 500 });
+    return NextResponse.json(
+      { error: "server_error", message: "Failed to fetch songs", requestId },
+      { status: 500, headers: { "X-Request-Id": requestId } },
+    );
   }
 }
 
@@ -165,7 +169,7 @@ export async function POST(req: NextRequest) {
       level: "warn",
     });
     return NextResponse.json(
-      { error: "Failed to read song payload", requestId },
+      { error: "validation_error", message: "Failed to read song payload", requestId },
       { status: 400, headers: { "X-Request-Id": requestId } },
     );
   }
@@ -336,7 +340,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: "Failed to save song", requestId },
+      { error: "server_error", message: "Failed to save song", requestId },
       { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
