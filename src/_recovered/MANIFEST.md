@@ -33,7 +33,6 @@ inert. Rename back to `.test.ts` when reactivating.
 | `lib/music/stainer.ts` | `src/lib/music/stainer.ts` | estimateKey / estimateBPM / estimateContour — music theory helpers not found elsewhere |
 | `modules/stainer/runtime.ts` | `src/modules/stainer/runtime.ts` | Provider fallback chain architecture (remote → browser-yin → basic-pitch → fixture) |
 | `workers/basic-pitch-service/main.py` | `workers/basic-pitch-service/main.py` | FastAPI PYIN worker with humming-tuned params (FMIN=75Hz) |
-| `modules/music/melody-polisher.test-archived.ts` | `src/modules/music/melody-polisher.test.ts` | Tests for the still-active melody-polisher module (no dedicated test file today) |
 
 ### Infrastructure / Export (6 files)
 
