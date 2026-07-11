@@ -38,6 +38,10 @@ export type LogEvent =
   // progress handler threw; the line was skipped instead of failing the whole
   // transcription (#224).
   | "transcribe.stream_event_invalid"
+  // A client received an API error envelope that was malformed or carried an
+  // unrecognized error code; it degraded to a generic code at the boundary
+  // instead of being trusted (#223).
+  | "api.error_envelope_invalid"
   | "notes.spent"
   | "notes.granted"
   | "notes.refund_failed"

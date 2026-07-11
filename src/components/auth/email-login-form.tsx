@@ -8,8 +8,27 @@ import { useTranslator } from "@/lib/i18n";
 import { clearRememberedShareReferrer } from "@/lib/api/share-referral";
 import { refreshCurrentAccount } from "@/lib/hooks/use-current-account";
 import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
+import {
+  buildAuthRequestError,
+  toAuthRequestError,
+  type AuthRequestErrorCode,
+} from "@/lib/auth/auth-request-error";
+import { formatSupportCode } from "@/lib/observability/support-code";
 
 type Stage = "email" | "code";
+
+// Typed code -> copy maps replace the previous string-matching on `data.error`.
+// A code without a dedicated entry falls back to the stage's generic key, which
+// preserves the form's prior behavior (send failures -> code_send_failed,
+// verify failures -> code_invalid).
+const SEND_CODE_COPY: Partial<Record<AuthRequestErrorCode, string>> = {
+  rate_limit: "auth.code_rate_limit",
+};
+const VERIFY_CODE_COPY: Partial<Record<AuthRequestErrorCode, string>> = {
+  invalid_code: "auth.code_invalid",
+  expired: "auth.code_expired",
+  max_attempts: "auth.code_max_attempts",
+};
 
 interface EmailLoginFormProps {
   onSuccess?: () => void;
@@ -34,19 +53,20 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
         body: JSON.stringify({ email: email.trim() }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data.error === "rate_limit") {
-          toast.error(t("auth.code_rate_limit"));
-        } else {
-          toast.error(t("auth.code_send_failed"));
-        }
-        return;
+        throw await buildAuthRequestError(res);
       }
       setStage("code");
       toast.success(t("auth.code_sent").replace("{email}", email.trim()));
       setTimeout(() => codeInputRef.current?.focus(), 100);
-    } catch {
-      toast.error(t("auth.code_send_failed"));
+    } catch (cause) {
+      const err = toAuthRequestError(cause);
+      toast.error(t(SEND_CODE_COPY[err.code] ?? "auth.code_send_failed"), {
+        description: formatSupportCode({
+          area: "AUTH",
+          error: err.code,
+          requestId: err.requestId,
+        }),
+      });
     } finally {
       setLoading(false);
     }
@@ -61,14 +81,10 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), code: code.trim() }),
       });
-      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (data.error === "invalid_code") toast.error(t("auth.code_invalid"));
-        else if (data.error === "expired") toast.error(t("auth.code_expired"));
-        else if (data.error === "max_attempts") toast.error(t("auth.code_max_attempts"));
-        else toast.error(t("auth.code_invalid"));
-        return;
+        throw await buildAuthRequestError(res);
       }
+      const data = await res.json().catch(() => ({}));
       if (data.user) {
         authClient.setUser({
           id: data.user.id,
@@ -83,8 +99,15 @@ export function EmailLoginForm({ onSuccess, className = "" }: EmailLoginFormProp
       if (onSuccess) {
         onSuccess();
       }
-    } catch {
-      toast.error(t("auth.code_invalid"));
+    } catch (cause) {
+      const err = toAuthRequestError(cause);
+      toast.error(t(VERIFY_CODE_COPY[err.code] ?? "auth.code_invalid"), {
+        description: formatSupportCode({
+          area: "AUTH",
+          error: err.code,
+          requestId: err.requestId,
+        }),
+      });
     } finally {
       setLoading(false);
     }
