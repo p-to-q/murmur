@@ -14,6 +14,7 @@ import { getPlayer } from "@/lib/music/tone-player";
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
 import {
   MOBILE_JOURNEY_STEPS,
+  ownsJourneyNav,
   resolveMobileJourneyStage,
 } from "./nav-items";
 import { cn } from "@/lib/cn";
@@ -68,6 +69,11 @@ export function BottomNav() {
       behavior: reduceMotion ? "auto" : "smooth",
     });
   }, [activeIndex, pathname, reduceMotion, visibleSteps.length]);
+
+  // Scope the journey rail to journey routes only. Non-journey surfaces
+  // (top-up checkout, the /me account hub, privacy, auth, share landings)
+  // never render the bottom rail. Kept below the hooks so hook order is stable.
+  if (!ownsJourneyNav(pathname)) return null;
 
   return (
     <motion.nav
@@ -214,6 +220,7 @@ function RailStep({
   if (onHome) {
     return (
       <button
+        type="button"
         onClick={onHomeClick}
         aria-label={label}
         aria-current={isCurrent ? "page" : undefined}
