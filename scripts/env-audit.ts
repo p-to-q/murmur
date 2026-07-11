@@ -1,4 +1,5 @@
 import { ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV } from "@/lib/billing/zpay";
+import { collectDatabaseEnvAuditIssues } from "@/lib/db/config";
 
 const REQUIRED_IN_PRODUCTION = [
   {
@@ -94,6 +95,8 @@ function main() {
     }
   }
 
+  missing.push(...collectDatabaseEnvAuditIssues(process.env));
+
   const googleConfigured =
     Boolean(process.env.GOOGLE_CLIENT_ID?.trim()) &&
     Boolean(process.env.GOOGLE_CLIENT_SECRET?.trim());
@@ -163,7 +166,7 @@ function main() {
   }
 
   if (missing.length > 0) {
-    console.error("Production env audit failed. Missing:");
+    console.error("Production env audit failed:");
     for (const item of missing) console.error(`  - ${item}`);
     process.exitCode = 1;
     return;

@@ -2,10 +2,12 @@ import { config } from "dotenv";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
+import { resolveDatabaseUrl, resolveDbPoolMax } from "./config";
+
 config({ path: ".env" });
 
 // Vercel provides POSTGRES_URL, others might use DATABASE_URL
-const configured = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
+const configured = resolveDatabaseUrl();
 
 // In production a missing DSN must fail loudly at first use, not silently
 // dial a localhost dev database and surface as confusing connection errors.
@@ -35,12 +37,14 @@ const connectionString =
 // `max: 5`, 20 concurrent warm instances = 100 connections — already at the
 // Neon Pro ceiling and well past Neon Free's 20. The durable fix is NOT a
 // smaller `max` but routing through Neon's connection pooler: point
-// `DATABASE_URL` at the `-pooler.neon.tech` host in production so PgBouncer
-// multiplexes many client connections onto a small backend pool, decoupling
-// instance count from the backend limit. Only lower `max` if you have a
-// concrete reason to (and re-check the invariant above if you raise it).
+// `DATABASE_URL` at the `-pooler.<region>.neon.tech` host in production so
+// PgBouncer multiplexes many client connections onto a small backend pool,
+// decoupling instance count from the backend limit. Only lower `max` if you have a
+// concrete reason to. `MURMUR_DB_POOL_MAX` allows bounded production load-test
+// tuning without changing the default; re-check the invariant above before
+// raising it.
 const client = postgres(connectionString, {
-  max: 5,
+  max: resolveDbPoolMax(),
   idle_timeout: 20,
   connect_timeout: 10,
 });
