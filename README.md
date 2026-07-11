@@ -459,7 +459,7 @@ cp .env.example .env
 | `MURMUR_ENABLE_MELO_LAB` | Explicit production diagnostic flag for the test-only MeLo Lab APIs. Local development enables them by default; worker URLs still must be loopback. |
 | `MELO_LAB_AUDIO_WORKER_URL` | Optional loopback audio worker override for `/api/test/melo-lab/transcribe`. Defaults to `http://127.0.0.1:8001`. |
 | `MELO_LAB_MUSIC_WORKER_URL` | Optional loopback music worker override for `/api/test/melo-lab/music`. Defaults to `http://127.0.0.1:8002`. |
-| `DATABASE_URL` | Postgres connection string for Drizzle. |
+| `DATABASE_URL` | Postgres connection string for Drizzle. In production point this at the Neon **pooler** endpoint (`-pooler.neon.tech`) — see [Database connections](#database-connections). |
 | `POSTGRES_URL` | Vercel Postgres-compatible fallback accepted by DB scripts and production env audit. |
 | `MURMUR_RATE_LIMIT_DRIVER` | Rate-limit backend. Production defaults to `postgres` for shared route-level buckets; local/test default to `memory`. `redis` remains reserved until an adapter lands. |
 | `CRON_SECRET` | Shared secret for cron routes; production must use a non-placeholder value. |
@@ -501,6 +501,28 @@ cp .env.example .env
   still has a local in-app notification inbox and browser alert opt-in for
   save / generation events.
 - The Strummer edit route expects an OpenAI-compatible chat API.
+
+### Database connections
+
+The Drizzle client (`src/lib/db/client.ts`) opens up to `max: 5` Postgres
+connections **per warm serverless instance**. On Vercel, each concurrently warm
+function instance holds its own pool, so the real backend load is:
+
+```
+peak_serverless_instances × max  <  neon_connection_limit
+```
+
+With `max: 5`, ~20 concurrent warm instances already reach 100 connections —
+the Neon **Pro** ceiling, and far past Neon **Free**'s 20. A traffic spike can
+then exhaust the limit and surface as `connection refused` across the whole app.
+
+The durable fix is a connection pooler, not a smaller `max`: in production,
+point `DATABASE_URL` at Neon's pooler endpoint (`<project>-pooler.neon.tech`).
+Neon's PgBouncer multiplexes many client connections onto a small backend pool,
+so instance count no longer maps 1:1 to backend connections. This is an
+environment/ops action on the deployment (swap the host in the `DATABASE_URL`
+secret); no code change is required, since the client already reads
+`DATABASE_URL`. Re-check the invariant above before raising `max`.
 
 ## Stack
 

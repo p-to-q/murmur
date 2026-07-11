@@ -52,6 +52,12 @@ import { usePreferencesStore } from "@/lib/store/preferences-store";
 /** Visual phases of the route arrival. */
 type Phase = "closing" | "opening" | "cards";
 
+// How long the tab must stay backgrounded before we treat an in-flight
+// generation as abandoned and cancel it (issue #212). Long enough to survive a
+// brief app-switch / notification-shade peek on mobile, short enough that a
+// truly abandoned generation stops billing RunPod promptly.
+const BACKGROUND_GENERATION_CANCEL_MS = 60_000;
+
 const STAR_SEA_VISUALS = [
   {
     gradient: "linear-gradient(148deg, #16242C 0%, #3F7791 48%, #D7D0BF 100%)",
@@ -270,6 +276,45 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       cancelActiveGeneration();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ── Cancel generation on tab close + sustained backgrounding ────
+     Unmount cleanup (above) only covers in-app forward navigation. A tab
+     close/refresh or a phone locking mid-generation never unmounts React, so
+     the RunPod job keeps running (and billing). `beforeunload` catches the
+     close/refresh; `visibilitychange` cancels only after the tab has stayed
+     hidden past a threshold, so a brief app-switch the user returns from does
+     not kill a generation they still want. (issue #212) */
+  useEffect(() => {
+    let backgroundTimer: number | null = null;
+    const clearBackgroundTimer = () => {
+      if (backgroundTimer !== null) {
+        window.clearTimeout(backgroundTimer);
+        backgroundTimer = null;
+      }
+    };
+    const handleBeforeUnload = () => {
+      cancelActiveGeneration();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        clearBackgroundTimer();
+        backgroundTimer = window.setTimeout(() => {
+          backgroundTimer = null;
+          cancelActiveGeneration();
+        }, BACKGROUND_GENERATION_CANCEL_MS);
+      } else {
+        // Back in the foreground before the threshold — keep the job alive.
+        clearBackgroundTimer();
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      clearBackgroundTimer();
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   const handleGenerationRecovery = useCallback(

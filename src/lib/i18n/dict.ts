@@ -221,6 +221,7 @@ export const DICT = {
   "hum.cta.release":   { zh: "松开结束",      en: "RELEASE TO STOP" },
   "hum.demo.cta":      { zh: "示例旋律",      en: "Try demo" },
   "hum.cta_demo":      { zh: "用示例旋律继续", en: "Use the demo melody" },
+  "hum.retry_recording": { zh: "重试上一段录音", en: "Retry last recording" },
   "hum.login_wall.title":   { zh: "免费试唱用完啦", en: "That's your free taste" },
   "hum.login_wall.detail":  { zh: "登录送 15 枚音磅，够完整试几轮；之后可按需补给。", en: "Sign in and get 15 notes for a few full tries. Top up when you need more." },
   "hum.login_wall.cta":     { zh: "用 Google 登录", en: "Continue with Google" },
