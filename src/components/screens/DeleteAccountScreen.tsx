@@ -103,7 +103,7 @@ export function DeleteAccountScreen() {
             type="button"
             disabled={!isRegistered || isSubmitting}
             onClick={handleDelete}
-            className="mm-btn-primary w-full max-w-sm disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-2 justify-center w-full max-w-sm rounded-full px-6 py-3.5 text-[14px] font-medium text-white bg-[#C43B3B] transition-all hover:bg-[#A32D2D] hover:-translate-y-px hover:shadow-[0_8px_22px_rgba(196,59,59,0.32)] disabled:cursor-not-allowed disabled:opacity-60"
             aria-disabled={!isRegistered || isSubmitting}
           >
             {isSubmitting ? t("delete.cta.working") : t("delete.cta")}
