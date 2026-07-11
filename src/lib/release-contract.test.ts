@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "bun:test";
 import { APP_BUILD } from "./release-metadata";
@@ -9,17 +9,36 @@ function readRepoFile(relativePath: string): string {
   return readFileSync(path.join(repoRoot, relativePath), "utf8");
 }
 
+function readPackageVersion(): string {
+  return (JSON.parse(readRepoFile("package.json")) as { version: string })
+    .version;
+}
+
 describe("release contract", () => {
   it("keeps package.json, build metadata, changelog, and docs aligned", () => {
-    const packageJson = JSON.parse(readRepoFile("package.json")) as {
-      version: string;
-    };
+    const version = readPackageVersion();
     const changelog = readRepoFile("CHANGELOG.md");
     const releaseDoc = readRepoFile("docs/packaging-and-release.md");
 
-    expect(changelog).toContain(`## [${packageJson.version}]`);
-    expect(releaseDoc).toContain(`**SemVer**: \`${packageJson.version}\``);
+    expect(changelog).toContain(`## [${version}]`);
+    expect(releaseDoc).toContain(`**SemVer**: \`${version}\``);
     expect(releaseDoc).toContain(`**Build**: \`${APP_BUILD}\``);
     expect(releaseDoc).toContain("src/lib/release-metadata.ts");
+  });
+
+  it("ships a versioned release note for the declared version", () => {
+    const version = readPackageVersion();
+    const relativePath = `docs/release-notes/v${version}.md`;
+    const absolutePath = path.join(repoRoot, relativePath);
+
+    expect(existsSync(absolutePath)).toBe(true);
+  });
+
+  it("references the declared version and build in the release note", () => {
+    const version = readPackageVersion();
+    const releaseNote = readRepoFile(`docs/release-notes/v${version}.md`);
+
+    expect(releaseNote).toContain(`v${version}`);
+    expect(releaseNote).toContain(`build ${APP_BUILD}`);
   });
 });
