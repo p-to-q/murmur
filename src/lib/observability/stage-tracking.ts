@@ -11,55 +11,79 @@ export type FunnelStage = "hum" | "vibe" | "studio" | "save" | "gallery";
 
 const STAGE_ORDER: FunnelStage[] = ["hum", "vibe", "studio", "save", "gallery"];
 
-let lastStage: FunnelStage | null = null;
-let lastStageEnteredAt: number | null = null;
+export const STAGE_TRACKING_MAX_RETAINED_FLOWS = 100;
+
+type FlowStageState = {
+  lastStage: FunnelStage;
+  lastStageEnteredAt: number;
+};
+
+const flowStates = new Map<string, FlowStageState>();
+
+function retainFlowState(flowId: string, state: FlowStageState): void {
+  flowStates.delete(flowId);
+  flowStates.set(flowId, state);
+
+  while (flowStates.size > STAGE_TRACKING_MAX_RETAINED_FLOWS) {
+    const oldestFlowId = flowStates.keys().next().value;
+    if (oldestFlowId === undefined) break;
+    flowStates.delete(oldestFlowId);
+  }
+}
 
 export function trackStageEntered(
+  flowId: string,
   stage: FunnelStage,
-  context?: { flowId?: string; draftId?: string },
+  context?: { draftId?: string },
 ): void {
   const now = performance.now();
-  const fromStage = lastStage;
-  const dwellMs = lastStageEnteredAt !== null
-    ? Math.round(now - lastStageEnteredAt)
+  const previous = flowStates.get(flowId);
+  const fromStage = previous?.lastStage ?? null;
+  const dwellMs = previous
+    ? Math.round(now - previous.lastStageEnteredAt)
     : null;
 
   if (fromStage && STAGE_ORDER.indexOf(stage) <= STAGE_ORDER.indexOf(fromStage)) {
     log("stage.dropped", {
+      ...context,
       from: fromStage,
       to: stage,
       dwellMs,
-      ...context,
+      flowId,
     });
   }
 
   log("stage.entered", {
+    ...context,
     stage,
     from: fromStage,
     dwellMs,
-    ...context,
+    flowId,
   });
 
-  lastStage = stage;
-  lastStageEnteredAt = now;
+  retainFlowState(flowId, { lastStage: stage, lastStageEnteredAt: now });
 }
 
 export function trackStageCompleted(
+  flowId: string,
   stage: FunnelStage,
   context?: Record<string, unknown>,
 ): void {
-  const dwellMs = lastStageEnteredAt !== null
-    ? Math.round(performance.now() - lastStageEnteredAt)
+  const state = flowStates.get(flowId);
+  const dwellMs = state
+    ? Math.round(performance.now() - state.lastStageEnteredAt)
     : null;
 
   log("stage.completed", {
+    ...context,
     stage,
     dwellMs,
-    ...context,
+    flowId,
   });
+
+  if (state) retainFlowState(flowId, state);
 }
 
-export function resetStageTracking(): void {
-  lastStage = null;
-  lastStageEnteredAt = null;
+export function resetStageTracking(flowId: string): void {
+  flowStates.delete(flowId);
 }

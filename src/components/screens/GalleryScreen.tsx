@@ -24,6 +24,7 @@ import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indic
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { SongCard } from "@/components/gallery/SongCard";
 import { trackStageEntered } from "@/lib/observability/stage-tracking";
+import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useNotificationStore } from "@/lib/store/notification-store";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
 import { ARTWORK_CATALOG } from "@/presets/artworks/catalog";
@@ -150,6 +151,8 @@ export function GalleryScreen() {
   const [sort, setSort] = useState<SortMode>("newest");
   const [deleteTarget, setDeleteTarget] = useState<SongWithMeta | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const currentFlowId = useMurmurStore((state) => state.currentFlowId);
+  const currentDraftId = useMurmurStore((state) => state.currentDraftId);
 
   // Use demo songs when user has no real songs
   const displaySongs = songs.length > 0 ? songs : DEMO_SONGS;
@@ -157,9 +160,15 @@ export function GalleryScreen() {
 
   const markAllRead = useNotificationStore((s) => s.markAllRead);
   useEffect(() => {
-    trackStageEntered("gallery");
     markAllRead();
   }, [markAllRead]);
+
+  useEffect(() => {
+    if (!currentFlowId) return;
+    trackStageEntered(currentFlowId, "gallery", {
+      draftId: currentDraftId ?? undefined,
+    });
+  }, [currentDraftId, currentFlowId]);
 
   useEffect(() => {
     let cancelled = false;

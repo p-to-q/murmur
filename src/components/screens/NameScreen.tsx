@@ -88,8 +88,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   useEffect(() => {
     if (stageTrackedRef.current || !currentVersion) return;
     stageTrackedRef.current = true;
-    trackStageEntered("save", {
-      flowId: currentVersion.originFlowId,
+    trackStageEntered(currentVersion.originFlowId, "save", {
       draftId: currentVersion.draftId,
     });
   }, [currentVersion]);
@@ -295,7 +294,9 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
         meta: { songTitle: savedTitle },
       });
 
-      trackStageCompleted("save", { songId: savedSongId });
+      trackStageCompleted(currentVersion.originFlowId, "save", {
+        songId: savedSongId,
+      });
       toast.success(t("studio.save_ok"));
       resetFlow();
       router.push(`/song/${savedSongId}`);
