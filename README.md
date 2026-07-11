@@ -300,6 +300,12 @@ bun run db:migrate
 If Docker Desktop is installed but not open yet, `bun run db:up` will fail
 until the Docker daemon is running.
 
+`bun run db:migrate` resolves its target through the shared fail-closed DSN
+resolver (prefer `DATABASE_URL_UNPOOLED` / `POSTGRES_URL_NON_POOLING`, then
+`DATABASE_URL` / `POSTGRES_URL`). Locally it uses the `.env` `DATABASE_URL`; with
+no DSN set it errors loudly rather than silently migrating `localhost` — see
+[Connection string precedence](#connection-string-precedence).
+
 For real audio transcription, run the audio worker separately and point the
 web app at it:
 
@@ -459,9 +465,10 @@ cp .env.example .env
 | `MURMUR_ENABLE_MELO_LAB` | Explicit production diagnostic flag for the test-only MeLo Lab APIs. Local development enables them by default; worker URLs still must be loopback. |
 | `MELO_LAB_AUDIO_WORKER_URL` | Optional loopback audio worker override for `/api/test/melo-lab/transcribe`. Defaults to `http://127.0.0.1:8001`. |
 | `MELO_LAB_MUSIC_WORKER_URL` | Optional loopback music worker override for `/api/test/melo-lab/music`. Defaults to `http://127.0.0.1:8002`. |
-| `DATABASE_URL` | Postgres connection string for Drizzle. In production point this at the Neon **pooler** endpoint (`*-pooler.<region>.neon.tech`) — see [Database connections](#database-connections). |
-| `DATABASE_URL_UNPOOLED` | Required GitHub Actions secret for production migrations. Use the direct, non-pooler Postgres endpoint; the migration workflow fails when it is absent. |
-| `POSTGRES_URL` | Vercel Postgres-compatible fallback accepted by DB scripts and production env audit. |
+| `DATABASE_URL` | Primary Postgres connection string for Drizzle (runtime + migrations). In production point this at the Neon **pooler** endpoint (`*-pooler.<region>.neon.tech`) — see [Database connections](#database-connections). |
+| `POSTGRES_URL` | Vercel Postgres-compatible fallback for `DATABASE_URL`. Accepted everywhere the runtime and DB scripts resolve a DSN, and by the production env audit — one precedence contract, see [Database connections](#database-connections). |
+| `DATABASE_URL_UNPOOLED` | Direct (non-pooler) endpoint used **only for migrations**, where it takes precedence over the pooled URLs. Set it (or `POSTGRES_URL_NON_POOLING`) as the production migration secret; the migration workflow fails closed when no DSN is present. |
+| `POSTGRES_URL_NON_POOLING` | Vercel/Neon-integration name for the direct endpoint; accepted as an unpooled alias in migration context. |
 | `MURMUR_DB_POOL_MAX` | Optional per-instance postgres-js pool bound. Defaults to `5`; only integers from `1` to `10` are accepted. Tune with production load-test evidence. |
 | `MURMUR_RATE_LIMIT_DRIVER` | Rate-limit backend. Production defaults to `postgres` for shared route-level buckets; local/test default to `memory`. `redis` remains reserved until an adapter lands. |
 | `CRON_SECRET` | Shared secret for cron routes; production must use a non-placeholder value. |
@@ -533,6 +540,24 @@ to 10. The default remains 5 because there is no production load-test evidence
 that 1 or 2 preserves request throughput. Use the override only during measured
 capacity work, and keep `peak_serverless_instances × max` within the database
 plan's client-connection limit even when the Neon pooler is enabled.
+
+#### Connection string precedence
+
+The runtime client, the migration script, and Drizzle Kit all resolve their DSN
+through one fail-closed helper (`resolveServerDsn` in
+[`src/lib/db/config.ts`](./src/lib/db/config.ts)), so there is a single contract:
+
+| Context | Precedence (first non-empty wins) |
+| --- | --- |
+| Runtime (pooled) | `DATABASE_URL` → `POSTGRES_URL` |
+| Migrations (prefer direct) | `DATABASE_URL_UNPOOLED` → `POSTGRES_URL_NON_POOLING` → `DATABASE_URL` → `POSTGRES_URL` |
+
+Migrations prefer the direct (unpooled) endpoint because DDL should not run
+through PgBouncer. When no DSN is configured the resolver **throws a clear
+error** instead of silently connecting to `localhost` — the migration script no
+longer targets a dev database when an operator forgets the connection string.
+The `localhost` default is only used as a fallback under an explicit local-dev
+signal: `NODE_ENV=development` / `test`, or `MURMUR_DB_ALLOW_LOCAL_FALLBACK=1`.
 
 ## Stack
 

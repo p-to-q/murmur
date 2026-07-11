@@ -67,6 +67,30 @@ The split between `ci.yml` and `audio-acceptance.yml` is intentional:
   shells (`/`, `/gallery`, `/me`, `/studio`, `/vibe`), so repo health is not
   inferred from APIs alone.
 
+## Database connection contract
+
+Production migrations run in
+[`.github/workflows/migrate.yml`](../.github/workflows/migrate.yml), which sets
+the connection string from the `DATABASE_URL_UNPOOLED` secret (the direct,
+non-pooler endpoint) and fails closed when it is absent.
+
+The runtime client, the migration script (`bun run db:migrate`), and Drizzle Kit
+all resolve their DSN through one fail-closed helper (`resolveServerDsn` in
+[`src/lib/db/config.ts`](../src/lib/db/config.ts)) so there is a single
+precedence contract:
+
+- **Runtime (pooled):** `DATABASE_URL` → `POSTGRES_URL`.
+- **Migrations (prefer direct):** `DATABASE_URL_UNPOOLED` →
+  `POSTGRES_URL_NON_POOLING` → `DATABASE_URL` → `POSTGRES_URL`.
+
+When no DSN is configured the resolver throws a clear error instead of silently
+connecting to `localhost`. The localhost default applies only under an explicit
+local-dev signal (`NODE_ENV=development` / `test`, or
+`MURMUR_DB_ALLOW_LOCAL_FALLBACK=1`), so an operator who follows the documented
+contract can no longer migrate the wrong target or hit a misleading localhost
+failure. The production env audit (`bun run env:audit`) enforces the same
+runtime precedence and rejects direct Neon pooler-less hosts for the runtime URL.
+
 ## Known limits right now
 
 The repo now treats `check:links` as a real CI gate because the known broken

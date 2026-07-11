@@ -4,13 +4,21 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import path from "path";
 import postgres from "postgres";
 
+import { isExplicitLocalDev, resolveServerDsn } from "./config";
+
 config({ path: ".env" });
 
 const runMigrate = async () => {
-  const client = postgres(
-    process.env.DATABASE_URL ?? "postgresql://postgres:password@localhost:5432/myapp",
-    { max: 1 }
-  );
+  // Same fail-closed DSN resolver the runtime client uses (issue #316), in
+  // MIGRATION mode: it prefers the explicit unpooled endpoint
+  // (DATABASE_URL_UNPOOLED / POSTGRES_URL_NON_POOLING) and accepts the
+  // documented POSTGRES_URL fallback. When no DSN is set it throws a clear
+  // error instead of silently targeting localhost and migrating the wrong DB.
+  const connectionString = resolveServerDsn(process.env, {
+    isMigration: true,
+    isExplicitLocalDev: isExplicitLocalDev(process.env),
+  });
+  const client = postgres(connectionString, { max: 1 });
   const db = drizzle(client);
 
   console.log("⏳ Running migrations...");
