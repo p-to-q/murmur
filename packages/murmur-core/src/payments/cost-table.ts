@@ -44,6 +44,12 @@ export type NotesReason =
   // preserved); the reconcile cron finds it by external_ref and retries the
   // real `refund:spend` idempotently. Never carries a balance change itself.
   | "refund:pending"
+  // Durable "this operation was delivered" marker (#298). A zero-delta
+  // bookkeeping row keyed to the spend it settles; it records the terminal
+  // "delivered" state of a charge/refund/retry operation so a later
+  // reconciler never refunds delivered work, and so a re-charge can restore
+  // exactly one net charge after a prior failure refunded the spend.
+  | "operation:delivered"
   // Operations
   | "manual:op_grant";
 

@@ -28,10 +28,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const copy = dailyDigestNotificationCopy("zh");
-    const result = await notifications.publishBroadcast({
-      title: copy.title,
-      body: copy.body,
+    // Each subscription receives the digest in its own persisted locale;
+    // grouping + fallback live in publishLocalizedBroadcast (#293).
+    const result = await notifications.publishLocalizedBroadcast({
+      resolveCopy: (lang) => dailyDigestNotificationCopy(lang),
       data: { source: "cron-daily-digest" },
     });
     return NextResponse.json(result, { headers: { "X-Request-Id": requestId } });

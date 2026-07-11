@@ -1,11 +1,11 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "incremental": false,
-    "types": ["bun"]
+    "incremental": false
   },
   "include": [
     "next-env.d.ts",
+    "bun-test-env.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "packages/**/*.ts",

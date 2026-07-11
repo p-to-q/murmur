@@ -36,6 +36,17 @@ const PROVIDER = "waffo";
 
 class NonRetryableWebhookError extends Error {}
 
+/**
+ * A refund.succeeded that arrives before its order.completed has been recorded
+ * (#314). The purchase row does not exist *yet*, but it is expected to — provider
+ * event delivery can reorder — so this is a TRANSIENT condition, not a permanent
+ * one. Throwing a retryable error (not `NonRetryableWebhookError`) makes the route
+ * answer non-2xx so Waffo redelivers, instead of acking 200 and permanently
+ * dropping a real refund. Once order.completed lands, the redelivered refund
+ * finds the purchase and reverses exactly once (reverseTopupGrant is idempotent).
+ */
+class OutOfOrderRefundError extends Error {}
+
 type RefundAmountDecision =
   | {
       ok: true;
@@ -456,8 +467,22 @@ async function refundOrder(
     .limit(1);
 
   if (!purchase) {
-    throw new NonRetryableWebhookError(
-      `refund.succeeded references unknown Waffo order ${orderId}`,
+    // #314: keep an out-of-order refund retryable rather than acking 200. Record
+    // the reorder distinctly so the redelivery (after order.completed) is
+    // auditable, then throw a retryable error → the POST handler returns 500 and
+    // Waffo redelivers. Duplicate/partial refund idempotency is unaffected: this
+    // branch only fires when NO purchase row exists yet.
+    log(
+      "billing.webhook_refund_out_of_order",
+      {
+        orderId,
+        providerEventId: event.id,
+        refundEventId: event.eventId,
+      },
+      { route: ROUTE, level: "warn" },
+    );
+    throw new OutOfOrderRefundError(
+      `refund.succeeded references not-yet-recorded Waffo order ${orderId}`,
     );
   }
 

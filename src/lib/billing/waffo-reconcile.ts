@@ -5,13 +5,7 @@ import { displayAmountToCents } from "@/lib/billing/waffo";
 import { db } from "@/lib/db/client";
 import { notesLedger } from "@/lib/db/schema/notes-ledger";
 import { purchases, type Purchase } from "@/lib/db/schema/purchases";
-import {
-  grantNotes,
-  refundNotes,
-  listPendingRefundMarkers,
-  type PendingRefundCursor,
-  type PendingRefundMarker,
-} from "@/lib/db/queries/notes-ledger";
+import { grantNotes } from "@/lib/db/queries/notes-ledger";
 
 export type WaffoReconcileSeverity = "warn" | "error";
 
@@ -35,25 +29,19 @@ export interface WaffoReconcileSummary {
 }
 
 /**
- * Auto-fix outcome (#238). Only present when `autoFix` was enabled. Every fix
- * is idempotent: grants dedupe on (user, purchase:topup, orderId); pending
- * refunds dedupe on the original spend's refund reference.
+ * Auto-fix outcome (#238). Only present when `autoFix` was enabled. Focused on
+ * purchase/top-up drift only (#299): re-granting a confirmed `purchase:topup`.
+ * Every fix is idempotent — grants dedupe on (user, purchase:topup, orderId).
+ * Durable spend `refund:pending` markers are recovered by the provider-neutral
+ * reconciler (see `pending-refund-reconcile.ts`), not here.
  */
 export interface WaffoAutoFixReport {
   enabled: boolean;
   /** `ledger_grant_missing` issues where the grant was (re)written. */
   grantsFixed: number;
-  /** Durable `refund:pending` markers whose reversal was newly applied. */
-  refundsFixed: number;
-  /** Pending markers already settled by a prior pass / in-request refund. */
-  refundsAlreadySettled: number;
-  /** Pending markers scanned across all pages this run. */
-  pendingRefundsScanned: number;
-  /** Pages walked over the pending-refund cursor. */
-  pendingRefundPages: number;
-  /** Total items that still need a human (failed grants + failed retries). */
+  /** Grant fixes that still need a human. */
   requiresManualReview: number;
-  /** grantsFixed + refundsFixed. */
+  /** Equal to grantsFixed (kept for a stable report shape). */
   fixed: number;
 }
 
@@ -94,15 +82,12 @@ export type WaffoReconcileOptions = {
   limit?: number;
   /**
    * When true, reconciliation stops being report-only and idempotently repairs
-   * what it safely can (#238): re-grant a missing `purchase:topup` for a
-   * confirmed payment, and retry every durable `refund:pending` marker. Gated
-   * off by default; the cron opts in via env/param so drift-fixing is deliberate.
+   * the purchase drift it safely can (#238): re-grant a missing `purchase:topup`
+   * for a confirmed payment. Gated off by default; the cron opts in via
+   * env/param so drift-fixing is deliberate. Durable spend refunds are recovered
+   * separately by the provider-neutral reconciler (#299).
    */
   autoFix?: boolean;
-  /** Page size for the durable pending-refund scan (default 100, max 500). */
-  pendingRefundPageLimit?: number;
-  /** Max pages to walk over pending-refund markers in one run (default 20). */
-  maxPendingRefundPages?: number;
 };
 
 export async function reconcileWaffoBilling(options: WaffoReconcileOptions): Promise<WaffoReconcileReport> {
@@ -325,28 +310,22 @@ export async function reconcileWaffoBilling(options: WaffoReconcileOptions): Pro
     return { summary, issues };
   }
 
-  const autoFix = await runReconcileAutoFix({
-    issues,
-    purchaseByOrder,
-    pendingRefundPageLimit: options.pendingRefundPageLimit,
-    maxPendingRefundPages: options.maxPendingRefundPages,
-  });
+  const autoFix = await runReconcileAutoFix({ issues, purchaseByOrder });
 
   return { summary, issues, autoFix };
 }
 
 /**
- * Idempotently repair the drift the read-only pass detected (#238):
+ * Idempotently repair the purchase drift the read-only pass detected (#238):
  *   • `ledger_grant_missing` → re-grant the confirmed `purchase:topup`.
- *   • durable `refund:pending` markers → retry the reversal.
- * Every write dedupes on its external_ref, so a re-run (or a race with the
- * webhook) is a no-op rather than a double credit.
+ * The grant dedupes on its external_ref, so a re-run (or a race with the
+ * webhook) is a no-op rather than a double credit. Durable spend refunds are
+ * handled by the provider-neutral reconciler (#299), keeping Waffo
+ * reconciliation focused on purchase/top-up.
  */
 async function runReconcileAutoFix(input: {
   issues: WaffoReconcileIssue[];
   purchaseByOrder: Map<string, Purchase>;
-  pendingRefundPageLimit?: number;
-  maxPendingRefundPages?: number;
 }): Promise<WaffoAutoFixReport> {
   let grantsFixed = 0;
   let requiresManualReview = 0;
@@ -377,105 +356,12 @@ async function runReconcileAutoFix(input: {
     }
   }
 
-  const pending = await retryPendingRefunds(
-    {
-      listMarkers: listPendingRefundMarkers,
-      retryRefund: async (originalLedgerId) => {
-        const res = await refundNotes({ originalLedgerId });
-        return res.ok
-          ? { ok: true, duplicate: res.duplicate }
-          : { ok: false, duplicate: false, reason: res.reason };
-      },
-    },
-    {
-      pageLimit: input.pendingRefundPageLimit,
-      maxPages: input.maxPendingRefundPages,
-    },
-  );
-
-  requiresManualReview += pending.requiresManualReview;
-
   return {
     enabled: true,
     grantsFixed,
-    refundsFixed: pending.refundsFixed,
-    refundsAlreadySettled: pending.alreadySettled,
-    pendingRefundsScanned: pending.scanned,
-    pendingRefundPages: pending.pages,
     requiresManualReview,
-    fixed: grantsFixed + pending.refundsFixed,
+    fixed: grantsFixed,
   };
-}
-
-export interface PendingRefundRetryDeps {
-  listMarkers: (input: {
-    limit: number;
-    after?: PendingRefundCursor | null;
-  }) => Promise<PendingRefundMarker[]>;
-  retryRefund: (
-    originalLedgerId: string,
-  ) => Promise<{ ok: boolean; duplicate: boolean; reason?: string }>;
-}
-
-export interface PendingRefundRetrySummary {
-  scanned: number;
-  refundsFixed: number;
-  alreadySettled: number;
-  requiresManualReview: number;
-  pages: number;
-}
-
-/**
- * Walk the durable `refund:pending` markers with a stable (created_at, id)
- * cursor and retry each reversal. Dependencies are injected so the pagination +
- * classification can be unit-tested without a database. The retry itself is
- * idempotent, so a marker for an already-refunded spend simply reports
- * `duplicate` and is counted as already-settled rather than double-refunded.
- */
-export async function retryPendingRefunds(
-  deps: PendingRefundRetryDeps,
-  options: { pageLimit?: number; maxPages?: number } = {},
-): Promise<PendingRefundRetrySummary> {
-  const pageLimit = clampInt(options.pageLimit ?? 100, 1, 500);
-  const maxPages = clampInt(options.maxPages ?? 20, 1, 1000);
-  const summary: PendingRefundRetrySummary = {
-    scanned: 0,
-    refundsFixed: 0,
-    alreadySettled: 0,
-    requiresManualReview: 0,
-    pages: 0,
-  };
-  let after: PendingRefundCursor | null = null;
-
-  for (let page = 0; page < maxPages; page += 1) {
-    const markers = await deps.listMarkers({ limit: pageLimit, after });
-    if (markers.length === 0) break;
-    summary.pages += 1;
-
-    for (const marker of markers) {
-      summary.scanned += 1;
-      try {
-        const res = await deps.retryRefund(marker.originalLedgerId);
-        if (res.ok && !res.duplicate) summary.refundsFixed += 1;
-        else if (res.ok) summary.alreadySettled += 1;
-        else summary.requiresManualReview += 1;
-      } catch {
-        summary.requiresManualReview += 1;
-      }
-    }
-
-    const last = markers[markers.length - 1];
-    after = { createdAt: last.createdAt, id: last.id };
-    // A short page means the cursor reached the tail — nothing left to walk.
-    if (markers.length < pageLimit) break;
-  }
-
-  return summary;
-}
-
-function clampInt(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return min;
-  return Math.max(min, Math.min(max, Math.trunc(value)));
 }
 
 function normalizeLimit(limit: number): number {

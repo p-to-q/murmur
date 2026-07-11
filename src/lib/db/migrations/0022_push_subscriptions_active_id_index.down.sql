@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS "push_subscriptions_active_id_idx";
