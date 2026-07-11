@@ -5,11 +5,15 @@ import {
   SESSION_COOKIE_NAME,
 } from "@/lib/platform/server-auth";
 import { requestAccountDeletion } from "@/lib/db/queries/users";
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
 import { log } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
 const ROUTE = "/api/account/delete";
+// User-scoped ceiling on an irreversible, auth-gated action; low by design.
+const DELETE_RATE_LIMIT = { capacity: 3, refillWindowMs: 60 * 60 * 1000 };
 const AUTH_SESSION_COOKIE_NAMES = [
   "authjs.session-token",
   "__Secure-authjs.session-token",
@@ -18,23 +22,40 @@ const AUTH_SESSION_COOKIE_NAMES = [
 ];
 
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "user",
+    userId: auth.user.id,
+    requestId,
+    sessionId: auth.sessionId,
+    options: DELETE_RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
 
   if (auth.user.accountKind !== "registered") {
     return NextResponse.json(
       {
         error: "registered_account_required",
         message: "Sign in before requesting account deletion.",
+        requestId,
       },
-      { status: 403 },
+      { status: 403, headers: { "X-Request-Id": requestId } },
     );
   }
 
   try {
     const result = await requestAccountDeletion(auth.user.id);
     if (!result.ok) {
-      return NextResponse.json({ error: result.reason }, { status: 404 });
+      return NextResponse.json(
+        { error: result.reason, requestId },
+        { status: 404, headers: { "X-Request-Id": requestId } },
+      );
     }
 
     log(
@@ -51,13 +72,17 @@ export async function POST(request: NextRequest) {
       },
     );
 
-    const response = NextResponse.json({
-      ok: true,
-      deletedAt: result.deletedAt.toISOString(),
-      revokedSongs: result.revokedSongs,
-      revokedSessions: result.revokedSessions,
-      alreadyDeleted: result.alreadyDeleted,
-    });
+    const response = NextResponse.json(
+      {
+        ok: true,
+        deletedAt: result.deletedAt.toISOString(),
+        revokedSongs: result.revokedSongs,
+        revokedSessions: result.revokedSessions,
+        alreadyDeleted: result.alreadyDeleted,
+        requestId,
+      },
+      { headers: { "X-Request-Id": requestId } },
+    );
     clearSessionCookies(response);
     return response;
   } catch (error) {
@@ -66,6 +91,7 @@ export async function POST(request: NextRequest) {
       { error: error instanceof Error ? error.message : String(error) },
       {
         route: ROUTE,
+        requestId,
         userId: auth.user.id,
         sessionId: auth.sessionId,
         level: "error",
@@ -75,8 +101,9 @@ export async function POST(request: NextRequest) {
       {
         error: "account_delete_unavailable",
         message: "Could not request account deletion right now.",
+        requestId,
       },
-      { status: 503 },
+      { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
 }
