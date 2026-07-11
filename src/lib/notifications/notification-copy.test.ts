@@ -1,8 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  NOTIFICATION_FALLBACK_LANG,
+  dailyDigestNotificationCopy,
   formatNotificationTemplate,
   langFromAcceptLanguage,
+  normalizeNotificationLocale,
   resolveNotificationCopy,
   songGeneratedNotificationCopy,
 } from "./notification-copy";
@@ -74,5 +77,35 @@ describe("notification copy", () => {
         totalCount: 3,
       }),
     ).toBe("2/3");
+  });
+});
+
+describe("notification locale normalization (#293)", () => {
+  it("maps supported base + regional codes to a supported language", () => {
+    expect(normalizeNotificationLocale("zh")).toBe("zh");
+    expect(normalizeNotificationLocale("zh-CN")).toBe("zh");
+    expect(normalizeNotificationLocale("zh_Hans")).toBe("zh");
+    expect(normalizeNotificationLocale("en")).toBe("en");
+    expect(normalizeNotificationLocale("en-US")).toBe("en");
+    expect(normalizeNotificationLocale("EN")).toBe("en");
+  });
+
+  it("falls back for missing, empty, or unknown locales", () => {
+    expect(NOTIFICATION_FALLBACK_LANG).toBe("zh");
+    expect(normalizeNotificationLocale(null)).toBe(NOTIFICATION_FALLBACK_LANG);
+    expect(normalizeNotificationLocale(undefined)).toBe(NOTIFICATION_FALLBACK_LANG);
+    expect(normalizeNotificationLocale("")).toBe(NOTIFICATION_FALLBACK_LANG);
+    expect(normalizeNotificationLocale("   ")).toBe(NOTIFICATION_FALLBACK_LANG);
+    expect(normalizeNotificationLocale("fr")).toBe(NOTIFICATION_FALLBACK_LANG);
+    expect(normalizeNotificationLocale("jp-JP")).toBe(NOTIFICATION_FALLBACK_LANG);
+  });
+
+  it("produces distinct digest copy per supported locale", () => {
+    const zh = dailyDigestNotificationCopy("zh");
+    const en = dailyDigestNotificationCopy("en");
+    expect(zh.title).not.toBe(en.title);
+    expect(zh.body).not.toBe(en.body);
+    expect(zh.title.length).toBeGreaterThan(0);
+    expect(en.title.length).toBeGreaterThan(0);
   });
 });

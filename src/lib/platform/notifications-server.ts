@@ -2,14 +2,20 @@ import webpush from "web-push";
 import { randomUUID } from "crypto";
 
 import {
+  ACTIVE_PUSH_SUBSCRIPTIONS_PAGE_SIZE,
   disablePushSubscriptionByEndpoint,
   disablePushSubscriptionForUser,
-  getActivePushSubscriptions,
   getActivePushSubscriptionsForUser,
+  getActivePushSubscriptionsPage,
   upsertPushSubscription,
   type WebPushSubscriptionJSON,
 } from "@/lib/db/queries/push-subscriptions";
 import type { PushSubscriptionRecord } from "@/lib/db/schema/push-subscriptions";
+import type { Lang } from "@/lib/i18n/dict";
+import {
+  NOTIFICATION_FALLBACK_LANG,
+  normalizeNotificationLocale,
+} from "@/lib/notifications/notification-copy";
 import { log } from "@/lib/observability/log";
 
 export type NotificationErrorCode = "publish_failed" | "unauthorized" | "server_error";
@@ -42,6 +48,12 @@ export type NotificationUserPublishInput = NotificationPublishInput & {
   userId: string;
 };
 
+export interface NotificationLocalizedBroadcastInput {
+  /** Resolves the notification copy for a supported language. */
+  resolveCopy: (lang: Lang) => { title: string; body: string };
+  data?: NotificationPublishInput["data"];
+}
+
 export interface NotificationSubscribeDeviceInput {
   userId: string;
   sessionId?: string | null;
@@ -66,8 +78,15 @@ type WebPushErrorLike = Error & {
   body?: string;
 };
 
-const DEFAULT_PUSH_LIMIT = 1000;
 const PUSH_SEND_CONCURRENCY = 25;
+const NO_ACTIVE_SUBSCRIPTIONS_REASON =
+  "No active browser push subscriptions are registered.";
+
+/** Mutable delivery tally threaded through paginated broadcast delivery. */
+type DeliveryCounters = { delivered: number; failed: number; removed: number };
+
+/** Builds the per-subscription push payload. The seam #293 hooks for locale. */
+type PayloadBuilder = (subscription: PushSubscriptionRecord) => string;
 
 export const notifications = {
   subscribeDevice(input: NotificationSubscribeDeviceInput) {
@@ -79,21 +98,69 @@ export const notifications = {
   },
 
   publish(input: NotificationUserPublishInput): Promise<NotificationPublishResult> {
-    return publishToSubscriptions(input, () =>
-      getActivePushSubscriptionsForUser(input.userId),
-    );
+    return runPublish(input.title, async (publishId) => {
+      const subscriptions = await getActivePushSubscriptionsForUser(input.userId);
+      if (subscriptions.length === 0) {
+        return { skipped: true, reason: NO_ACTIVE_SUBSCRIPTIONS_REASON };
+      }
+      const payload = serializeNotificationPayload(input, publishId);
+      const counters: DeliveryCounters = { delivered: 0, failed: 0, removed: 0 };
+      await deliverPage(subscriptions, () => payload, counters);
+      return counters;
+    });
   },
 
   publishBroadcast(input: NotificationPublishInput): Promise<NotificationPublishResult> {
-    return publishToSubscriptions(input, () =>
-      getActivePushSubscriptions(DEFAULT_PUSH_LIMIT),
-    );
+    return runPublish(input.title, (publishId) => {
+      const payload = serializeNotificationPayload(input, publishId);
+      return deliverActiveSubscriptionPages(() => payload);
+    });
+  },
+
+  /**
+   * Broadcast to every active subscription in the recipient's own persisted
+   * locale. Owns locale selection (#293); delivery completeness + scale stay in
+   * {@link deliverActiveSubscriptionPages} (#312). Subscriptions are grouped by
+   * normalized supported locale and one payload is built per locale group
+   * (lazily, then reused), so the population is never materialized in memory.
+   * Missing/unknown locales fall back to {@link NOTIFICATION_FALLBACK_LANG}.
+   */
+  publishLocalizedBroadcast(
+    input: NotificationLocalizedBroadcastInput,
+  ): Promise<NotificationPublishResult> {
+    // The result summary title is representative only; use the fallback locale.
+    const summaryTitle = input.resolveCopy(NOTIFICATION_FALLBACK_LANG).title;
+    return runPublish(summaryTitle, (publishId) => {
+      const payloadByLang = new Map<Lang, string>();
+      const buildPayload: PayloadBuilder = (subscription) => {
+        const lang = normalizeNotificationLocale(subscription.metadata?.locale);
+        const cached = payloadByLang.get(lang);
+        if (cached) return cached;
+        const copy = input.resolveCopy(lang);
+        const payload = serializeNotificationPayload(
+          { title: copy.title, body: copy.body, data: input.data },
+          publishId,
+        );
+        payloadByLang.set(lang, payload);
+        return payload;
+      };
+      return deliverActiveSubscriptionPages(buildPayload);
+    });
   },
 };
 
-async function publishToSubscriptions(
-  input: NotificationPublishInput,
-  loadSubscriptions: () => Promise<PushSubscriptionRecord[]>,
+/**
+ * Shared publish envelope: mints a publish id, short-circuits with a skipped
+ * result when Web Push is unconfigured (keeps local demos + saves working),
+ * primes VAPID, then runs `deliver` and normalizes its outcome. `deliver`
+ * returns either delivery counters or a `{ skipped }` marker (e.g. no
+ * recipients).
+ */
+async function runPublish(
+  title: string,
+  deliver: (
+    publishId: string,
+  ) => Promise<DeliveryCounters | { skipped: true; reason: string }>,
 ): Promise<NotificationPublishResult> {
   const publishId = createPublishId();
   const config = getWebPushConfig();
@@ -103,64 +170,98 @@ async function publishToSubscriptions(
       failed: 0,
       removed: 0,
       publishId,
-      title: input.title,
+      title,
       skipped: true,
       reason: config.reason,
     };
   }
 
-  webpush.setVapidDetails(
-    config.subject,
-    config.publicKey,
-    config.privateKey,
-  );
+  webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
 
-  const subscriptions = await loadSubscriptions();
-
-  if (subscriptions.length === 0) {
+  const outcome = await deliver(publishId);
+  if ("skipped" in outcome) {
     return {
       delivered: 0,
       failed: 0,
       removed: 0,
       publishId,
-      title: input.title,
+      title,
       skipped: true,
-      reason: "No active browser push subscriptions are registered.",
+      reason: outcome.reason,
     };
   }
 
-  const payload = JSON.stringify({
-    title: input.title,
-    body: input.body,
-    icon: "/icon.png",
-    badge: "/brand/murmur-app-icon-120-rounded.png",
-    tag: input.data?.tag ?? input.data?.kind ?? "murmur-notification",
-    data: {
-      ...input.data,
-      publishId,
-    },
-  });
+  return {
+    delivered: outcome.delivered,
+    failed: outcome.failed,
+    removed: outcome.removed,
+    publishId,
+    title,
+  };
+}
 
-  let delivered = 0;
-  let failed = 0;
-  let removed = 0;
+/**
+ * Walk every active subscription in stable keyset pages and deliver to each
+ * exactly once. Owns delivery completeness + scale (#312): payload selection is
+ * delegated to `buildPayload` so locale grouping (#293) stays a separate
+ * concern. Returns a skipped marker when there are no active recipients.
+ */
+async function deliverActiveSubscriptionPages(
+  buildPayload: PayloadBuilder,
+): Promise<DeliveryCounters | { skipped: true; reason: string }> {
+  const counters: DeliveryCounters = { delivered: 0, failed: 0, removed: 0 };
+  let cursor: string | null = null;
+  let total = 0;
 
+  for (;;) {
+    const page = await getActivePushSubscriptionsPage({
+      after: cursor,
+      limit: ACTIVE_PUSH_SUBSCRIPTIONS_PAGE_SIZE,
+    });
+    if (page.length === 0) break;
+    total += page.length;
+    await deliverPage(page, buildPayload, counters);
+    if (page.length < ACTIVE_PUSH_SUBSCRIPTIONS_PAGE_SIZE) break;
+    cursor = page[page.length - 1].id;
+  }
+
+  if (total === 0) {
+    return { skipped: true, reason: NO_ACTIVE_SUBSCRIPTIONS_REASON };
+  }
+  return counters;
+}
+
+/**
+ * Deliver a single page of subscriptions with bounded concurrency. Idempotent
+ * on failure: `410/404` endpoints are disabled and counted as removed; other
+ * errors are logged and counted as failed. `counters` is accumulated in place
+ * across pages.
+ */
+async function deliverPage(
+  subscriptions: PushSubscriptionRecord[],
+  buildPayload: PayloadBuilder,
+  counters: DeliveryCounters,
+): Promise<void> {
   await mapWithConcurrency(
     subscriptions,
     PUSH_SEND_CONCURRENCY,
     async (subscription) => {
       try {
-        await webpush.sendNotification(toWebPushSubscription(subscription), payload, {
-          TTL: 60 * 60 * 24,
-          timeout: 5000,
-          urgency: "normal",
-        });
-        delivered += 1;
+        await webpush.sendNotification(
+          toWebPushSubscription(subscription),
+          buildPayload(subscription),
+          {
+            TTL: 60 * 60 * 24,
+            timeout: 5000,
+            urgency: "normal",
+          },
+        );
+        counters.delivered += 1;
       } catch (error) {
-        failed += 1;
+        counters.failed += 1;
         if (isGonePushEndpoint(error)) {
           await disablePushSubscriptionByEndpoint(subscription.endpoint);
-          removed += 1;
+          counters.removed += 1;
           return;
         }
 
@@ -176,14 +277,23 @@ async function publishToSubscriptions(
       }
     },
   );
+}
 
-  return {
-    delivered,
-    failed,
-    removed,
-    publishId,
+function serializeNotificationPayload(
+  input: NotificationPublishInput,
+  publishId: string,
+): string {
+  return JSON.stringify({
     title: input.title,
-  };
+    body: input.body,
+    icon: "/icon.png",
+    badge: "/brand/murmur-app-icon-120-rounded.png",
+    tag: input.data?.tag ?? input.data?.kind ?? "murmur-notification",
+    data: {
+      ...input.data,
+      publishId,
+    },
+  });
 }
 
 export function getPublicWebPushKey() {
