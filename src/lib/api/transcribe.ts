@@ -1,5 +1,6 @@
 import type { TranscribeStreamEvent } from "@/app/api/transcribe/route";
 import type { TranscriptionResult } from "@/modules/shared/types";
+import { log } from "@/lib/observability/log";
 import { request } from "./request";
 
 /**
@@ -222,6 +223,82 @@ export async function transcribeRecordingStreaming(
   return consumeTranscribeStream(response, options.onProgress);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/**
+ * Runtime-validate a parsed NDJSON line against the `TranscribeStreamEvent`
+ * contract before dispatching (#224). Returns the typed event, or null when the
+ * shape is unrecognized/malformed so the consumer can skip + log it instead of
+ * trusting a blind `as` cast that could mis-drive the UI or throw downstream.
+ *
+ * Hand-written to match this file's existing guard style (`buildTranscribeError`)
+ * and keep zod out of the client bundle. Reconstructs only the known fields so
+ * unexpected extras never leak through.
+ */
+function parseStreamEvent(value: unknown): TranscribeStreamEvent | null {
+  if (!isRecord(value)) return null;
+  switch (value.phase) {
+    case "billing_ok": {
+      const balanceBefore = value.balanceBefore;
+      if (balanceBefore === null || balanceBefore === undefined) {
+        return { phase: "billing_ok", balanceBefore: null };
+      }
+      if (typeof balanceBefore !== "number") return null;
+      return { phase: "billing_ok", balanceBefore };
+    }
+    case "worker_started":
+      return { phase: "worker_started" };
+    case "complete":
+      if (!("result" in value)) return null;
+      return { phase: "complete", result: value.result };
+    case "error": {
+      if (
+        typeof value.error !== "string" ||
+        typeof value.message !== "string" ||
+        typeof value.status !== "number" ||
+        typeof value.requestId !== "string"
+      ) {
+        return null;
+      }
+      return {
+        phase: "error",
+        error: value.error,
+        message: value.message,
+        status: value.status,
+        requestId: value.requestId,
+        currentBalance:
+          typeof value.currentBalance === "number" ? value.currentBalance : null,
+      };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Invoke the progress callback defensively (#224). A throwing handler must never
+ * reject the whole transcription — that error would not be classified as a
+ * network error upstream and would skip the client-pitch fallback, turning a
+ * cosmetic UI glitch into a hard failure the user already paid a note for.
+ */
+function dispatchProgress(
+  onProgress: TranscribeProgressCallback | undefined,
+  phase: TranscribePhase,
+): void {
+  if (!onProgress) return;
+  try {
+    onProgress(phase);
+  } catch (error) {
+    log("transcribe.stream_event_invalid", {
+      reason: "onprogress_threw",
+      phase,
+      message: error instanceof Error ? error.message : String(error),
+    }, { level: "warn" });
+  }
+}
+
 async function consumeTranscribeStream(
   response: Response,
   onProgress?: TranscribeProgressCallback,
@@ -249,23 +326,45 @@ async function consumeTranscribeStream(
       buffer = buffer.slice(newlineIdx + 1);
       if (!line) continue;
 
-      let event: TranscribeStreamEvent;
+      let parsed: unknown;
       try {
-        event = JSON.parse(line) as TranscribeStreamEvent;
+        parsed = JSON.parse(line);
       } catch {
+        // Not JSON (e.g. a proxy error page spliced into the stream). Skip the
+        // line rather than failing the whole transcription (#224).
+        log("transcribe.stream_event_invalid", {
+          reason: "json_parse_failed",
+          preview: line.slice(0, 64),
+        }, { level: "warn" });
+        continue;
+      }
+
+      const event = parseStreamEvent(parsed);
+      if (!event) {
+        // Well-formed JSON but not a recognized event shape. Skip + log instead
+        // of dispatching an unvalidated event downstream (#224).
+        const receivedPhase = isRecord(parsed) ? parsed.phase : undefined;
+        log("transcribe.stream_event_invalid", {
+          reason: "schema_mismatch",
+          receivedPhase:
+            typeof receivedPhase === "string" ? receivedPhase : typeof receivedPhase,
+        }, { level: "warn" });
         continue;
       }
 
       switch (event.phase) {
         case "billing_ok":
         case "worker_started":
-          onProgress?.(event.phase);
+          dispatchProgress(onProgress, event.phase);
           break;
         case "complete":
-          onProgress?.("complete");
+          dispatchProgress(onProgress, "complete");
           result = event.result as TranscriptionResult;
           break;
         case "error": {
+          // A server-emitted error event is intentional control flow (not a bad
+          // event): surface it as the typed transport error so callers can pick
+          // recovery copy. This throw is deliberately not swallowed.
           const mapped = SERVER_ERROR_TO_CLIENT[event.error];
           throw new TranscribeRequestError({
             code: mapped ?? statusToFallbackCode(event.status),
