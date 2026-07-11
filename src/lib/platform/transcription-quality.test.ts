@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { normalizeWorkerResponse } from "@/lib/platform/audio-worker";
+import type { TranscriptionProvider } from "@/modules/shared/types";
 
 /**
  * Transcription quality test set.
@@ -41,7 +42,7 @@ type GoldenCase = {
     frameCount?: number;
   };
   expected: {
-    provider: string;
+    provider: TranscriptionProvider;
     noteCountRange: [number, number];
     keyOptions?: string[];
     scaleOptions?: Array<"major" | "minor" | "pentatonic" | "dorian" | "phrygian">;

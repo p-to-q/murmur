@@ -8,13 +8,14 @@ import {
 function baseEvent(overrides: {
   event: string;
   level?: "info" | "warn" | "error";
+  route?: string | null;
   ext?: Record<string, unknown>;
 }) {
   return {
     event: overrides.event,
     level: overrides.level ?? "info",
     ts: "2026-06-03T06:30:00.000Z",
-    route: "/api/transcribe",
+    route: overrides.route ?? "/api/transcribe",
     requestId: "req_test",
     userId: "usr_test",
     shell: "web",

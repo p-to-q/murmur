@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { setTestNodeEnv } from "@/test-utils/env";
 
 import { assertProductionAuthConfig } from "./assert-config";
 
@@ -10,7 +11,7 @@ describe("assertProductionAuthConfig", () => {
     const prevSecret = process.env.GOOGLE_CLIENT_SECRET;
     const prevAuth = process.env.AUTH_SECRET;
 
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     delete process.env.NEXT_PHASE;
     process.env.GOOGLE_CLIENT_ID = "test-id";
     process.env.GOOGLE_CLIENT_SECRET = "test-secret";
@@ -20,7 +21,7 @@ describe("assertProductionAuthConfig", () => {
     try {
       expect(() => assertProductionAuthConfig()).toThrow(/AUTH_SECRET/);
     } finally {
-      process.env.NODE_ENV = prevNode;
+      setTestNodeEnv(prevNode);
       if (prevPhase === undefined) delete process.env.NEXT_PHASE;
       else process.env.NEXT_PHASE = prevPhase;
       if (prevId === undefined) delete process.env.GOOGLE_CLIENT_ID;

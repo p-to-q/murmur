@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { setTestNodeEnv } from "@/test-utils/env";
 
 import {
   __resetZpayConfigForTesting,
@@ -15,7 +16,7 @@ describe("ZPay checkout launch gate", () => {
     try {
       process.env.ZPAY_PID = "pid_test";
       process.env.ZPAY_KEY = "key_test";
-      process.env.NODE_ENV = "production";
+      setTestNodeEnv("production");
       delete process.env[ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV];
       __resetZpayConfigForTesting();
 
@@ -35,7 +36,7 @@ describe("ZPay checkout launch gate", () => {
     try {
       process.env.ZPAY_PID = "pid_test";
       process.env.ZPAY_KEY = "key_test";
-      process.env.NODE_ENV = "test";
+      setTestNodeEnv("test");
       delete process.env.VERCEL;
       delete process.env.VERCEL_ENV;
       delete process.env[ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV];
@@ -54,7 +55,7 @@ describe("ZPay checkout launch gate", () => {
     try {
       process.env.ZPAY_PID = "pid_test";
       process.env.ZPAY_KEY = "key_test";
-      process.env.NODE_ENV = "production";
+      setTestNodeEnv("production");
       process.env.VERCEL = "1";
       process.env.VERCEL_ENV = "preview";
       delete process.env[ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV];
@@ -80,7 +81,7 @@ function snapshotEnv() {
 }
 
 function restoreEnv(previous: ReturnType<typeof snapshotEnv>) {
-  restoreOptionalEnv("NODE_ENV", previous.nodeEnv);
+  setTestNodeEnv(previous.nodeEnv);
   restoreOptionalEnv("VERCEL", previous.vercel);
   restoreOptionalEnv("VERCEL_ENV", previous.vercelEnv);
   restoreOptionalEnv("ZPAY_PID", previous.pid);

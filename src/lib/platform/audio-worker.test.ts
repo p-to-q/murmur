@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { createFetchMock } from "@/test-utils/fetch";
 import {
   AudioWorkerError,
   extractInterimMelody,
@@ -373,11 +374,11 @@ describe("audio worker adapter", () => {
     const originalFetch = globalThis.fetch;
     const originalWorkerUrl = process.env.AUDIO_WORKER_URL;
     process.env.AUDIO_WORKER_URL = "http://audio-worker.test";
-    globalThis.fetch = (async () =>
+    globalThis.fetch = createFetchMock(async () =>
       new Response(
         JSON.stringify({ detail: { error: "no_voiced_frames" } }),
         { status: 422 },
-      )) as typeof fetch;
+      ));
 
     try {
       await transcribeWithAudioWorker({
@@ -412,11 +413,11 @@ describe("audio worker retry", () => {
     const originalUrl = process.env.AUDIO_WORKER_URL;
     process.env.AUDIO_WORKER_URL = "http://audio-worker.test";
     let calls = 0;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = createFetchMock(async () => {
       const index = calls;
       calls += 1;
       return handler(index);
-    }) as typeof fetch;
+    });
     return {
       calls: () => calls,
       restore() {
@@ -487,12 +488,12 @@ describe("audio worker retry", () => {
     const originalFetch = globalThis.fetch;
     const originalUrl = process.env.AUDIO_WORKER_URL;
     process.env.AUDIO_WORKER_URL = "http://audio-worker.test";
-    let receivedProvider: FormDataEntryValue | null = null;
-    globalThis.fetch = (async (_url, init) => {
+    const receivedProvider: { value: FormDataEntryValue | null } = { value: null };
+    globalThis.fetch = createFetchMock(async (_url, init) => {
       const body = init?.body as FormData;
-      receivedProvider = body.get("pitchProvider");
+      receivedProvider.value = body.get("pitchProvider");
       return new Response(validBody, { status: 200 });
-    }) as typeof fetch;
+    });
 
     try {
       await transcribeWithAudioWorker({
@@ -501,7 +502,7 @@ describe("audio worker retry", () => {
         requestId: "req_pitch_provider",
         pitchProvider: "auto",
       });
-      expect(receivedProvider).toBe("auto");
+      expect(receivedProvider.value).toBe("auto");
     } finally {
       globalThis.fetch = originalFetch;
       if (originalUrl === undefined) delete process.env.AUDIO_WORKER_URL;

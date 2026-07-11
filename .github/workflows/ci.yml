@@ -47,6 +47,11 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Typecheck application and tests
+        run: |
+          bun run typecheck
+          bun run typecheck:tests
+
       - name: Check local markdown links
         run: bun run check:links
 

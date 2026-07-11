@@ -14,9 +14,9 @@ afterEach(() => {
 
 describe("MeLo Lab client adapter", () => {
   it("normalizes transcription errors into run results", async () => {
-    let receivedForm: FormData | null = null;
+    const receivedForm: { value: FormData | null } = { value: null };
     globalThis.fetch = (async (_url, init) => {
-      receivedForm = init?.body as FormData;
+      receivedForm.value = init?.body as FormData;
       return new Response(JSON.stringify({ detail: { message: "worker unavailable" } }), {
         status: 503,
       });
@@ -26,15 +26,17 @@ describe("MeLo Lab client adapter", () => {
       new Blob(["audio"], { type: "audio/webm" }),
     );
 
-    expect(result.status).toBe("error");
-    expect(receivedForm?.get("pitchProvider")).toBe("auto");
+    expect(receivedForm.value?.get("pitchProvider")).toBe("auto");
+    if (result.status !== "error") {
+      throw new Error(`expected transcription error, received ${result.status}`);
+    }
     expect(result.error).toBe("worker unavailable");
   });
 
   it("returns generated music bytes and response metadata", async () => {
-    let receivedForm: FormData | null = null;
+    const receivedForm: { value: FormData | null } = { value: null };
     globalThis.fetch = (async (_url, init) => {
-      receivedForm = init?.body as FormData;
+      receivedForm.value = init?.body as FormData;
       return new Response(new Blob(["music"], { type: "audio/wav" }), {
         status: 200,
         headers: {
@@ -67,9 +69,9 @@ describe("MeLo Lab client adapter", () => {
     expect(result.generationMs).toBe("42");
     expect(result.melodyConditioned).toBe("true");
     expect(result.cfgNotes).toBe("ok");
-    expect(receivedForm?.get("prompt")).toBe("plain piano");
-    expect(receivedForm?.get("duration")).toBe("2");
-    expect(receivedForm?.get("hum")).toBeNull();
+    expect(receivedForm.value?.get("prompt")).toBe("plain piano");
+    expect(receivedForm.value?.get("duration")).toBe("2");
+    expect(receivedForm.value?.get("hum")).toBeNull();
   });
 
   it("chooses stable filenames for common audio blobs", () => {

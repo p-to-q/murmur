@@ -8,6 +8,19 @@ import {
   resolveParentSongId,
   resolveRootSongId,
 } from "./lineage";
+import type { SongCard } from "@/modules/shared/types";
+
+function songCard(overrides: Partial<SongCard> & Pick<SongCard, "id">): SongCard {
+  return {
+    title: "Test song",
+    visualConfig: {} as SongCard["visualConfig"],
+    vibe: "Test vibe",
+    duration: 10,
+    arrangementState: {} as SongCard["arrangementState"],
+    createdAt: "2026-07-11T00:00:00.000Z",
+    ...overrides,
+  };
+}
 
 describe("lineage helpers", () => {
   it("normalizes lineage depth", () => {
@@ -24,13 +37,13 @@ describe("lineage helpers", () => {
   });
 
   it("builds remix lineage from a saved song", () => {
-    expect(buildRemixLineage({ id: "song_child", lineageDepth: 0 })).toEqual({
+    expect(buildRemixLineage(songCard({ id: "song_child", lineageDepth: 0 }))).toEqual({
       parentSongId: "song_child",
       rootSongId: "song_child",
       lineageDepth: 1,
     });
 
-    expect(buildRemixLineage({ id: "song_branch", rootSongId: "song_root", lineageDepth: 2 })).toEqual({
+    expect(buildRemixLineage(songCard({ id: "song_branch", rootSongId: "song_root", lineageDepth: 2 }))).toEqual({
       parentSongId: "song_branch",
       rootSongId: "song_root",
       lineageDepth: 3,

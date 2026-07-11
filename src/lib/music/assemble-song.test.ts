@@ -67,7 +67,8 @@ describe("music smoke path", () => {
     const assembled = assembleSong(version);
     expect(assembled.totalDuration).toBeGreaterThanOrEqual(melody.duration);
     expect(assembled.chords.length).toBeGreaterThan(0);
-    expect(assembled.vibeId).toBe(version.arrangementState.chords.chordsTag);
+    expect(version.arrangementState.chords.chordsTag).toBeDefined();
+    expect(assembled.vibeId).toBe(version.arrangementState.chords.chordsTag!);
     expect(assembleSong(version)).toEqual(assembled);
   });
 });

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+import type { ClaimShareReferralResult } from "@/lib/db/queries/share-referrals";
 
 let nextAuth: ResolvedRequestAuth = {
   ok: true,
@@ -14,7 +15,7 @@ let nextAuth: ResolvedRequestAuth = {
   source: "session",
   sessionId: "sess_invitee",
 };
-const getSettledShareReferralForInviteeMock = mock(async () => ({
+const getSettledShareReferralForInviteeMock = mock(async (): Promise<ClaimShareReferralResult> => ({
   ok: true as const,
   referralId: "srf_existing",
   referrer: null,

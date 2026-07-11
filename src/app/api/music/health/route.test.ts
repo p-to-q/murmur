@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, mock } from "bun:test";
+import { createFetchMock } from "@/test-utils/fetch";
 
 let nextMode: "serverless" | "http" | null = null;
 let nextWorkerHealth: Response = Response.json({
@@ -52,7 +53,7 @@ beforeEach(() => {
     loading: false,
     loadError: "internal stack trace",
   });
-  globalThis.fetch = (async () => nextWorkerHealth.clone()) as typeof fetch;
+  globalThis.fetch = createFetchMock(async () => nextWorkerHealth.clone());
 });
 
 describe("GET /api/music/health", () => {

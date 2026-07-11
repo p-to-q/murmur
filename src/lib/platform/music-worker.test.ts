@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { setTestNodeEnv } from "@/test-utils/env";
 import {
   getMusicEngineMode,
   getRequestedMusicEngineMode,
@@ -24,12 +25,13 @@ beforeEach(() => {
   for (const key of KEYS) saved[key] = process.env[key];
   // Start from a clean slate: prod-like (no localhost fallback) and nothing wired.
   for (const key of KEYS) delete process.env[key];
-  process.env.NODE_ENV = "production";
+  setTestNodeEnv("production");
 });
 
 afterEach(() => {
   for (const key of KEYS) {
     if (saved[key] === undefined) delete process.env[key];
+    else if (key === "NODE_ENV") setTestNodeEnv(saved[key]);
     else process.env[key] = saved[key];
   }
 });
@@ -69,7 +71,7 @@ describe("getMusicEngineMode transport selection", () => {
   it("MUSIC_ENGINE_MODE=http can force the pod outside production", () => {
     wireServerless();
     wirePod();
-    process.env.NODE_ENV = "development";
+    setTestNodeEnv("development");
     process.env.MUSIC_ENGINE_MODE = "http";
     expect(getMusicEngineMode()).toBe("http");
   });
@@ -77,7 +79,7 @@ describe("getMusicEngineMode transport selection", () => {
   it("treats 'pod' and 'worker' as aliases for the http transport", () => {
     wireServerless();
     wirePod();
-    process.env.NODE_ENV = "development";
+    setTestNodeEnv("development");
     for (const alias of ["pod", "worker", "HTTP", " Pod "]) {
       process.env.MUSIC_ENGINE_MODE = alias;
       expect(getMusicEngineMode()).toBe("http");
@@ -108,7 +110,7 @@ describe("getMusicEngineMode transport selection", () => {
   });
 
   it("uses the local http fallback outside production when http is forced", () => {
-    process.env.NODE_ENV = "development";
+    setTestNodeEnv("development");
     wireServerless();
     process.env.MUSIC_ENGINE_MODE = "http";
     expect(getMusicEngineMode()).toBe("http");
@@ -116,7 +118,7 @@ describe("getMusicEngineMode transport selection", () => {
   });
 
   it("falls back outside production when serverless is forced but missing", () => {
-    process.env.NODE_ENV = "development";
+    setTestNodeEnv("development");
     delete process.env.RUNPOD_SERVERLESS_ENDPOINT_ID;
     delete process.env.RUNPOD_API_KEY;
     wirePod();
@@ -140,7 +142,7 @@ describe("getMusicEngineMode transport selection", () => {
 
   it("getMusicWorkerUrl is null in prod when unset (no localhost fallback)", () => {
     expect(getMusicWorkerUrl()).toBeNull();
-    process.env.NODE_ENV = "development";
+    setTestNodeEnv("development");
     expect(getMusicWorkerUrl()).toBe("http://127.0.0.1:8002");
   });
 });

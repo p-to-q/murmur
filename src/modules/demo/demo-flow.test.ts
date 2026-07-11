@@ -13,7 +13,8 @@ describe("buildDemoFlowState", () => {
   it("hydrates a deterministic demo flow shape when randomness is fixed", () => {
     Math.random = () => 0.1;
     let nextId = 0;
-    crypto.randomUUID = () => `demo-id-${nextId++}`;
+    crypto.randomUUID = () =>
+      `00000000-0000-4000-8000-${String(nextId++).padStart(12, "0")}`;
 
     const demo = buildDemoFlowState();
 

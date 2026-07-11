@@ -16,9 +16,16 @@ export function createProxyFetch(): typeof fetch | undefined {
 
   const dispatcher = new ProxyAgent(proxyUrl);
 
-  return (input, init) =>
+  const proxyFetch = (
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ): ReturnType<typeof fetch> =>
     undiciFetch(input as Parameters<typeof undiciFetch>[0], {
       ...(init as Parameters<typeof undiciFetch>[1] | undefined),
       dispatcher,
     }) as unknown as Promise<Response>;
+
+  return Object.assign(proxyFetch, {
+    preconnect() {},
+  });
 }

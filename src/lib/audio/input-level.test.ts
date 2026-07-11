@@ -1,11 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { inputLevelLabelKey, nextInputLevelDecision } from "./input-level";
+import type { InputLevelDecision } from "./input-level";
 
 describe("nextInputLevelDecision", () => {
   it("does not mark the opening warmup as quiet before any stable signal", () => {
-    let decision = {
-      state: "idle" as const,
-      quietSinceMs: null as number | null,
+    let decision: InputLevelDecision = {
+      state: "idle",
+      quietSinceMs: null,
       hasHeardSignal: false,
     };
 

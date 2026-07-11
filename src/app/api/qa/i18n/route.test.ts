@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+import { setTestNodeEnv } from "@/test-utils/env";
 
 const originalNodeEnv = process.env.NODE_ENV;
 const originalDebugSurface = process.env.MURMUR_ENABLE_DEBUG_SURFACE;
@@ -30,7 +31,7 @@ function request(url = "http://test.local/api/qa/i18n"): NextRequest {
 
 beforeEach(() => {
   if (originalNodeEnv === "production") {
-    process.env.NODE_ENV = "test";
+    setTestNodeEnv("test");
   }
   if (originalDebugSurface === undefined) {
     delete process.env.MURMUR_ENABLE_DEBUG_SURFACE;
@@ -52,11 +53,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  if (originalNodeEnv === undefined) {
-    delete process.env.NODE_ENV;
-  } else {
-    process.env.NODE_ENV = originalNodeEnv;
-  }
+  setTestNodeEnv(originalNodeEnv);
   if (originalDebugSurface === undefined) {
     delete process.env.MURMUR_ENABLE_DEBUG_SURFACE;
   } else {
@@ -82,7 +79,7 @@ describe("GET /api/qa/i18n", () => {
   });
 
   it("is disabled by default in production", async () => {
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     delete process.env.MURMUR_ENABLE_DEBUG_SURFACE;
 
     const response = await GET(request("https://murmur.example/api/qa/i18n"));
@@ -92,7 +89,7 @@ describe("GET /api/qa/i18n", () => {
   });
 
   it("requires a non-guest session when production debug is explicitly enabled", async () => {
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     process.env.MURMUR_ENABLE_DEBUG_SURFACE = "true";
     nextAuth = {
       ok: true,

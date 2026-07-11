@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import { nextNotesRefillAt, notesRefillWindowKey } from "@/lib/billing/notes-clock";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+import { setTestNodeEnv } from "@/test-utils/env";
 
 let nextAuth: ResolvedRequestAuth = {
   ok: true,
@@ -80,8 +81,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
-  else process.env.NODE_ENV = originalNodeEnv;
+  setTestNodeEnv(originalNodeEnv);
   if (originalDevBillingFallback === undefined) {
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
   } else {
@@ -141,7 +141,7 @@ describe("GET /api/user/balance", () => {
   it("keeps localhost previews usable when the ledger is unavailable outside dev mode", async () => {
     const prevNode = process.env.NODE_ENV;
     const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     nextBalanceError = new Error("ECONNREFUSED");
 
@@ -162,15 +162,14 @@ describe("GET /api/user/balance", () => {
       expect(body.dailyFreeNotes).toBe(0);
       expect(body.planTier).toBe("free");
     } finally {
-      if (prevNode === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = prevNode;
+      setTestNodeEnv(prevNode);
       if (prevFlag === undefined) delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
       else process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
     }
   });
 
   it("does not expose the dev balance fallback on public production hosts", async () => {
-    process.env.NODE_ENV = "production";
+    setTestNodeEnv("production");
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
     nextBalanceError = new Error("ECONNREFUSED");
 
