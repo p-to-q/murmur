@@ -1,7 +1,7 @@
 # Tech Stack — Current State
 
 A current-state map of what Murmur actually runs in production, as of
-2026-06. Exact dependency versions live in [package.json](../package.json) and
+2026-07. Exact dependency versions live in [package.json](../package.json) and
 the worker `requirements`/`pyproject` files; this doc is the architecture-level
 source of truth and links out for the parts that have their own deep docs.
 
@@ -29,8 +29,8 @@ source of truth and links out for the parts that have their own deep docs.
  └──────────────┘   └───────────────┘   │
                                         │
                                  ┌──────▼───────┐
-                                 │   Waffo      │  one-time note top-ups
-                                 │  (Pancake)   │  checkout + webhook
+                                 │ Waffo / ZPay │  one-time note top-ups
+                                 │ card / WeChat│  checkout + callback
                                  └──────────────┘
 ```
 
@@ -72,7 +72,7 @@ or Workers tier.
 | ORM | Drizzle ORM (`drizzle-orm` 0.45.x) over `postgres` 3.x |
 | Auth | NextAuth v5 (beta) — OAuth + session |
 | Object storage | AWS SDK v3 S3 client against any S3/R2-compatible bucket |
-| Billing | Waffo Pancake (`@waffo/pancake-ts`) — see [billing-waffo.md](billing-waffo.md) |
+| Billing | Waffo Pancake for card checkout; guarded ZPay for CNY WeChat Pay — see [billing-waffo.md](billing-waffo.md) |
 | Validation | Zod schemas at every route boundary |
 
 REST conventions, the error envelope, idempotency, and webhook handling are
@@ -118,11 +118,14 @@ probe.
 
 ## Billing
 
-Web checkout is **Waffo** (Pancake), not Stripe. The client opens a Waffo
-checkout URL; a signed `order.completed` webhook at `/api/billing/webhook`
-grants notes idempotently. Mobile-store IAP (Apple / Google, via RevenueCat) is
-future work for the Capacitor shells. The full flow, SKUs, env vars, and
-bootstrap scripts are in [billing-waffo.md](billing-waffo.md).
+Web checkout uses provider-hosted payment pages rather than collecting payment
+credentials inside Murmur. Card checkout uses **Waffo** (Pancake); eligible CNY
+WeChat Pay orders use the guarded **ZPay** route. Both settle into the same
+idempotent purchase and notes-ledger flow. ZPay remains behind an explicit
+production launch gate while refund and chargeback reversal callbacks are not
+implemented. Mobile-store IAP (Apple / Google, via RevenueCat) is future work
+for the Capacitor shells. The full flow, SKUs, env vars, and provider limits are
+in [billing-waffo.md](billing-waffo.md).
 
 ## Hosting + deploy topology
 

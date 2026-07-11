@@ -51,8 +51,8 @@ type TextSection = {
 };
 
 const UPDATED_AT: LocalizedText = {
-  zh: "更新于 2026 年 6 月 16 日",
-  en: "Updated June 16, 2026",
+  zh: "生效于 2026 年 7 月 11 日",
+  en: "Effective July 11, 2026",
 };
 
 const HERO = {
@@ -74,12 +74,12 @@ const SUMMARY_ITEMS: SummaryItem[] = [
   {
     icon: <Mic2 className="h-4 w-4" />,
     title: {
-      zh: "原始录音默认不会长期保存",
-      en: "Raw recordings are not kept by default",
+      zh: "原始录音默认不会随账号长期保存",
+      en: "Raw recordings are not kept with your account by default",
     },
     body: {
-      zh: "录音会用于旋律转写。转写完成后，Murmur 保存的是旋律和歌曲数据，不是你的原始哼唱音频。",
-      en: "A recording is sent for melody transcription. After that, Murmur saves melody and song data, not your original hum audio.",
+      zh: "录音会用于旋律转写；在使用原声风格引导时，也会随生成请求交给音乐处理服务。Murmur 默认保存旋律和歌曲数据，不把原始哼唱作为账号资产长期保存。",
+      en: "A recording is used for melody transcription and, when raw-hum style conditioning is used, sent with the generation request to the music processor. Murmur saves melody and song data by default, not the original hum as a long-term account asset.",
     },
   },
   {
@@ -138,16 +138,16 @@ const DATA_ITEMS: DataItem[] = [
     icon: <Mic2 className="h-4 w-4" />,
     label: { zh: "哼唱录音与旋律", en: "Hummed audio and melody" },
     collect: {
-      zh: "你录下或上传的短音频，以及转写出的音符、节奏、调性、质量诊断和目标乐器。",
-      en: "Short audio you record or upload, plus derived notes, rhythm, key, quality diagnostics, and target instrument.",
+      zh: "你录下或上传的短音频，以及转写出的音符、节奏、调性、质量诊断、目标乐器和原声风格引导强度。",
+      en: "Short audio you record or upload, plus derived notes, rhythm, key, quality diagnostics, target instrument, and raw-hum conditioning strength.",
     },
     why: {
-      zh: "用于识别旋律、修正噪音和跑调、生成可编辑的歌曲草稿。",
-      en: "To identify melody, repair noise or pitch issues, and create an editable song draft.",
+      zh: "用于识别旋律、修正噪音和跑调，并在对应生成请求中可选地用原始哼唱引导音乐的质感与表达。",
+      en: "To identify melody, repair noise or pitch issues, and optionally condition a generation on the texture and expression of the original hum.",
     },
     keep: {
-      zh: "原始录音默认只用于当次转写，不会作为账户资产长期保存；旋律结果会随作品一起保存。",
-      en: "Raw audio is used for the transcription request by default and is not kept as an account asset; melody results may be saved with the song.",
+      zh: "原始录音默认只用于当次转写和适用的风格引导请求，不会作为账号资产长期保存；旋律结果会随作品一起保存。",
+      en: "Raw audio is used for the transcription request and applicable style-conditioning requests by default, and is not kept as an account asset; melody results may be saved with the song.",
     },
   },
   {
@@ -170,16 +170,16 @@ const DATA_ITEMS: DataItem[] = [
     icon: <CreditCard className="h-4 w-4" />,
     label: { zh: "音磅、购买与账务", en: "Notes, purchases, and billing" },
     collect: {
-      zh: "音磅余额、消费记录、购买档位、支付提供方订单 ID、退款状态和账务 webhook 事件。",
-      en: "Notes balance, spend records, top-up tier, payment provider order IDs, refund state, and billing webhook events.",
+      zh: "音磅余额、消费记录、购买档位、收据邮箱、金额与币种、支付方式、支付方订单 ID、退款状态和账务回调事件。",
+      en: "Notes balance, spend records, top-up tier, receipt email, amount and currency, payment method, provider order IDs, refund state, and billing callback events.",
     },
     why: {
       zh: "用于扣减创作消耗、发放购买的音磅、处理退款、防止重复到账，并完成账务核对。",
       en: "To debit creation actions, grant purchased notes, process refunds, prevent duplicate grants, and reconcile payments.",
     },
     keep: {
-      zh: "按账务、税务、风控和支持需要保留。Murmur 不保存完整银行卡号。",
-      en: "Kept as needed for accounting, tax, fraud prevention, and support. Murmur does not store full card numbers.",
+      zh: "按账务、税务、风控和支持需要保留。Murmur 不接收或保存完整银行卡号、微信支付凭据。",
+      en: "Kept as needed for accounting, tax, fraud prevention, and support. Murmur does not receive or store full card numbers or WeChat Pay credentials.",
     },
   },
   {
@@ -243,6 +243,18 @@ const PROCESSORS: ProcessorItem[] = [
   },
   {
     icon: <Sparkles className="h-4 w-4" />,
+    name: "RunPod",
+    role: {
+      zh: "生产音乐处理服务",
+      en: "Production music processor",
+    },
+    note: {
+      zh: "生产环境会发送生成提示、片段时长、请求标识和可选旋律。使用原声风格引导时，还会发送引导强度和原始哼唱音频；未使用时不会发送原始哼唱。",
+      en: "Production requests include the generation prompt, clip duration, request identifier, and optional melody. When raw-hum style conditioning is used, Murmur also sends the conditioning strength and original hum audio; otherwise the raw hum is not sent for music generation.",
+    },
+  },
+  {
+    icon: <Sparkles className="h-4 w-4" />,
     name: "OpenAI-compatible AI gateway",
     role: {
       zh: "可选的 Studio 编辑理解",
@@ -255,14 +267,14 @@ const PROCESSORS: ProcessorItem[] = [
   },
   {
     icon: <CreditCard className="h-4 w-4" />,
-    name: "Waffo",
+    name: "Waffo / ZPay / WeChat Pay",
     role: {
-      zh: "网页支付处理",
-      en: "Web payment processing",
+      zh: "支付与结账处理",
+      en: "Payment and checkout processing",
     },
     note: {
-      zh: "处理托管结账、订单完成和退款事件。Murmur 会接收订单结果，用来发放音磅。",
-      en: "Handles hosted checkout, completed orders, and refund events. Murmur receives order results to grant notes.",
+      zh: "银行卡结账可由 Waffo 托管；符合条件的人民币微信支付可经 ZPay 发起。Murmur 会发送商品说明、金额与币种、内部账号和订单标识、返回与回调地址，以及支付所需的收据邮箱或客户端 IP，并接收订单结果来发放音磅。",
+      en: "Waffo may host card checkout; eligible CNY WeChat Pay orders may be initiated through ZPay. Murmur sends the product description, amount and currency, internal account and order references, return and callback URLs, and the receipt email or client IP when required, then receives order results to grant notes.",
     },
   },
   {
@@ -463,8 +475,8 @@ export function PrivacyScreen() {
                 title={lang === "zh" ? "哪些服务会参与处理。" : "Services that may process data."}
                 body={
                   lang === "zh"
-                    ? "Murmur 把登录、转写、AI 编辑、支付和基础设施放在清晰边界后面。供应商只应为了提供对应功能处理必要数据。"
-                    : "Murmur keeps sign-in, transcription, AI editing, payments, and infrastructure behind clear boundaries. Providers should process only the data needed for their role."
+                    ? "Murmur 把登录、转写、音乐生成、AI 编辑、支付和基础设施放在清晰边界后面。供应商只应为了提供对应功能处理必要数据。"
+                    : "Murmur keeps sign-in, transcription, music generation, AI editing, payments, and infrastructure behind clear boundaries. Providers should process only the data needed for their role."
                 }
               />
 
