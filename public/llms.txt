@@ -28,7 +28,7 @@ Murmur is a standalone web app that captures vocal melody input (humming, singin
 
 - [Sitemap](https://murmur.ptoq.io/sitemap.xml): XML sitemap
 - [Robots](https://murmur.ptoq.io/robots.txt): Crawler directives
-- [Manifest](https://murmur.ptoq.io/manifest.json): PWA manifest
+- [Manifest](https://murmur.ptoq.io/manifest.webmanifest): PWA manifest
 - [Humans](https://murmur.ptoq.io/humans.txt): Team and technology info
 
 ## Contact

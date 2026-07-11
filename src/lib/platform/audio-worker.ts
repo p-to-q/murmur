@@ -11,6 +11,7 @@ import {
   chooseGenerationMelodyKind,
 } from "@/modules/music/humming-engine";
 import { isObject } from "@/lib/utils/is-object";
+import { log } from "@/lib/observability/log";
 import type {
   CleanMelody,
   MelodyNote,
@@ -443,7 +444,14 @@ async function readWorkerError(
             : `Audio worker returned HTTP ${response.status}`,
     };
   } catch (parseError) {
-    console.warn("[audio-worker] failed to parse error response body:", parseError);
+    log(
+      "audio_worker.error_parse_failed",
+      {
+        status: response.status,
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+      },
+      { level: "warn" },
+    );
     return {
       code: null,
       message: `Audio worker returned HTTP ${response.status}`,

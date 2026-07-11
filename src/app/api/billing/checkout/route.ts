@@ -204,7 +204,11 @@ export async function POST(request: NextRequest) {
   try {
     body = (await request.json()) as CheckoutRequestBody;
   } catch (parseError) {
-    console.warn("[checkout] request body parse failed:", parseError);
+    log(
+      "checkout.body_parse_failed",
+      { error: parseError instanceof Error ? parseError.message : String(parseError) },
+      { route: ROUTE, requestId, level: "warn" },
+    );
     body = {};
   }
 

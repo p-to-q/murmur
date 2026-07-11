@@ -802,7 +802,14 @@ async function generateViaHttp(
     try {
       workerDetail = (await workerRes.json()) as unknown;
     } catch (parseError) {
-      console.warn("[music/generate] worker error body parse failed (status", workerRes.status, "):", parseError);
+      log(
+        "music.worker_error_parse_failed",
+        {
+          status: workerRes.status,
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+        },
+        { route: ROUTE, requestId, level: "warn" },
+      );
     }
     const unauthorized = workerRes.status === 401 || workerRes.status === 403;
     return {
