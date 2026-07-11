@@ -123,6 +123,20 @@ export function useCurrentUser(): AppUser {
   return usePlatformState((state) => state.auth.user);
 }
 
+export type SessionLogoutErrorCode = "http_error" | "network_error";
+
+export class SessionLogoutError extends Error {
+  readonly code: SessionLogoutErrorCode;
+  readonly status: number;
+
+  constructor(code: SessionLogoutErrorCode, message: string, status = 0) {
+    super(message);
+    this.name = "SessionLogoutError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
 export const authClient = {
   get user() {
     return getSnapshot().auth.user;
@@ -163,13 +177,27 @@ export const authClient = {
 
 async function revokeMurmurSession(): Promise<void> {
   if (typeof window === "undefined") return;
+
+  let response: Response;
   try {
-    await fetch("/api/auth/logout", {
+    response = await fetch("/api/auth/logout", {
       method: "POST",
       credentials: "same-origin",
     });
-  } catch {
-    // Local/demo logout still clears the local identity below. The server
-    // route revokes the Murmur session when the network is available.
+  } catch (error) {
+    throw new SessionLogoutError(
+      "network_error",
+      error instanceof Error
+        ? `Could not reach the logout endpoint: ${error.message}`
+        : "Could not reach the logout endpoint",
+    );
+  }
+
+  if (!response.ok) {
+    throw new SessionLogoutError(
+      "http_error",
+      `Logout endpoint returned HTTP ${response.status}`,
+      response.status,
+    );
   }
 }

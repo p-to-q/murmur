@@ -105,6 +105,18 @@ export const DICT = {
     zh: "退出登录",
     en: "Sign out",
   },
+  "auth.sign_out_retry": {
+    zh: "重试退出登录",
+    en: "Try signing out again",
+  },
+  "auth.sign_out_network_error": {
+    zh: "暂时无法连接服务器。你的账号仍保持登录，请检查网络后重试。",
+    en: "Murmur couldn't reach the server. You're still signed in; check your connection and try again.",
+  },
+  "auth.sign_out_http_error": {
+    zh: "服务器暂时无法结束会话。你的账号仍保持登录，请重试。",
+    en: "Murmur couldn't end this session. You're still signed in; please try again.",
+  },
   "auth.local_creator": {
     zh: "本地创作者",
     en: "Local Creator",

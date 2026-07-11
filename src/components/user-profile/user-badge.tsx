@@ -3,7 +3,10 @@
 import { useRef, useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { LogOut, UserRound, X } from "lucide-react";
-import { authClient } from "@/lib/platform/auth-client";
+import {
+  authClient,
+  SessionLogoutError,
+} from "@/lib/platform/auth-client";
 import type { AppUser } from "@/lib/platform/types";
 import { useSession, signOut } from "next-auth/react";
 import { useAuthProviders } from "@/lib/hooks/use-auth-providers";
@@ -25,6 +28,8 @@ export function UserBadge() {
   const { status: nextAuthStatus } = useSession();
   const [open, setOpen] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutFailure, setLogoutFailure] = useState<"http" | "network" | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const { providers, signInWithOAuth } = useAuthProviders();
   const hasNextAuthSession = nextAuthStatus === "authenticated";
@@ -118,22 +123,54 @@ export function UserBadge() {
               )}
             </div>
           )}
+          {logoutFailure && (
+            <p
+              role="alert"
+              className="mt-1 rounded-lg bg-[#F5F1EB] px-2 py-2 text-xs leading-relaxed text-[#6F5E54]"
+            >
+              {logoutFailure === "network"
+                ? t("auth.sign_out_network_error")
+                : t("auth.sign_out_http_error")}
+            </p>
+          )}
           <button
+            type="button"
             onClick={async () => {
-              await authClient.logout();
-              clearCurrentAccountCache();
-              if (hasNextAuthSession) {
-                await signOut({ callbackUrl: "/" });
-              } else {
-                await refreshCurrentAccount();
-                await fetchUserBalance({ force: true });
+              setIsLoggingOut(true);
+              setLogoutFailure(null);
+              try {
+                try {
+                  await authClient.logout();
+                } catch (error) {
+                  setLogoutFailure(
+                    error instanceof SessionLogoutError && error.code === "network_error"
+                      ? "network"
+                      : "http",
+                  );
+                  return;
+                }
+
+                clearCurrentAccountCache();
+                if (hasNextAuthSession) {
+                  await signOut({ callbackUrl: "/" });
+                } else {
+                  await refreshCurrentAccount();
+                  await fetchUserBalance({ force: true });
+                }
+                setOpen(false);
+              } finally {
+                setIsLoggingOut(false);
               }
-              setOpen(false);
             }}
-            className="mt-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-[#8C8780] hover:bg-[#F5F1EB] hover:text-[#1A1A1A]"
+            disabled={isLoggingOut}
+            className="mt-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-[#8C8780] enabled:hover:bg-[#F5F1EB] enabled:hover:text-[#1A1A1A] disabled:cursor-wait disabled:opacity-60"
           >
-            <LogOut className="h-3.5 w-3.5" />
-            {t("auth.sign_out")}
+            {isLoggingOut ? (
+              <Spinner size="sm" variant="muted" />
+            ) : (
+              <LogOut className="h-3.5 w-3.5" />
+            )}
+            {logoutFailure ? t("auth.sign_out_retry") : t("auth.sign_out")}
           </button>
         </DropdownPanel>
       )}
