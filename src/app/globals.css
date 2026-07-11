@@ -468,10 +468,12 @@
   }
 }
 
-/* Responsive main content bottom padding:
-   mobile — reserves space for the floating bottom-nav pill (56px) + 12px lift
-            + safe area
-   desktop (md+) — no bottom nav, minimal padding */
+/* Responsive main content bottom padding — the shared bottom-spacing floor
+   applied to <main> in layout.tsx (paddingBottom: var(--main-pb)).
+   mobile — 0 here: the bottom-nav pill is a fixed overlay (not in flow), so
+            each screen reserves its own clearance above it via the app's
+            `pb-28` bottom-padding convention (≈ pill 56px + 8px lift + safe area).
+   desktop (md+) — no bottom nav, so a 2rem breathing floor is enough. */
 :root {
   --main-pb: 0px;
   /* Mobile top bar clearance — logo (22px) + padding above/below */

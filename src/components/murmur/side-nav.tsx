@@ -257,6 +257,18 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
               style={i > 0 ? { borderColor: collapsed ? "transparent" : "rgba(229,221,208,0.7)", transition: "border-color 0.3s" } : undefined}
             >
               <div className="relative flex h-9 items-center">
+                {/* Active-row wash — a soft coral highlight that glides between
+                    destinations (shared layoutId), giving the active item a
+                    clear-but-quiet zone. Expanded only; sits behind the label. */}
+                {isActive && !collapsed && (
+                  <motion.span
+                    layoutId="side-nav-active-bg"
+                    className="pointer-events-none absolute inset-y-0 -left-4 -right-3 rounded-[12px] bg-[#FF5924]/[0.07]"
+                    initial={false}
+                    transition={{ layout: { duration: 0.46, ease: [0.16, 1, 0.3, 1] } }}
+                    aria-hidden
+                  />
+                )}
                 {/* Dot — crossfades in when collapsed */}
                 <div
                   className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
@@ -278,14 +290,14 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                 </div>
                 {/* Text — crossfades in when expanded */}
                 <div
-                  className={`w-full transition-opacity duration-200 ${
+                  className={`relative z-[1] w-full transition-opacity duration-200 ${
                     collapsed ? "opacity-0 pointer-events-none" : "opacity-100"
                   }`}
                 >
                   {isActive && (
                     <motion.span
                       layoutId="side-nav-active-marker"
-                      className={`absolute -left-7 top-1/2 h-9 w-[3px] -translate-y-1/2 overflow-visible transition-opacity duration-200 ${collapsed ? "opacity-0" : "opacity-100"}`}
+                      className={`absolute -left-7 top-1/2 h-9 w-[4px] -translate-y-1/2 overflow-visible transition-opacity duration-200 ${collapsed ? "opacity-0" : "opacity-100"}`}
                       initial={false}
                       transition={{
                         layout: { duration: 0.46, ease: [0.16, 1, 0.3, 1] },
