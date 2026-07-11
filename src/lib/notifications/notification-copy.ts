@@ -24,6 +24,32 @@ export function langFromAcceptLanguage(
   return acceptLanguage?.toLowerCase().startsWith("zh") ? "zh" : "en";
 }
 
+/**
+ * Locale used when a subscription has no stored locale, or one we do not
+ * support. Chinese is Murmur's primary language and the app-wide translation
+ * fallback, so an unknown recipient still gets a coherent, non-empty digest.
+ */
+export const NOTIFICATION_FALLBACK_LANG: Lang = "zh";
+
+/**
+ * Normalize a persisted subscription locale (e.g. "zh-CN", "en_US", "EN",
+ * null) onto a supported notification language. Missing, empty, or unknown
+ * values resolve to {@link NOTIFICATION_FALLBACK_LANG}.
+ */
+export function normalizeNotificationLocale(
+  locale: string | null | undefined,
+): Lang {
+  const normalized = locale?.trim().toLowerCase();
+  if (!normalized) return NOTIFICATION_FALLBACK_LANG;
+  if (normalized === "zh" || normalized.startsWith("zh-") || normalized.startsWith("zh_")) {
+    return "zh";
+  }
+  if (normalized === "en" || normalized.startsWith("en-") || normalized.startsWith("en_")) {
+    return "en";
+  }
+  return NOTIFICATION_FALLBACK_LANG;
+}
+
 export function resolveNotificationCopy(
   item: NotificationCopyInput,
   lang: Lang,

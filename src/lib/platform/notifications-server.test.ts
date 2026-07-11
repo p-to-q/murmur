@@ -178,3 +178,59 @@ describe("publishBroadcast pagination (#312)", () => {
     expect(pageLoads.length).toBe(0);
   });
 });
+
+describe("publishLocalizedBroadcast per-locale grouping (#293)", () => {
+  const localeCycle = ["zh", "en", undefined, "fr", "zh-CN", "en-US"] as const;
+
+  function titleByEndpoint(): Map<string, string> {
+    return new Map(
+      sends.map((s) => [s.endpoint, JSON.parse(s.payload).title as string]),
+    );
+  }
+
+  it("delivers each subscription its normalized locale copy across all pages", async () => {
+    seed(600, { locale: (i) => localeCycle[i % localeCycle.length] });
+    const resolveCalls: string[] = [];
+
+    const result = await notifications.publishLocalizedBroadcast({
+      resolveCopy: (lang) => {
+        resolveCalls.push(lang);
+        return { title: `T-${lang}`, body: `B-${lang}` };
+      },
+      data: { source: "cron-daily-digest" },
+    });
+
+    expect(result.skipped).toBeUndefined();
+    expect(result.delivered).toBe(600);
+    // Summary title uses the fallback locale.
+    expect(result.title).toBe("T-zh");
+
+    const titles = titleByEndpoint();
+    expect(titles.get("https://push.example.test/sub/0")).toBe("T-zh"); // zh
+    expect(titles.get("https://push.example.test/sub/1")).toBe("T-en"); // en
+    expect(titles.get("https://push.example.test/sub/2")).toBe("T-zh"); // missing -> fallback
+    expect(titles.get("https://push.example.test/sub/3")).toBe("T-zh"); // unknown -> fallback
+    expect(titles.get("https://push.example.test/sub/4")).toBe("T-zh"); // zh-CN
+    expect(titles.get("https://push.example.test/sub/5")).toBe("T-en"); // en-US
+
+    // Exactly one payload per locale group despite 600 recipients / many pages.
+    expect(new Set(sends.map((s) => JSON.parse(s.payload).title)).size).toBe(2);
+    // Copy is resolved per group, not per subscription (memoized).
+    expect(resolveCalls.length).toBeLessThanOrEqual(3);
+    expect(new Set(resolveCalls)).toEqual(new Set(["zh", "en"]));
+  });
+
+  it("routes every unknown/missing locale to the fallback language", async () => {
+    seed(300, { locale: (i) => (i % 2 === 0 ? undefined : "fr") });
+
+    const result = await notifications.publishLocalizedBroadcast({
+      resolveCopy: (lang) => ({ title: `T-${lang}`, body: `B-${lang}` }),
+    });
+
+    expect(result.delivered).toBe(300);
+    // All fall back to a single locale group.
+    expect(new Set(sends.map((s) => JSON.parse(s.payload).title))).toEqual(
+      new Set(["T-zh"]),
+    );
+  });
+});

@@ -11,6 +11,11 @@ import {
   type WebPushSubscriptionJSON,
 } from "@/lib/db/queries/push-subscriptions";
 import type { PushSubscriptionRecord } from "@/lib/db/schema/push-subscriptions";
+import type { Lang } from "@/lib/i18n/dict";
+import {
+  NOTIFICATION_FALLBACK_LANG,
+  normalizeNotificationLocale,
+} from "@/lib/notifications/notification-copy";
 import { log } from "@/lib/observability/log";
 
 export type NotificationErrorCode = "publish_failed" | "unauthorized" | "server_error";
@@ -42,6 +47,12 @@ export interface NotificationPublishInput {
 export type NotificationUserPublishInput = NotificationPublishInput & {
   userId: string;
 };
+
+export interface NotificationLocalizedBroadcastInput {
+  /** Resolves the notification copy for a supported language. */
+  resolveCopy: (lang: Lang) => { title: string; body: string };
+  data?: NotificationPublishInput["data"];
+}
 
 export interface NotificationSubscribeDeviceInput {
   userId: string;
@@ -103,6 +114,37 @@ export const notifications = {
     return runPublish(input.title, (publishId) => {
       const payload = serializeNotificationPayload(input, publishId);
       return deliverActiveSubscriptionPages(() => payload);
+    });
+  },
+
+  /**
+   * Broadcast to every active subscription in the recipient's own persisted
+   * locale. Owns locale selection (#293); delivery completeness + scale stay in
+   * {@link deliverActiveSubscriptionPages} (#312). Subscriptions are grouped by
+   * normalized supported locale and one payload is built per locale group
+   * (lazily, then reused), so the population is never materialized in memory.
+   * Missing/unknown locales fall back to {@link NOTIFICATION_FALLBACK_LANG}.
+   */
+  publishLocalizedBroadcast(
+    input: NotificationLocalizedBroadcastInput,
+  ): Promise<NotificationPublishResult> {
+    // The result summary title is representative only; use the fallback locale.
+    const summaryTitle = input.resolveCopy(NOTIFICATION_FALLBACK_LANG).title;
+    return runPublish(summaryTitle, (publishId) => {
+      const payloadByLang = new Map<Lang, string>();
+      const buildPayload: PayloadBuilder = (subscription) => {
+        const lang = normalizeNotificationLocale(subscription.metadata?.locale);
+        const cached = payloadByLang.get(lang);
+        if (cached) return cached;
+        const copy = input.resolveCopy(lang);
+        const payload = serializeNotificationPayload(
+          { title: copy.title, body: copy.body, data: input.data },
+          publishId,
+        );
+        payloadByLang.set(lang, payload);
+        return payload;
+      };
+      return deliverActiveSubscriptionPages(buildPayload);
     });
   },
 };
