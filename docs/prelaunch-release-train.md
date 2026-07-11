@@ -31,13 +31,23 @@ should update their checklists instead of claiming to close the whole umbrella.
 | #295 | Close the streaming and worker contract comments posted after #289 merged | Merge before extending the interim stream or audio-worker adapter. |
 | #296 | Close user-facing auth, deletion, contrast, and disabled-state comments from #253/#285/#288 | Merge independently from billing and persistence work. |
 
+### Release-train PRs in review
+
+| PR | Lane | Outcome |
+| --- | --- | --- |
+| #294 | R0 | Establishes this issue-to-PR routing artifact. |
+| #301 | R1 | Restores active-test TypeScript coverage and adds the CI gate. |
+| #302 | R2 | Adds the first missing client transcription result contract tests. |
+| #303 | R2 | Reactivates melody-polisher coverage under the recovered-file policy. |
+| #304 | R0 | Completes the remaining request-id response matrix and closes #215. |
+
 ### Planned lanes
 
 | Lane | Proposed PR | Issues | Outcome | Depends on |
 | --- | --- | --- | --- | --- |
 | R0 | Backlog truth and stale-issue reconciliation | #202, #194, #215, #237 | Every audit item points to a live issue, merged PR, or explicit deferral | none |
-| R1 | Restore test type checking | #221 | `bunx tsc --noEmit` checks application and tests without excluding test files | R0 |
-| R2 | Restore critical unit/evaluation coverage | #214, #196 | Client fallback and melody-polisher behavior have direct regression tests | R1 |
+| R1 | Restore test type checking (#301) | #221 | Application and active tests have explicit zero-error typecheck gates | R0 |
+| R2 | Restore critical unit/evaluation coverage (#302, #303) | #214, #196 | Client fallback and melody-polisher behavior have direct regression tests | R1 |
 | R3 | Add browser golden-path release gate | #247 | A deterministic browser test covers create, save, and public share | R1, R2 |
 | R3a | Close transcribe operation accounting | #298 | Retry, refund, delivery, and reconciliation produce exactly one valid net charge | R1 |
 | R3b | Decouple pending spend refunds from Waffo | #299 | Product refunds recover through a provider-neutral idempotent worker | R1 |
@@ -48,12 +58,12 @@ should update their checklists instead of claiming to close the whole umbrella.
 | R6 | Restore music quality evaluation | #201 | Evaluation suite is live; GPU deploy restoration remains a separate opt-in step | R2, R5 |
 | R7 | Make generation degradation legible | #211, #216, #217 | Users see fallback quality and wait state; auto-audition becomes a preference | R2 |
 | R8 | Design durable generation jobs | #244 | Job/status contract is documented before SSE or queue implementation | R5, R7 |
-| R9 | Observability and AI operational follow-through | #207, #208, #210 | Cache behavior, durable stage events, and latency alerts have measurable sinks | R5 |
+| R9 | Observability operational follow-through | #208, #210 | Durable stage events and latency alerts have measurable sinks | R5 |
 | R10 | Restore export capabilities safely | #198 | Poster and standalone HTML export return behind existing export boundaries | R2 |
 | R11 | Establish product layout contracts | #256, #257, #266, #269, #272 | Shared empty, header, loading, navigation, and bottom-spacing contracts | R3 |
 | R12 | Improve creation feedback | #260, #262, #263, #268, #271 | Recording, generation, entry, and transition feedback share motion rules | R11 |
 | R13 | Complete visual consistency pass | #258, #259, #264, #265, #270 | Billing, settings, auth, navigation, and toast styling match design language | R11 |
-| R14 | Split code only along active product seams | #225, #242, #243, #245, #246 | Boundaries become clearer without a repository-wide rewrite or dependency churn | R3-R13 |
+| R14 | Split code only along active product seams | #225, #245, #246 | Boundaries become clearer without a repository-wide rewrite or dependency churn | R3-R13 |
 
 ## Complete open-issue matrix
 
@@ -64,6 +74,8 @@ Status values:
 - `verify-close`: likely fixed or stale; verify against `main`, then close/update;
 - `design-first`: implementation would be premature without a contract;
 - `opportunistic`: do only while changing the same product seam.
+- `in-review`: a focused PR now carries the remaining closure work;
+- `closed`: triage showed the original issue should not produce a code PR.
 
 | Issue | Status | Release lane | Maintainer disposition |
 | --- | --- | --- | --- |
@@ -86,36 +98,35 @@ Status values:
 | #246 Decompose large screens | opportunistic | R14 | Extract recorder/save/playback seams only when their behavior is being changed. |
 | #245 Split i18n dictionary | design-first | R14 | Measure bundle impact and preserve hydration/language-switch guarantees first. |
 | #244 Polling to SSE | design-first | R8 | Define durable job ownership and reconnect semantics before choosing transport. |
-| #243 Replace caches with query library | design-first | R14 | Require a demonstrated cache bug; avoid dependency churn as a goal itself. |
-| #242 `lib`/`modules` boundary | partial | R14 | Add a written/import-check boundary before moving directories. |
+| #243 Replace caches with query library | closed | — | Existing hooks already deduplicate requests; no demonstrated bug justifies a new dependency. |
+| #242 `lib`/`modules` boundary | closed | — | Current architecture docs define the intended split; a mass move would contradict it. |
 | #237 Waffo pending purchase | active | R4 | Persist expected amount/SKU before checkout and validate webhook against it. |
 | #235 Database pooler | partial | R5 | Enforce/document pooled production URL and a safe per-instance connection cap. |
 | #225 Split mega-store | opportunistic | R14 | Preserve selectors and persisted draft compatibility; extract one concern per PR. |
-| #221 Broken test type checking | active | R1 | Add Bun types, fix env mutation helpers, then repair fixtures in bounded batches. |
+| #221 Broken test type checking | in-review | R1 | #301 reaches zero active-test diagnostics and adds the CI gate. |
 | #220 Worker deploy/monitor architecture | partial | R5 | Separate topology, health/readiness, graceful drain, and alerting contracts. |
 | #217 Auto-audition preference | active | R7 | Put the preference in the existing preference store and honor mute/accessibility. |
 | #216 `estimatedWaitMs` UX | active | R7 | Display honest ranges and record predicted versus actual wait. |
-| #215 Missing request IDs | verify-close | R0 | #289 covered many paths; run a route response matrix and close remaining gaps only. |
-| #214 v0.6 module tests | partial | R2 | Several modules now have tests; update the checklist and cover remaining seams. |
+| #215 Missing request IDs | in-review | R0 | #304 covers the four remaining routes while preserving ZPay and fallback contracts. |
+| #214 v0.6 module tests | partial | R2 | #302 covers the result builder; pitch, Stainer, and badge seams remain. |
 | #211 Fallback quality indicator | active | R7 | Add a calm non-blocking indicator with retry guidance and i18n copy. |
 | #210 Latency alerting | active | R9 | Route existing budget events to a durable sink before adding dashboards. |
 | #208 Durable stage analytics | active | R9 | Choose sink, consent, identifiers, and retention; isolate tracking by flow id. |
-| #207 Anthropic cache control | verify-close | R9 | Confirm gateway/provider support and measure cache hits before adding fields. |
+| #207 Anthropic cache control | closed | — | The current OpenAI-compatible DeepSeek adapter has no Anthropic message/cache contract. |
 | #202 Full-repo audit | partial | R0 | Keep as an index; remove merged findings and link deferred clusters. |
 | #201 Evaluation/GPU scripts | partial | R6 | Restore evaluation first; treat GPU deployment as a separate operational PR. |
 | #198 Poster/HTML export | active | R10 | Reactivate each recovered module separately with current artifact tests. |
-| #196 Melody-polisher tests | active | R2 | Follow the recovered-file checklist and restore the archived test only. |
+| #196 Melody-polisher tests | in-review | R2 | #303 restores the archived test and records current merge-boundary semantics. |
 | #194 Product UX audit | partial | R0 | Keep as an index; link focused issues and remove findings already fixed. |
 | #298 Transcribe operation accounting | active | R3a | A stable spend key alone is insufficient; model delivered/refunded/pending transitions at the ledger boundary. |
 | #299 Provider-neutral pending refunds | active | R3b | Product-spend compensation must not depend on Waffo credentials or availability. |
 | #300 Durable generation recovery | active | R3c | Persist/reuse paid clip identity and artifact; do not restore every ready clip as a new pending purchase. |
 | #297 Saved-song artifact provenance | design-first | R4a | Add a versioned compatibility reader before changing persisted arrangement or lineage semantics. |
 
-## Newly confirmed gaps
+## Newly confirmed focused gaps
 
-These findings are visible in current `main` but do not have focused GitHub
-issues yet. They should be opened before implementation so they do not disappear
-inside an umbrella PR.
+These findings were confirmed against current `main` and now have focused
+GitHub issues so they do not disappear inside an umbrella PR.
 
 | Gap | Evidence | Proposed lane | Required shape |
 | --- | --- | --- | --- |
