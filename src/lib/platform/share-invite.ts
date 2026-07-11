@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { copyTextWithSelection } from "@/lib/platform/clipboard";
 
 interface ShareInviteCopyMessages {
   copied: string;
@@ -27,22 +28,5 @@ export async function copyShareInviteLink(
     } else {
       toast.error(messages.copyFailed);
     }
-  }
-}
-
-function copyTextWithSelection(text: string): boolean {
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  textarea.style.pointerEvents = "none";
-  document.body.appendChild(textarea);
-  textarea.select();
-
-  try {
-    return document.execCommand("copy");
-  } finally {
-    document.body.removeChild(textarea);
   }
 }

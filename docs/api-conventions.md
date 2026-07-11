@@ -140,9 +140,12 @@ GET /api/songs?limit=50&cursor=sng_01H…
 - A client polling for new items uses `?since=<ulid>` (returns
   newer-than) instead of pagination; mutually exclusive with `cursor`.
 
-Internally, "list of user's X" queries always pass through a shared
-`paginate()` helper in `src/lib/api/paginate.ts` (Codex implements; not
-yet built — spec is §4 of this doc).
+**Not implemented / planned.** The intent was for "list of user's X"
+queries to funnel through a shared `paginate()` helper in
+`src/lib/api/paginate.ts`, but that helper was never built and no list
+route wires up the cursor contract yet (e.g. `GET /api/songs` currently
+returns an unpaginated list). The shape above is the spec such a helper
+would follow.
 
 ---
 
@@ -255,6 +258,13 @@ if (!rateLimit.allowed) return rateLimitedResponse(rateLimit, requestId);
 ---
 
 ## 8. Idempotency
+
+**Not implemented / planned.** The generic `Idempotency-Key` header
+mechanism and `src/lib/api/idempotency.ts` described in this section were
+never built; the text below is the intended spec, not current behavior.
+Where idempotency exists today it is per-route: webhook routes dedupe on
+the hashed provider event id (see the note at the end of this section),
+and `POST /api/songs` reuses client-minted draft ids for save retries.
 
 Mutating routes accept an `Idempotency-Key` header (ulid). The server
 records `idempotency_key + userId + route` for 24 hours and returns

@@ -233,7 +233,15 @@ export async function POST(req: NextRequest) {
       sessionId: auth.sessionId,
       promptLength: prompt.length,
     });
-    console.warn("[strummer/edit] llm failed:", err);
+    log("strummer.edit_llm_failed", {
+      error: err instanceof Error ? err.message : String(err),
+    }, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+      level: "warn",
+    });
     return NextResponse.json(
       { tokens: [], error: err instanceof Error ? err.message : "LLM error", requestId },
       { status: 502, headers: { "X-Request-Id": requestId } },
