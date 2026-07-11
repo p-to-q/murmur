@@ -78,7 +78,10 @@ export type LogEvent =
   | "client_pitch.completed"
   | "transcribe.client_fallback_unavailable"
   | "transcribe.client_fallback_starting"
-  | "transcribe.client_fallback_failed";
+  | "transcribe.client_fallback_failed"
+  // Open escape hatch: known events above give autocomplete; ad-hoc
+  // diagnostic events (e.g. "<route>.body_parse_failed") stay allowed.
+  | (string & {});
 
 export interface LogContext {
   requestId?: string;

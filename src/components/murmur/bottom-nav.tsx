@@ -78,14 +78,14 @@ export function BottomNav() {
       style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}
       aria-label="Primary navigation"
     >
-      <div className="pointer-events-auto relative w-full max-w-[288px] px-0.5">
+      <div className="pointer-events-auto relative w-full max-w-[340px] px-0.5">
         <div className="mobile-rail-shell mobile-rail-shell--compact relative isolate overflow-hidden rounded-[18px] border border-[#E6DED3]">
           <div
             ref={railTrackRef}
             className="mobile-rail-track relative overflow-x-auto overflow-y-hidden snap-x snap-mandatory [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           >
             <LayoutGroup id="mobile-journey-rail">
-              <div className="mobile-rail-inner flex w-full min-w-[332px] items-center px-1 py-[4px]">
+              <div className="mobile-rail-inner flex w-full items-center px-1 py-[4px]">
                 {visibleSteps.map((step, index) => (
                   <Fragment key={step.href}>
                     <RailStep

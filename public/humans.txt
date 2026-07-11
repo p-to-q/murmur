@@ -1,0 +1,19 @@
+/* TEAM */
+
+Name: [p → q]
+Site: https://ptoq.io
+Contact: hi [at] ptoq.io
+GitHub: https://github.com/p-to-q
+
+/* SITE */
+
+Name: MURMUR
+URL: https://murmur.ptoq.io
+Description: Turn a hum into a music card you can collect and share.
+Standards: HTML5, CSS3, ES2024
+Components: React, Next.js, Tailwind CSS
+Platform: Vercel
+
+/* THANKS */
+
+Built with care by [p → q].

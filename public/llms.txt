@@ -1,0 +1,37 @@
+# MURMUR — Hum to Song
+
+> Turn the hum in your head into a music card you can collect and share.
+> Murmur is a web application by [p → q] that transcribes hummed melodies and transforms them into editable, saveable songs.
+
+## What It Is
+
+Murmur is a standalone web app that captures vocal melody input (humming, singing, or whistling), transcribes it with AI, and lets you arrange, save, and share the result as a music card.
+
+## Core Journey
+
+1. **Hum** — Capture a vocal melody at `/`
+2. **Vibe** — Review the transcribed melody at `/vibe`
+3. **Studio** — Edit and arrange the song at `/studio`
+4. **Gallery** — Browse your saved songs at `/gallery`
+5. **Share** — Share a song card via public link at `/s/[shareCode]`
+
+## Pages
+
+- [Home](https://murmur.ptoq.io/): Hum capture screen
+- [Vibe](https://murmur.ptoq.io/vibe): Transcribed melody review
+- [Studio](https://murmur.ptoq.io/studio): Song arrangement and editing
+- [Gallery](https://murmur.ptoq.io/gallery): Saved song collection
+- [Me](https://murmur.ptoq.io/me): Profile and account settings
+- [Top Up](https://murmur.ptoq.io/topup): Purchase additional credits
+
+## Machine-Readable
+
+- [Sitemap](https://murmur.ptoq.io/sitemap.xml): XML sitemap
+- [Robots](https://murmur.ptoq.io/robots.txt): Crawler directives
+- [Manifest](https://murmur.ptoq.io/manifest.webmanifest): PWA manifest
+- [Humans](https://murmur.ptoq.io/humans.txt): Team and technology info
+
+## Contact
+
+- Website: https://ptoq.io
+- GitHub: https://github.com/p-to-q

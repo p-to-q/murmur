@@ -799,8 +799,15 @@ async function generateViaHttp(
     let workerDetail: unknown = null;
     try {
       workerDetail = (await workerRes.json()) as unknown;
-    } catch {
-      // non-JSON body (tunnel error pages etc.) — nothing to extract
+    } catch (parseError) {
+      log(
+        "music.worker_error_parse_failed",
+        {
+          status: workerRes.status,
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+        },
+        { route: ROUTE, requestId, level: "warn" },
+      );
     }
     const unauthorized = workerRes.status === 401 || workerRes.status === 403;
     return {

@@ -91,7 +91,9 @@ export function startAudioContext(): void {
         _audioUnlocked = true;
       }
     }
-  } catch { /* 非致命 */ }
+  } catch (audioError) {
+    console.warn("[tone-player] audio unlock failed (non-fatal):", audioError);
+  }
 }
 
 // ── 乐器构建（覆盖所有 instrument 字符串）────────────────────────────────────

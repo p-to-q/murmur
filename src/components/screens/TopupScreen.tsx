@@ -313,9 +313,9 @@ export function TopupScreen() {
       <PageBackdrop variant="soft" />
 
       <div className="relative z-10 flex min-h-svh flex-col">
-        <div className="flex-1 px-5 pb-48 md:pb-24">
+        <div className="flex-1 px-5 pb-48 md:px-12 md:pb-24">
           <div
-            className="mx-auto max-w-lg"
+            className="mx-auto max-w-lg md:max-w-2xl"
             style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 52px)" }}
           >
             {/* ── Assets ─────────────────────────────────────────── */}

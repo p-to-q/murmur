@@ -25,8 +25,17 @@ import { FontHydrator } from "@/components/murmur/font-hydrator";
 import { MobileTopBar } from "@/components/murmur/mobile-top-bar";
 import { ShareReferralTracker } from "@/components/murmur/share-referral-tracker";
 import { getSiteUrl } from "@/lib/site-url";
+import { SITE_CONFIG } from "@/lib/constants";
+import { getSiteSchemaOrgGraph } from "@/lib/schema-org-json-ld";
 
 const SITE_URL = getSiteUrl();
+
+const defaultOgImage = {
+  url: "/og",
+  width: 1200,
+  height: 630,
+  alt: SITE_CONFIG.name,
+} as const;
 
 const instrumentalSerif = Instrument_Serif({
   subsets: ["latin"],
@@ -35,14 +44,15 @@ const instrumentalSerif = Instrument_Serif({
   variable: "--font-instrument-serif",
 });
 
+const schemaOrgJsonLd = JSON.stringify(getSiteSchemaOrgGraph());
+
 export const metadata: Metadata = {
   ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
   title: {
     default: "MURMUR",
     template: "%s | MURMUR",
   },
-  description:
-    "把脑海里的哼唱，变成一张可以收藏和分享的音乐卡片 · Turn the hum in your head into a music card you can collect and share.",
+  description: SITE_CONFIG.description,
   keywords: ["音乐创作", "哼唱", "AI音乐", "旋律", "music creation", "humming", "melody"],
   authors: [{ name: "P to Q" }],
   creator: "P to Q",
@@ -50,36 +60,30 @@ export const metadata: Metadata = {
   applicationName: "MURMUR",
   icons: {
     icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
       { url: "/favicon.ico", sizes: "32x32" },
       { url: "/favicon.png", sizes: "512x512", type: "image/png" },
       { url: "/icon.png", sizes: "120x120", type: "image/png" },
     ],
     apple: [
-      { url: "/brand/murmur-app-icon-180-rounded.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
   },
-  manifest: "/manifest.json",
+  manifest: "/manifest.webmanifest",
   openGraph: {
     type: "website",
-    siteName: "MURMUR",
-    title: "MURMUR",
-    description: "哼一句脑海里的旋律，MURMUR 帮它长成一首小歌。",
+    siteName: SITE_CONFIG.name,
+    title: SITE_CONFIG.title,
+    description: SITE_CONFIG.socialDescription,
     url: "/",
     locale: "zh_CN",
-    images: [
-      {
-        url: "/brand/murmur-app-icon-1024-rounded.png",
-        width: 1024,
-        height: 1024,
-        alt: "MURMUR",
-      },
-    ],
+    images: [defaultOgImage],
   },
   twitter: {
-    card: "summary",
-    title: "MURMUR",
-    description: "哼一句脑海里的旋律，MURMUR 帮它长成一首小歌。",
-    images: ["/brand/murmur-app-icon-512-rounded.png"],
+    card: "summary_large_image",
+    title: SITE_CONFIG.title,
+    description: SITE_CONFIG.socialDescription,
+    images: ["/og"],
   },
   robots: {
     index: true,
@@ -94,6 +98,14 @@ export const metadata: Metadata = {
   },
   alternates: {
     canonical: "/",
+    languages: {
+      "zh-Hans": "/",
+      "en": "/",
+      "x-default": "/",
+    },
+  },
+  other: {
+    "humans": "/humans.txt",
   },
 };
 
@@ -127,6 +139,12 @@ export default async function RootLayout({
         instrumentalSerif.variable,
       )}
     >
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: schemaOrgJsonLd }}
+        />
+      </head>
       <body
         suppressHydrationWarning
         className="min-h-svh flex flex-col bg-[#F5F1EB]"
