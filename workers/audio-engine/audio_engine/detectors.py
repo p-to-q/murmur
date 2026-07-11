@@ -22,7 +22,7 @@ class DetectorConfig:
     hop_length: int
 
 
-@dataclass(frozen=True)
+@dataclass
 class PitchDetection:
     """Raw frame-level f0 output from a detector provider."""
 
@@ -31,7 +31,7 @@ class PitchDetection:
     f0: object
     voiced: object
     confidence: object
-    diagnostics: dict[str, int | float | str | None] = field(default_factory=dict)
+    diagnostics: dict[str, object] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     sample_rate: int = 22050
     hop_length: int = 512

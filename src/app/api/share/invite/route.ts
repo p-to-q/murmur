@@ -31,7 +31,8 @@ export async function GET(request: NextRequest) {
 
   const origin = getSiteUrlForRequest(request);
   const inviterId = auth.ok && canUseShareReferral(auth.user) ? auth.user.id : null;
-  return NextResponse.json({
-    url: buildShareInviteUrl(origin, inviterId),
-  });
+  return NextResponse.json(
+    { url: buildShareInviteUrl(origin, inviterId) },
+    { headers: { "X-Request-Id": requestId } },
+  );
 }

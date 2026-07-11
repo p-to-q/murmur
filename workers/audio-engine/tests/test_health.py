@@ -2,8 +2,9 @@
 
 import os
 import sys
+import asyncio
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -56,3 +57,29 @@ class DetectorsReadyTest(unittest.TestCase):
 
     def tearDown(self):
         main._preload_outcomes.clear()
+
+
+class LifespanShutdownTest(unittest.TestCase):
+    def test_lifespan_gracefully_shuts_down_transcription_executor(self):
+        executor = Mock()
+        with (
+            patch.object(main, "_TRANSCRIBE_EXECUTOR", executor),
+            patch.object(main, "require_worker_token"),
+            patch.object(main, "_preload_pitch_model"),
+        ):
+            async def run_lifespan():
+                async with main._lifespan(main.app):
+                    pass
+
+            asyncio.run(run_lifespan())
+
+        executor.shutdown.assert_called_once_with(wait=True)
+
+
+class TranscriptionErrorMappingTest(unittest.TestCase):
+    def test_invalid_pitch_provider_uses_worker_safe_client_error(self):
+        with self.assertRaises(main.TranscriptionClientError) as raised:
+            main.resolve_requested_pitch_provider("unknown")
+
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertEqual(raised.exception.detail["error"], "invalid_pitch_provider")

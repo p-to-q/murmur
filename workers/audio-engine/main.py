@@ -50,7 +50,12 @@ LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1", ""}
 async def _lifespan(_app: FastAPI):
     require_worker_token()
     _preload_pitch_model()
-    yield
+    try:
+        yield
+    finally:
+        # Let an in-flight transcription finish before the worker exits. This
+        # avoids abandoning a request halfway through a deploy/restart.
+        _TRANSCRIBE_EXECUTOR.shutdown(wait=True)
 
 
 app = FastAPI(title="Murmur Audio Engine", version="0.3.0", lifespan=_lifespan)
@@ -80,6 +85,15 @@ MAX_AUDIO_SECONDS = 30
 # restarted by Fly instead of green-lighting 503s forever. Empty until the
 # lifespan preload has run (unit tests calling handlers directly stay green).
 _preload_outcomes: dict[str, str] = {}
+
+
+class TranscriptionClientError(ValueError):
+    """A stable 4xx error raised by the blocking transcription pipeline."""
+
+    def __init__(self, status_code: int, detail: object):
+        super().__init__(str(detail))
+        self.status_code = status_code
+        self.detail = detail
 
 
 def _detectors_ready() -> bool:
@@ -1969,8 +1983,8 @@ async def transcribe(
                 started,
             ),
         )
-    except HTTPException:
-        raise
+    except TranscriptionClientError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     except DetectorUnavailable as exc:
         raise HTTPException(
             status_code=503,
@@ -2005,11 +2019,11 @@ def _transcribe_sync(
     y = decode_audio(data, filename)
     decode_ms = round((time.perf_counter() - phase) * 1000)
     if y.size == 0:
-        raise HTTPException(status_code=422, detail="audio decoded empty")
+        raise TranscriptionClientError(422, "audio decoded empty")
 
     duration = len(y) / SR
     if duration > MAX_AUDIO_SECONDS:
-        raise HTTPException(status_code=413, detail="audio duration too long")
+        raise TranscriptionClientError(413, "audio duration too long")
 
     phase = time.perf_counter()
     y = trim_silence(y)
@@ -2053,9 +2067,9 @@ def _transcribe_sync(
     }
 
     if not notes:
-        raise HTTPException(
-            status_code=422,
-            detail={
+        raise TranscriptionClientError(
+            422,
+            {
                 "error": "no_voiced_frames",
                 "diagnostics": diagnostics,
             },
@@ -2100,9 +2114,9 @@ def resolve_requested_pitch_provider(requested: str) -> str:
         return configured_pitch_provider()
     if value in ("auto", "rmvpe", "pyin", "swiftf0", "yin", "parselmouth"):
         return value
-    raise HTTPException(
-        status_code=400,
-        detail={
+    raise TranscriptionClientError(
+        400,
+        {
             "error": "invalid_pitch_provider",
             "message": (
                 "pitchProvider must be auto, rmvpe, swiftf0, pyin, yin, or "

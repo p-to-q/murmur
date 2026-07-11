@@ -16,7 +16,10 @@ const RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
 export async function GET(request: NextRequest) {
   const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
-  if (!auth.ok) return auth.response;
+  if (!auth.ok) {
+    auth.response.headers.set("X-Request-Id", requestId);
+    return auth.response;
+  }
   const userId = auth.user.id;
 
   const rateLimit = await checkApiRateLimit({
@@ -33,7 +36,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const snapshot = await getTopupSurfaceSnapshot(userId);
-    return NextResponse.json(serializeSnapshot(snapshot));
+    return NextResponse.json(serializeSnapshot(snapshot), { headers: { "X-Request-Id": requestId } });
   } catch (error) {
     if (shouldUseDevBalanceFallback({ host: getRequestHostname(request) })) {
       log("user.balance_failed", {
@@ -49,7 +52,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(serializeSnapshot({
         lifetimeTopupCents: 0,
         latestPlanSkuId: null,
-      }));
+      }), { headers: { "X-Request-Id": requestId } });
     }
 
     log("user.balance_failed", {
@@ -64,7 +67,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       { error: "topup_surface_unavailable" },
-      { status: 503 },
+      { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
 }
@@ -80,4 +83,3 @@ function serializeSnapshot(snapshot: SnapshotLike) {
     latestPlanSkuId: snapshot.latestPlanSkuId,
   };
 }
-

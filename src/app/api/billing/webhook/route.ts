@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   if (!isWaffoConfigured()) {
     return NextResponse.json(
       { error: "waffo_not_configured", requestId },
-      { status: 503 },
+      { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
 
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
   if (!signature) {
     return NextResponse.json(
       { error: "missing_signature", requestId },
-      { status: 400 },
+      { status: 400, headers: { "X-Request-Id": requestId } },
     );
   }
 
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       );
       return NextResponse.json(
         { error: "invalid_signature", requestId },
-        { status: 401 },
+        { status: 401, headers: { "X-Request-Id": requestId } },
       );
   }
 
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
 
   const eventRow = insertedRows[0] ?? (await reclaimUnprocessedEvent(event.id));
   if (!eventRow) {
-    return NextResponse.json({ received: true, duplicate: true, requestId });
+    return NextResponse.json({ received: true, duplicate: true, requestId }, { headers: { "X-Request-Id": requestId } });
   }
 
   log(
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
       .update(eventsWebhook)
       .set({ status: "processed", processedAt: new Date() })
       .where(eq(eventsWebhook.id, eventRow.id));
-    return NextResponse.json({ received: true, ...outcome, requestId });
+    return NextResponse.json({ received: true, ...outcome, requestId }, { headers: { "X-Request-Id": requestId } });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const retryable = !(err instanceof NonRetryableWebhookError);
@@ -157,11 +157,12 @@ export async function POST(request: NextRequest) {
     if (retryable) {
       return NextResponse.json(
         { error: "webhook_processing_failed", requestId },
-        { status: 500 },
+        { status: 500, headers: { "X-Request-Id": requestId } },
       );
     }
     return NextResponse.json(
       { received: true, error: "non_retryable", requestId },
+      { headers: { "X-Request-Id": requestId } },
     );
   }
 }

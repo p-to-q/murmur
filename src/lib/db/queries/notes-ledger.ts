@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import { db } from "../client";
 import { notesLedger } from "../schema/notes-ledger";
 import { users } from "../schema/users";

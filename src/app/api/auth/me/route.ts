@@ -17,7 +17,10 @@ const RATE_LIMIT = { capacity: 60, refillWindowMs: 60_000 };
 export async function GET(request: NextRequest) {
   const requestId = getRequestId(request);
   const auth = await resolveRequestAuth(request);
-  if (!auth.ok) return auth.response;
+  if (!auth.ok) {
+    auth.response.headers.set("X-Request-Id", requestId);
+    return auth.response;
+  }
 
   const rateLimit = await checkApiRateLimit({
     route: ROUTE,
@@ -44,7 +47,7 @@ export async function GET(request: NextRequest) {
           error: "user_not_found",
           message: "No billing account exists for the resolved user.",
         },
-        { status: 404 },
+        { status: 404, headers: { "X-Request-Id": requestId } },
       );
     }
 
@@ -61,6 +64,7 @@ export async function GET(request: NextRequest) {
           planTier: balance.planTier,
         },
       }),
+      { headers: { "X-Request-Id": requestId } },
     );
   } catch (error) {
     if (shouldUseDevBalanceFallback({ host: getRequestHostname(request) })) {
@@ -83,6 +87,7 @@ export async function GET(request: NextRequest) {
           identityProviders: [],
           balance: fallback,
         }),
+        { headers: { "X-Request-Id": requestId } },
       );
     }
 
@@ -100,8 +105,7 @@ export async function GET(request: NextRequest) {
         error: "me_unavailable",
         message: "Could not resolve the current account snapshot.",
       },
-      { status: 503 },
+      { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
 }
-

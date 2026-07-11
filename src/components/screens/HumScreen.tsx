@@ -296,7 +296,9 @@ export function HumScreen() {
   const blob1Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.35]);
   const blob2Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.28]);
   const blob3Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.22]);
-  const blobOpacity = useTransform(amplitudeSpring, [0, 1], [0.82, 1]);
+  const blobOpacity = useTransform(amplitudeSpring, (value) =>
+    Math.min(1, Math.max(0, 0.82 + value * 0.18)),
+  );
   // Orb conic glow — bigger range, brighter response
   const glowScale = useTransform(amplitudeSpring, [0, 0.3, 1], [1, 1.15, 1.7]);
   const glowOpacity = useTransform(amplitudeSpring, [0, 0.2, 1], [0.35, 0.55, 1.0]);
@@ -562,6 +564,10 @@ export function HumScreen() {
           if (phase === "billing_ok") {
             setProcessingMessage(t("hum.proc.billing_ok"));
           } else if (phase === "worker_started") {
+            setProcessingMessage(t("hum.proc.analyzing"));
+          } else if (phase === "interim_melody") {
+            // The preview is progress-only. Generation waits for the final
+            // humming-engine selection so billing and attribution stay aligned.
             setProcessingMessage(t("hum.proc.analyzing"));
           }
         },

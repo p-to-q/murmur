@@ -17,7 +17,7 @@ import { buildClientTranscriptionResult } from "@/lib/audio/build-client-transcr
 
 function isNetworkError(error: unknown): boolean {
   if (error instanceof TypeError && /fetch|network/i.test(error.message)) return true;
-  if (error instanceof DOMException && error.name === "AbortError") return false;
+  if (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError")) return true;
   if (error instanceof Error && /ECONNREFUSED|ETIMEDOUT|503|502/i.test(error.message)) return true;
   return false;
 }

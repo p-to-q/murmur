@@ -5,6 +5,7 @@ import {
   isMelodyCarrier,
   transcribeWithAudioWorker,
 } from "@/lib/platform/audio-worker";
+import type { CleanMelody } from "@/modules/shared/types";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth, type ResolvedRequestAuth } from "@/lib/auth";
@@ -27,6 +28,7 @@ import { COST } from "@murmur/core";
 export type TranscribeStreamEvent =
   | { phase: "billing_ok"; balanceBefore: number | null }
   | { phase: "worker_started" }
+  | { phase: "interim_melody"; melody: CleanMelody }
   | { phase: "complete"; result: unknown }
   | { phase: "error"; error: string; message: string; status: number; requestId: string; currentBalance?: number | null };
 
@@ -221,6 +223,9 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
           audio,
           targetInstrument,
           requestId,
+          onInterimMelody: (melody) => {
+            emit(controller, { phase: "interim_melody", melody });
+          },
         }).then(
           (value) => ({ kind: "result" as const, value }),
           (error: unknown) => ({ kind: "error" as const, error }),
@@ -985,4 +990,3 @@ function fail(
     },
   );
 }
-
