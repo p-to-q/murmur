@@ -16,16 +16,35 @@ import {
   readShareReferrerFromRequest,
 } from "@/lib/api/share-referral-server";
 import { settleRegistrationShareReferral } from "@/lib/auth/share-referral-settlement";
+import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
+import { getRequestId } from "@/lib/api/request-id";
+import { clientIpFromHeaders } from "@/lib/http/client-ip";
 
 export const runtime = "nodejs";
 
 const ROUTE = "/api/auth/email/verify-code";
+// IP-scoped ceiling on top of verifyCode's per-email attempt cap: stops one
+// host from brute-forcing codes across many addresses.
+const VERIFY_CODE_RATE_LIMIT = { capacity: 10, refillWindowMs: 60_000 };
 
 export async function POST(request: NextRequest) {
+  const requestId = getRequestId(request);
+
+  const rateLimit = await checkApiRateLimit({
+    route: ROUTE,
+    bucket: "ip",
+    userId: clientIpFromHeaders(request.headers),
+    requestId,
+    options: VERIFY_CODE_RATE_LIMIT,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitedResponse(rateLimit, requestId);
+  }
+
   if (!isEmailAuthConfigured()) {
     return NextResponse.json(
-      { error: "email_auth_disabled" },
-      { status: 404 },
+      { error: "email_auth_disabled", requestId },
+      { status: 404, headers: { "X-Request-Id": requestId } },
     );
   }
 
@@ -33,20 +52,29 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "invalid_body", requestId },
+      { status: 400, headers: { "X-Request-Id": requestId } },
+    );
   }
 
   const email = body.email?.trim();
   const code = body.code?.trim();
   if (!email || !code) {
-    return NextResponse.json({ error: "missing_fields" }, { status: 400 });
+    return NextResponse.json(
+      { error: "missing_fields", requestId },
+      { status: 400, headers: { "X-Request-Id": requestId } },
+    );
   }
 
   const verification = await verifyCode(email, code);
   if (!verification.ok) {
     return NextResponse.json(
-      { error: verification.error },
-      { status: verification.error === "max_attempts" ? 429 : 400 },
+      { error: verification.error, requestId },
+      {
+        status: verification.error === "max_attempts" ? 429 : 400,
+        headers: { "X-Request-Id": requestId },
+      },
     );
   }
 
@@ -101,10 +129,14 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const response = NextResponse.json({
-      ok: true,
-      user: { id: userId, email: normalized, accountKind: "registered" },
-    });
+    const response = NextResponse.json(
+      {
+        ok: true,
+        user: { id: userId, email: normalized, accountKind: "registered" },
+        requestId,
+      },
+      { headers: { "X-Request-Id": requestId } },
+    );
     response.cookies.set(
       SESSION_COOKIE_NAME,
       session.token,
@@ -115,11 +147,11 @@ export async function POST(request: NextRequest) {
     log(
       "auth.email_verify_failed",
       { error: error instanceof Error ? error.message : String(error) },
-      { route: ROUTE, level: "error" },
+      { route: ROUTE, requestId, level: "error" },
     );
     return NextResponse.json(
-      { error: "verification_failed" },
-      { status: 500 },
+      { error: "verification_failed", requestId },
+      { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
 }
