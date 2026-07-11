@@ -54,18 +54,26 @@ let activeAbort: AbortController | null = null;
 let activeBatchId: string | null = null;
 let liveObjectUrls: string[] = [];
 
+export type GenerationCancellationKind = "navigation" | "background";
+
+const BACKGROUND_CANCELLATION_REASON = "murmur:background-generation-canceled";
+
 export function invalidateMusicEngineCache(): void {
   healthCache = null;
 }
 
 /**
- * Abort any in-flight generation requests. Call on VibeScreen unmount or
- * when navigating away so server-side RunPod jobs are cancelled promptly
- * instead of running until their execution timeout.
+ * Abort any in-flight generation requests. Navigation cancellation stays
+ * silent because the screen is leaving; sustained background cancellation
+ * settles pending cards into an explicit retry state for foreground recovery.
  */
-export function cancelActiveGeneration(): void {
+export function cancelActiveGeneration(
+  kind: GenerationCancellationKind = "navigation",
+): void {
   if (activeAbort) {
-    activeAbort.abort();
+    activeAbort.abort(
+      kind === "background" ? BACKGROUND_CANCELLATION_REASON : undefined,
+    );
     activeAbort = null;
   }
   activeBatchId = null;
@@ -269,8 +277,11 @@ export function regenerateVersionAudio(version: VibeVersion): void {
     cost: undefined,
   });
   const humBlob = useMurmurStore.getState().humStyleBlob;
+  if (!activeAbort || activeAbort.signal.aborted) {
+    activeAbort = new AbortController();
+  }
   activeBatchId ??= crypto.randomUUID();
-  void requestClip(version, humBlob, activeAbort?.signal ?? null, activeBatchId);
+  void requestClip(version, humBlob, activeAbort.signal, activeBatchId);
 }
 
 function startBatchGeneration(versions: VibeVersion[], humBlob: Blob | null): void {
@@ -340,7 +351,24 @@ async function requestClip(
     });
     notifyIfBatchComplete();
   } catch (error) {
-    if (signal?.aborted) return;
+    if (signal?.aborted) {
+      if (signal.reason !== BACKGROUND_CANCELLATION_REASON) return;
+      const applied = patchGeneration(version.id, {
+        status: "error",
+        error: "Generation stopped while Murmur was in the background.",
+        errorCode: "background_canceled",
+      });
+      if (!applied) return;
+      log("magenta.clip_background_canceled", {
+        vibe: version.vibe,
+        prompt: generation.prompt,
+      }, {
+        level: "warn",
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+      notifyIfBatchComplete();
+      return;
+    }
     const failure = normalizeMusicGenerateError(error);
     patchGeneration(version.id, {
       status: "error",

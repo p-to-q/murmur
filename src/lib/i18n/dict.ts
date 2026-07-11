@@ -299,6 +299,7 @@ export const DICT = {
   "vibe.pick.wait":   { zh: "等待中",         en: "Brewing" },
   "vibe.retry":       { zh: "重试",           en: "Retry" },
   "vibe.gen.failed":  { zh: "没酿成，点一下重试", en: "Didn't brew — tap to retry" },
+  "vibe.gen.background_canceled": { zh: "切到后台太久，酿造已停止。准备好后可重新开始。", en: "Brewing stopped after Murmur stayed in the background. Retry when you're ready to start again." },
   "vibe.gen.topup":   { zh: "去补给",         en: "Top up" },
   "vibe.gen.wait":    { zh: "稍后再试",       en: "Try later" },
   "vibe.gen.insufficient_notes": { zh: "音磅不够了，先去补给再继续酿。", en: "Out of notes — top up to brew more." },
