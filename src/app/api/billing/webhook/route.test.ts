@@ -54,30 +54,32 @@ function insertChain(values: Row) {
   };
 }
 
-mock.module("@/lib/db/client", () => ({
-  db: {
-    insert: () => ({ values: (v: Row) => insertChain(v) }),
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: async () => {
-            if (purchaseRow) return [purchaseRow];
-            return reclaimRow ? [reclaimRow] : [];
-          },
-        }),
-      }),
-    }),
-    update: () => ({
-      set: (v: Row) => ({
-        where: () => {
-          if (v.status === "refunded") purchaseUpdates.push(v);
-          else eventUpdates.push(v);
-          return Promise.resolve([]);
+const dbMock = {
+  insert: () => ({ values: (v: Row) => insertChain(v) }),
+  select: () => ({
+    from: () => ({
+      where: () => ({
+        limit: async () => {
+          if (purchaseRow) return [purchaseRow];
+          return reclaimRow ? [reclaimRow] : [];
         },
       }),
     }),
-  },
-}));
+  }),
+  update: () => ({
+    set: (v: Row) => ({
+      where: () => {
+        if (v.status === "refunded") purchaseUpdates.push(v);
+        else eventUpdates.push(v);
+        return Promise.resolve([]);
+      },
+    }),
+  }),
+  transaction: async <T,>(fn: (tx: typeof dbMock) => Promise<T>): Promise<T> =>
+    fn(dbMock),
+};
+
+mock.module("@/lib/db/client", () => ({ db: dbMock }));
 
 const grantInputs: Row[] = [];
 const reverseInputs: Row[] = [];
@@ -103,7 +105,10 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
     grantInputs.push(input);
     return grantResult;
   }),
-  grantNotesInTransaction: mock(async () => grantResult),
+  grantNotesInTransaction: mock(async (_tx: unknown, input: Row) => {
+    grantInputs.push(input);
+    return grantResult;
+  }),
   getNotesBalance: async () => ({
     ok: true as const,
     userId: "guest",

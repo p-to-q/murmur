@@ -44,12 +44,17 @@ const dbMock = {
   select: () => ({
     from: () => ({
       where: () => ({
-        limit: async () => {
-          selectCalls += 1;
-          if (eventInsertConflicts && selectCalls === 1) {
-            return reclaimedEvent ? [reclaimedEvent] : [];
-          }
-          return pendingPurchase ? [pendingPurchase] : [];
+        limit: () => {
+          const rows = (async () => {
+            selectCalls += 1;
+            if (eventInsertConflicts && selectCalls === 1) {
+              return reclaimedEvent ? [reclaimedEvent] : [];
+            }
+            return pendingPurchase ? [pendingPurchase] : [];
+          })();
+          // Support both `await …limit(1)` (reclaim lookup) and
+          // `…limit(1).for("update")` (row-locked pending-purchase read, #231).
+          return Object.assign(rows, { for: () => rows });
         },
       }),
     }),
@@ -310,5 +315,27 @@ describe("POST /api/billing/zpay-notify", () => {
     expect(await response.text()).toBe("success");
     expect(grantInputs).toHaveLength(0);
     expect(eventUpdates).toHaveLength(0);
+  });
+
+  it("acknowledges terminal non-success statuses without recording an event (#239)", async () => {
+    verifiedNotify = { ...verifiedNotify!, trade_status: "TRADE_CLOSED" };
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("success");
+    expect(eventInserts).toHaveLength(0);
+    expect(grantInputs).toHaveLength(0);
+  });
+
+  it("asks ZPay to redeliver transient non-success statuses via a non-200 (#239)", async () => {
+    verifiedNotify = { ...verifiedNotify!, trade_status: "WAIT_BUYER_PAY" };
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(202);
+    expect(await response.text()).toBe("pending");
+    expect(eventInserts).toHaveLength(0);
+    expect(grantInputs).toHaveLength(0);
   });
 });

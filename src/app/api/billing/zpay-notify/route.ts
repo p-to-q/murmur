@@ -68,8 +68,31 @@ export async function POST(request: NextRequest) {
     return new NextResponse("fail", { status: 401 });
   }
 
+  // Only TRADE_SUCCESS proceeds to fulfillment below. For every other status
+  // we must decide whether to acknowledge (ZPay treats an HTTP 200 "success"
+  // body as "stop retrying") or ask ZPay to redeliver later (any non-200).
+  //
+  // ASSUMPTION — verify against ZPay's docs before deploy: the exact
+  // trade_status vocabulary and ZPay's retry semantics are not documented
+  // anywhere in this codebase (only TRADE_SUCCESS appears today). We treat
+  // TRADE_CLOSED / TRADE_FINISHED as terminal (ack, so ZPay stops retrying)
+  // and default EVERY other/unknown status (e.g. WAIT_BUYER_PAY) to a 202 so
+  // ZPay redelivers once the payment settles. Unknown-status-defaults-to-retry
+  // is the safe bias: a spurious retry is cheap (the fulfillment path is
+  // idempotent) while a silently-dropped settlement is not.
   if (verified.trade_status !== "TRADE_SUCCESS") {
-    return new NextResponse("success");
+    const terminal =
+      verified.trade_status === "TRADE_CLOSED" ||
+      verified.trade_status === "TRADE_FINISHED";
+    log(
+      "billing.zpay_notify_failed",
+      { stage: "non_success_status", trade_status: verified.trade_status, terminal },
+      { route: ROUTE, requestId, level: "warn" },
+    );
+    if (terminal) {
+      return new NextResponse("success");
+    }
+    return new NextResponse("pending", { status: 202 });
   }
 
   const outTradeNo = verified.out_trade_no;
@@ -128,7 +151,12 @@ export async function POST(request: NextRequest) {
         eq(purchases.providerRef, outTradeNo),
       ),
     )
-    .limit(1);
+    .limit(1)
+    // Defense-in-depth only (#231): the real double-grant guard is the
+    // idempotent, row-locked grant keyed on the stable out_trade_no
+    // externalRef. This FOR UPDATE narrows the window for two concurrent
+    // redeliveries to both read status="pending" before either flips it.
+    .for("update");
 
   if (!pendingPurchase) {
     log("billing.zpay_notify_failed", { stage: "no_pending", outTradeNo }, { route: ROUTE, requestId, level: "error" });

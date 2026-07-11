@@ -21,7 +21,10 @@ import {
 import { db } from "@/lib/db/client";
 import { eventsWebhook } from "@/lib/db/schema/events-webhook";
 import { purchases } from "@/lib/db/schema/purchases";
-import { grantNotes, reverseTopupGrant } from "@/lib/db/queries/notes-ledger";
+import {
+  grantNotesInTransaction,
+  reverseTopupGrant,
+} from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
@@ -217,43 +220,55 @@ async function fulfillOrder(
     throw error;
   }
 
-  await db
-    .insert(purchases)
-    .values({
-      id: newId("pur"),
+  // Record the succeeded purchase and grant its notes in one transaction so a
+  // crash between the two never leaves an orphaned succeeded purchase with no
+  // matching grant (#240). Both writes are idempotent on the Waffo order id —
+  // the insert via onConflict(provider, providerRef), the grant via its
+  // externalRef — so a redelivered event replays cleanly.
+  const grant = await db.transaction(async (tx) => {
+    await tx
+      .insert(purchases)
+      .values({
+        id: newId("pur"),
+        userId: purchase.userId,
+        provider: PROVIDER,
+        productId: purchase.productId,
+        providerRef: orderId,
+        amountCents: purchase.amountCents,
+        currency: purchase.currency,
+        notesGranted: purchase.notesGranted,
+        status: "succeeded",
+        rawPayload: data as unknown as Record<string, unknown>,
+      })
+      .onConflictDoNothing({
+        target: [purchases.provider, purchases.providerRef],
+      });
+
+    const result = await grantNotesInTransaction(tx, {
       userId: purchase.userId,
-      provider: PROVIDER,
-      productId: purchase.productId,
-      providerRef: orderId,
-      amountCents: purchase.amountCents,
-      currency: purchase.currency,
-      notesGranted: purchase.notesGranted,
-      status: "succeeded",
-      rawPayload: data as unknown as Record<string, unknown>,
-    })
-    .onConflictDoNothing({
-      target: [purchases.provider, purchases.providerRef],
+      amount: purchase.notesGranted,
+      reason: "purchase:topup",
+      externalRef: orderId,
+      metadata: {
+        provider: PROVIDER,
+        ...purchase.metadata,
+        orderId,
+        paymentId: purchase.paymentIntentId,
+        waffoEventId: data.paymentId,
+      },
     });
 
-  const grant = await grantNotes({
-    userId: purchase.userId,
-    amount: purchase.notesGranted,
-    reason: "purchase:topup",
-    externalRef: orderId,
-    metadata: {
-      provider: PROVIDER,
-      ...purchase.metadata,
-      orderId,
-      paymentId: purchase.paymentIntentId,
-      waffoEventId: data.paymentId,
-    },
-  });
+    // Throw inside the transaction so a failed grant rolls the purchase insert
+    // back with it — the whole point of #240. The POST handler's catch marks
+    // the event failed and returns a retryable 500.
+    if (!result.ok) {
+      throw new Error(
+        `grantNotes failed for ${purchase.userId} on order ${orderId}: ${result.reason}`,
+      );
+    }
 
-  if (!grant.ok) {
-    throw new Error(
-      `grantNotes failed for ${purchase.userId} on order ${orderId}: ${grant.reason}`,
-    );
-  }
+    return result;
+  });
 
   log(
     "notes.granted",
