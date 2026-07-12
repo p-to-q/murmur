@@ -257,6 +257,13 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
               style={i > 0 ? { borderColor: collapsed ? "transparent" : "rgba(229,221,208,0.7)", transition: "border-color 0.3s" } : undefined}
             >
               <div className="relative flex h-9 items-center">
+                {/* Active-row wash removed 2026-07-12:
+                    Previously a `bg-[#FF5924]/[0.07]` rounded-[12px] overlay
+                    that covered the entire active destination row. Users found
+                    the "light orange backdrop" distracting — the left-edge
+                    marker (side-nav-active-marker) is sufficient alone.
+                    See docs/adr/remove-side-nav-active-bg.md */}
+
                 {/* Dot — crossfades in when collapsed */}
                 <div
                   className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
