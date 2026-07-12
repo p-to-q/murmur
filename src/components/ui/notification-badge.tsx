@@ -20,10 +20,10 @@ export function NotificationBadge({
     <span
       className={`inline-flex items-center justify-center rounded-full bg-[#FF762F] text-white font-medium tabular-nums leading-none ${className}`}
       style={{
-        minWidth: 16,
-        height: 16,
-        fontSize: 10,
-        padding: "0 4px",
+        minWidth: 18,
+        height: 18,
+        fontSize: 11,
+        padding: "0 5px",
       }}
       aria-label={`${count} unread`}
     >
