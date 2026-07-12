@@ -159,6 +159,9 @@ export function ShareTicketCard({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
           className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/40 backdrop-blur-md px-3"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Share ticket"
           style={{
             paddingTop: "max(env(safe-area-inset-top, 0px), 12px)",
             paddingBottom: "max(env(safe-area-inset-bottom, 0px), 16px)",

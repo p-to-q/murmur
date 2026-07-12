@@ -882,6 +882,9 @@ export function SongDetailScreen({ songId }: { songId: string }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-md px-5"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Delete confirmation"
             onClick={() => setDeleteOpen(false)}
           >
             <motion.div

@@ -188,6 +188,9 @@ export function ShareCardModal({ open, onClose, shareUrl }: ShareCardModalProps)
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Share card"
           onClick={onClose}
         >
           <motion.div
