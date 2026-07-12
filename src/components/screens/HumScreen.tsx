@@ -1276,6 +1276,10 @@ export function HumScreen() {
               <motion.button
                 ref={orbButtonRef}
                 onClick={() => {
+                  if (showOnboarding && !onboardingRippling) {
+                    handleOnboardingPress();
+                    return;
+                  }
                   if (isRecording) {
                     stopRecording();
                     return;
@@ -1286,6 +1290,10 @@ export function HumScreen() {
                   if (e.repeat) return;
                   if (e.key === " " || e.key === "Enter") {
                     e.preventDefault();
+                    if (showOnboarding && !onboardingRippling) {
+                      handleOnboardingPress();
+                      return;
+                    }
                     if (isRecording) {
                       stopRecording();
                       return;
