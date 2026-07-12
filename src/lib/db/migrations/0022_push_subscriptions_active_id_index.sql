@@ -1,0 +1,1 @@
+CREATE INDEX "push_subscriptions_active_id_idx" ON "push_subscriptions" USING btree ("id") WHERE "push_subscriptions"."disabled_at" IS NULL;

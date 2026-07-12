@@ -171,6 +171,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
       <div className="relative z-10 h-[60px]">
         {/* Brand glyph — visible when collapsed */}
         <button
+          type="button"
           onClick={goHome}
           aria-label="Murmur — home"
           className={`absolute inline-flex items-center justify-center transition-opacity duration-200 ${
@@ -183,6 +184,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
 
         {/* Brand mark — visible when expanded */}
         <button
+          type="button"
           onClick={goHome}
           aria-label="Murmur — home"
           className={`absolute group transition-opacity duration-200 ${
@@ -197,6 +199,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
 
         {/* Collapse/expand toggle — single button, position transitions */}
         <button
+          type="button"
           onClick={() => setCollapsed(!collapsed)}
           aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
           className="absolute text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
@@ -262,7 +265,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                     that covered the entire active destination row. Users found
                     the "light orange backdrop" distracting — the left-edge
                     marker (side-nav-active-marker) is sufficient alone.
-                    See docs/adr/remove-side-nav-active-bg.md */}
+                    See docs/adr/0001-remove-side-nav-active-bg.md */}
 
                 {/* Dot — crossfades in when collapsed */}
                 <div
@@ -285,14 +288,14 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                 </div>
                 {/* Text — crossfades in when expanded */}
                 <div
-                  className={`w-full transition-opacity duration-200 ${
+                  className={`relative z-[1] w-full transition-opacity duration-200 ${
                     collapsed ? "opacity-0 pointer-events-none" : "opacity-100"
                   }`}
                 >
                   {isActive && (
                     <motion.span
                       layoutId="side-nav-active-marker"
-                      className={`absolute -left-7 top-1/2 h-9 w-[3px] -translate-y-1/2 overflow-visible transition-opacity duration-200 ${collapsed ? "opacity-0" : "opacity-100"}`}
+                      className={`absolute -left-7 top-1/2 h-9 w-[4px] -translate-y-1/2 overflow-visible transition-opacity duration-200 ${collapsed ? "opacity-0" : "opacity-100"}`}
                       initial={false}
                       transition={{
                         layout: { duration: 0.46, ease: [0.16, 1, 0.3, 1] },
@@ -316,7 +319,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
           return (
             <Fragment key={item.href}>
               {item.href === "/" ? (
-                <button onClick={goHome} onPointerDown={() => setOptimisticPath(resolveHomeTarget())} className="block w-full text-left group">
+                <button type="button" onClick={goHome} onPointerDown={() => setOptimisticPath(resolveHomeTarget())} className="block w-full text-left group">
                   {row}
                 </button>
               ) : (
@@ -362,6 +365,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
         {!collapsed && (
           isLoggedIn ? (
             <button
+              type="button"
               onClick={onShareClick}
               className="group flex w-full items-center gap-3 rounded-[15px] border border-[#E5DDD0] bg-white/50 px-4 py-3.5 text-left transition-colors hover:border-[#FF5924]/40 hover:bg-white/70"
             >
@@ -380,6 +384,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
             </button>
           ) : (
             <button
+              type="button"
               onClick={onShareClick}
               className="group flex w-full items-center gap-3 rounded-[15px] border border-[#E5DDD0] bg-white/50 px-4 py-3.5 text-left transition-colors hover:border-[#FF5924]/40 hover:bg-white/70"
             >
@@ -446,6 +451,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
             {/* Language switch — LEFT, slash baseline aligned with icon buttons */}
             <div className="flex items-baseline gap-1.5">
               <button
+                type="button"
                 onClick={() => {
                   setLang("zh");
                   setSlashFlash(true);
@@ -465,6 +471,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                 /
               </span>
               <button
+                type="button"
                 onClick={() => {
                   setLang("en");
                   setSlashFlash(true);
@@ -496,6 +503,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
           <div className="flex flex-col items-center gap-3.5">
             <NotificationBellButton chromeless />
             <button
+              type="button"
               onClick={() => setLang(lang === "zh" ? "en" : "zh")}
               className="text-[11px] tracking-[0.06em] text-[#B6B0A4] hover:text-[#1A1A1A] transition-colors"
             >

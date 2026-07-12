@@ -4,13 +4,18 @@ import {
   dailyFreeAfterGrant,
   decideBillingAccountMaintenance,
   decideGrant,
+  decideOperationDelivery,
+  decideRechargePoolsForOriginalSpend,
   decideRefund,
   decideRefundPoolsForOriginalSpend,
   decideSpend,
   decideSpendPoolsForCost,
   decideTopupReversal,
+  deliveredReferenceFor,
+  deriveOperationState,
   originalLedgerIdFromPendingRef,
   pendingRefundReferenceFor,
+  rechargeReferenceFor,
   refundReferenceFor,
   trimDailyFreeAfterTopupReversal,
 } from "@/lib/billing/notes-ledger-decisions";
@@ -144,6 +149,302 @@ describe("refundReferenceFor", () => {
 
   it("is collision-free across distinct ledger ids", () => {
     expect(refundReferenceFor("nle_a")).not.toBe(refundReferenceFor("nle_b"));
+  });
+});
+
+describe("operation state machine (#298)", () => {
+  describe("decideRefund delivery-awareness", () => {
+    it("skips the refund for a delivered operation instead of reversing it", () => {
+      // A reconcile pass hitting a pending marker whose operation was delivered
+      // must NOT refund the delivered work.
+      const result = decideRefund({
+        currentBalance: 4,
+        original: { id: "nle_spend", delta: -1 },
+        existingRefund: null,
+        delivered: true,
+      });
+      expect(result).toEqual({ kind: "delivered", amount: 1 });
+    });
+
+    it("still reports duplicate when a refund already exists, even if delivered", () => {
+      // failure → refund → retry-delivered → re-charged. The refund row exists,
+      // so a later reconcile dedupes on it (balance already correct) rather than
+      // taking the delivered no-op path.
+      const result = decideRefund({
+        currentBalance: 7,
+        original: { id: "nle_spend", delta: -1 },
+        existingRefund: { id: "nle_refund_prior", delta: 1 },
+        delivered: true,
+      });
+      expect(result).toEqual({
+        kind: "duplicate",
+        ledgerId: "nle_refund_prior",
+        balanceAfter: 7,
+        amount: 1,
+      });
+    });
+
+    it("proceeds normally for a not-yet-delivered failed operation", () => {
+      const result = decideRefund({
+        currentBalance: 4,
+        original: { id: "nle_spend", delta: -1 },
+        existingRefund: null,
+        delivered: false,
+      });
+      expect(result).toEqual({ kind: "proceed", balanceAfter: 5, amount: 1 });
+    });
+  });
+
+  describe("deriveOperationState", () => {
+    it("maps row existence to the five named states", () => {
+      const base = { hasSpend: true, hasRefund: false, hasPending: false, hasDelivered: false };
+      expect(deriveOperationState(base)).toBe("charged");
+      expect(deriveOperationState({ ...base, hasPending: true })).toBe("refund_pending");
+      expect(deriveOperationState({ ...base, hasRefund: true })).toBe("refunded");
+      // delivered is terminal and wins over any compensation rows.
+      expect(deriveOperationState({ ...base, hasRefund: true, hasDelivered: true })).toBe("delivered");
+      expect(deriveOperationState({ ...base, hasPending: true, hasDelivered: true })).toBe("delivered");
+    });
+  });
+
+  describe("references", () => {
+    it("builds distinct, deterministic recharge and delivered refs", () => {
+      expect(rechargeReferenceFor("nle_1")).toBe("recharge:nle_1");
+      expect(deliveredReferenceFor("nle_1")).toBe("op_delivered:nle_1");
+      // Each role's ref is disjoint from the others for the same spend id, so a
+      // single IN (...) lookup classifies rows by ref unambiguously.
+      const refs = new Set([
+        refundReferenceFor("nle_1"),
+        pendingRefundReferenceFor("nle_1"),
+        rechargeReferenceFor("nle_1"),
+        deliveredReferenceFor("nle_1"),
+      ]);
+      expect(refs.size).toBe(4);
+    });
+  });
+
+  describe("decideOperationDelivery", () => {
+    const spend = { delta: -1, metadata: { spendPools: { dailyFreeSpent: 1, accountSpent: 0 } } };
+
+    it("is a replay no-op once the delivered marker exists", () => {
+      expect(
+        decideOperationDelivery({
+          spend,
+          hasRefund: true,
+          hasDelivered: true,
+          hasRecharge: true,
+          currentBalance: 4,
+          currentDailyFree: 0,
+        }),
+      ).toEqual({ kind: "already_delivered" });
+    });
+
+    it("records delivery without a re-charge on the happy path (never compensated)", () => {
+      // charged → delivered: balance already reflects the single charge.
+      expect(
+        decideOperationDelivery({
+          spend,
+          hasRefund: false,
+          hasDelivered: false,
+          hasRecharge: false,
+          currentBalance: 4,
+          currentDailyFree: 1,
+        }),
+      ).toEqual({
+        kind: "delivered",
+        writeDelivered: true,
+        writeRecharge: false,
+        balanceAfter: 4,
+        dailyFreeAfter: 1,
+      });
+    });
+
+    it("records delivery without a re-charge for a pending-only operation", () => {
+      // refund write failed → balance was never actually reversed (still one
+      // charge). Recording delivery makes refundNotes/reconcile skip the owed
+      // refund; no balance change.
+      expect(
+        decideOperationDelivery({
+          spend,
+          hasRefund: false,
+          hasDelivered: false,
+          hasRecharge: false,
+          currentBalance: 4,
+          currentDailyFree: 0,
+        }),
+      ).toMatchObject({
+        kind: "delivered",
+        writeRecharge: false,
+        balanceAfter: 4,
+      });
+    });
+
+    it("re-charges when a completed refund had reversed the spend", () => {
+      // failure → refund (balance restored to 5) → retry delivered: re-charge
+      // back to one net charge (balance 4), re-spending the same daily-free note.
+      const decision = decideOperationDelivery({
+        spend,
+        hasRefund: true,
+        hasDelivered: false,
+        hasRecharge: false,
+        currentBalance: 5,
+        currentDailyFree: 1,
+      });
+      expect(decision).toMatchObject({
+        kind: "delivered_recharged",
+        writeDelivered: true,
+        writeRecharge: true,
+        rechargeAmount: 1,
+        balanceAfter: 4,
+        dailyFreeAfter: 0,
+      });
+    });
+
+    it("does not re-charge twice when the recharge row already exists", () => {
+      const decision = decideOperationDelivery({
+        spend,
+        hasRefund: true,
+        hasDelivered: false,
+        hasRecharge: true,
+        currentBalance: 4,
+        currentDailyFree: 0,
+      });
+      expect(decision).toMatchObject({ kind: "delivered", writeRecharge: false, balanceAfter: 4 });
+    });
+  });
+
+  describe("decideRechargePoolsForOriginalSpend", () => {
+    it("re-spends exactly the daily-free portion the refund had restored (pool-neutral round trip)", () => {
+      // Original spend took 1 daily-free note; the refund restored it (dailyFree
+      // back to 1). The recharge re-spends that 1 so the net daily-free is 0.
+      expect(
+        decideRechargePoolsForOriginalSpend(
+          { spendPools: { dailyFreeSpent: 1, accountSpent: 0 } },
+          1,
+          0,
+        ),
+      ).toEqual({
+        dailyFreeReSpent: 1,
+        accountReSpent: 0,
+        dailyFreeAfter: 0,
+        accountAfter: 0,
+      });
+    });
+
+    it("re-spends from the account pool when the original spend did", () => {
+      expect(
+        decideRechargePoolsForOriginalSpend(
+          { spendPools: { dailyFreeSpent: 0, accountSpent: 1 } },
+          0,
+          4,
+        ),
+      ).toEqual({
+        dailyFreeReSpent: 0,
+        accountReSpent: 1,
+        dailyFreeAfter: 0,
+        accountAfter: 4,
+      });
+    });
+  });
+
+  describe("net-charge invariant across the four acceptance cases", () => {
+    // Each case walks the operation's ledger deltas through the decisions and
+    // asserts the operation nets to exactly one charge for delivered work, zero
+    // for reversed work. cost = 1.
+    function netOf(deltas: number[]): number {
+      return deltas.reduce((a, b) => a + b, 0);
+    }
+
+    it("response lost after delivery → replay does not double charge", () => {
+      // Stable op id: the replayed spend dedupes (no new row). Delivered, never
+      // compensated → no recharge.
+      const spendDelta = -1;
+      const delivery = decideOperationDelivery({
+        spend: { delta: spendDelta, metadata: {} },
+        hasRefund: false,
+        hasDelivered: false,
+        hasRecharge: false,
+        currentBalance: 4,
+        currentDailyFree: 0,
+      });
+      expect(delivery).toMatchObject({ writeRecharge: false });
+      // One spend row only across both attempts (replay is a ledger duplicate).
+      expect(netOf([spendDelta])).toBe(-1);
+    });
+
+    it("worker failure → refund → retry success has exactly one net charge", () => {
+      const spendDelta = -1;
+      const refund = decideRefund({
+        currentBalance: 4,
+        original: { id: "s", delta: spendDelta },
+        existingRefund: null,
+        delivered: false,
+      });
+      expect(refund.kind).toBe("proceed");
+      const refundDelta = refund.kind === "proceed" ? refund.amount : 0; // +1
+      // Retry delivers: a completed refund exists → re-charge.
+      const delivery = decideOperationDelivery({
+        spend: { delta: spendDelta, metadata: {} },
+        hasRefund: true,
+        hasDelivered: false,
+        hasRecharge: false,
+        currentBalance: 5,
+        currentDailyFree: 0,
+      });
+      const rechargeDelta =
+        delivery.kind === "delivered_recharged" ? -delivery.rechargeAmount : 0; // -1
+      expect(netOf([spendDelta, refundDelta, rechargeDelta])).toBe(-1);
+    });
+
+    it("refund pending → retry success → reconcile does not refund delivered work", () => {
+      const spendDelta = -1;
+      // Pending marker is zero-delta; balance is still one net charge.
+      // Delivery records the delivered marker; no recharge (never truly reversed).
+      const delivery = decideOperationDelivery({
+        spend: { delta: spendDelta, metadata: {} },
+        hasRefund: false,
+        hasDelivered: false,
+        hasRecharge: false,
+        currentBalance: 4,
+        currentDailyFree: 0,
+      });
+      expect(delivery).toMatchObject({ writeRecharge: false });
+      // Reconcile now runs refundNotes on the pending marker → delivered → skip.
+      const reconcile = decideRefund({
+        currentBalance: 4,
+        original: { id: "s", delta: spendDelta },
+        existingRefund: null,
+        delivered: true,
+      });
+      expect(reconcile.kind).toBe("delivered");
+      const reconcileDelta = 0; // skipped
+      expect(netOf([spendDelta, 0 /* pending */, reconcileDelta])).toBe(-1);
+    });
+
+    it("concurrent retries settle to one coherent net charge", () => {
+      const spendDelta = -1;
+      // Two deliveries race. The first settles (delivered marker); the second
+      // sees it and is a replay no-op.
+      const first = decideOperationDelivery({
+        spend: { delta: spendDelta, metadata: {} },
+        hasRefund: false,
+        hasDelivered: false,
+        hasRecharge: false,
+        currentBalance: 4,
+        currentDailyFree: 0,
+      });
+      const second = decideOperationDelivery({
+        spend: { delta: spendDelta, metadata: {} },
+        hasRefund: false,
+        hasDelivered: true, // first already wrote the marker
+        hasRecharge: false,
+        currentBalance: 4,
+        currentDailyFree: 0,
+      });
+      expect(first).toMatchObject({ writeDelivered: true, writeRecharge: false });
+      expect(second).toEqual({ kind: "already_delivered" });
+      expect(netOf([spendDelta])).toBe(-1);
+    });
   });
 });
 

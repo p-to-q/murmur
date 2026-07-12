@@ -129,19 +129,25 @@ export async function resolveRequestAuth(
     try {
       session = await deps.getSessionByToken(token);
     } catch (error) {
-      const unavailableAuth = authError(
+      // Murmur session infrastructure is unavailable. Do NOT return 503 yet:
+      // a valid Auth.js (Google) session must still be able to authenticate
+      // the request. Hold the 503 and fall through to the NextAuth lookup for
+      // BOTH route modes — mirroring the guest-preview fall-through so normal
+      // and guest-preview routes share one precedence order. If no real
+      // identity resolves, the honest 503 is returned below (or, on
+      // guest-preview routes, guest access).
+      invalidSessionAuth = authError(
         "session_unavailable",
         error instanceof Error ? error.message : "Session lookup failed",
         503,
       );
-      if (!options.allowGuestPreview) return unavailableAuth;
-      invalidSessionAuth = unavailableAuth;
       sessionLookupFailed = true;
     }
 
     if (sessionLookupFailed) {
-      // Explicit guest-preview routes can continue when the local session DB
-      // is offline; registered Auth.js sessions still get a chance to resolve.
+      // Murmur session DB is offline for this request. Skip the cookie-session
+      // branch entirely and let a registered Auth.js session resolve below;
+      // if none does, the held 503 (or guest preview) is returned.
     } else if (!session) {
       invalidSessionAuth = authError(
         "unauthorized",

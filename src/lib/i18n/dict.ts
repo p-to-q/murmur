@@ -105,6 +105,18 @@ export const DICT = {
     zh: "退出登录",
     en: "Sign out",
   },
+  "auth.sign_out_retry": {
+    zh: "重试退出登录",
+    en: "Try signing out again",
+  },
+  "auth.sign_out_network_error": {
+    zh: "暂时无法连接服务器。你的账号仍保持登录，请检查网络后重试。",
+    en: "Murmur couldn't reach the server. You're still signed in; check your connection and try again.",
+  },
+  "auth.sign_out_http_error": {
+    zh: "服务器暂时无法结束会话。你的账号仍保持登录，请重试。",
+    en: "Murmur couldn't end this session. You're still signed in; please try again.",
+  },
   "auth.local_creator": {
     zh: "本地创作者",
     en: "Local Creator",
@@ -299,6 +311,7 @@ export const DICT = {
   "vibe.pick.wait":   { zh: "等待中",         en: "Brewing" },
   "vibe.retry":       { zh: "重试",           en: "Retry" },
   "vibe.gen.failed":  { zh: "没酿成，点一下重试", en: "Didn't brew — tap to retry" },
+  "vibe.gen.background_canceled": { zh: "切到后台太久，酿造已停止。准备好后可重新开始。", en: "Brewing stopped after Murmur stayed in the background. Retry when you're ready to start again." },
   "vibe.gen.topup":   { zh: "去补给",         en: "Top up" },
   "vibe.gen.wait":    { zh: "稍后再试",       en: "Try later" },
   "vibe.gen.insufficient_notes": { zh: "音磅不够了，先去补给再继续酿。", en: "Out of notes — top up to brew more." },
@@ -319,6 +332,16 @@ export const DICT = {
   "vibe.all_failed.demo": { zh: "用示例", en: "Use demo" },
   "vibe.all_failed.record": { zh: "重录", en: "Record again" },
   "vibe.demo.failed": { zh: "暂时没能载入示例旋律。", en: "Couldn't load the demo melody." },
+  // Brewing surface — primary phase (serif) + secondary status (sans) + a
+  // coarse queue-wait hint so cold-start waits read as "in queue", not a hang.
+  "vibe.gen.brewing_eyebrow": { zh: "酿造中", en: "Brewing" },
+  "vibe.gen.brewing_title":   { zh: "正在为这句哼唱谱三个方向", en: "Composing three takes on your hum" },
+  "vibe.gen.brewing_sub":     { zh: "谱好一个就先放一个。", en: "First previews arrive as each one finishes." },
+  "vibe.gen.progress":        { zh: "已就绪", en: "ready" },
+  "vibe.gen.wait_in_queue":   { zh: "排队中", en: "in queue" },
+  // Reduced-detail capture hint (client-side pitch fallback). Informational,
+  // never blocking.
+  "vibe.capture.reduced":     { zh: "以精简模式采集，细节可能略有出入。", en: "Captured in reduced-detail mode — some nuance may vary." },
 
   // ── Melody origin semantics ───────────────────────────────────────
   "melody_origin.intent.label": { zh: "贴近原唱", en: "INTENT" },
@@ -395,6 +418,10 @@ export const DICT = {
   "name.cancel":           { zh: "再调一调",     en: "Keep editing" },
   "name.save":             { zh: "收进藏歌",     en: "Save into Gallery" },
   "name.required":         { zh: "得有个名字才能存哦", en: "Needs a name first" },
+  "name.render_failed":    { zh: "音频没能渲染完成。", en: "The audio didn't finish rendering." },
+  "name.render_failed_body": { zh: "没能为这首歌渲染出音频。可以重试，或先存为未完成的草稿之后再收尾——草稿暂时不能分享或下载。", en: "We couldn't render this song's audio. Retry, or save it as an incomplete draft to finish later — drafts can't be shared or downloaded." },
+  "name.retry_render":     { zh: "重试渲染",     en: "Retry render" },
+  "name.save_draft":       { zh: "存为草稿",     en: "Save as draft" },
   "name.suggestions":      { zh: "试试这些",     en: "Try" },
   "name.refresh_suggestions": { zh: "换一组名字", en: "Refresh suggestions" },
   "name.proc.rendering":   { zh: "正在渲染",     en: "rendering" },
@@ -437,6 +464,7 @@ export const DICT = {
   "gallery.empty.detail":{ zh: "哼唱一段旋律，你的第一张唱片卡就在那里", en: "Hum a melody — your first record card will appear here" },
   "gallery.empty.cta":   { zh: "开始哼唱",   en: "Start humming" },
   "gallery.new_hum":     { zh: "新的哼唱",   en: "New hum" },
+  "gallery.draft":       { zh: "草稿",       en: "Draft" },
   "gallery.eyebrow.empty": { zh: "你的歌架", en: "YOUR SHELF" },
   "gallery.sort.newest": { zh: "最新", en: "newest" },
   "gallery.tile.trace": { zh: "可回溯", en: "Traceable" },
@@ -528,6 +556,8 @@ export const DICT = {
   "song.export.free":         { zh: "免费", en: "free" },
   "song.export.cost.video":   { zh: "免费", en: "free" },
   "song.export.no_audio_yet": { zh: "音频还没渲染好", en: "not yet rendered" },
+  "song.incomplete.badge":    { zh: "未完成草稿", en: "Incomplete draft" },
+  "song.incomplete.body":     { zh: "这首歌的音频没有渲染完成，暂时不能分享或下载。回到工作室把它做完吧。", en: "This song's audio didn't finish rendering, so it can't be shared or downloaded yet. Reopen it in the studio to finish it." },
   "song.export.video_hint":   { zh: "视频会复用当前音频与视觉 preset，导出为可直接分享的 MP4（旧浏览器自动回退 WebM）。", en: "Video export reuses the current audio and visual preset and renders a shareable MP4 (older browsers fall back to WebM)." },
   "song.export.video_unsupported_hint": { zh: "当前浏览器不支持视频导出；你仍然可以下载音频、分享页和分享卡。", en: "This browser does not support video export, but audio, share page, and share card are still available." },
   "song.export.video_preparing": { zh: "正在准备导出视频，请稍候…", en: "Preparing video export…" },
@@ -671,6 +701,9 @@ export const DICT = {
   "settings.developer.debug":  { zh: "打开调试台", en: "Open debug" },
   "settings.developer.health": { zh: "QA 健康 JSON", en: "QA health JSON" },
   "settings.developer.i18n":   { zh: "i18n JSON", en: "i18n JSON" },
+  "settings.audio.title":      { zh: "播放", en: "Playback" },
+  "settings.audio.auto_audition":      { zh: "自动试听", en: "Auto-preview vibes" },
+  "settings.audio.auto_audition_body": { zh: "生成完成后，自动播放第一个方向的试听。默认关闭；当系统开启“减少动态效果”时始终关闭。", en: "When a set finishes brewing, play the first vibe automatically. Off by default, and always off when your device prefers reduced motion." },
 
   // ── Common ──────────────────────────────────────────────────────────
   "common.back":                 { zh: "返回",     en: "Back" },
@@ -740,8 +773,8 @@ export const DICT = {
   "checkout.method_blocked":     { zh: "微信支付仅支持人民币订单。", en: "WeChat Pay is only available for CNY orders." },
   "checkout.use_card":           { zh: "改用信用卡", en: "Use card instead" },
   "checkout.change_topup":       { zh: "返回补给页", en: "Change top up" },
-  "checkout.card_route_note":    { zh: "银行卡支付会打开 Waffo 的托管结账页。", en: "Card checkout opens through Waffo." },
-  "checkout.wechat_route_note":  { zh: "微信支付会走中国区支付路线。", en: "WeChat Pay opens through the China payment route." },
+  "checkout.card_route_note":    { zh: "银行卡支付会打开由第三方支付方托管的安全结账页。", en: "Card payment opens a secure checkout hosted by a payment provider." },
+  "checkout.wechat_route_note":  { zh: "微信支付会通过第三方中国区支付路线打开。", en: "WeChat Pay opens through a third-party China payment route." },
   "checkout.agree_prefix":       { zh: "我已阅读并同意", en: "I have read and agree to the" },
   "checkout.agree_and":          { zh: "以及", en: "and" },
   "checkout.terms":              { zh: "服务条款", en: "Terms" },
@@ -786,7 +819,7 @@ export const DICT = {
   "privacy.use.title":     { zh: "我们如何使用", en: "How we use it" },
   "privacy.use.body":      { zh: "用于转写哼唱、生成编曲、保存作品、同步余额，以及在你遇到问题时提供支持。", en: "To transcribe hums, generate arrangements, save your work, sync your balance, and help when something goes wrong." },
   "privacy.share.title":   { zh: "分享与第三方", en: "Sharing & third parties" },
-  "privacy.share.body":    { zh: "支付由 Waffo 处理；我们不会出售你的个人数据。你主动分享的歌卡片只包含你选择导出的内容。", en: "Payments go through Waffo. We don't sell your data. Shared song cards only include what you choose to export." },
+  "privacy.share.body":    { zh: "第三方支付服务商会处理结账所需的订单与支付数据；我们不会出售你的个人数据。你主动分享的歌卡片只包含你选择导出的内容。", en: "Third-party payment providers process the order and payment data needed for checkout. We don't sell your data. Shared song cards only include what you choose to export." },
   "privacy.contact.title": { zh: "联系我们", en: "Contact" },
   "privacy.contact.body":  { zh: "如有隐私相关问题，请通过应用内设置或 hi@ptoq.io 联系我们。", en: "Questions about privacy? Reach us via in-app settings or hi@ptoq.io." },
   "privacy.back":          { zh: "返回", en: "Back" },

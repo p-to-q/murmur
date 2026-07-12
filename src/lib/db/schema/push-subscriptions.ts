@@ -49,6 +49,9 @@ export const pushSubscriptions = pgTable(
     byActive: index("push_subscriptions_active_idx")
       .on(table.lastSeenAt)
       .where(sql`${table.disabledAt} IS NULL`),
+    byActiveId: index("push_subscriptions_active_id_idx")
+      .on(table.id)
+      .where(sql`${table.disabledAt} IS NULL`),
     byEndpoint: uniqueIndex("push_subscriptions_endpoint_idx").on(table.endpoint),
   }),
 );

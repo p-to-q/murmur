@@ -14,13 +14,25 @@ import { isZpayConfigured, zpayVerifyNotify } from "@/lib/billing/zpay";
 import { db } from "@/lib/db/client";
 import { eventsWebhook } from "@/lib/db/schema/events-webhook";
 import { purchases } from "@/lib/db/schema/purchases";
-import { grantNotes } from "@/lib/db/queries/notes-ledger";
+import { grantNotesInTransaction } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
 const ROUTE = "/api/billing/zpay-notify";
 const PROVIDER = "zpay";
+
+/**
+ * Thrown inside the atomic grant+settlement transaction (#319) when the notes
+ * grant fails, so the whole transaction rolls back — the purchase stays pending
+ * and the ledger is untouched — rather than leaving credit delivered while
+ * durable state lags. The handler maps it to a retryable 500.
+ */
+class ZpayGrantError extends Error {
+  constructor(readonly grantReason: string) {
+    super(`grant failed: ${grantReason}`);
+  }
+}
 
 function newId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
@@ -122,19 +134,8 @@ export async function POST(request: NextRequest) {
 
   const eventRowId = eventRow.id;
 
-  // Parse our out_trade_no format: {userId}:{skuId}:{uuid}
-  const parts = outTradeNo.split(":");
-  if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
-    log("billing.zpay_notify_failed", { stage: "parse", outTradeNo }, { route: ROUTE, requestId, level: "error" });
-    await markEventFailed(eventRowId, "invalid out_trade_no format");
-    return zpayResponse("success", requestId);
-  }
-
-  const outUserId = parts[0]!;
-  const outSkuId = parts[1]!;
-
-  // Resolve notes from the pending_zpay_orders metadata stored at checkout time
-  // We look up the purchase record created during checkout
+  // The provider id is opaque. User, SKU, amount, and currency provenance all
+  // come from the purchase row created before checkout handoff.
   const [pendingPurchase] = await db
     .select({
       id: purchases.id,
@@ -180,25 +181,17 @@ export async function POST(request: NextRequest) {
     return zpayResponse("success", requestId);
   }
 
-  if (
-    pendingPurchase.userId !== outUserId ||
-    pendingPurchase.productId !== outSkuId ||
-    pendingPurchase.currency.toUpperCase() !== "CNY"
-  ) {
+  if (pendingPurchase.currency.toUpperCase() !== "CNY") {
     log(
       "billing.zpay_notify_failed",
       {
-        stage: "purchase_mismatch",
+        stage: "currency_mismatch",
         outTradeNo,
-        expectedUserId: pendingPurchase.userId,
-        expectedSkuId: pendingPurchase.productId,
         expectedCurrency: pendingPurchase.currency,
-        actualUserId: outUserId,
-        actualSkuId: outSkuId,
       },
       { route: ROUTE, requestId, level: "error" },
     );
-    await markEventFailed(eventRowId, "purchase mismatch");
+    await markEventFailed(eventRowId, "purchase currency mismatch");
     return zpayResponse("success", requestId);
   }
 
@@ -223,44 +216,71 @@ export async function POST(request: NextRequest) {
     return zpayResponse("success", requestId);
   }
 
-  // Grant notes
-  const grant = await grantNotes({
-    userId: pendingPurchase.userId,
-    amount: notesGranted,
-    reason: "purchase:topup",
-    externalRef: outTradeNo,
-    metadata: {
-      provider: PROVIDER,
-      skuId: pendingPurchase.productId,
-      zpayTradeNo: verified.trade_no,
-      paymentType: verified.type,
-      money: verified.money,
-    },
-  });
+  // Grant notes AND settle the purchase + webhook event in ONE transaction
+  // (#319). Before, the grant committed in its own transaction and the
+  // purchase/event updates followed separately, so a crash in between could
+  // leave credit delivered while the durable purchase/event state stayed
+  // "pending" — recoverable only if the provider happened to redeliver. Folding
+  // the grant into the settlement transaction makes "notes granted" and
+  // "purchase/event processed" atomic: either all three land or none do.
+  //
+  // Idempotency is preserved: grantNotesInTransaction dedupes on the
+  // (userId, purchase:topup, out_trade_no) ledger index under the user row
+  // lock, so a redelivery re-runs the transaction, hits the existing grant
+  // (duplicate: true), and re-applies the same terminal purchase/event state.
+  let grant: Awaited<ReturnType<typeof grantNotesInTransaction>>;
+  try {
+    grant = await db.transaction(async (tx) => {
+      const result = await grantNotesInTransaction(tx, {
+        userId: pendingPurchase.userId,
+        amount: notesGranted,
+        reason: "purchase:topup",
+        externalRef: outTradeNo,
+        metadata: {
+          provider: PROVIDER,
+          skuId: pendingPurchase.productId,
+          zpayTradeNo: verified.trade_no,
+          paymentType: verified.type,
+          money: verified.money,
+        },
+      });
 
-  if (!grant.ok) {
-    log("billing.zpay_notify_failed", { stage: "grant", outTradeNo, reason: grant.reason }, { route: ROUTE, requestId, level: "error" });
-    await markEventFailed(eventRowId, `grant failed: ${grant.reason}`);
+      // Throw inside the transaction so a failed grant rolls the purchase +
+      // event settlement back with it — the whole point of #319.
+      if (!result.ok) {
+        throw new ZpayGrantError(result.reason);
+      }
+
+      await tx
+        .update(purchases)
+        .set({
+          status: "succeeded",
+          rawPayload: verified as unknown as Record<string, unknown>,
+          updatedAt: new Date(),
+        })
+        .where(eq(purchases.id, pendingPurchase.id));
+
+      await tx
+        .update(eventsWebhook)
+        .set({ status: "processed", processedAt: new Date() })
+        .where(eq(eventsWebhook.id, eventRowId));
+
+      return result;
+    });
+  } catch (error) {
+    if (error instanceof ZpayGrantError) {
+      log("billing.zpay_notify_failed", { stage: "grant", outTradeNo, reason: error.grantReason }, { route: ROUTE, requestId, level: "error" });
+      await markEventFailed(eventRowId, error.message);
+      return zpayResponse("fail", requestId, 500);
+    }
+    // A settlement failure (e.g. the purchase/event UPDATE) also rolls back the
+    // grant. Surface a retryable 500 and record the event as failed so a ZPay
+    // redelivery — or the reconcile cron — can complete it later.
+    const message = error instanceof Error ? error.message : String(error);
+    log("billing.zpay_notify_failed", { stage: "settlement", outTradeNo, error: message }, { route: ROUTE, requestId, level: "error" });
+    await markEventFailed(eventRowId, `settlement failed: ${message}`).catch(() => {});
     return zpayResponse("fail", requestId, 500);
   }
-
-  // Mark purchase succeeded and event processed atomically so a mid-flight
-  // crash never leaves purchase in "pending" while notes are already granted.
-  await db.transaction(async (tx) => {
-    await tx
-      .update(purchases)
-      .set({
-        status: "succeeded",
-        rawPayload: verified as unknown as Record<string, unknown>,
-        updatedAt: new Date(),
-      })
-      .where(eq(purchases.id, pendingPurchase.id));
-
-    await tx
-      .update(eventsWebhook)
-      .set({ status: "processed", processedAt: new Date() })
-      .where(eq(eventsWebhook.id, eventRowId));
-  });
 
   log(
     "notes.granted",

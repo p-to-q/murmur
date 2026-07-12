@@ -128,7 +128,14 @@ export async function POST(request: NextRequest) {
   const startedAt = performance.now();
   const requestId = getRequestId(request);
   const batchId = readGenerationBatchId(request);
-  const spendRef = createSpendReference("music_generate");
+  // Clip identity keys spend idempotency (#300): resuming or retrying the same
+  // clip reuses this ref, so spendNotes dedupes and never double-charges a clip
+  // the user already paid for. A fresh clip/reroll sends a new id (or none, for
+  // legacy clients) and charges normally.
+  const clipId = readGenerationClipId(request);
+  const spendRef = clipId
+    ? `music_generate:${clipId}`
+    : createSpendReference("music_generate");
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
@@ -391,6 +398,14 @@ const GENERATION_BATCH_ID_PATTERN = /^[A-Za-z0-9_-]{6,64}$/;
 
 function readGenerationBatchId(request: NextRequest): string | null {
   const raw = request.headers.get("x-generation-batch-id")?.trim();
+  return raw && GENERATION_BATCH_ID_PATTERN.test(raw) ? raw : null;
+}
+
+// The per-clip operation id doubles as the spend idempotency key, so it must be
+// bounded and URL-safe. A malformed value falls back to a fresh per-request ref
+// (today's behavior) rather than failing generation.
+function readGenerationClipId(request: NextRequest): string | null {
+  const raw = request.headers.get("x-generation-clip-id")?.trim();
   return raw && GENERATION_BATCH_ID_PATTERN.test(raw) ? raw : null;
 }
 

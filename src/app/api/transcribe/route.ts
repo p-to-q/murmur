@@ -9,17 +9,21 @@ import type { CleanMelody } from "@/modules/shared/types";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth, type ResolvedRequestAuth } from "@/lib/auth";
-import { createSpendReference } from "@/lib/billing/spend-ref";
-import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
+import {
+  createSpendReference,
+  isValidOperationId,
+  operationSpendReference,
+} from "@/lib/billing/spend-ref";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
+import { shouldAllowDeploymentLocalPreview } from "@/lib/deployment/local-preview";
 import {
   getNotesBalance,
   recordPendingRefund,
   refundNotes,
+  settleOperationDelivery,
   spendNotes,
 } from "@/lib/db/queries/notes-ledger";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
-import { safeHostnameFromUrl } from "@/lib/http/safe-hostname";
 import { classifyError } from "@/lib/errors/transient";
 import { log } from "@/lib/observability/log";
 import { checkBudget } from "@/lib/observability/latency-budgets";
@@ -83,7 +87,7 @@ export async function POST(request: NextRequest) {
 async function streamingTranscribe(request: NextRequest): Promise<Response> {
   const startedAt = performance.now();
   const requestId = getRequestId(request);
-  const spendRef = createSpendReference("hum");
+  const { operationId, spendRef } = resolveTranscribeOperation(request);
   const encoder = new TextEncoder();
 
   function emit(controller: ReadableStreamDefaultController, event: TranscribeStreamEvent) {
@@ -115,7 +119,7 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
     async start(controller) {
       try {
         const auth = await resolveRequestAuth(request, {
-          allowGuestPreview: shouldAllowGuestTranscribePreview(request),
+          allowGuestPreview: shouldAllowGuestTranscribePreview(),
         });
         if (!auth.ok) {
           emit(controller, { phase: "error", error: "unauthorized", message: "Authentication required", status: 401, requestId });
@@ -288,6 +292,18 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
 
         const result = raced.value;
 
+        // Delivered: settle the operation so charge/refund/retry history
+        // collapses to exactly one net charge (#298). Best-effort — never fails
+        // an already-successful transcription.
+        await settleDeliveredTranscribeOperation({
+          operationId,
+          spend: billingResult.spend,
+          userId,
+          requestId,
+          sessionId: auth.sessionId,
+          targetInstrument,
+        });
+
         const totalDurationMs = Math.round(performance.now() - startedAt);
         const budget = checkBudget("transcribe", totalDurationMs);
         log("transcribe.completed", {
@@ -391,7 +407,7 @@ async function resolveBilling(
     try {
       balance = await getNotesBalance(userId);
     } catch {
-      if (shouldBypassBillingForLocalDemo(request)) {
+      if (shouldBypassBillingForLocalDemo()) {
         billingMode = "dev_fallback";
         balance = devFallbackBalance(userId);
       } else {
@@ -400,7 +416,7 @@ async function resolveBilling(
     }
 
     if (!balance.ok) {
-      if (shouldBypassBillingForLocalDemo(request)) {
+      if (shouldBypassBillingForLocalDemo()) {
         billingMode = "dev_fallback";
         balance = devFallbackBalance(userId);
       } else {
@@ -410,7 +426,7 @@ async function resolveBilling(
     if (
       billingMode === "ledger"
       && auth.user.accountKind !== "local_creator"
-      && shouldBypassBillingForLocalDemo(request)
+      && shouldBypassBillingForLocalDemo()
     ) {
       billingMode = "dev_fallback";
       balance = devFallbackBalance(userId);
@@ -464,9 +480,9 @@ function devFallbackBalance(userId: string) {
 async function classicTranscribe(request: NextRequest) {
   const startedAt = performance.now();
   const requestId = getRequestId(request);
-  const spendRef = createSpendReference("hum");
+  const { operationId, spendRef } = resolveTranscribeOperation(request);
   const auth = await resolveRequestAuth(request, {
-    allowGuestPreview: shouldAllowGuestTranscribePreview(request),
+    allowGuestPreview: shouldAllowGuestTranscribePreview(),
   });
   if (!auth.ok) return auth.response;
   const userId = auth.user.id;
@@ -546,7 +562,7 @@ async function classicTranscribe(request: NextRequest) {
       try {
         balance = await getNotesBalance(userId);
       } catch (error) {
-        if (shouldBypassBillingForLocalDemo(request)) {
+        if (shouldBypassBillingForLocalDemo()) {
           billingMode = "dev_fallback";
           log("user.balance_failed", {
             phase: "billing",
@@ -580,7 +596,7 @@ async function classicTranscribe(request: NextRequest) {
       }
 
       if (!balance.ok) {
-        if (shouldBypassBillingForLocalDemo(request)) {
+        if (shouldBypassBillingForLocalDemo()) {
           billingMode = "dev_fallback";
           log("user.balance_failed", {
             phase: "billing",
@@ -614,7 +630,7 @@ async function classicTranscribe(request: NextRequest) {
       if (
         billingMode === "ledger"
         && auth.user.accountKind !== "local_creator"
-        && shouldBypassBillingForLocalDemo(request)
+        && shouldBypassBillingForLocalDemo()
       ) {
         billingMode = "dev_fallback";
         balance = {
@@ -749,6 +765,16 @@ async function classicTranscribe(request: NextRequest) {
       throw error;
     }
 
+    // Delivered: settle the operation to exactly one net charge (#298).
+    await settleDeliveredTranscribeOperation({
+      operationId,
+      spend,
+      userId,
+      requestId,
+      sessionId: auth.sessionId,
+      targetInstrument,
+    });
+
     const totalDurationMs = Math.round(performance.now() - startedAt);
     const budget = checkBudget("transcribe", totalDurationMs);
     log("transcribe.completed", {
@@ -804,19 +830,95 @@ async function classicTranscribe(request: NextRequest) {
   }
 }
 
-function shouldBypassBillingForLocalDemo(request: NextRequest): boolean {
-  const host =
-    request.nextUrl?.hostname ||
-    safeHostnameFromUrl(request.url);
-  return shouldBypassBillingInDevelopment({
-    host,
-  });
+function shouldBypassBillingForLocalDemo(): boolean {
+  return shouldAllowDeploymentLocalPreview();
 }
 
-function shouldAllowGuestTranscribePreview(request: NextRequest): boolean {
-  if (process.env.NODE_ENV === "development") return true;
-  const host = request.nextUrl?.hostname || safeHostnameFromUrl(request.url);
-  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+function shouldAllowGuestTranscribePreview(): boolean {
+  return shouldAllowDeploymentLocalPreview();
+}
+
+/**
+ * Derive this request's spend externalRef (#298). A client-supplied stable
+ * operation id (header `x-operation-id`) makes retries reuse one spend row so
+ * the charge/refund/retry/delivery accounting collapses to exactly one net
+ * charge; legacy clients without one keep the per-request random ref and behave
+ * exactly as before (no operation settlement).
+ */
+function resolveTranscribeOperation(request: NextRequest): {
+  operationId: string | null;
+  spendRef: string;
+} {
+  const header = request.headers.get("x-operation-id");
+  const operationId = isValidOperationId(header) ? header : null;
+  const spendRef = operationId
+    ? operationSpendReference("hum", operationId)
+    : createSpendReference("hum");
+  return { operationId, spendRef };
+}
+
+/**
+ * Settle a delivered operation so its net charge is exactly one and no reconcile
+ * pass refunds the delivered work (#298). Only ledger-billed operations carrying
+ * a stable operation id are settled; dev-fallback/guest/legacy paths are no-ops.
+ * Best-effort: a settlement failure is logged for manual review but never fails
+ * an already-successful transcription response.
+ */
+async function settleDeliveredTranscribeOperation(options: {
+  operationId: string | null;
+  spend: BillingOk["spend"];
+  userId: string;
+  requestId: string;
+  sessionId: string | null;
+  targetInstrument: string;
+}): Promise<void> {
+  if (!options.operationId) return;
+  if (!options.spend.ok || options.spend.ledgerId === null) return;
+  const ledgerId = options.spend.ledgerId;
+
+  try {
+    const settled = await settleOperationDelivery({
+      userId: options.userId,
+      spendLedgerId: ledgerId,
+      metadata: {
+        requestId: options.requestId,
+        operationId: options.operationId,
+        targetInstrument: options.targetInstrument,
+        trigger: "transcribe_delivered",
+      },
+    });
+
+    if (settled.ok && settled.recharged && !settled.duplicate) {
+      // A prior failed attempt had refunded this operation; delivery re-charged
+      // it, so record the restored spend for the ledger's audit trail.
+      log("notes.spent", {
+        reason: "spend:hum",
+        cost: COST.hum,
+        balanceAfter: settled.balanceAfter,
+        ledgerId: settled.rechargeLedgerId,
+        recharge: true,
+        operationId: options.operationId,
+      }, {
+        route: ROUTE,
+        requestId: options.requestId,
+        userId: options.userId,
+        sessionId: options.sessionId,
+      });
+    }
+  } catch (error) {
+    log("notes.operation_settlement_failed", {
+      requestLedgerId: ledgerId,
+      operationId: options.operationId,
+      reason: error instanceof Error ? error.message : String(error),
+      reconciliation: "MANUAL_REVIEW",
+    }, {
+      route: ROUTE,
+      requestId: options.requestId,
+      userId: options.userId,
+      sessionId: options.sessionId,
+      level: "error",
+    });
+  }
 }
 
 async function refundSpendIfNeeded(options: {

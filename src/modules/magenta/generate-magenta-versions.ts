@@ -7,6 +7,10 @@ import type {
 import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import { createVibePromptBatch } from "@/lib/music/vibe-prompts";
 import { useMurmurStore } from "@/lib/store/murmur-store";
+import {
+  loadClipArtifact,
+  persistClipArtifact,
+} from "@/lib/store/generation-artifact-store";
 import { log } from "@/lib/observability/log";
 import { pickArtworkSelection, gradientFromPalette } from "@/presets/artworks/artwork-matcher";
 import { sendBrowserNotification } from "@/lib/hooks/use-browser-notification";
@@ -46,6 +50,13 @@ export type MusicEngineStatus = {
   configured: boolean;
   available: boolean;
   reason: string | null;
+  /**
+   * Coarse queue-wait estimate (ms) from /api/music/health, derived from
+   * RunPod queue depth + a cold-start penalty. Null when the transport does
+   * not expose it (HTTP/legacy) or the queue shape was unreadable. Surfaced in
+   * VibeScreen so cold-start waits read as "in queue", not a hang (issue #216).
+   */
+  estimatedWaitMs: number | null;
 };
 
 let healthCache: { at: number; status: MusicEngineStatus } | null = null;
@@ -54,18 +65,26 @@ let activeAbort: AbortController | null = null;
 let activeBatchId: string | null = null;
 let liveObjectUrls: string[] = [];
 
+export type GenerationCancellationKind = "navigation" | "background";
+
+const BACKGROUND_CANCELLATION_REASON = "murmur:background-generation-canceled";
+
 export function invalidateMusicEngineCache(): void {
   healthCache = null;
 }
 
 /**
- * Abort any in-flight generation requests. Call on VibeScreen unmount or
- * when navigating away so server-side RunPod jobs are cancelled promptly
- * instead of running until their execution timeout.
+ * Abort any in-flight generation requests. Navigation cancellation stays
+ * silent because the screen is leaving; sustained background cancellation
+ * settles pending cards into an explicit retry state for foreground recovery.
  */
-export function cancelActiveGeneration(): void {
+export function cancelActiveGeneration(
+  kind: GenerationCancellationKind = "navigation",
+): void {
   if (activeAbort) {
-    activeAbort.abort();
+    activeAbort.abort(
+      kind === "background" ? BACKGROUND_CANCELLATION_REASON : undefined,
+    );
     activeAbort = null;
   }
   activeBatchId = null;
@@ -123,6 +142,7 @@ export async function fetchMusicEngineStatus(force = false): Promise<MusicEngine
       configured: false,
       available: false,
       reason: "unreachable",
+      estimatedWaitMs: null,
     };
 
     for (const delayMs of retryDelaysMs) {
@@ -156,17 +176,25 @@ async function probeHealthOnce(): Promise<MusicEngineStatus | null> {
       cache: "no-store",
     });
     if (!res.ok) {
-      return { configured: false, available: false, reason: `http_${res.status}` };
+      return {
+        configured: false,
+        available: false,
+        reason: `http_${res.status}`,
+        estimatedWaitMs: null,
+      };
     }
     const data = (await res.json()) as {
       available?: boolean;
       configured?: boolean;
       reason?: string | null;
+      estimatedWaitMs?: number | null;
     };
     return {
       configured: data.configured === true,
       available: data.available === true,
       reason: data.reason ?? null,
+      estimatedWaitMs:
+        typeof data.estimatedWaitMs === "number" ? data.estimatedWaitMs : null,
     };
   } catch {
     return null;
@@ -184,6 +212,13 @@ export interface MagentaVersionOptions {
   /** 0 for the first three vibes; reroll passes previous + 1. */
   batchIndex: number;
   humBlob?: Blob | null;
+  /**
+   * "reduced" when the source melody came from the client-side pitch fallback
+   * (worker unreachable) rather than the server transcriber — the generated
+   * versions carry this so VibeScreen can show a non-blocking reduced-detail
+   * hint (issue #211). Absent for normal server-side captures.
+   */
+  captureQuality?: VibeVersion["captureQuality"];
 }
 
 /**
@@ -210,6 +245,12 @@ export function createMagentaVersions(
     melody,
   });
 
+  // Stable operation identity for the whole fan-out (#300). Each clip slot gets
+  // its own operationId; the batch id is shared. Both persist in the draft and
+  // become the idempotency key for spend + the recovery handle for durable
+  // artifacts.
+  const batchOperationId = newOperationId();
+
   const batchArtworkIds: string[] = [];
   const versions = scaffold.map((version, index) => {
     const spec = prompts[index]!;
@@ -221,12 +262,15 @@ export function createMagentaVersions(
       durationSec: MAGENTA_CLIP_SECONDS,
       batchIndex: options.batchIndex,
       styleMix: options.humBlob ? DEFAULT_HUM_STYLE_MIX : 0,
+      operationId: newOperationId(),
+      batchOperationId,
     };
     return {
       ...version,
       title: spec.title,
       vibe: spec.vibeId,
       tags: spec.tags,
+      captureQuality: options.captureQuality,
       visualConfig: (() => {
         const artworkSeed = `${options.draftId}:${options.batchIndex}:${index}:${version.id}`;
         const artwork = pickArtworkSelection(spec.visualFacets, artworkSeed, [], batchArtworkIds);
@@ -254,33 +298,103 @@ export function createMagentaVersions(
     humStyled: !!options.humBlob,
   });
 
-  startBatchGeneration(versions, options.humBlob ?? null);
+  startBatchGeneration(versions, options.humBlob ?? null, batchOperationId);
   return versions;
 }
 
-/** Re-request audio for a single version (error-card retry). */
+function newOperationId(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    /* fall through */
+  }
+  return `op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Error-card retry: a fresh attempt at a FAILED slot whose note was already
+ * refunded, so it must charge again — mint a NEW operationId so the server
+ * treats it as a new purchase rather than a deduped resume (#300).
+ */
 export function regenerateVersionAudio(version: VibeVersion): void {
   if (!version.generation) return;
+  const operationId = newOperationId();
   patchGeneration(version.id, {
     status: "pending",
+    operationId,
     error: undefined,
     errorCode: undefined,
     currentBalance: undefined,
     cost: undefined,
   });
   const humBlob = useMurmurStore.getState().humStyleBlob;
-  activeBatchId ??= crypto.randomUUID();
-  void requestClip(version, humBlob, activeAbort?.signal ?? null, activeBatchId);
+  if (!activeAbort || activeAbort.signal.aborted) {
+    activeAbort = new AbortController();
+  }
+  activeBatchId ??= version.generation.batchOperationId ?? newOperationId();
+  void requestClip(version, humBlob, activeAbort.signal, activeBatchId, operationId);
 }
 
-function startBatchGeneration(versions: VibeVersion[], humBlob: Blob | null): void {
+/**
+ * Recover a restored clip's audio without re-purchasing it (#300). A ready or
+ * still-pending clip that lost its session blob URL is first rehydrated from
+ * the durable artifact store — the EXACT audited clip, no network, no charge.
+ * If the durable bytes are gone we resume the SAME paid operation (the server
+ * dedupes the spend on operationId), which re-fetches audio without a second
+ * charge. Error clips are left to the explicit retry affordance.
+ */
+export async function recoverVersionAudio(version: VibeVersion): Promise<void> {
+  const generation = version.generation;
+  if (!generation || generation.audioUrl || generation.status === "error") return;
+
+  const operationId = generation.operationId;
+  if (operationId) {
+    const blob = await loadClipArtifact(operationId);
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      liveObjectUrls.push(url);
+      const applied = patchGeneration(version.id, { status: "ready", audioUrl: url });
+      if (!applied) {
+        URL.revokeObjectURL(url);
+        liveObjectUrls = liveObjectUrls.filter((u) => u !== url);
+      }
+      return;
+    }
+  }
+
+  resumeClipGeneration(version);
+}
+
+/** Resume a clip's generation on its existing (paid) operationId — no reroll. */
+function resumeClipGeneration(version: VibeVersion): void {
+  const generation = version.generation;
+  if (!generation) return;
+  patchGeneration(version.id, {
+    status: "pending",
+    error: undefined,
+    errorCode: undefined,
+  });
+  const humBlob = useMurmurStore.getState().humStyleBlob;
+  if (!activeAbort || activeAbort.signal.aborted) {
+    activeAbort = new AbortController();
+  }
+  activeBatchId ??= generation.batchOperationId ?? newOperationId();
+  void requestClip(version, humBlob, activeAbort.signal, activeBatchId, generation.operationId);
+}
+
+function startBatchGeneration(
+  versions: VibeVersion[],
+  humBlob: Blob | null,
+  batchId: string,
+): void {
   activeAbort?.abort();
   const controller = new AbortController();
   activeAbort = controller;
   // One id per fan-out. The server threads it through logs and web-push
   // identity, so the three sibling clips land as a single OS notification
   // and inbox entry instead of one alert per clip.
-  const batchId = crypto.randomUUID();
   activeBatchId = batchId;
 
   // Clips from a superseded batch are unreachable from the UI — release them.
@@ -288,7 +402,7 @@ function startBatchGeneration(versions: VibeVersion[], humBlob: Blob | null): vo
   liveObjectUrls = [];
 
   for (const version of versions) {
-    void requestClip(version, humBlob, controller.signal, batchId);
+    void requestClip(version, humBlob, controller.signal, batchId, version.generation?.operationId);
   }
 }
 
@@ -297,6 +411,7 @@ async function requestClip(
   humBlob: Blob | null,
   signal: AbortSignal | null,
   batchId: string,
+  operationId?: string,
 ): Promise<void> {
   const generation = version.generation!;
   const startedAt = performance.now();
@@ -312,10 +427,15 @@ async function requestClip(
       form.append("hum", humBlob, "hum.webm");
     }
 
+    const headers: Record<string, string> = { "x-generation-batch-id": batchId };
+    // Stable per-clip identity: the server keys spend idempotency on it, so a
+    // resume/retry of the same clip never double-charges (#300).
+    if (operationId) headers["x-generation-clip-id"] = operationId;
+
     const res = await fetch("/api/music/generate", {
       method: "POST",
       body: form,
-      headers: { "x-generation-batch-id": batchId },
+      headers,
       signal: withGenerateTimeout(signal),
     });
     if (!res.ok) {
@@ -324,6 +444,9 @@ async function requestClip(
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     liveObjectUrls.push(url);
+    // Persist the exact bytes durably so a later reload recovers this clip
+    // without regenerating or re-charging it (#300).
+    if (operationId) void persistClipArtifact(operationId, blob);
     const applied = patchGeneration(version.id, { status: "ready", audioUrl: url });
     if (!applied) {
       // Batch was replaced while this clip was in flight.
@@ -340,7 +463,24 @@ async function requestClip(
     });
     notifyIfBatchComplete();
   } catch (error) {
-    if (signal?.aborted) return;
+    if (signal?.aborted) {
+      if (signal.reason !== BACKGROUND_CANCELLATION_REASON) return;
+      const applied = patchGeneration(version.id, {
+        status: "error",
+        error: "Generation stopped while Murmur was in the background.",
+        errorCode: "background_canceled",
+      });
+      if (!applied) return;
+      log("magenta.clip_background_canceled", {
+        vibe: version.vibe,
+        prompt: generation.prompt,
+      }, {
+        level: "warn",
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+      notifyIfBatchComplete();
+      return;
+    }
     const failure = normalizeMusicGenerateError(error);
     patchGeneration(version.id, {
       status: "error",
@@ -501,7 +641,12 @@ function notifyIfBatchComplete(): void {
 
 /** Patch a version's generation in the store; false if it's no longer there. */
 type VersionGenerationPatch =
-  | Partial<Pick<VersionGeneration, "audioUrl" | "currentBalance" | "cost">> &
+  | Partial<
+      Pick<
+        VersionGeneration,
+        "audioUrl" | "currentBalance" | "cost" | "operationId" | "batchOperationId"
+      >
+    > &
     ({ status: "pending" | "ready"; error?: undefined; errorCode?: undefined }
     | { status: "error"; error: string; errorCode: VersionGenerationErrorCode });
 

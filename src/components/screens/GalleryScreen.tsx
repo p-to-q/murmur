@@ -348,6 +348,8 @@ export function GalleryScreen() {
                 index={i}
                 onClick={handleSongClick}
                 onDelete={isShowingDemo ? undefined : handleDeleteRequest}
+                isDraft={song.hasAudio === false}
+                draftLabel={t("gallery.draft") || "Draft"}
               />
             ))}
           </div>
@@ -436,6 +438,7 @@ function SortToggle({
   return (
     <div className="flex shrink-0 items-center gap-3 text-[12px] tracking-[0.04em]">
       <button
+        type="button"
         onClick={() => onChange("newest")}
         className={`transition-colors ${sort === "newest" ? "text-[#1A1A1A] font-medium" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
       >
@@ -443,6 +446,7 @@ function SortToggle({
       </button>
       <span className="text-[#D2C9B6]">·</span>
       <button
+        type="button"
         onClick={() => onChange("alpha")}
         className={`transition-colors ${sort === "alpha" ? "text-[#1A1A1A] font-medium" : "text-[#8C8780] hover:text-[#1A1A1A]"}`}
       >

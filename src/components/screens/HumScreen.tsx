@@ -599,6 +599,10 @@ export function HumScreen() {
         sourceMelodyKind: selectedMelody.kind,
         batchIndex: 0,
         humBlob: preparedBlob ?? null,
+        // Client-side pitch fallback (worker unreachable) yields lower-fidelity
+        // notes; tag the versions so VibeScreen can show a reduced-detail hint
+        // (issue #211). Normal server transcription leaves this undefined.
+        captureQuality: result.provider === "client_pyin" ? "reduced" : undefined,
       });
       setVibeVersions(versions);
       setCurrentDraftId(draftId);

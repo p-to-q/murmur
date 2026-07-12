@@ -1,5 +1,6 @@
 import { pgTable, text, timestamp, integer, jsonb, index } from "drizzle-orm/pg-core";
 import type { InferSelectModel } from "drizzle-orm";
+import type { CleanMelody, SongProvenance } from "@/modules/shared/types";
 
 // ─── These types MUST stay in sync with src/modules/shared/types.ts ───────────
 
@@ -106,8 +107,29 @@ export const songs = pgTable(
   editDepth: text("edit_depth").notNull().default("fresh").$type<EditDepth>(),
   visibility: text("visibility").notNull().default("private").$type<SongVisibility>(),
   shareCode: text("share_code"),
-  // Audio — base64 data URL or CDN URL; null until generated
+  // Audio playback artifact.
+  // DEPRECATED — legacy base64 data URL; read-only fallback for pre-#292 rows.
+  // New saves upload through the object-storage adapter and leave this null.
   mp3DataUrl: text("mp3_data_url"),
+  // Object-storage URL for newly rendered audio (R2 / S3 / 腾讯云 COS). Preferred
+  // playback source; null until an object master exists.
+  mp3Url: text("mp3_url"),
+  // Storage key backing mp3Url — the durable reference used for re-derivation
+  // and object-lifecycle deletion. Null for legacy/demo rows.
+  mp3StorageKey: text("mp3_storage_key"),
+  // Artifact/schema version of {melody + arrangementState + visualConfig +
+  // provenance + playback}. Legacy rows are 1; #297 saves write 2. Read paths
+  // branch on this via readSongArtifact (src/modules/music/song-artifact.ts).
+  artifactVersion: integer("artifact_version").notNull().default(1),
+  // Canonical editable melody/source, persisted separately from the playback
+  // artifact so reopening keeps timing + generation context (#297). Null for
+  // legacy rows, which still reconstruct from arrangementState.
+  melody: jsonb("melody").$type<CleanMelody>(),
+  // Creation provenance: flow, recording op, generation batch/clip, draft.
+  provenance: jsonb("provenance").$type<SongProvenance>(),
+  // Content fingerprint of the canonical save payload — distinguishes an exact
+  // save replay (idempotent) from a same-id/different-payload conflict (#297).
+  saveFingerprint: text("save_fingerprint"),
   // JSON blobs
   visualConfig: jsonb("visual_config").$type<VisualConfig>().notNull(),
   arrangementState: jsonb("arrangement_state").$type<ArrangementState>().notNull(),

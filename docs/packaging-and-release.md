@@ -20,16 +20,26 @@ configuration. Source: [GitHub Docs: Sharing actions and workflows with your org
 GitHub Releases can attach distributable assets in addition to the auto-generated
 zip and tarball of the repository at a tag. Source: [GitHub Docs: About releases](https://docs.github.com/articles/about-releases?ref=amos-blog)
 
-### Current Vercel constraint
+### Current Vercel deployment (settled)
 
-This repository currently cannot rely on Vercel Hobby deployment from a private
-GitHub organization repository. The existing check failure states that private
-organization repository deploys require a Pro plan. That is consistent with the
-Vercel deployment restriction already surfaced in PR checks.
+The deploy path is no longer open: production runs on **Vercel's native Git
+integration**. Every pull request gets a Preview deployment and every push to
+`main` gets a Production deployment, using the build command
+`bun run env:audit && bun run build` (see `vercel.json`). The operational
+runbook — required env, migration ordering, rollback, and ownership — lives in
+[repository-operations.md](./repository-operations.md); this document covers
+versioning and packaging.
 
-### Prebuilt deploy option
+One plan constraint is load-bearing: the account **rejects sub-daily cron
+schedules** (a Hobby-tier restriction learned empirically — an hourly cron broke
+the production deploy). Vercel crons in `vercel.json` must therefore stay
+**daily** unless/until the project is confirmed on a plan that permits sub-daily
+crons.
 
-If Vercel remains the host, Vercel supports `vercel build` followed by
+### Prebuilt deploy option (alternative, not current)
+
+Native Git integration is the current path. If provenance control later requires
+decoupling the build from Vercel, Vercel also supports `vercel build` followed by
 `vercel deploy --prebuilt`, which lets a prebuilt project be deployed without
 sharing source code with Vercel at deploy time. Source:
 
@@ -129,20 +139,20 @@ For artifact-oriented milestones, also preserve:
 
 ## Stage 3. Deployable app output
 
-Choose one hosting path deliberately.
+The hosting path is settled: **Option A (Vercel native Git integration)** is the
+production path today. Options B and C are kept as documented alternatives, not
+open decisions.
 
-### Option A. Vercel Pro or equivalent
+### Option A. Vercel native Git integration (current)
 
-Use when:
+This is what production runs on:
 
-- the GitHub org repo stays private
-- you want the simplest Next.js deployment path
-
-Recommended shape:
-
-- keep source in private GitHub
-- connect repository to a paid Vercel project
-- use preview + production environments
+- source stays in the private GitHub repo
+- the repo is connected to a Vercel project with Preview + Production
+  environments
+- Preview deploys on every PR, Production deploys on every push to `main`
+- schema changes are applied by `.github/workflows/migrate.yml`, not by the
+  deploy (see [repository-operations.md](./repository-operations.md))
 
 ### Option B. Prebuilt Vercel deploy
 
@@ -217,17 +227,38 @@ That means:
 - compatibility-affecting export changes deserve explicit review
 - sample outputs are worth preserving at milestone boundaries
 
+## Post-merge tag and release
+
+Tagging and cutting the GitHub Release are **post-merge** operations, performed
+after the release PR lands on `main`. They are deliberately kept **out of the
+code PR** so the tag points at the merged commit and never at an unmerged branch
+tip.
+
+Sequence, once the release PR (version bump + `CHANGELOG.md` +
+`docs/release-notes/vX.Y.Z.md`) is merged:
+
+1. update local `main`: `git checkout main && git pull`
+2. confirm CI is green on the merged commit and the migration workflow succeeded
+3. tag the merge commit: `git tag vX.Y.Z && git push origin vX.Y.Z`
+4. create the GitHub Release for `vX.Y.Z`, using `docs/release-notes/vX.Y.Z.md`
+   as the body
+
+There is intentionally no tag-triggered release workflow yet (see the "optional
+hardening" list in [repository-operations.md](./repository-operations.md)); the
+tag and Release are created by the owner of the production release path.
+
 ## Recommended next operational step for Murmur
 
-Given the current repository state, the clearest next step is:
+The deploy path is settled (Vercel native Git integration; see
+[repository-operations.md](./repository-operations.md)), and CI already runs the
+required gate. The remaining operational steps are owner/admin actions, not code:
 
 1. keep collaboration in the private GitHub repo
-2. add a lightweight CI workflow for `lint` + `build`
-3. decide whether deployment should be:
-   - Vercel Pro
-   - prebuilt Vercel deploy
-   - self-hosted
-4. create a tagged release process only after deployment path is chosen
+2. activate the ordered migrate-then-deploy cutover so production code never
+   ships ahead of its schema (tracked in issue #307)
+3. apply a branch-protection ruleset on `main` (tracked in issue #308)
+4. follow [Post-merge tag and release](#post-merge-tag-and-release) on each
+   product release
 
 ## App version contract
 
@@ -275,7 +306,11 @@ release note):
    number
 3. add a short entry to `CHANGELOG.md` and update "Current release" in this
    document
-4. create a git tag `vX.Y.Z`
+4. add `docs/release-notes/vX.Y.Z.md` — the release contract test
+   (`src/lib/release-contract.test.ts`) requires a release note for the declared
+   `package.json` version that references the matching `APP_BUILD`
+5. after the release PR merges, create the git tag `vX.Y.Z` and the GitHub
+   Release (see [Post-merge tag and release](#post-merge-tag-and-release))
 
 | Change type | Version bump | Build bump |
 |-------------|--------------|------------|
@@ -297,10 +332,12 @@ SemVer or build.
 
 ## Suggested next decision
 
-The next explicit team decision should be:
+The deploy-path decision is closed (Vercel native Git integration). The open
+decisions now are operational governance, not hosting:
 
-- **deploy path decision**: `vercel-pro`, `vercel-prebuilt`, or `self-hosted`
-
-Until that decision is made, continue treating deployment as an open
-infrastructure choice and keep the repository focused on build correctness and
-artifact stability.
+- **ordered production rollout** (issue #307): serialize migrate-before-deploy
+  instead of the current parallel race — an owner/admin action, documented in
+  [repository-operations.md](./repository-operations.md).
+- **branch protection on `main`** (issue #308): require PR + the CI `verify`
+  check + approval before merge — a repository setting the owner applies in
+  GitHub.

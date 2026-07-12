@@ -64,6 +64,18 @@ const paperTextureStyle = {
   `,
 };
 
+// Unified pricing-card treatment (SKU tiles + custom card share one language):
+//   - single 20px radius, hairline cream border, soft paper fill
+//   - idle: subtle cream border that warms on hover
+//   - selected: coral accent border + soft coral-tinted shadow + gentle lift
+// Kept subtle so the selected state reads clearly without shouting.
+const PRICE_CARD_BASE =
+  "border backdrop-blur-sm transition-all duration-200";
+const PRICE_CARD_IDLE =
+  "border-[#E5DDD0]/70 bg-white/55 hover:border-[#C8C0B4]";
+const PRICE_CARD_SELECTED =
+  "border-[#FF5924] bg-white/85 shadow-[0_4px_18px_rgba(255,89,36,0.12)]";
+
 function formatRefillTime(iso: string, locale: string): string {
   try {
     return new Intl.DateTimeFormat(locale, {
@@ -313,7 +325,7 @@ export function TopupScreen() {
       <PageBackdrop variant="soft" />
 
       <div className="relative z-10 flex min-h-svh flex-col">
-        <div className="flex-1 px-5 pb-48 md:px-12 md:pb-24">
+        <div className="flex-1 px-5 pb-48 md:px-12 md:pb-28">
           <div
             className="mx-auto max-w-lg md:max-w-2xl"
             style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 52px)" }}
@@ -420,10 +432,8 @@ export function TopupScreen() {
                       key={sku.id}
                       whileTap={{ scale: 0.97 }}
                       onClick={() => setSelectedId(sku.id)}
-                      className={`relative rounded-[18px] border backdrop-blur-sm px-4 py-5 text-center transition-all ${
-                        isSelected
-                          ? "border-[#1A1A1A] bg-white/80 shadow-[0_2px_12px_rgba(0,0,0,0.08)]"
-                          : "border-[#E5DDD0]/40 bg-white/50 hover:border-[#C8C0B4]"
+                      className={`relative rounded-[20px] px-4 py-5 text-center ${PRICE_CARD_BASE} ${
+                        isSelected ? PRICE_CARD_SELECTED : PRICE_CARD_IDLE
                       }`}
                     >
                       {sku.highlight && (
@@ -463,10 +473,8 @@ export function TopupScreen() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3, duration: 0.5 }}
-                className={`rounded-[20px] border backdrop-blur-sm px-6 py-6 transition-all ${
-                  selectedId === CUSTOM_TOPUP_ID
-                    ? "border-[#1A1A1A] bg-white/80 shadow-[0_2px_12px_rgba(0,0,0,0.08)]"
-                    : "border-[#E5DDD0]/40 bg-white/50"
+                className={`rounded-[20px] px-6 py-6 ${PRICE_CARD_BASE} ${
+                  selectedId === CUSTOM_TOPUP_ID ? PRICE_CARD_SELECTED : PRICE_CARD_IDLE
                 }`}
                 onClick={() => setSelectedId(CUSTOM_TOPUP_ID)}
               >

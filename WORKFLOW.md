@@ -17,6 +17,13 @@ Murmur repository. It is intentionally light.
 - no direct pushes to `main`
 - keep the worktree clean before handoff or merge
 
+"No direct pushes to `main`" is currently a **convention, not an enforced
+control** — `main` has no branch-protection ruleset yet, so the push path is
+technically open. Applying the required ruleset (require PR, the CI `verify`
+check, and one approval) is an owner/admin action tracked in issue #308 and
+documented in
+[docs/repository-operations.md](./docs/repository-operations.md#branch-protection-issue-308).
+
 ## Good agent-sized work
 
 Work is a good fit for one pass when:

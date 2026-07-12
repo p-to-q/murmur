@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import type {
   BalanceResult,
@@ -43,7 +43,27 @@ let nextWorkerImpl: (() => Promise<TranscriptionResult>) | null = null;
 const lastSpendInputs: SpendNotesInput[] = [];
 const lastRefundInputs: RefundNotesInput[] = [];
 const lastPendingRefundInputs: Array<{ userId: string; originalLedgerId: string }> = [];
+const lastSettleInputs: Array<{ userId: string; spendLedgerId: string }> = [];
+let nextSettleResult: {
+  ok: true;
+  state: string;
+  delivered: boolean;
+  recharged: boolean;
+  duplicate: boolean;
+  rechargeLedgerId: string | null;
+  balanceAfter: number;
+} = {
+  ok: true,
+  state: "delivered",
+  delivered: true,
+  recharged: false,
+  duplicate: false,
+  rechargeLedgerId: null,
+  balanceAfter: 9,
+};
 let lastResolveAuthOptions: { allowGuestPreview?: boolean } | null = null;
+const originalProductionPreview = process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+const originalVercel = process.env.VERCEL;
 
 const stubTranscription: TranscriptionResult = {
   provider: "swiftf0",
@@ -154,6 +174,10 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
       duplicate: false,
     };
   },
+  settleOperationDelivery: async (input: { userId: string; spendLedgerId: string }) => {
+    lastSettleInputs.push(input);
+    return nextSettleResult;
+  },
   reverseTopupGrant: async () => ({ ok: false as const, reason: "purchase_grant_not_found" as const }),
   // Unused here, but every mock of this module must declare the full export
   // surface — bun can't add new export names to an already-created record.
@@ -244,10 +268,11 @@ function audioFile(bytes = 1024, type = "audio/webm"): File {
 
 function buildRequest(
   form: FormData,
-  options: { requestId?: string; url?: string } = {},
+  options: { requestId?: string; url?: string; operationId?: string } = {},
 ): NextRequest {
   const headers = new Headers();
   if (options.requestId) headers.set("x-request-id", options.requestId);
+  if (options.operationId) headers.set("x-operation-id", options.operationId);
   return new Request(options.url ?? "http://test.local/api/transcribe", {
     method: "POST",
     body: form,
@@ -257,10 +282,11 @@ function buildRequest(
 
 function buildStreamingRequest(
   form: FormData,
-  options: { requestId?: string; signal?: AbortSignal } = {},
+  options: { requestId?: string; signal?: AbortSignal; operationId?: string } = {},
 ): NextRequest {
   const headers = new Headers({ Accept: "text/x-ndjson" });
   if (options.requestId) headers.set("x-request-id", options.requestId);
+  if (options.operationId) headers.set("x-operation-id", options.operationId);
   return new Request("http://test.local/api/transcribe", {
     method: "POST",
     body: form,
@@ -293,6 +319,8 @@ async function drainNdjson(response: Response): Promise<StreamEvent[]> {
 
 beforeEach(() => {
   delete process.env.MURMUR_RATE_LIMIT_DRIVER;
+  delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+  delete process.env.VERCEL;
   resetCachedRateLimitStore();
   getRateLimitStore().resetAll();
   nextAuth = {
@@ -325,8 +353,28 @@ beforeEach(() => {
   lastSpendInputs.length = 0;
   lastRefundInputs.length = 0;
   lastPendingRefundInputs.length = 0;
+  lastSettleInputs.length = 0;
+  nextSettleResult = {
+    ok: true,
+    state: "delivered",
+    delivered: true,
+    recharged: false,
+    duplicate: false,
+    rechargeLedgerId: null,
+    balanceAfter: 9,
+  };
   lastResolveAuthOptions = null;
 });
+
+afterEach(() => {
+  restoreEnv("MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW", originalProductionPreview);
+  restoreEnv("VERCEL", originalVercel);
+});
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}
 
 describe("POST /api/transcribe", () => {
   it("returns the polished melody and debits a note on success", async () => {
@@ -357,6 +405,115 @@ describe("POST /api/transcribe", () => {
     } finally {
       setTestNodeEnv(prevNodeEnv);
     }
+  });
+
+  describe("operation settlement (#298)", () => {
+    it("uses a stable spend ref and settles the operation on delivery when x-operation-id is present", async () => {
+      const prevNodeEnv = process.env.NODE_ENV;
+      setTestNodeEnv("production");
+      const form = new FormData();
+      form.append("audio", audioFile());
+      form.append("targetInstrument", "piano");
+
+      try {
+        const response = await POST(
+          buildRequest(form, { requestId: "req_op", operationId: "op-abc-123" }),
+        );
+        expect(response.status).toBe(200);
+
+        // Stable operation ref so a retry of the same operation dedupes.
+        expect(lastSpendInputs[0]?.externalRef).toBe("hum:op:op-abc-123");
+        // Delivery settled the operation with the spend's ledger id.
+        expect(lastSettleInputs).toHaveLength(1);
+        expect(lastSettleInputs[0]).toMatchObject({
+          userId: "usr_test",
+          spendLedgerId: "nle_test",
+        });
+      } finally {
+        setTestNodeEnv(prevNodeEnv);
+      }
+    });
+
+    it("preserves legacy behavior (random ref, no settlement) without x-operation-id", async () => {
+      const prevNodeEnv = process.env.NODE_ENV;
+      setTestNodeEnv("production");
+      const form = new FormData();
+      form.append("audio", audioFile());
+      form.append("targetInstrument", "piano");
+
+      try {
+        const response = await POST(buildRequest(form, { requestId: "req_legacy" }));
+        expect(response.status).toBe(200);
+
+        expect(lastSpendInputs[0]?.externalRef).toStartWith("hum:");
+        expect(lastSpendInputs[0]?.externalRef).not.toStartWith("hum:op:");
+        // No stable operation id → no operation settlement.
+        expect(lastSettleInputs).toHaveLength(0);
+      } finally {
+        setTestNodeEnv(prevNodeEnv);
+      }
+    });
+
+    it("ignores a malformed x-operation-id and falls back to legacy behavior", async () => {
+      const prevNodeEnv = process.env.NODE_ENV;
+      setTestNodeEnv("production");
+      const form = new FormData();
+      form.append("audio", audioFile());
+      form.append("targetInstrument", "piano");
+
+      try {
+        // Too short / contains illegal characters → rejected by isValidOperationId.
+        await POST(buildRequest(form, { requestId: "req_bad", operationId: "bad id!" }));
+        expect(lastSpendInputs[0]?.externalRef).not.toStartWith("hum:op:");
+        expect(lastSettleInputs).toHaveLength(0);
+      } finally {
+        setTestNodeEnv(prevNodeEnv);
+      }
+    });
+
+    it("does not settle on a worker failure (settlement is delivery-only)", async () => {
+      const prevNodeEnv = process.env.NODE_ENV;
+      setTestNodeEnv("production");
+      nextWorkerImpl = async () => {
+        throw new AudioWorkerError("worker_http_error", "worker down", 502);
+      };
+      const form = new FormData();
+      form.append("audio", audioFile());
+      form.append("targetInstrument", "piano");
+
+      try {
+        const response = await POST(
+          buildRequest(form, { requestId: "req_fail", operationId: "op-fail-1" }),
+        );
+        expect(response.status).toBe(502);
+        // Failure → refund path, never delivery settlement.
+        expect(lastSettleInputs).toHaveLength(0);
+        expect(lastRefundInputs).toHaveLength(1);
+      } finally {
+        setTestNodeEnv(prevNodeEnv);
+      }
+    });
+
+    it("settles the operation on the streaming delivery path", async () => {
+      const prevNodeEnv = process.env.NODE_ENV;
+      setTestNodeEnv("production");
+      const form = new FormData();
+      form.append("audio", audioFile());
+      form.append("targetInstrument", "piano");
+
+      try {
+        const response = await POST(
+          buildStreamingRequest(form, { requestId: "req_op_stream", operationId: "op-stream-9" }),
+        );
+        const events = await drainNdjson(response);
+        expect(events.at(-1)?.phase).toBe("complete");
+        expect(lastSpendInputs[0]?.externalRef).toBe("hum:op:op-stream-9");
+        expect(lastSettleInputs).toHaveLength(1);
+        expect(lastSettleInputs[0]).toMatchObject({ spendLedgerId: "nle_test" });
+      } finally {
+        setTestNodeEnv(prevNodeEnv);
+      }
+    });
   });
 
   it("does not reuse client request ids as spend idempotency keys", async () => {
@@ -411,7 +568,10 @@ describe("POST /api/transcribe", () => {
     expect(lastSpendInputs).toHaveLength(1);
   });
 
-  it("spends Local Creator ledger notes on localhost when a balance row exists", async () => {
+  it("spends Local Creator ledger notes in an explicitly enabled production preview", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    setTestNodeEnv("production");
+    process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW = "1";
     nextAuth = {
       ok: true,
       user: {
@@ -436,21 +596,26 @@ describe("POST /api/transcribe", () => {
     const form = new FormData();
     form.append("audio", audioFile());
 
-    const response = await POST(
-      buildRequest(form, {
-        requestId: "req_local_creator",
-        url: "http://localhost:3000/api/transcribe",
-      }),
-    );
+    try {
+      const response = await POST(
+        buildRequest(form, {
+          requestId: "req_local_creator",
+          url: "https://preview.example/api/transcribe",
+        }),
+      );
 
-    expect(response.status).toBe(200);
-    expect(lastResolveAuthOptions?.allowGuestPreview).toBe(true);
-    expect(lastSpendInputs).toHaveLength(1);
-    expect(lastSpendInputs[0]).toMatchObject({
-      userId: "lc_test",
-      reason: "spend:hum",
-      cost: 1,
-    });
+      expect(response.status).toBe(200);
+      expect(lastResolveAuthOptions?.allowGuestPreview).toBe(true);
+      expect(lastSpendInputs).toHaveLength(1);
+      expect(lastSpendInputs[0]).toMatchObject({
+        userId: "lc_test",
+        reason: "spend:hum",
+        cost: 1,
+      });
+    } finally {
+      setTestNodeEnv(prevNodeEnv);
+      delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+    }
   });
 
   it("rejects missing audio with audio_required", async () => {
@@ -662,11 +827,11 @@ describe("POST /api/transcribe", () => {
     }
   });
 
-  it("keeps localhost previews usable when billing is unavailable outside dev mode", async () => {
+  it("rejects a forged localhost URL in non-Vercel production", async () => {
     const prevNodeEnv = process.env.NODE_ENV;
-    const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     setTestNodeEnv("production");
-    process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
+    delete process.env.VERCEL;
+    delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
     nextBalanceThrows = new Error("db offline");
 
     try {
@@ -674,20 +839,67 @@ describe("POST /api/transcribe", () => {
       form.append("audio", audioFile());
       const response = await POST(
         buildRequest(form, {
-          requestId: "req_localhost_bypass",
+          requestId: "req_non_vercel_localhost",
           url: "http://localhost:3000/api/transcribe",
         }),
       );
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(503);
+      expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
       expect(lastSpendInputs).toHaveLength(0);
       expect(lastRefundInputs).toHaveLength(0);
     } finally {
       setTestNodeEnv(prevNodeEnv);
-      if (prevFlag === undefined) {
-        delete process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
-      } else {
-        process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = prevFlag;
-      }
+    }
+  });
+
+  it("rejects a forged localhost URL in Vercel production", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    setTestNodeEnv("production");
+    process.env.VERCEL = "1";
+    delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
+    nextBalanceThrows = new Error("db offline");
+
+    try {
+      const form = new FormData();
+      form.append("audio", audioFile());
+      const response = await POST(
+        buildRequest(form, {
+          requestId: "req_vercel_localhost",
+          url: "http://127.0.0.1:3000/api/transcribe",
+        }),
+      );
+      expect(response.status).toBe(503);
+      expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
+      expect(lastSpendInputs).toHaveLength(0);
+      expect(lastRefundInputs).toHaveLength(0);
+    } finally {
+      setTestNodeEnv(prevNodeEnv);
+      delete process.env.VERCEL;
+    }
+  });
+
+  it("allows billing fallback only after explicit production opt-in", async () => {
+    const prevNodeEnv = process.env.NODE_ENV;
+    setTestNodeEnv("production");
+    process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW = "1";
+    nextBalanceThrows = new Error("db offline");
+
+    try {
+      const form = new FormData();
+      form.append("audio", audioFile());
+      const response = await POST(
+        buildRequest(form, {
+          requestId: "req_explicit_production_preview",
+          url: "https://preview.example/api/transcribe",
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect(lastResolveAuthOptions?.allowGuestPreview).toBe(true);
+      expect(lastSpendInputs).toHaveLength(0);
+      expect(lastRefundInputs).toHaveLength(0);
+    } finally {
+      setTestNodeEnv(prevNodeEnv);
+      delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
     }
   });
 

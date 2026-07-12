@@ -128,7 +128,7 @@ describe("creation draft store helpers", () => {
     ).toBe("/vibe");
   });
 
-  it("strips session audio URLs before localStorage persistence", () => {
+  it("keeps a ready clip ready and preserves its operation identity (#300)", () => {
     const version = makeVersion({
       generation: {
         engine: "magenta",
@@ -139,13 +139,42 @@ describe("creation draft store helpers", () => {
         durationSec: 12,
         batchIndex: 0,
         styleMix: 0.6,
+        operationId: "op_clip_1",
+        batchOperationId: "op_batch_1",
       },
     });
 
     const stored = prepareVersionForDraftStorage(version);
 
+    // The ephemeral blob URL is dropped...
     expect(stored.generation?.audioUrl).toBeUndefined();
-    expect(stored.generation?.status).toBe("pending");
+    // ...but the clip stays READY (not turned back into a fresh, re-charged
+    // pending) and keeps its stable operation identity for durable recovery.
+    expect(stored.generation?.status).toBe("ready");
+    expect(stored.generation?.operationId).toBe("op_clip_1");
+    expect(stored.generation?.batchOperationId).toBe("op_batch_1");
+    // The live in-memory version is untouched.
     expect(version.generation?.audioUrl).toBe("blob:http://localhost/clip");
+  });
+
+  it("keeps a pending clip pending and preserves its operation identity (#300)", () => {
+    const version = makeVersion({
+      generation: {
+        engine: "magenta",
+        prompt: "soft evening",
+        vibeLabel: { zh: "黄昏", en: "Sunset" },
+        status: "pending",
+        durationSec: 12,
+        batchIndex: 0,
+        styleMix: 0.6,
+        operationId: "op_clip_2",
+      },
+    });
+
+    const stored = prepareVersionForDraftStorage(version);
+
+    expect(stored.generation?.status).toBe("pending");
+    expect(stored.generation?.audioUrl).toBeUndefined();
+    expect(stored.generation?.operationId).toBe("op_clip_2");
   });
 });

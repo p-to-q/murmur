@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
 import { requireDebugSurfaceAccess } from "@/lib/observability/debug-surface";
 import { QA_ROUTE_PATHS } from "@/lib/qa/qa-routes";
@@ -6,6 +7,7 @@ import { QA_ROUTE_PATHS } from "@/lib/qa/qa-routes";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request);
   const gate = await requireDebugSurfaceAccess(request, resolveRequestAuth);
   if (gate) return gate;
 
@@ -40,20 +42,24 @@ export async function GET(request: NextRequest) {
 
   const ok = workerConfigured ? workerOk : false;
 
-  return NextResponse.json({
-    status: ok ? "ok" : "degraded",
-    capturedAt: new Date().toISOString(),
-    web: {
-      status: "ok",
-      runtime: process.env.NODE_ENV ?? "development",
+  return NextResponse.json(
+    {
+      status: ok ? "ok" : "degraded",
+      capturedAt: new Date().toISOString(),
+      web: {
+        status: "ok",
+        runtime: process.env.NODE_ENV ?? "development",
+      },
+      worker: {
+        configured: workerConfigured,
+        ok: workerOk,
+        status: workerStatus,
+        service: workerService,
+        url: workerHealthUrl,
+      },
+      qaRoutes: QA_ROUTE_PATHS,
+      requestId,
     },
-    worker: {
-      configured: workerConfigured,
-      ok: workerOk,
-      status: workerStatus,
-      service: workerService,
-      url: workerHealthUrl,
-    },
-    qaRoutes: QA_ROUTE_PATHS,
-  });
+    { headers: { "X-Request-Id": requestId } },
+  );
 }

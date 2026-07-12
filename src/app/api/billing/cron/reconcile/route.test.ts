@@ -24,10 +24,6 @@ let reconcileSummary = {
 let nextAutoFix: {
   enabled: boolean;
   grantsFixed: number;
-  refundsFixed: number;
-  refundsAlreadySettled: number;
-  pendingRefundsScanned: number;
-  pendingRefundPages: number;
   requiresManualReview: number;
   fixed: number;
 } | null = null;
@@ -177,10 +173,6 @@ describe("GET /api/billing/cron/reconcile", () => {
     nextAutoFix = {
       enabled: true,
       grantsFixed: 1,
-      refundsFixed: 0,
-      refundsAlreadySettled: 0,
-      pendingRefundsScanned: 0,
-      pendingRefundPages: 0,
       requiresManualReview: 0,
       fixed: 1,
     };
@@ -205,10 +197,6 @@ describe("GET /api/billing/cron/reconcile", () => {
     nextAutoFix = {
       enabled: true,
       grantsFixed: 0,
-      refundsFixed: 0,
-      refundsAlreadySettled: 0,
-      pendingRefundsScanned: 1,
-      pendingRefundPages: 1,
       requiresManualReview: 1,
       fixed: 0,
     };

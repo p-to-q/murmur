@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import type { VibeVersion, VersionGeneration } from "@/modules/shared/types";
+import { clearAllClipArtifacts } from "@/lib/store/generation-artifact-store";
+import { parsePersistedDraft } from "@/lib/store/draft-schema";
 
 export type RecordingState = "idle" | "recording" | "processing" | "done" | "error";
 export type CreationRoute = "/vibe" | "/studio" | "/studio/name";
@@ -46,6 +48,10 @@ interface MurmurStore {
   setActiveCreationRoute: (route: CreationRoute | null) => void;
   draftUpdatedAt: number | null;
   restoredDraftAt: number | null;
+  // True once the initial persisted-draft hydration pass has run. Screens gate
+  // their empty-state redirect on this so a not-yet-restored store is never
+  // mistaken for an empty one (#315).
+  hasHydratedDraft: boolean;
 
   // Playback state — which version card is being previewed
   auditioningVersionId: string | null;  // version card id being previewed
@@ -60,28 +66,21 @@ export type CreationRouteState = Pick<
   "activeCreationRoute" | "currentVersion" | "vibeVersions"
 >;
 
-function isCreationRoute(value: unknown): value is CreationRoute {
-  return value === "/vibe" || value === "/studio" || value === "/studio/name";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
 function stripSessionAudio(
   generation: VersionGeneration | undefined,
 ): VersionGeneration | undefined {
   if (!generation) return undefined;
-  // Browser blob URLs only live for the current tab session. Persist the shape
-  // of the generation, then let restored screens request a fresh playable clip.
+  // Browser blob URLs only live for the current tab session, so we always drop
+  // audioUrl. But we PRESERVE status + the stable operation identity (#300): a
+  // "ready" clip stays ready and is rehydrated from the durable artifact store
+  // (or resumed via its operationId) on restore — never turned back into a
+  // fresh pending clip that would be re-generated and re-charged.
   if (generation.status === "error") {
     return { ...generation, audioUrl: undefined };
   }
-  // "ready" clips lose their session audio, so restored screens re-request.
   return {
     ...generation,
     audioUrl: undefined,
-    status: "pending",
     error: undefined,
     errorCode: undefined,
   };
@@ -148,44 +147,38 @@ function writeDraftSnapshot(state: MurmurStore) {
   }
 }
 
-function stringOrNull(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
 function readStoredDraft(): Partial<MurmurStore> {
   if (typeof window === "undefined") return {};
   try {
     const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed) || parsed.version !== DRAFT_STORAGE_VERSION) {
-      return {};
-    }
-    const state = parsed.state;
-    if (!isRecord(state)) return {};
-    const vibeVersions = Array.isArray(state.vibeVersions)
-      ? (state.vibeVersions as VibeVersion[]).map(prepareVersionForDraftStorage)
-      : [];
-    const currentVersion = isRecord(state.currentVersion)
-      ? prepareVersionForDraftStorage(state.currentVersion as VibeVersion)
+    // Versioned runtime parse (#315): validate the envelope + every nested
+    // version, dropping malformed ones instead of casting them into the store.
+    const parsed = parsePersistedDraft(JSON.parse(raw), DRAFT_STORAGE_VERSION);
+    if (!parsed) return {};
+
+    // Blob URLs never survive a reload; normalize the restored generations.
+    const vibeVersions = parsed.vibeVersions.map(prepareVersionForDraftStorage);
+    const currentVersion = parsed.currentVersion
+      ? prepareVersionForDraftStorage(parsed.currentVersion)
       : null;
     if (vibeVersions.length === 0 && !currentVersion) return {};
-    const activeCreationRoute = isCreationRoute(state.activeCreationRoute)
-      ? state.activeCreationRoute
-      : resolveRecoverableCreationRoute({
-          activeCreationRoute: null,
-          currentVersion,
-          vibeVersions,
-        });
+
+    const activeCreationRoute =
+      parsed.activeCreationRoute ??
+      resolveRecoverableCreationRoute({
+        activeCreationRoute: null,
+        currentVersion,
+        vibeVersions,
+      });
 
     return {
       vibeVersions,
       currentVersion,
-      currentDraftId: stringOrNull(state.currentDraftId),
-      currentFlowId: stringOrNull(state.currentFlowId),
+      currentDraftId: parsed.currentDraftId,
+      currentFlowId: parsed.currentFlowId,
       activeCreationRoute,
-      draftUpdatedAt:
-        typeof state.draftUpdatedAt === "number" ? state.draftUpdatedAt : null,
+      draftUpdatedAt: parsed.draftUpdatedAt,
       restoredDraftAt: Date.now(),
     };
   } catch {
@@ -224,6 +217,9 @@ export const useMurmurStore = create<MurmurStore>((set, get) => {
       setDraftState({ activeCreationRoute: route }),
     draftUpdatedAt: restoredDraft.draftUpdatedAt ?? null,
     restoredDraftAt: restoredDraft.restoredDraftAt ?? null,
+    // readStoredDraft has already run synchronously above, so restoration is
+    // complete by the time any screen mounts.
+    hasHydratedDraft: true,
 
     auditioningVersionId: null,
     setAuditioning: (versionId) => set({ auditioningVersionId: versionId }),
@@ -243,6 +239,8 @@ export const useMurmurStore = create<MurmurStore>((set, get) => {
         auditioningVersionId: null,
       });
       writeDraftSnapshot(get());
+      // The flow's clips are no longer reachable — release their durable bytes.
+      void clearAllClipArtifacts();
     },
   };
 });

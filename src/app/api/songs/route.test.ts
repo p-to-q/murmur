@@ -1,7 +1,34 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, afterEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
+import {
+  __resetObjectStoreForTesting,
+  __setObjectStoreForTesting,
+  type ObjectStore,
+} from "@/lib/storage";
+import { computeSaveFingerprint } from "@/modules/music/song-artifact";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+
+const BASE_VISUAL_CONFIG = {
+  preset: "soft_gradient",
+  gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+  particleDensity: 0.4,
+  pulseSource: "energy" as const,
+};
+
+const BASE_ARRANGEMENT = {
+  melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+  chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+  strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+  drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+  bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+  texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+};
+
+// 1x1 silent-ish MP3 payload stand-in — the route only needs decodable bytes.
+const SAMPLE_MP3_DATA_URL = `data:audio/mpeg;base64,${Buffer.from(
+  "ID3-fake-mp3-master-bytes",
+).toString("base64")}`;
 
 let nextAuth: ResolvedRequestAuth = {
   ok: true,
@@ -103,7 +130,38 @@ beforeEach(async () => {
   createSongWithSpendError = null;
   existingConflictSong = null;
   resetLocalSongFallbackForTests();
+  __resetObjectStoreForTesting();
 });
+
+afterEach(() => {
+  __resetObjectStoreForTesting();
+});
+
+function makeRecordingStore(): { store: ObjectStore; puts: Array<{ key: string }> } {
+  const puts: Array<{ key: string }> = [];
+  const store: ObjectStore = {
+    driver: "memory",
+    async put(key, body, opts) {
+      puts.push({ key });
+      return {
+        key,
+        url: `https://cdn.test/${key}`,
+        size: body.byteLength,
+        contentType: opts.contentType,
+        scope: opts.scope ?? "private",
+        storedAt: new Date("2026-06-05T12:00:00.000Z"),
+      };
+    },
+    async get() {
+      return null;
+    },
+    async delete() {},
+    url(key) {
+      return `https://cdn.test/${key}`;
+    },
+  };
+  return { store, puts };
+}
 
 describe("POST /api/songs", () => {
   it("persists the selected source melody kind with the saved song", async () => {
@@ -216,7 +274,31 @@ describe("POST /api/songs", () => {
     expect(body.visualConfig).toEqual(expect.objectContaining({ artwork }));
   });
 
-  it("falls back to corrected when the request sends an unknown melody kind", async () => {
+  it("rejects an unknown source melody kind with an explicit validation error (#311)", async () => {
+    const response = await POST(buildRequest({
+      id: "song_bad_kind",
+      title: "Plain Draft",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      sourceMelodyKind: "unknown",
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    // Explicit validation error, not a silent fallback to "corrected".
+    expect(response.status).toBe(400);
+    expect(createdSongs).toHaveLength(0);
+    const body = await response.json() as { error: string; issues: Array<{ path: string }> };
+    expect(body.error).toBe("validation_error");
+    expect(body.issues.some((issue) => issue.path === "sourceMelodyKind")).toBe(true);
+  });
+
+  it("defaults to corrected and normalizes lineage/edit counts when the kind is omitted", async () => {
     const response = await POST(buildRequest({
       id: "song_2",
       title: "Plain Draft",
@@ -227,22 +309,9 @@ describe("POST /api/songs", () => {
       scaleType: "major",
       duration: 20,
       lineageDepth: -3,
-      sourceMelodyKind: "unknown",
       editCount: -9,
-      visualConfig: {
-        preset: "soft_gradient",
-        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
-        particleDensity: 0.4,
-        pulseSource: "energy",
-      },
-      arrangementState: {
-        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
-        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
-        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
-        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
-        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
-        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
-      },
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
       tags: [],
     }));
 
@@ -257,6 +326,65 @@ describe("POST /api/songs", () => {
     const body = await response.json() as Record<string, unknown>;
     expect(body.sourceMelodyKind).toBe("corrected");
     expect(body.editDepth).toBe("fresh");
+  });
+
+  it("rejects more tags than the bound allows (#311)", async () => {
+    const response = await POST(buildRequest({
+      id: "song_too_many_tags",
+      title: "Tag Flood",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: Array.from({ length: 40 }, (_, i) => `tag-${i}`),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(createdSongs).toHaveLength(0);
+    const body = await response.json() as { error: string; issues: Array<{ path: string }> };
+    expect(body.error).toBe("validation_error");
+    expect(body.issues.some((issue) => issue.path === "tags")).toBe(true);
+  });
+
+  it("rejects an artwork palette that exceeds the item bound (#311)", async () => {
+    const response = await POST(buildRequest({
+      id: "song_palette_flood",
+      title: "Palette Flood",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: {
+        ...BASE_VISUAL_CONFIG,
+        artwork: {
+          id: "art_1",
+          bucket: "tidal_mineral",
+          title: "Test",
+          artist: "Tester",
+          year: "2026",
+          source: "met",
+          sourceUrl: "https://example.com/art",
+          imagePath: "/artworks/x.jpg",
+          license: "Public Domain",
+          crop: { x: 0.5, y: 0.5, scale: 1 },
+          palette: Array.from({ length: 40 }, () => "#abcdef"),
+        },
+      },
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(400);
+    expect(createdSongs).toHaveLength(0);
+    const body = await response.json() as { error: string; issues: Array<{ path: string }> };
+    expect(body.error).toBe("validation_error");
+    expect(body.issues.some((issue) => issue.path.includes("palette"))).toBe(true);
   });
 
   it("rejects malformed payloads instead of forwarding raw JSON into persistence", async () => {
@@ -556,5 +684,278 @@ describe("POST /api/songs", () => {
     const body = await response.json() as { error?: string; requestId?: string };
     expect(body.error).toBe("save_unavailable");
     expect(body.requestId).toBe("req_registered_db_down");
+  });
+
+  it("uploads rendered audio to object storage and persists an object URL, not base64 (#292)", async () => {
+    const { store, puts } = makeRecordingStore();
+    __setObjectStoreForTesting(store);
+
+    const response = await POST(buildRequest({
+      id: "song_audio_object",
+      title: "Object Master",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      mp3DataUrl: SAMPLE_MP3_DATA_URL,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(puts).toHaveLength(1);
+    expect(puts[0]?.key).toContain("songs/master/usr_song/song_audio_object");
+    expect(createdSongs).toHaveLength(1);
+    // The persisted row references object storage and carries NO embedded base64.
+    expect(createdSongs[0]?.mp3Url).toBe(`https://cdn.test/${puts[0]!.key}`);
+    expect(createdSongs[0]?.mp3StorageKey).toBe(puts[0]!.key);
+    expect(createdSongs[0]?.mp3DataUrl).toBeNull();
+    expect(response.headers.get("X-Murmur-Audio-Storage")).toBeNull();
+  });
+
+  it("persists no audio fields when the save carries no rendered audio (#292)", async () => {
+    __setObjectStoreForTesting(makeRecordingStore().store);
+    const response = await POST(buildRequest({
+      id: "song_audio_none",
+      title: "Silent Draft",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(createdSongs[0]?.mp3Url).toBeNull();
+    expect(createdSongs[0]?.mp3StorageKey).toBeNull();
+    expect(createdSongs[0]?.mp3DataUrl).toBeNull();
+  });
+
+  it("falls back to an embedded data URL and flags it when object storage is unavailable (#292)", async () => {
+    const failingStore: ObjectStore = {
+      driver: "memory",
+      async put() {
+        throw new Error("driver_unconfigured");
+      },
+      async get() {
+        return null;
+      },
+      async delete() {},
+      url(key) {
+        return `memory://${key}`;
+      },
+    };
+    __setObjectStoreForTesting(failingStore);
+
+    const response = await POST(buildRequest({
+      id: "song_audio_fallback",
+      title: "Fallback Master",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      mp3DataUrl: SAMPLE_MP3_DATA_URL,
+      visualConfig: {
+        preset: "soft_gradient",
+        gradient: "linear-gradient(135deg, #f6d365, #fda085)",
+        particleDensity: 0.4,
+        pulseSource: "energy",
+      },
+      arrangementState: {
+        melody: { enabled: true, intensity: 0.8, originalPattern: "60", currentPattern: "60", instrument: "piano", versionHistory: [] },
+        chords: { enabled: true, intensity: 0.6, originalPattern: "gen:sunset", currentPattern: "gen:sunset", instrument: "felt_piano", versionHistory: [] },
+        strings: { enabled: false, intensity: 0.3, originalPattern: "pad", currentPattern: "pad", instrument: "string_ensemble", versionHistory: [] },
+        drums: { enabled: false, intensity: 0.2, originalPattern: "none", currentPattern: "none", instrument: "brush_kit", versionHistory: [] },
+        bass: { enabled: true, intensity: 0.4, originalPattern: "root", currentPattern: "root", instrument: "upright_bass", versionHistory: [] },
+        texture: { enabled: true, intensity: 0.2, originalPattern: "air", currentPattern: "air", instrument: "vinyl_noise", versionHistory: [] },
+      },
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Murmur-Audio-Storage")).toBe("fallback-data-url");
+    expect(createdSongs[0]?.mp3Url).toBeNull();
+    expect(createdSongs[0]?.mp3DataUrl).toBe(SAMPLE_MP3_DATA_URL);
+  });
+
+  it("stamps the artifact version and persists the canonical melody + provenance (#297)", async () => {
+    const melody = {
+      notes: [{ pitch: 62, start: 0, duration: 0.5, velocity: 0.8, confidence: 0.9 }],
+      key: "D",
+      scale: "minor",
+      bpm: 92,
+      duration: 12,
+      contour: "wave",
+    };
+    const response = await POST(buildRequest({
+      id: "song_artifact_v2",
+      title: "Versioned",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 92,
+      keySignature: "D",
+      scaleType: "minor",
+      duration: 12,
+      melody,
+      provenance: { flow: "flow_abc", draftId: "draft_abc", sourceType: "hum" },
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: ["night"],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(createdSongs[0]?.artifactVersion).toBe(2);
+    expect(createdSongs[0]?.melody).toEqual(melody);
+    expect(createdSongs[0]?.provenance).toEqual({ flow: "flow_abc", draftId: "draft_abc", sourceType: "hum" });
+    expect(typeof createdSongs[0]?.saveFingerprint).toBe("string");
+  });
+
+  it("derives root + depth from the owned parent, overriding client-supplied lineage (#297)", async () => {
+    existingConflictSong = {
+      id: "song_parent",
+      userId: "usr_song",
+      rootSongId: "song_true_root",
+      lineageDepth: 3,
+    };
+
+    const response = await POST(buildRequest({
+      id: "song_child",
+      title: "Child Branch",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      parentSongId: "song_parent",
+      // Client lies about root/depth — the server must ignore these.
+      rootSongId: "client_root_lie",
+      lineageDepth: 0,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(createdSongs[0]?.parentSongId).toBe("song_parent");
+    expect(createdSongs[0]?.rootSongId).toBe("song_true_root");
+    expect(createdSongs[0]?.lineageDepth).toBe(4);
+  });
+
+  it("returns a payload conflict when a same-id save carries different content (#297)", async () => {
+    createSongError = Object.assign(new Error("duplicate key value violates unique constraint"), {
+      code: "23505",
+      constraint: "songs_pkey",
+    });
+    existingConflictSong = {
+      id: "song_fp",
+      userId: "usr_song",
+      title: "Original Content",
+      saveFingerprint: "not-a-matching-fingerprint",
+    };
+
+    const response = await POST(buildRequest({
+      id: "song_fp",
+      title: "Different Content",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(409);
+    const body = await response.json() as { error: string };
+    expect(body.error).toBe("song_payload_conflict");
+  });
+
+  it("replays idempotently when a same-id save carries matching content (#297)", async () => {
+    const matchingFingerprint = computeSaveFingerprint({
+      title: "Same Content",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      sourceMelodyKind: "corrected",
+      editCount: 0,
+      editDepth: "fresh",
+      parentSongId: null,
+      rootSongId: "song_fp_match",
+      lineageDepth: 0,
+      tags: [],
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      melody: null,
+      provenance: null,
+      mp3Url: null,
+      mp3StorageKey: null,
+      mp3DataUrl: null,
+    });
+    createSongError = Object.assign(new Error("duplicate key value violates unique constraint"), {
+      code: "23505",
+      constraint: "songs_pkey",
+    });
+    existingConflictSong = {
+      id: "song_fp_match",
+      userId: "usr_song",
+      title: "Same Content",
+      saveFingerprint: matchingFingerprint,
+    };
+
+    const response = await POST(buildRequest({
+      id: "song_fp_match",
+      title: "Same Content",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Murmur-Idempotent-Replay")).toBe("song");
   });
 });

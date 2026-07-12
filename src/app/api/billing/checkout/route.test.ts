@@ -21,6 +21,7 @@ const createdSessions: Array<Record<string, unknown>> = [];
 let waffoConfigured = true;
 let zpayConfigured = false;
 let zpayCheckoutEnabled = false;
+const zpayOrderId = "0123456789abcdef0123456789abcdef";
 const zpayCreateOrder = mock(async () => ({
   payUrl: "https://zpay.test/pay",
   tradeNo: "zpay_trade_123",
@@ -42,6 +43,7 @@ mock.module("@/lib/billing/waffo", () => ({
 }));
 
 mock.module("@/lib/billing/zpay", () => ({
+  createZpayOrderId: () => zpayOrderId,
   isZpayConfigured: () => zpayConfigured,
   isZpayCheckoutEnabled: () => zpayCheckoutEnabled,
   zpayCreateOrder,
@@ -186,7 +188,7 @@ describe("POST /api/billing/checkout", () => {
     });
   });
 
-  it("keeps the billing email on pending Zpay purchases", async () => {
+  it("persists and sends an opaque provider-safe ZPay order id", async () => {
     zpayConfigured = true;
     zpayCheckoutEnabled = true;
 
@@ -201,15 +203,22 @@ describe("POST /api/billing/checkout", () => {
 
     expect(response.status).toBe(200);
     expect(zpayCreateOrder).toHaveBeenCalledTimes(1);
+    expect(zpayCreateOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ outTradeNo: zpayOrderId }),
+    );
     expect(purchaseInserts).toHaveLength(1);
     expect(purchaseInserts[0]).toMatchObject({
       provider: "zpay",
+      providerRef: zpayOrderId,
       currency: "CNY",
       rawPayload: {
         payMethod: "wxpay",
+        outTradeNo: zpayOrderId,
         billingEmail: "wechat-receipt@test.local",
       },
     });
+    expect(zpayOrderId.length).toBeLessThanOrEqual(32);
+    expect(zpayOrderId).not.toContain(":");
   });
 
   it("blocks WeChat checkout when Zpay credentials exist but the launch gate is closed", async () => {

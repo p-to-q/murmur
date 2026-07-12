@@ -25,7 +25,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ArrowLeft, Copy, MoreHorizontal, Pause, Play } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,6 +46,7 @@ import {
   buildSavedSongRemixVersions,
 } from "@/modules/music/saved-song-version";
 import { buildLineageTrail } from "@/modules/music/lineage";
+import { isIncompleteSongArtifact } from "@/modules/music/song-artifact";
 import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
@@ -81,10 +82,46 @@ type ExportKey = "audio" | "video" | "share" | "link";
 type ShareCardMode = "image" | "video";
 const CJK_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
 
+// Pick the download extension for an audio source. Handles both legacy base64
+// data URLs (`data:audio/wav;\u2026`) and object-storage URLs (`\u2026/master.wav`);
+// defaults to mp3, which is what the renderer emits on the happy path.
+function audioFileExtension(audioSrc: string): "wav" | "mp3" {
+  if (/^data:audio\/(wav|x-wav|wave)/i.test(audioSrc)) return "wav";
+  if (/\.wav(?:[?#]|$)/i.test(audioSrc)) return "wav";
+  return "mp3";
+}
+
+// Shared entry-motion vocabulary for the detail screen: a staggered
+// fade + slide-up on the app's signature ease. Honors reduced-motion by
+// collapsing to an instant, offset-free reveal. Spread onto any motion.*.
+type EntryOpts = { y?: number; scale?: number; delay?: number; duration?: number };
+function entryMotion(reduce: boolean | null, opts: EntryOpts = {}) {
+  const { y = 0, scale, delay = 0, duration = 0.55 } = opts;
+  if (reduce) {
+    return { initial: false as const, animate: { opacity: 1 } };
+  }
+  const initial: { opacity: number; y?: number; scale?: number } = { opacity: 0 };
+  const animate: { opacity: number; y?: number; scale?: number } = { opacity: 1 };
+  if (y) {
+    initial.y = y;
+    animate.y = 0;
+  }
+  if (scale) {
+    initial.scale = scale;
+    animate.scale = 1;
+  }
+  return {
+    initial,
+    animate,
+    transition: { delay, duration, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
+  };
+}
+
 export function SongDetailScreen({ songId }: { songId: string }) {
   const router = useRouter();
   const t = useTranslator();
   const lang = useI18nStore((s) => s.lang);
+  const reduceMotion = useReducedMotion();
   const setCurrentVersion = useMurmurStore((state) => state.setCurrentVersion);
   const setVibeVersions = useMurmurStore((state) => state.setVibeVersions);
   const setCurrentDraftId = useMurmurStore((state) => state.setCurrentDraftId);
@@ -266,7 +303,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     }
     setBusy("audio");
     try {
-      const ext = audioSrc.startsWith("data:audio/wav") ? "wav" : "mp3";
+      const ext = audioFileExtension(audioSrc);
       const a = document.createElement("a");
       a.href = audioSrc;
       a.download = `${slug}.${ext}`;
@@ -584,13 +621,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         </div>
 
         {/* ── Body ─────────────────────────────────────────────────── */}
-        <div className="flex-1 px-5 md:px-10 lg:px-16 pb-16">
+        <div className="flex-1 px-5 md:px-10 lg:px-16 pb-28">
           <div className="mx-auto max-w-2xl">
             {/* Cover */}
             <motion.div
-              initial={{ opacity: 0, y: 14, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+              {...entryMotion(reduceMotion, { y: 14, scale: 0.97, duration: 0.7 })}
               className="relative overflow-hidden rounded-[26px] md:rounded-[32px] cursor-pointer select-none border border-white/40 shadow-[0_28px_70px_rgba(26,26,26,0.12)]"
               style={{ aspectRatio: "4/3" }}
               onClick={() => {
@@ -647,9 +682,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
             {/* Meta row */}
             <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.55 }}
+              {...entryMotion(reduceMotion, { y: 6, delay: 0.1 })}
               className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] uppercase tracking-[0.22em] text-[#8C8780]"
             >
               <span className="tabular-nums">{song.bpm ?? 80} BPM</span>
@@ -662,9 +695,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.13, duration: 0.55 }}
+              {...entryMotion(reduceMotion, { y: 6, delay: 0.13 })}
               className="mt-4 rounded-[20px] border border-[#E5DDD0] bg-[#FFFEFB]/80 px-4 py-3"
             >
               <p className="text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
@@ -682,9 +713,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
             {/* Editorial caption */}
             <motion.p
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.18, duration: 0.55 }}
+              {...entryMotion(reduceMotion, { y: 6, delay: 0.18 })}
               className="font-serif-italic mt-3 text-[14px] leading-[1.55] text-[#6F6A63] md:text-[15px]"
             >
               {(t("song.caption") || "Made by humming, {date}.").replace(
@@ -697,6 +726,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               song={song}
               melodyOrigin={melodyOrigin}
               t={t}
+              reduceMotion={reduceMotion}
             />
 
             <LineagePanel
@@ -706,21 +736,34 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               t={t}
               lang={lang}
               onOpenSong={(id) => router.push(`/song/${id}`)}
+              reduceMotion={reduceMotion}
             />
+
+            {/* Incomplete/draft state — audio never rendered (#291) */}
+            {isIncompleteSongArtifact(song) && (
+              <motion.div
+                {...entryMotion(reduceMotion, { y: 6, delay: 0.2 })}
+                className="mt-10 rounded-[18px] border border-[#E7C9B3] bg-[#FBF1E9] px-5 py-4"
+              >
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[#B26B45]">
+                  {t("song.incomplete.badge") || "Incomplete draft"}
+                </p>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-[#8A6A57]">
+                  {t("song.incomplete.body") ||
+                    "This song's audio didn't finish rendering, so it can't be shared or downloaded yet. Reopen it in the studio to finish it."}
+                </p>
+              </motion.div>
+            )}
 
             {/* Export list */}
             <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.24, duration: 0.5 }}
+              {...entryMotion(reduceMotion, { delay: 0.24, duration: 0.5 })}
               className="eyebrow mt-12 text-[#FF8A5C]"
             >
               {t("song.export.eyebrow") || "EXPORT"}
             </motion.p>
             <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.28, duration: 0.55 }}
+              {...entryMotion(reduceMotion, { y: 6, delay: 0.28 })}
               className="mt-3 divide-y divide-[#E5DDD0] border-t border-b border-[#E5DDD0]"
             >
               <ExportRow
@@ -768,9 +811,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
             {/* Tertiary footer */}
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4, duration: 0.5 }}
+              {...entryMotion(reduceMotion, { delay: 0.4, duration: 0.5 })}
               className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-2"
             >
               <button
@@ -969,6 +1010,7 @@ function LineagePanel({
   t,
   lang,
   onOpenSong,
+  reduceMotion,
 }: {
   song: Song;
   parentSong: RelatedSong | null;
@@ -976,6 +1018,7 @@ function LineagePanel({
   t: (key: string) => string;
   lang: Lang;
   onOpenSong: (id: string) => void;
+  reduceMotion: boolean | null;
 }) {
   const hasBranchContext =
     song.lineageDepth && song.lineageDepth > 0
@@ -989,9 +1032,7 @@ function LineagePanel({
   if (!hasBranchContext) {
     return (
       <motion.details
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.21, duration: 0.55 }}
+        {...entryMotion(reduceMotion, { y: 6, delay: 0.21 })}
         className="mt-6 rounded-[20px] border border-[#E5DDD0] bg-white/78 px-4 py-4"
       >
         <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
@@ -1006,9 +1047,7 @@ function LineagePanel({
 
   return (
     <motion.details
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.21, duration: 0.55 }}
+      {...entryMotion(reduceMotion, { y: 6, delay: 0.21 })}
       className="mt-6 rounded-[20px] border border-[#E5DDD0] bg-white/78 px-4 py-4"
     >
       <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">
@@ -1048,10 +1087,12 @@ function SourceTracePanel({
   song,
   melodyOrigin,
   t,
+  reduceMotion,
 }: {
   song: Song;
   melodyOrigin: ReturnType<typeof getMelodyOriginCopy>;
   t: (key: string) => string;
+  reduceMotion: boolean | null;
 }) {
   const depth = song.lineageDepth ?? 0;
   const branchLabel =
@@ -1064,9 +1105,7 @@ function SourceTracePanel({
 
   return (
     <motion.details
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.2, duration: 0.55 }}
+      {...entryMotion(reduceMotion, { y: 6, delay: 0.2 })}
       className="mt-6 rounded-[20px] border border-[#E5DDD0] bg-white/78 px-4 py-4"
     >
       <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.24em] text-[#B7AEA1]">

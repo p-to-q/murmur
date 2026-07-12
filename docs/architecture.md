@@ -103,6 +103,13 @@ flowchart TB
 ### 4. Platform concerns
 
 - Auth is session-based in production.
+- Logout is fail-closed across the client/server boundary. When the Murmur
+  cookie contains an active token, the logout route attempts server revocation;
+  if that operation is unavailable, it returns a non-success response without
+  clearing the cookie. A successful response means revocation processing
+  completed and the cookie was cleared (`revoked: false` is valid when no
+  active token existed). The client preserves its local identity and offers a
+  retry unless it receives that successful response.
 - Local Creator is a lightweight account with a real `users.id`, a Murmur
   session cookie, and 5 notes once for the current browser. Live hums spend
   that finite server ledger when the Local Creator session exists; pure guest
@@ -150,7 +157,12 @@ flowchart TB
   still client-orchestrated clip-by-clip; sibling clips share a browser-minted
   generation batch id (`x-generation-batch-id`) so their pushes and inbox
   entries collapse to one per batch (see "Generation Batch Semantics" in
-  `docs/notifications.md`). Generation batch pushes are now collapsed per batch
+  `docs/notifications.md`). After 60 seconds continuously hidden, the browser
+  cancels active requests and turns remaining pending Vibe cards into an
+  explicit retry state; it does not auto-retry because a new attempt may have
+  paid-generation consequences. Durable paid clip identity and resume/query
+  recovery remain tracked separately in issue #300. Generation batch pushes
+  are now collapsed per batch
   (`src/app/api/notifications/cron/route.ts`). Fully durable "batch finished
   after browser exit" notifications still require a future server-side generation
   job queue.
