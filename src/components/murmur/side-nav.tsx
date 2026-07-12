@@ -165,7 +165,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
         borderBottomRightRadius: collapsed ? "16px" : "0px",
         overflow: "hidden",
       }}
-      aria-label="Primary navigation"
+      aria-label="Sidebar"
     >
       {/* ── Brand area — abs-positioned children for smooth transition ── */}
       <div className="relative z-10 h-[60px]">
@@ -231,6 +231,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
       <LayoutGroup id="side-nav">
         <nav
           className="relative z-10 mt-12"
+          aria-label="Primary navigation"
           style={{
             paddingLeft: collapsed ? 0 : 28,
             paddingRight: collapsed ? 0 : 28,
