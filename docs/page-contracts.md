@@ -61,9 +61,9 @@ Interaction rules that should remain true:
   collapsing into generic retry copy
 - browser recording failures should surface as a quiet card with a stable
   retry or demo action
-- first-run onboarding owns the full viewport while visible: any click advances
-  the copy, the final onboarding click only dismisses the overlay, and live
-  recording remains a separate post-onboarding orb action
+- first-run onboarding owns the full viewport while visible: any click / tap /
+  Space | Enter advances the copy; the final onboarding click only dismisses
+  the overlay, and live recording remains a separate post-onboarding orb action
 - global audio-unlock hints should wait until first-run onboarding is complete
   so permission guidance does not appear inside the onboarding veil
 

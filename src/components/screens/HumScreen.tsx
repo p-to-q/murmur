@@ -1279,9 +1279,8 @@ export function HumScreen() {
               {/* White orb button */}
               <motion.button
                 ref={orbButtonRef}
-                onClick={(event) => {
+                onClick={() => {
                   if (showOnboarding && !onboardingRippling) {
-                    event.stopPropagation();
                     handleOnboardingPress();
                     return;
                   }
@@ -1518,6 +1517,7 @@ export function HumScreen() {
         revealRadius={revealRadius}
         rippling={onboardingRippling}
         line={onboardingLine}
+        onAdvance={handleOnboardingPress}
       />
     </div>
   );

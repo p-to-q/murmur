@@ -260,18 +260,13 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
               style={i > 0 ? { borderColor: collapsed ? "transparent" : "rgba(229,221,208,0.7)", transition: "border-color 0.3s" } : undefined}
             >
               <div className="relative flex h-9 items-center">
-                {/* Active-row wash — a soft coral highlight that glides between
-                    destinations (shared layoutId), giving the active item a
-                    clear-but-quiet zone. Expanded only; sits behind the label. */}
-                {isActive && !collapsed && (
-                  <motion.span
-                    layoutId="side-nav-active-bg"
-                    className="pointer-events-none absolute inset-y-0 -left-4 -right-3 rounded-[12px] bg-[#FF5924]/[0.07]"
-                    initial={false}
-                    transition={{ layout: { duration: 0.46, ease: [0.16, 1, 0.3, 1] } }}
-                    aria-hidden
-                  />
-                )}
+                {/* Active-row wash removed 2026-07-12:
+                    Previously a `bg-[#FF5924]/[0.07]` rounded-[12px] overlay
+                    that covered the entire active destination row. Users found
+                    the "light orange backdrop" distracting — the left-edge
+                    marker (side-nav-active-marker) is sufficient alone.
+                    See docs/adr/0001-remove-side-nav-active-bg.md */}
+
                 {/* Dot — crossfades in when collapsed */}
                 <div
                   className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
@@ -287,7 +282,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                       }`}
                     />
                     {item.href === "/gallery" && (
-                      <NotificationBadge className="absolute -top-1.5 -right-2.5 scale-75" />
+                      <NotificationBadge className="absolute -top-2.5 -right-3" />
                     )}
                   </span>
                 </div>

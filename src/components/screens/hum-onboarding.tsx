@@ -9,6 +9,30 @@ import {
   useTransform,
 } from "framer-motion";
 
+/**
+ * First-run onboarding overlay for the Hum screen.
+ *
+ * Design contract:
+ *
+ * 1. The overlay is the SOLE interaction surface during onboarding steps.
+ *    It has pointer-events-auto and captures any click / tap / Space|Enter
+ *    to advance the copy. The orb button underneath is visually available
+ *    but unreachable via pointer — this keeps the user's focus on reading
+ *    rather than hunting for a specific tap target.
+ *
+ * 2. During the final "melt web" reveal animation (rippling = true) the
+ *    overlay becomes pointer-events-none and aria-hidden so the orb, now
+ *    visible and unfrozen, becomes the active interaction surface for
+ *    live recording.
+ *
+ * 3. Keyboard users reach the overlay via its role="button" + tabIndex={0}.
+ *    Space / Enter on the overlay advance the step. If keyboard focus
+ *    falls on the orb behind the overlay, the orb also delegates to
+ *    handleOnboardingPress — the parent co-ordinates the two paths.
+ *
+ * See docs/page-contracts.md for the product-level contract.
+ */
+
 type OrbCenter = {
   x: number;
   y: number;
@@ -21,6 +45,7 @@ interface HumOnboardingOverlayProps {
   revealRadius: MotionValue<number>;
   rippling: boolean;
   line: string;
+  onAdvance: () => void;
 }
 
 const MYMIND_EASE = [0.22, 1, 0.36, 1] as const;
@@ -44,6 +69,7 @@ export function HumOnboardingOverlay({
   revealRadius,
   rippling,
   line,
+  onAdvance,
 }: HumOnboardingOverlayProps) {
   const reduceMotion = useReducedMotion();
   const canRender = visible && orbCenter.y > 0;
@@ -65,8 +91,23 @@ export function HumOnboardingOverlay({
       {canRender && (
         <motion.div
           key="hum-onboarding"
-          aria-hidden="true"
-          className="fixed inset-0 z-[60] pointer-events-none"
+          aria-hidden={rippling}
+          className={[
+            "fixed inset-0 z-[60]",
+            rippling ? "pointer-events-none" : "pointer-events-auto cursor-pointer",
+          ].join(" ")}
+          onClick={() => {
+            if (!rippling) onAdvance();
+          }}
+          onKeyDown={(e) => {
+            if (rippling) return;
+            if (e.key === " " || e.key === "Enter") {
+              e.preventDefault();
+              onAdvance();
+            }
+          }}
+          role={rippling ? undefined : "button"}
+          tabIndex={rippling ? undefined : 0}
           exit={{ opacity: 0 }}
           transition={{ duration: reduceMotion ? 0.15 : 0.28 }}
         >

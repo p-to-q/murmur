@@ -1,5 +1,3 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#1A1A1A"/>
-  <path d="M18 20c0-2.2 1.8-4 4-4h20c2.2 0 4 1.8 4 4v24c0 2.2-1.8 4-4 4H22c-2.2 0-4-1.8-4-4V20z" fill="#F5F1EB" opacity="0.08"/>
-  <path d="M22 38V26l6 6 8-12 6 12 4-4v10" fill="none" stroke="#F5F1EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 180 180" width="180" height="180">
+  <image href="/brand/murmur-app-icon-180-rounded.png" width="180" height="180"/>
 </svg>
