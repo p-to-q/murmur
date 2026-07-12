@@ -201,7 +201,7 @@ function RailStep({
         isUpcoming ? "opacity-[0.76]" : "opacity-100",
       )}
     >
-      <span className={textClass}>{label}</span>
+      <span className={textClass} title={label}>{label}</span>
       {isCurrent ? (
         <motion.span
           layoutId="mobile-rail-active-line"
@@ -222,7 +222,6 @@ function RailStep({
       <button
         type="button"
         onClick={onHomeClick}
-        aria-label={label}
         aria-current={isCurrent ? "page" : undefined}
         data-mobile-rail-active={isCurrent ? "true" : undefined}
         className={cls}
@@ -235,7 +234,6 @@ function RailStep({
   return (
     <Link
       href={href}
-      aria-label={label}
       aria-current={isCurrent ? "page" : undefined}
       data-mobile-rail-active={isCurrent ? "true" : undefined}
       className={cls}
