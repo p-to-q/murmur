@@ -282,7 +282,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                       }`}
                     />
                     {item.href === "/gallery" && (
-                      <NotificationBadge className="absolute -top-2.5 -right-3" />
+                      <NotificationBadge className="absolute -top-2 -right-2.5" />
                     )}
                   </span>
                 </div>
