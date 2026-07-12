@@ -319,7 +319,13 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
           return (
             <Fragment key={item.href}>
               {item.href === "/" ? (
-                <button type="button" onClick={goHome} onPointerDown={() => setOptimisticPath(resolveHomeTarget())} className="block w-full text-left group">
+                <button
+                  type="button"
+                  onClick={goHome}
+                  onPointerDown={() => setOptimisticPath(resolveHomeTarget())}
+                  className="block w-full text-left group"
+                  title={label}
+                >
                   {row}
                 </button>
               ) : (
@@ -328,6 +334,7 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                   onPointerDown={() => setOptimisticPath(item.href)}
                   onClick={() => setOptimisticPath(item.href)}
                   className="block group"
+                  title={label}
                   suppressHydrationWarning
                 >
                   {row}
