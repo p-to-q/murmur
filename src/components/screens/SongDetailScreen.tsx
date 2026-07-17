@@ -57,7 +57,11 @@ import {
   type SongShareRequestErrorCode,
 } from "@/lib/api/song-share";
 import { hasSongShareAudio } from "@/lib/share/song-share";
-import { formatShareSupportCode, formatSupportCode } from "@/lib/observability/support-code";
+import {
+  formatShareSupportCode,
+  formatSupportCode,
+  formatVibeSupportCode,
+} from "@/lib/observability/support-code";
 import {
   ApiEnvelopeError,
   apiErrorEnvelopeFrom,
@@ -137,6 +141,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const [busy, setBusy] = useState<ExportKey | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRemixing, setIsRemixing] = useState(false);
   const [shareCardOpen, setShareCardOpen] = useState(false);
   const [shareCardMode, setShareCardMode] = useState<ShareCardMode>("image");
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -514,8 +519,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     router.push("/studio");
   };
 
-  const handleRemixAgain = () => {
-    void buildSavedSongRemixVersions(song).then((versions) => {
+  const handleRemixAgain = async () => {
+    if (isRemixing) return;
+    setIsRemixing(true);
+    try {
+      const versions = await buildSavedSongRemixVersions(song);
       // Magenta is the only engine — an empty batch means the worker is
       // unreachable. Keep the user on the song rather than pushing an empty
       // /vibe, and tell them to retry.
@@ -541,7 +549,14 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         })
         .catch(() => {});
       router.push("/vibe");
-    });
+    } catch (error) {
+      console.error("[SongDetail] remix error:", error);
+      toast.error(t("vibe.gen.engine_warming") || "Music engine is warming up — try again in a moment.", {
+        description: formatVibeSupportCode({ code: "remix_failed", requestId: null }),
+      });
+    } finally {
+      setIsRemixing(false);
+    }
   };
 
   return (
@@ -807,9 +822,12 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               <button
                 type="button"
                 onClick={handleRemixAgain}
-                className="font-serif-italic text-[15px] text-[#1A1A1A] hover:text-[#B83212] underline-mm transition-colors"
+                disabled={isRemixing}
+                className="font-serif-italic text-[15px] text-[#1A1A1A] hover:text-[#B83212] underline-mm transition-colors disabled:pointer-events-none disabled:opacity-50"
               >
-                {t("song.remix_again") || "Try new versions"}
+                {isRemixing
+                  ? (t("vibe.gen.brewing") || "Brewing")
+                  : (t("song.remix_again") || "Try new versions")}
               </button>
               <button
                 type="button"

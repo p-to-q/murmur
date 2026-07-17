@@ -5,7 +5,7 @@ import {
 } from "@/lib/auth/local-creator-client";
 import { __resetCurrentAccountCacheForTesting } from "@/lib/hooks/use-current-account";
 import { __resetUserBalanceCacheForTesting } from "@/lib/hooks/use-user-balance";
-import { loadGallerySongsOnce } from "./GalleryScreen";
+import { gallerySongHref, loadGallerySongsOnce } from "./GalleryScreen";
 
 const originalFetch = globalThis.fetch;
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -222,5 +222,17 @@ describe("loadGallerySongsOnce", () => {
     expect(songs).toBeNull();
     expect(songFetches).toBe(2);
     expect(bootstrapFetches).toBe(1);
+  });
+});
+
+describe("gallerySongHref", () => {
+  it("keeps demo cards from navigating to missing song details", () => {
+    expect(gallerySongHref("demo-1", true)).toBe("/");
+    expect(gallerySongHref("song_real", true)).toBe("/song/song_real");
+  });
+
+  it("opens persisted songs from the song detail route", () => {
+    expect(gallerySongHref("song_real", false)).toBe("/song/song_real");
+    expect(gallerySongHref("demo-1", false)).toBe("/song/demo-1");
   });
 });

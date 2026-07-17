@@ -95,6 +95,10 @@ const DEMO_SONGS: SongWithMeta[] = [
   },
 ];
 
+export function gallerySongHref(songId: string, isShowingDemo: boolean): string {
+  return isShowingDemo && songId.startsWith("demo-") ? "/" : `/song/${songId}`;
+}
+
 function displayVibe(song: SongWithMeta, lang: Lang): string {
   return displayVibeLabel(song.vibe, song.tags, lang);
 }
@@ -215,9 +219,9 @@ export function GalleryScreen() {
           metadata: { type: "open_song", song_id: song.id },
         })
         .catch(() => {});
-      router.push(`/song/${song.id}`);
+      router.push(gallerySongHref(song.id, isShowingDemo));
     },
-    [displaySongs, router],
+    [displaySongs, isShowingDemo, router],
   );
 
   const handleDeleteRequest = useCallback(

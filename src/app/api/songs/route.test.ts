@@ -38,6 +38,16 @@ let nextAuth: ResolvedRequestAuth = {
 };
 
 const createdSongs: Array<Record<string, unknown>> = [];
+const compositionEvents: Array<Record<string, unknown>> = [];
+const createCompositionEventMock = mock(async (data: Record<string, unknown>) => {
+  compositionEvents.push(data);
+  return {
+    id: "cmp_test",
+    ...data,
+    occurredAt: new Date("2026-06-05T12:00:00.000Z"),
+    createdAt: new Date("2026-06-05T12:00:00.000Z"),
+  };
+});
 let createSongError: unknown = null;
 const createSongMock = mock(async (data: Record<string, unknown>) => {
   if (createSongError) throw createSongError;
@@ -94,6 +104,11 @@ mock.module("@/lib/db/queries/songs", () => ({
   updateSongForUser: mock(async () => null),
 }));
 
+mock.module("@/lib/db/queries/composition-events", () => ({
+  createCompositionEvent: createCompositionEventMock,
+  listCompositionTrainingExamples: mock(async () => []),
+}));
+
 const { POST } = await import("./route");
 const { resetLocalSongFallbackForTests } = await import("@/lib/db/queries/local-song-fallback");
 
@@ -123,8 +138,10 @@ beforeEach(async () => {
     sessionId: "sess_song",
   };
   createdSongs.length = 0;
+  compositionEvents.length = 0;
   createSongMock.mockClear();
   createSongWithSpendMock.mockClear();
+  createCompositionEventMock.mockClear();
   getSongByIdMock.mockClear();
   createSongError = null;
   createSongWithSpendError = null;
@@ -841,6 +858,22 @@ describe("POST /api/songs", () => {
     expect(createdSongs[0]?.melody).toEqual(melody);
     expect(createdSongs[0]?.provenance).toEqual({ flow: "flow_abc", draftId: "draft_abc", sourceType: "hum" });
     expect(typeof createdSongs[0]?.saveFingerprint).toBe("string");
+    expect(createCompositionEventMock).toHaveBeenCalledTimes(1);
+    expect(compositionEvents[0]).toEqual(expect.objectContaining({
+      userId: "usr_song",
+      songId: "song_artifact_v2",
+      draftId: "draft_abc",
+      flowId: "flow_abc",
+      eventKind: "song.saved",
+      source: "server",
+    }));
+    expect(compositionEvents[0]?.payload).toEqual(expect.objectContaining({
+      requestId: "req_song",
+      artifactVersion: 2,
+      sourceMelodyKind: "corrected",
+      hasAudio: false,
+      audioStorage: "none",
+    }));
   });
 
   it("derives root + depth from the owned parent, overriding client-supplied lineage (#297)", async () => {

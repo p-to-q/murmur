@@ -12,9 +12,11 @@ name: Migrate (production)
 #                           secret is absent so a green run always means the
 #                           migration command was actually attempted.
 #
-# Migrations currently run in parallel with the native deploy. This workflow
-# does not claim that overlap is safe for every migration; ordered
-# migrate-before-deploy promotion is tracked separately in issue #307.
+# By default this workflow only migrates, because Vercel's native Git
+# integration may still own Production deploys. Once the repo owner disables
+# native Production auto-deploy for main, set the repository variable
+# VERCEL_DEPLOY_AFTER_MIGRATE=true and the secret VERCEL_DEPLOY_HOOK_URL to
+# promote Production only after migrations succeed (issue #307).
 
 on:
   push:
@@ -57,3 +59,20 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
         run: bun run db:migrate
+
+      - name: Trigger Vercel production deploy after migrations
+        env:
+          VERCEL_DEPLOY_AFTER_MIGRATE: ${{ vars.VERCEL_DEPLOY_AFTER_MIGRATE }}
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ "${VERCEL_DEPLOY_AFTER_MIGRATE:-}" != "true" ]; then
+            echo "::notice title=Production deploy not triggered::Set VERCEL_DEPLOY_AFTER_MIGRATE=true only after disabling Vercel native Production auto-deploy for main."
+            exit 0
+          fi
+
+          if [ -z "${VERCEL_DEPLOY_HOOK_URL:-}" ]; then
+            echo "::error title=Vercel deploy hook is not configured::Set VERCEL_DEPLOY_HOOK_URL before enabling VERCEL_DEPLOY_AFTER_MIGRATE."
+            exit 1
+          fi
+
+          curl --fail-with-body --show-error --silent --request POST "${VERCEL_DEPLOY_HOOK_URL}"

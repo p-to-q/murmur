@@ -113,19 +113,23 @@ migrating. This is a real race, documented honestly rather than assumed
 harmless: existing migrations create tables, alter columns, delete rows, and add
 constraints that runtime code can depend on immediately.
 
-The **recommended target cutover** (not yet implemented — a deliberate
-owner/admin action tracked in #307) is:
+The **recommended target cutover** (workflow support is checked in; activation is
+still a deliberate owner/admin action tracked in #307) is:
 
-1. disable native Production auto-deploy — either in the Vercel dashboard, or by
-   setting `git.deploymentEnabled.main = false` in `vercel.json`;
-2. add a workflow that migrates first and, only on success, triggers a
-   Production deploy via a Vercel **Deploy Hook** (`VERCEL_DEPLOY_HOOK_URL`
-   secret);
+1. create a Vercel **Deploy Hook** for Production and save it as the repository
+   secret `VERCEL_DEPLOY_HOOK_URL`;
+2. disable native Production auto-deploy for `main` in the Vercel dashboard, or
+   by setting the equivalent Vercel Git deployment setting for the production
+   branch;
 3. leave **Preview** deployments on the native integration (they carry no
-   production schema risk).
+   production schema risk);
+4. set the repository variable `VERCEL_DEPLOY_AFTER_MIGRATE=true`.
 
-Do not implement this here. Activation is an owner action because it changes how
-production ships; it is tracked in #307.
+The checked-in workflow now supports that target state: after `bun run
+db:migrate` succeeds, `.github/workflows/migrate.yml` triggers the deploy hook
+only when `VERCEL_DEPLOY_AFTER_MIGRATE=true`. Until the owner performs the
+Vercel cutover, keep that variable unset/false so this workflow does not create
+a second Production deploy on top of the native integration.
 
 ### Branch protection (issue #308)
 
@@ -143,9 +147,26 @@ application code) is:
 - require the CI **`verify`** status check (the job in
   [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) to pass;
 - require at least one approving review for non-emergency changes;
+- block force pushes and branch deletion;
+- require conversation resolution before merge;
 - define a named emergency-bypass owner with an audit expectation for any bypass.
 
 This is tracked in #308.
+
+Owner checklist:
+
+1. In GitHub, open **Settings -> Rules -> Rulesets** and create an active
+   branch ruleset targeting exactly `main`.
+2. Enable pull-request requirement, one approval, conversation resolution,
+   required status check `verify`, no force pushes, and no branch deletion.
+3. If emergency bypass is allowed, restrict it to a named owner/team and require
+   a follow-up PR or incident note that records the bypass reason.
+4. Confirm the rule with `gh api repos/:owner/:repo/rulesets` or the GitHub UI.
+
+This cannot be fully enforced by repository files alone. A checked-in workflow
+can detect damage after a push, but only a GitHub ruleset can prevent the
+unreviewed `main` write that would also trigger Production deploy and
+production migrations.
 
 ### Vercel cron constraint (learned empirically)
 

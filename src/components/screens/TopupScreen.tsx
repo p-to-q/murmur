@@ -504,10 +504,20 @@ export function TopupScreen() {
             >
               <RefreshCw className={`h-5 w-5 text-[#8C8780] ${isRefreshing ? "animate-spin" : ""}`} />
             </button>
-            <button className="flex h-9 w-9 items-center justify-center" aria-label={t("topup.search")}>
+            <button
+              type="button"
+              disabled
+              className="flex h-9 w-9 cursor-default items-center justify-center opacity-40"
+              aria-label={t("topup.search")}
+            >
               <Search className="h-5 w-5 text-[#8C8780]" />
             </button>
-            <button className="flex h-9 w-9 items-center justify-center" aria-label={t("topup.share")}>
+            <button
+              type="button"
+              disabled
+              className="flex h-9 w-9 cursor-default items-center justify-center opacity-40"
+              aria-label={t("topup.share")}
+            >
               <Share2 className="h-5 w-5 text-[#8C8780]" />
             </button>
           </div>

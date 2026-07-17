@@ -19,6 +19,8 @@ const HEIGHT = 1920;
 const FPS = 30;
 const SCALE = WIDTH / 420;
 const PAD = Math.round(28 * SCALE);
+export const VIDEO_EXPORT_AUDIO_LOAD_TIMEOUT_MS = 20_000;
+const VIDEO_EXPORT_PLAYBACK_GRACE_MS = 15_000;
 
 export type VideoExportSupport = {
   supported: boolean;
@@ -175,33 +177,44 @@ export async function renderSongVideo(
     };
   });
 
-  recorder.start();
-  draw();
+  let recorderStarted = false;
 
   try {
+    recorder.start();
+    recorderStarted = true;
+    draw();
+
     await audio.play();
-  } catch (error) {
+    await Promise.race([
+      waitForPlaybackEnd(audio),
+      stopped.then(() => {
+        throw new VideoExportError(
+          "recorder_failed",
+          "MediaRecorder stopped before playback finished",
+        );
+      }),
+    ]);
+
     recorder.stop();
-    throw error instanceof Error ? error : new Error(String(error));
+    const blob = await stopped;
+
+    opts?.onProgress?.(1);
+    return blob;
+  } catch (error) {
+    if (recorderStarted && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    throw normalizeVideoExportError(error);
+  } finally {
+    cancelAnimationFrame(rafId);
+    source.disconnect();
+    destination.disconnect();
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    mixedStream.getTracks().forEach((track) => track.stop());
+    await audioContext.close().catch(() => {});
   }
-
-  await new Promise<void>((resolve) => {
-    audio.onended = () => resolve();
-    audio.onerror = () => resolve();
-  });
-
-  recorder.stop();
-  const blob = await stopped;
-
-  source.disconnect();
-  destination.disconnect();
-  audio.pause();
-  audio.src = "";
-  mixedStream.getTracks().forEach((track) => track.stop());
-  await audioContext.close().catch(() => {});
-
-  opts?.onProgress?.(1);
-  return blob;
 }
 
 export function getVideoMimeType(): string | null {
@@ -240,10 +253,18 @@ function extensionForMimeType(mimeType: string): "mp4" | "webm" {
   return mimeType.startsWith("video/mp4") ? "mp4" : "webm";
 }
 
-function waitForMedia(audio: HTMLAudioElement): Promise<void> {
+export function waitForMedia(
+  audio: HTMLAudioElement,
+  timeoutMs = VIDEO_EXPORT_AUDIO_LOAD_TIMEOUT_MS,
+): Promise<void> {
   if (audio.readyState >= 2) return Promise.resolve();
   return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new VideoExportError("audio_load_failed", "Audio timed out while loading"));
+    }, timeoutMs);
     const cleanup = () => {
+      window.clearTimeout(timeout);
       audio.removeEventListener("loadeddata", onLoaded);
       audio.removeEventListener("error", onError);
     };
@@ -258,6 +279,45 @@ function waitForMedia(audio: HTMLAudioElement): Promise<void> {
     audio.addEventListener("loadeddata", onLoaded, { once: true });
     audio.addEventListener("error", onError, { once: true });
   });
+}
+
+export function waitForPlaybackEnd(audio: HTMLAudioElement): Promise<void> {
+  const durationMs =
+    audio.duration && Number.isFinite(audio.duration)
+      ? Math.ceil(audio.duration * 1000) + VIDEO_EXPORT_PLAYBACK_GRACE_MS
+      : VIDEO_EXPORT_AUDIO_LOAD_TIMEOUT_MS;
+
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new VideoExportError("audio_load_failed", "Audio timed out during playback"));
+    }, Math.max(durationMs, VIDEO_EXPORT_AUDIO_LOAD_TIMEOUT_MS));
+
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      audio.removeEventListener("ended", onEnded);
+      audio.removeEventListener("error", onError);
+    };
+    const onEnded = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new VideoExportError("audio_load_failed", "Audio failed during playback"));
+    };
+
+    audio.addEventListener("ended", onEnded, { once: true });
+    audio.addEventListener("error", onError, { once: true });
+  });
+}
+
+function normalizeVideoExportError(error: unknown): Error {
+  if (error instanceof VideoExportError) return error;
+  if (error instanceof Error) {
+    return new VideoExportError("audio_load_failed", error.message || "Audio failed");
+  }
+  return new VideoExportError("audio_load_failed", String(error));
 }
 
 function loadArtwork(

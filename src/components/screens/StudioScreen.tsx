@@ -170,10 +170,20 @@ function StudioContent({ version }: { version: VibeVersion }) {
     });
   };
 
-  const restartPlayback = (nextVersion: VibeVersion): boolean => {
+  const restartPlayback = useCallback(async (nextVersion: VibeVersion): Promise<boolean> => {
     versionPreview.stop();
     return versionPreview.play(nextVersion);
-  };
+  }, []);
+
+  const restartPlaybackAfterEdit = useCallback((nextVersion: VibeVersion) => {
+    void restartPlayback(nextVersion)
+      .then((didPlay) => setIsPlaying(didPlay))
+      .catch((error) => {
+        console.error("[Studio] playback restart error:", error);
+        setIsPlaying(false);
+        toast.error(t("cards.play_error") || "Couldn't play that preview.");
+      });
+  }, [restartPlayback, t]);
 
   const updateTrack = useCallback(
     (key: keyof ArrangementState, patch: Partial<TrackState>) => {
@@ -187,15 +197,15 @@ function StudioContent({ version }: { version: VibeVersion }) {
         strummerCode: generateStrummerCode(nextArrangement),
       });
       setCurrentVersion(nextVersion);
-      if (isPlaying) restartPlayback(nextVersion);
+      if (isPlaying) restartPlaybackAfterEdit(nextVersion);
     },
-    [arrangement, currentVersion, isPlaying, setCurrentVersion],
+    [arrangement, currentVersion, isPlaying, restartPlaybackAfterEdit, setCurrentVersion],
   );
 
   const handleScene = (tokens: EditToken[]) => {
     const nextVersion = applyTokens(currentVersion, tokens);
     setCurrentVersion(nextVersion);
-    if (isPlaying) restartPlayback(nextVersion);
+    if (isPlaying) restartPlaybackAfterEdit(nextVersion);
   };
 
   const handlePrompt = async (prompt: string) => {
@@ -205,7 +215,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
       if (ruleToken) {
         const nextVersion = applyTokens(currentVersion, [ruleToken]);
         setCurrentVersion(nextVersion);
-        if (isPlaying) restartPlayback(nextVersion);
+        if (isPlaying) restartPlaybackAfterEdit(nextVersion);
         toast.success(t("studio.prompt.applied"));
         memory
           .reportAction({
@@ -230,7 +240,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
       if (llmTokens.length > 0) {
         const nextVersion = applyTokens(currentVersion, llmTokens);
         setCurrentVersion(nextVersion);
-        if (isPlaying) restartPlayback(nextVersion);
+        if (isPlaying) restartPlaybackAfterEdit(nextVersion);
         toast.success(t("studio.prompt.applied"));
         memory
           .reportAction({
@@ -277,7 +287,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
       strummerCode: generateStrummerCode(restoredArrangement),
     });
     setCurrentVersion(nextVersion);
-    if (isPlaying) restartPlayback(nextVersion);
+    if (isPlaying) restartPlaybackAfterEdit(nextVersion);
     toast(t("studio.restore_toast"));
     memory
       .reportAction({
@@ -294,7 +304,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
       .catch(() => {});
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (isPlaying) {
       versionPreview.stop();
       setIsPlaying(false);
@@ -307,7 +317,17 @@ function StudioContent({ version }: { version: VibeVersion }) {
       toast(t("studio.magenta.pending") || "Audio is still brewing…");
       return;
     }
-    setIsPlaying(restartPlayback(currentVersion));
+    try {
+      const didPlay = await restartPlayback(currentVersion);
+      setIsPlaying(didPlay);
+      if (!didPlay) {
+        toast.error(t("cards.play_error") || "Couldn't play that preview.");
+      }
+    } catch (error) {
+      console.error("[Studio] playback error:", error);
+      setIsPlaying(false);
+      toast.error(t("cards.play_error") || "Couldn't play that preview.");
+    }
   };
 
   const handleSave = () => {

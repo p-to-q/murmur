@@ -176,6 +176,13 @@
       "when": 1786000000001,
       "tag": "0025_song_artifact_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1786000000002,
+      "tag": "0026_composition_events",
+      "breakpoints": true
     }
   ]
 }

@@ -45,6 +45,43 @@ Current shipped verification layers:
 That means Murmur is no longer starting from "zero tests," but it is also not
 yet at the final multi-layer target described in the rest of this document.
 
+## 1.2 First Playwright golden path (#247)
+
+There is no checked-in Playwright dependency or config yet. Do not add a
+`*.spec.ts` file that cannot run in CI. The first browser lane should land as
+one small PR that adds Playwright, a single smoke, and no broad UI assertions.
+
+Minimum smoke:
+
+1. start the app with mocked/stubbed workers and a disposable test account;
+2. open `/`;
+3. record or upload a tiny deterministic hum fixture;
+4. wait for transcription to complete and confirm the app reaches `/vibe`;
+5. generate or stub three Vibe cards and select one;
+6. confirm Studio opens with a saveable arrangement;
+7. save with a deterministic title;
+8. confirm Gallery lists the saved song;
+9. open Song detail and verify playback/share controls render without throwing.
+
+Required negative companion smoke:
+
+- music worker unavailable -> user sees a bounded error and notes are not
+  double-spent;
+- saved song share link -> public `/s/[shareCode]` renders the same title and
+  does not expose owner controls.
+
+Recommended landing shape:
+
+```text
+playwright.config.ts
+src/tests/e2e/golden-path.spec.ts
+src/tests/e2e/fixtures/hum-short.wav
+```
+
+The first PR should mark the job informational/manual unless the local and CI
+worker stubs are deterministic. Once it is stable, make it a release gate and
+keep the full cross-browser matrix for nightly runs.
+
 ---
 
 ## 2. Stack pick

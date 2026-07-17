@@ -13,14 +13,19 @@ class VersionPreview {
   private audio: HTMLAudioElement | null = null;
 
   /** Start preview. Returns false when there is nothing to play yet. */
-  play(version: VibeVersion): boolean {
+  async play(version: VibeVersion): Promise<boolean> {
     this.stop();
     if (version.generation) {
       const url = version.generation.audioUrl;
       if (!url) return false;
       const el = new Audio(url);
       el.loop = true;
-      void el.play().catch(() => {});
+      try {
+        await el.play();
+      } catch (error) {
+        el.removeAttribute("src");
+        throw error;
+      }
       this.audio = el;
       return true;
     }

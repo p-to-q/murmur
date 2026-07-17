@@ -135,6 +135,13 @@ flowchart TB
   skip cleanly so local demos remain usable.
 - Memory events are stored locally for now, which keeps user flows non-blocking.
 - Stage-based funnel tracking (`src/lib/observability/stage-tracking.ts`) records hum → vibe → studio → save → gallery transitions with dwell times. Callers explicitly pass the creation flow's existing `currentFlowId` / `VibeVersion.originFlowId` (with `draftId` as optional log context), so overlapping flows remain isolated without introducing a second analytics identity. The in-memory state is capped at 100 recently used flows; this remains structured-log observability, not durable analytics storage.
+- Composition training data has a narrow durable spine: saved songs hold the
+  canonical artifact (`melody`, `arrangementState`, `visualConfig`,
+  `provenance`, lineage, audio storage references) and `composition_events`
+  indexes lifecycle actions by user, draft, flow, generation batch, clip, and
+  song. `src/lib/db/queries/composition-events.ts` exposes the read shape used
+  for internal corpus export; event writes are best-effort and must not block
+  the user's creative save path.
 - Per-component latency budgets (`src/lib/observability/latency-budgets.ts`) define P50/P95 ceilings for transcribe, music_generate, llm_edit, and db query paths. When a component exceeds its P95, structured logs carry a `budget_exceeded` flag.
 - Language is negotiated before first paint from the explicit `murmur.lang`
   cookie first, then the request `Accept-Language` header, then the product

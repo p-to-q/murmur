@@ -15,6 +15,7 @@ import {
   createSong,
   createSongWithSpend,
 } from "@/lib/db/queries/songs";
+import { createCompositionEvent } from "@/lib/db/queries/composition-events";
 import {
   createLocalSongFallback,
   getLocalSongSummariesByUserFallback,
@@ -85,6 +86,7 @@ const songPayloadSchema = z.object({
 
 type SongPayload = z.infer<typeof songPayloadSchema>;
 type SongInput = typeof songs.$inferInsert;
+type SavedSong = typeof songs.$inferSelect;
 type OkAuth = Extract<ResolvedRequestAuth, { ok: true }>;
 
 export async function GET(req: NextRequest) {
@@ -234,6 +236,12 @@ export async function POST(req: NextRequest) {
           title: song.title,
           acceptLanguage: req.headers.get("accept-language"),
         }));
+        scheduleAfterResponse(() => recordSongSavedCompositionEvent(song, {
+          requestId,
+          userId,
+          sessionId: auth.sessionId,
+          audioStorage: resolvedAudio.audioStorage,
+        }));
 
         return NextResponse.json(song, {
           headers: { "X-Request-Id": requestId, ...audioStorageHeaders },
@@ -331,6 +339,12 @@ export async function POST(req: NextRequest) {
       songId: result.song.id,
       title: result.song.title,
       acceptLanguage: req.headers.get("accept-language"),
+    }));
+    scheduleAfterResponse(() => recordSongSavedCompositionEvent(result.song, {
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+      audioStorage: resolvedAudio.audioStorage,
     }));
 
     return NextResponse.json(result.song, {
@@ -650,9 +664,57 @@ async function publishSongSavedNotification(input: {
     });
 }
 
+async function recordSongSavedCompositionEvent(
+  song: SavedSong,
+  ctx: {
+    requestId: string;
+    userId: string;
+    sessionId: string | null;
+    audioStorage: ResolvedSongAudio["audioStorage"];
+  },
+) {
+  try {
+    const provenance = song.provenance ?? {};
+    await createCompositionEvent({
+      userId: song.userId,
+      songId: song.id,
+      draftId: typeof provenance.draftId === "string" ? provenance.draftId : null,
+      flowId: typeof provenance.flow === "string" ? provenance.flow : null,
+      generationBatchId:
+        typeof provenance.generationBatchId === "string" ? provenance.generationBatchId : null,
+      generationClipId:
+        typeof provenance.generationClipId === "string" ? provenance.generationClipId : null,
+      eventKind: "song.saved",
+      source: "server",
+      payload: {
+        requestId: ctx.requestId,
+        sessionId: ctx.sessionId,
+        artifactVersion: song.artifactVersion,
+        sourceMelodyKind: song.sourceMelodyKind,
+        editCount: song.editCount,
+        editDepth: song.editDepth,
+        lineageDepth: song.lineageDepth,
+        hasAudio: Boolean(song.mp3Url || song.mp3DataUrl),
+        audioStorage: ctx.audioStorage,
+      },
+    });
+  } catch (error) {
+    log("composition_event.write_failed", {
+      eventKind: "song.saved",
+      songId: song.id,
+      error: error instanceof Error ? error.message : String(error),
+    }, {
+      route: ROUTE,
+      requestId: ctx.requestId,
+      userId: ctx.userId,
+      sessionId: ctx.sessionId,
+      level: "warn",
+    });
+  }
+}
+
 function truncateNotificationText(value: string, maxLength: number): string {
   const trimmed = value.trim();
   if (trimmed.length <= maxLength) return trimmed;
   return `${trimmed.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }
-
