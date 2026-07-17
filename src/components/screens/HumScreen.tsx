@@ -290,6 +290,7 @@ export function HumScreen() {
   const quietSinceRef = useRef<number | null>(null);
   const heardSignalRef = useRef(false);
   const recordingStartedAtRef = useRef<number | null>(null);
+  const inputLevelStartedAtRef = useRef<number | null>(null);
   const recordingElapsedMsRef = useRef(0);
   const stopReasonRef = useRef<"manual" | "limit" | null>(null);
   const levelStateRef = useRef<"idle" | "quiet" | "heard">("idle");
@@ -800,7 +801,7 @@ export function HumScreen() {
     analyserRef.current = null;
     quietSinceRef.current = null;
     heardSignalRef.current = false;
-    recordingStartedAtRef.current = null;
+    inputLevelStartedAtRef.current = null;
     clearTimeoutRef(heardTimeoutRef);
     setShowHeardMessage(false);
     maxRmsRef.current = 0.08;
@@ -827,6 +828,7 @@ export function HumScreen() {
     quietSinceRef.current = null;
     heardSignalRef.current = false;
     recordingStartedAtRef.current = null;
+    inputLevelStartedAtRef.current = null;
 
     try {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
@@ -848,7 +850,7 @@ export function HumScreen() {
 
       const tick = (now: number) => {
         if (!analyserRef.current) return;
-        recordingStartedAtRef.current ??= now;
+        inputLevelStartedAtRef.current ??= now;
         analyserRef.current.getByteTimeDomainData(dataArray);
         // RMS amplitude, scaled up so speaking/humming reaches ~0.8-1.0
         let sum = 0;
@@ -931,7 +933,7 @@ export function HumScreen() {
   };
 
   const updateInputLevel = useCallback((rms: number) => {
-    const startedAt = recordingStartedAtRef.current;
+    const startedAt = inputLevelStartedAtRef.current;
     const elapsedMs = startedAt === null ? 0 : performance.now() - startedAt;
     const decision = nextInputLevelDecision({
       rms,
@@ -1242,7 +1244,7 @@ export function HumScreen() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.4 }}
-                    className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-[108%] w-[108%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
+                    className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-[114%] w-[114%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
                     viewBox="0 0 300 300"
                     preserveAspectRatio="xMidYMid meet"
                   >
@@ -1252,8 +1254,8 @@ export function HumScreen() {
                       cy="150"
                       r={ringRadius}
                       fill="none"
-                      stroke="rgba(255,255,255,0.25)"
-                      strokeWidth="2.5"
+                      stroke="rgba(255,89,36,0.16)"
+                      strokeWidth="3.5"
                     />
                     {/* Progress */}
                     <circle
@@ -1262,7 +1264,7 @@ export function HumScreen() {
                       r={ringRadius}
                       fill="none"
                       stroke="#FF5924"
-                      strokeWidth="2.5"
+                      strokeWidth="3.5"
                       strokeLinecap="round"
                       strokeDasharray={ringCircumference}
                       strokeDashoffset={ringOffset}

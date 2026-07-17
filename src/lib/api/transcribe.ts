@@ -376,71 +376,81 @@ async function consumeTranscribeStream(
   let buffer = "";
   let result: TranscriptionResult | null = null;
 
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (value) buffer += decoder.decode(value, { stream: true });
-
-    let newlineIdx: number;
-    while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
-      const line = buffer.slice(0, newlineIdx).trim();
-      buffer = buffer.slice(newlineIdx + 1);
-      if (!line) continue;
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch {
-        // Not JSON (e.g. a proxy error page spliced into the stream). Skip the
-        // line rather than failing the whole transcription (#224).
-        log("transcribe.stream_event_invalid", {
-          reason: "json_parse_failed",
-          preview: line.slice(0, 64),
-        }, { level: "warn" });
-        continue;
-      }
-
-      const event = parseStreamEvent(parsed);
-      if (!event) {
-        // Well-formed JSON but not a recognized event shape. Skip + log instead
-        // of dispatching an unvalidated event downstream (#224).
-        const receivedPhase = isRecord(parsed) ? parsed.phase : undefined;
-        log("transcribe.stream_event_invalid", {
-          reason: "schema_mismatch",
-          receivedPhase:
-            typeof receivedPhase === "string" ? receivedPhase : typeof receivedPhase,
-        }, { level: "warn" });
-        continue;
-      }
-
-      switch (event.phase) {
-        case "billing_ok":
-        case "worker_started":
-          dispatchProgress(onProgress, event.phase);
-          break;
-        case "interim_melody":
-          dispatchProgress(onProgress, event.phase, event.melody);
-          break;
-        case "complete":
-          dispatchProgress(onProgress, "complete");
-          result = event.result as TranscriptionResult;
-          break;
-        case "error": {
-          // A server-emitted error event is intentional control flow (not a bad
-          // event): surface it as the typed transport error so callers can pick
-          // recovery copy. This throw is deliberately not swallowed.
-          const mapped = SERVER_ERROR_TO_CLIENT[event.error];
-          throw new TranscribeRequestError({
-            code: mapped ?? statusToFallbackCode(event.status),
-            status: event.status,
-            message: event.message,
-            requestId: event.requestId,
-            currentBalance: event.currentBalance,
-          });
-        }
-      }
+  function consumeLine(line: string) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      // Not JSON (e.g. a proxy error page spliced into the stream). Skip the
+      // line rather than failing the whole transcription (#224).
+      log("transcribe.stream_event_invalid", {
+        reason: "json_parse_failed",
+        preview: line.slice(0, 64),
+      }, { level: "warn" });
+      return;
     }
 
-    if (done) break;
+    const event = parseStreamEvent(parsed);
+    if (!event) {
+      // Well-formed JSON but not a recognized event shape. Skip + log instead
+      // of dispatching an unvalidated event downstream (#224).
+      const receivedPhase = isRecord(parsed) ? parsed.phase : undefined;
+      log("transcribe.stream_event_invalid", {
+        reason: "schema_mismatch",
+        receivedPhase:
+          typeof receivedPhase === "string" ? receivedPhase : typeof receivedPhase,
+      }, { level: "warn" });
+      return;
+    }
+
+    switch (event.phase) {
+      case "billing_ok":
+      case "worker_started":
+        dispatchProgress(onProgress, event.phase);
+        break;
+      case "interim_melody":
+        dispatchProgress(onProgress, event.phase, event.melody);
+        break;
+      case "complete":
+        dispatchProgress(onProgress, "complete");
+        result = event.result as TranscriptionResult;
+        break;
+      case "error": {
+        // A server-emitted error event is intentional control flow (not a bad
+        // event): surface it as the typed transport error so callers can pick
+        // recovery copy. This throw is deliberately not swallowed.
+        const mapped = SERVER_ERROR_TO_CLIENT[event.error];
+        throw new TranscribeRequestError({
+          code: mapped ?? statusToFallbackCode(event.status),
+          status: event.status,
+          message: event.message,
+          requestId: event.requestId,
+          currentBalance: event.currentBalance,
+        });
+      }
+    }
+  }
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (value) buffer += decoder.decode(value, { stream: true });
+      if (done) buffer += decoder.decode();
+
+      let newlineIdx: number;
+      while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, newlineIdx).trim();
+        buffer = buffer.slice(newlineIdx + 1);
+        if (line) consumeLine(line);
+      }
+
+      if (done) break;
+    }
+
+    const finalLine = buffer.trim();
+    if (finalLine) consumeLine(finalLine);
+  } finally {
+    reader.releaseLock();
   }
 
   if (!result) {

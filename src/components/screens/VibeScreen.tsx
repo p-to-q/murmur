@@ -35,8 +35,6 @@ import { versionPreview } from "@/lib/music/version-preview";
 import {
   cancelActiveGeneration,
   createMagentaVersions,
-  fetchMusicEngineStatus,
-  getCachedMusicEngineStatus,
   recoverVersionAudio,
   regenerateVersionAudio,
   shouldUseMagentaEngine,
@@ -176,22 +174,12 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
   const [phase, setPhase] = useState<Phase>("closing");
   const [pickingId, setPickingId] = useState<string | null>(null);
-  const [fetchedWaitMs, setFetchedWaitMs] = useState<number | null>(null);
   const demoSeededRef = useRef(false);
   const sourceVersion = vibeVersions[0] ?? null;
   const fromSavedSong = sourceVersion?.sourceType === "library";
   const demoEnabled = initialDemo;
   const restoredRegenerationRef = useRef<number | null>(null);
 
-  // Generation progress, derived from the versions currently on screen.
-  const generatingVersions = vibeVersions.filter((v) => v.generation);
-  const brewingTotal = generatingVersions.length;
-  const readyCount = generatingVersions.filter(
-    (v) => v.generation!.status === "ready",
-  ).length;
-  const isBrewing = generatingVersions.some(
-    (v) => v.generation!.status === "pending",
-  );
   // Any version whose melody came from the client-side pitch fallback (#211).
   const anyReducedCapture = vibeVersions.some(
     (v) => v.captureQuality === "reduced",
@@ -313,28 +301,6 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     auditioningVersionId,
     setAuditioning,
   ]);
-
-  /* ── Wait estimate: surface the queue/cold-start hint while brewing ──
-     Derive the immediate hint during render (null when idle, or the cached
-     health estimate captured at the pre-generation gate) — only the async
-     fallback probe needs an effect, which avoids a synchronous setState in the
-     effect body. Cold-start waits can run into minutes, so this keeps "brewing"
-     from reading as a hang (issue #216). */
-  const waitHintMs = isBrewing
-    ? (getCachedMusicEngineStatus()?.estimatedWaitMs ?? fetchedWaitMs)
-    : null;
-  useEffect(() => {
-    if (!isBrewing) return;
-    const cached = getCachedMusicEngineStatus();
-    if (cached && cached.estimatedWaitMs != null) return;
-    let cancelled = false;
-    void fetchMusicEngineStatus().then((status) => {
-      if (!cancelled) setFetchedWaitMs(status.estimatedWaitMs ?? null);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isBrewing]);
 
   /* ── Reduced-detail capture: log once when the hint first shows (#211) ── */
   const reducedHintLoggedRef = useRef(false);
@@ -641,16 +607,14 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                       ? t("vibe.back.saved") || "Back to your song"
                       : t("vibe.back") || "Try a different hum"}
                   </motion.button>
-                  {!isBrewing && (
-                    <motion.h2
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.1, duration: 0.4 }}
-                      className="hidden md:block flex-1 text-center font-serif-italic text-[26px] text-[#8B8781]"
-                    >
-                      {t("cards.sub.short") || "Listen, then pick the one that feels right."}
-                    </motion.h2>
-                  )}
+                  <motion.h2
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.1, duration: 0.4 }}
+                    className="hidden md:block flex-1 text-center font-serif-italic text-[26px] text-[#8B8781]"
+                  >
+                    {t("cards.sub.short") || "Listen, then pick the one that feels right."}
+                  </motion.h2>
                   <motion.button
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -661,23 +625,14 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
                     {t("vibe.reroll") || "New set"} →
                   </motion.button>
                 </div>
-                {isBrewing ? (
-                  <BrewStatus
-                    readyCount={readyCount}
-                    total={brewingTotal}
-                    waitHintMs={waitHintMs}
-                    t={t}
-                  />
-                ) : (
-                  <motion.h2
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.1, duration: 0.4 }}
-                    className="md:hidden mt-3 px-2 text-center font-serif-italic text-[17px] leading-snug text-[#8B8781]"
-                  >
-                    {t("cards.sub.short") || "Listen, then pick the one that feels right."}
-                  </motion.h2>
-                )}
+                <motion.h2
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.1, duration: 0.4 }}
+                  className="md:hidden mt-3 px-2 text-center font-serif-italic text-[17px] leading-snug text-[#8B8781]"
+                >
+                  {t("cards.sub.short") || "Listen, then pick the one that feels right."}
+                </motion.h2>
                 {anyReducedCapture && <ReducedDetailHint t={t} />}
               </div>
 
@@ -750,57 +705,6 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────────
-   Brewing status — the generating surface's type hierarchy (#260):
-   tracked-caps eyebrow (tertiary) → serif-italic phase (primary) → muted
-   sans progress + wait hint (secondary). Carries the queue / cold-start
-   wait estimate from the health endpoint (#216).
-   ───────────────────────────────────────────────────────────────────── */
-
-function BrewStatus({
-  readyCount,
-  total,
-  waitHintMs,
-  t,
-}: {
-  readyCount: number;
-  total: number;
-  waitHintMs: number | null;
-  t: (key: string) => string;
-}) {
-  const detailParts: string[] = [];
-  if (total > 0) {
-    detailParts.push(`${readyCount}/${total} ${t("vibe.gen.progress") || "ready"}`);
-  }
-  const wait = formatWaitHint(waitHintMs, t);
-  if (wait) detailParts.push(wait);
-  const detail =
-    detailParts.length > 0
-      ? detailParts.join("  ·  ")
-      : t("vibe.gen.brewing_sub") || "First previews arrive as each one finishes.";
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="mt-3 flex flex-col items-center gap-1.5 text-center"
-      aria-live="polite"
-    >
-      <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.22em] text-[#B0A99E]">
-        <Loader2 className="h-3 w-3 animate-spin" />
-        {t("vibe.gen.brewing_eyebrow") || "Brewing"}
-      </span>
-      <p className="font-serif-italic text-[19px] leading-snug text-[#1A1A1A] md:text-[24px]">
-        {t("vibe.gen.brewing_title") || "Composing three takes on your hum"}
-      </p>
-      <p className="text-[12px] tracking-[0.04em] text-[#8C8780] tabular-nums">
-        {detail}
-      </p>
-    </motion.div>
-  );
-}
-
 /* Reduced-detail capture hint (#211): informational, never blocking. */
 function ReducedDetailHint({ t }: { t: (key: string) => string }) {
   return (
@@ -815,25 +719,6 @@ function ReducedDetailHint({ t }: { t: (key: string) => string }) {
         "Captured in reduced-detail mode — some nuance may vary."}
     </motion.p>
   );
-}
-
-/**
- * Format a coarse wait hint from the health estimate. Returns null for
- * unknown/near-zero waits (a warm queue) so we never show a misleading
- * "~0s". Seconds round to 5s and long waits collapse to minutes — the
- * estimate is coarse and false precision would undercut trust.
- */
-function formatWaitHint(
-  ms: number | null,
-  t: (key: string) => string,
-): string | null {
-  if (ms == null || ms <= 3000) return null;
-  const totalSec = Math.round(ms / 1000);
-  const label =
-    totalSec >= 60
-      ? `~${Math.round(totalSec / 60)}m`
-      : `~${Math.max(5, Math.round(totalSec / 5) * 5)}s`;
-  return `${label} ${t("vibe.gen.wait_in_queue") || "in queue"}`;
 }
 
 /* ─────────────────────────────────────────────────────────────────────

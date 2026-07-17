@@ -52,6 +52,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(serializeSnapshot({
         lifetimeTopupCents: 0,
         latestPlanSkuId: null,
+        balanceHistory: [],
+        notesInUse: 0,
       }), { headers: { "X-Request-Id": requestId } });
     }
 
@@ -75,11 +77,15 @@ export async function GET(request: NextRequest) {
 type SnapshotLike = {
   lifetimeTopupCents: number;
   latestPlanSkuId: string | null;
+  balanceHistory: unknown[];
+  notesInUse: number;
 };
 
 function serializeSnapshot(snapshot: SnapshotLike) {
   return {
     lifetimeTopupCents: snapshot.lifetimeTopupCents,
     latestPlanSkuId: snapshot.latestPlanSkuId,
+    balanceHistory: snapshot.balanceHistory,
+    notesInUse: snapshot.notesInUse,
   };
 }

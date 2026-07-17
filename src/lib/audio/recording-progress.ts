@@ -21,6 +21,6 @@ export function formatRecordingElapsedSeconds(
   elapsedMs: number,
   limitMs = HUM_RECORDING_LIMIT_MS,
 ): string {
-  const seconds = clampRecordingElapsedMs(elapsedMs, limitMs) / 1000;
-  return seconds.toFixed(1).padStart(4, "0");
+  const seconds = Math.round(clampRecordingElapsedMs(elapsedMs, limitMs) / 1000);
+  return String(seconds).padStart(2, "0");
 }

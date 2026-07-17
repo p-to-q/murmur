@@ -13,9 +13,26 @@ let nextSnapshotError: unknown = null;
 let nextSnapshot: {
   lifetimeTopupCents: number;
   latestPlanSkuId: string | null;
+  balanceHistory: Array<{
+    range: "1H" | "1D" | "7D" | "1M" | "All";
+    points: Array<{ timestamp: string; balance: number }>;
+    changeValue: number;
+    changePercent: number;
+  }>;
+  notesInUse: number;
 } = {
   lifetimeTopupCents: 2197,
   latestPlanSkuId: "topup_120_notes",
+  balanceHistory: [{
+    range: "1D",
+    points: [
+      { timestamp: "2026-07-16T00:00:00.000Z", balance: 10 },
+      { timestamp: "2026-07-17T00:00:00.000Z", balance: 14 },
+    ],
+    changeValue: 4,
+    changePercent: 40,
+  }],
+  notesInUse: 9,
 };
 
 mock.module("@/lib/auth", () => ({
@@ -64,6 +81,16 @@ afterEach(() => {
   nextSnapshot = {
     lifetimeTopupCents: 2197,
     latestPlanSkuId: "topup_120_notes",
+    balanceHistory: [{
+      range: "1D",
+      points: [
+        { timestamp: "2026-07-16T00:00:00.000Z", balance: 10 },
+        { timestamp: "2026-07-17T00:00:00.000Z", balance: 14 },
+      ],
+      changeValue: 4,
+      changePercent: 40,
+    }],
+    notesInUse: 9,
   };
 });
 
@@ -77,10 +104,22 @@ describe("GET /api/user/topup-surface", () => {
     const body = (await response.json()) as {
       lifetimeTopupCents: number;
       latestPlanSkuId: string | null;
+      balanceHistory: unknown[];
+      notesInUse: number;
     };
     expect(body).toEqual({
       lifetimeTopupCents: 2197,
       latestPlanSkuId: "topup_120_notes",
+      balanceHistory: [{
+        range: "1D",
+        points: [
+          { timestamp: "2026-07-16T00:00:00.000Z", balance: 10 },
+          { timestamp: "2026-07-17T00:00:00.000Z", balance: 14 },
+        ],
+        changeValue: 4,
+        changePercent: 40,
+      }],
+      notesInUse: 9,
     });
   });
 
@@ -111,10 +150,14 @@ describe("GET /api/user/topup-surface", () => {
     const body = (await response.json()) as {
       lifetimeTopupCents: number;
       latestPlanSkuId: string | null;
+      balanceHistory: unknown[];
+      notesInUse: number;
     };
     expect(body).toEqual({
       lifetimeTopupCents: 0,
       latestPlanSkuId: null,
+      balanceHistory: [],
+      notesInUse: 0,
     });
   });
 
@@ -122,6 +165,8 @@ describe("GET /api/user/topup-surface", () => {
     nextSnapshot = {
       lifetimeTopupCents: 1200,
       latestPlanSkuId: null,
+      balanceHistory: [],
+      notesInUse: 0,
     };
 
     const response = await GET(
@@ -132,8 +177,12 @@ describe("GET /api/user/topup-surface", () => {
     const body = (await response.json()) as {
       lifetimeTopupCents: number;
       latestPlanSkuId: string | null;
+      balanceHistory: unknown[];
+      notesInUse: number;
     };
     expect(body.latestPlanSkuId).toBeNull();
     expect(body.lifetimeTopupCents).toBe(1200);
+    expect(body.balanceHistory).toEqual([]);
+    expect(body.notesInUse).toBe(0);
   });
 });

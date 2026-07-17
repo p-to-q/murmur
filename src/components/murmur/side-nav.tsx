@@ -47,7 +47,6 @@ import {
 } from "@/lib/hooks/use-browser-notification";
 import { NAV_ITEMS, computeTrail, type ComputedStep } from "./nav-items";
 import { MurmurMark } from "./murmur-mark";
-import { NotificationBadge } from "@/components/ui/notification-badge";
 import { ShareCardModal } from "./share-card-modal";
 import { Fragment } from "react";
 
@@ -281,9 +280,6 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                           : "bg-transparent border border-[#B6B0A4] scale-90 group-hover:border-[#1A1A1A] group-hover:scale-100"
                       }`}
                     />
-                    {item.href === "/gallery" && (
-                      <NotificationBadge className="absolute -top-2 -right-2.5" />
-                    )}
                   </span>
                 </div>
                 {/* Text — crossfades in when expanded */}
@@ -309,7 +305,6 @@ function SideNavInner({ onShareClick }: { onShareClick: () => void }) {
                     className={`inline-flex items-center gap-1.5 transition-all duration-200 group-hover:translate-x-[3px] ${textCls}`}
                   >
                     {label}
-                    {item.href === "/gallery" && <NotificationBadge />}
                   </span>
                 </div>
               </div>

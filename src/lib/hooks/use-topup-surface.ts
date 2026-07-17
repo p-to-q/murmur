@@ -8,6 +8,22 @@ import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 export interface TopupSurfaceData {
   lifetimeTopupCents: number;
   latestPlanSkuId: string | null;
+  balanceHistory: TopupBalanceHistoryRange[];
+  notesInUse: number;
+}
+
+export type TopupHistoryRange = "1H" | "1D" | "7D" | "1M" | "All";
+
+export interface TopupBalanceHistoryPoint {
+  timestamp: string;
+  balance: number;
+}
+
+export interface TopupBalanceHistoryRange {
+  range: TopupHistoryRange;
+  points: TopupBalanceHistoryPoint[];
+  changeValue: number;
+  changePercent: number;
 }
 
 export function useTopupSurface() {
@@ -26,6 +42,8 @@ export function useTopupSurface() {
       const nextData = {
         lifetimeTopupCents: 0,
         latestPlanSkuId: null,
+        balanceHistory: [],
+        notesInUse: 0,
       };
       setData(nextData);
       setError(null);
@@ -48,6 +66,10 @@ export function useTopupSurface() {
         latestPlanSkuId: typeof payload.latestPlanSkuId === "string"
           ? payload.latestPlanSkuId
           : null,
+        balanceHistory: parseBalanceHistory(payload.balanceHistory),
+        notesInUse: typeof payload.notesInUse === "number" && Number.isFinite(payload.notesInUse)
+          ? Math.max(0, Math.round(payload.notesInUse))
+          : 0,
       };
       setData(nextData);
       setError(null);
@@ -68,4 +90,39 @@ export function useTopupSurface() {
   }, [refresh]);
 
   return { data, isLoading, error, refresh };
+}
+
+function parseBalanceHistory(value: unknown): TopupBalanceHistoryRange[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((range): TopupBalanceHistoryRange[] => {
+    if (!range || typeof range !== "object") return [];
+    const record = range as Partial<TopupBalanceHistoryRange>;
+    if (!isTopupHistoryRange(record.range) || !Array.isArray(record.points)) return [];
+
+    return [{
+      range: record.range,
+      points: record.points.flatMap((point): TopupBalanceHistoryPoint[] => {
+        if (!point || typeof point !== "object") return [];
+        const pointRecord = point as Partial<TopupBalanceHistoryPoint>;
+        if (typeof pointRecord.timestamp !== "string" || typeof pointRecord.balance !== "number") {
+          return [];
+        }
+        return [{
+          timestamp: pointRecord.timestamp,
+          balance: Number.isFinite(pointRecord.balance) ? pointRecord.balance : 0,
+        }];
+      }),
+      changeValue: typeof record.changeValue === "number" && Number.isFinite(record.changeValue)
+        ? record.changeValue
+        : 0,
+      changePercent: typeof record.changePercent === "number" && Number.isFinite(record.changePercent)
+        ? record.changePercent
+        : 0,
+    }];
+  });
+}
+
+function isTopupHistoryRange(value: unknown): value is TopupHistoryRange {
+  return value === "1H" || value === "1D" || value === "7D" || value === "1M" || value === "All";
 }

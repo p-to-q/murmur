@@ -18,10 +18,10 @@ describe("recording progress helpers", () => {
     expect(recordingProgressFromElapsed(20_000)).toBe(1);
   });
 
-  it("formats tenths so users can see the real capture duration", () => {
-    expect(formatRecordingElapsedSeconds(0)).toBe("00.0");
-    expect(formatRecordingElapsedSeconds(980)).toBe("01.0");
-    expect(formatRecordingElapsedSeconds(14_960)).toBe("15.0");
-    expect(formatRecordingElapsedSeconds(20_000)).toBe("15.0");
+  it("formats whole seconds for the recording timer", () => {
+    expect(formatRecordingElapsedSeconds(0)).toBe("00");
+    expect(formatRecordingElapsedSeconds(980)).toBe("01");
+    expect(formatRecordingElapsedSeconds(14_960)).toBe("15");
+    expect(formatRecordingElapsedSeconds(20_000)).toBe("15");
   });
 });

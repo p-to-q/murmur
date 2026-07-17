@@ -11,7 +11,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useSpring, useTransform, animate } from "framer-motion";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Search, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatSupportCode } from "@/lib/observability/support-code";
 import {
@@ -34,10 +34,13 @@ import { PageBackdrop } from "@/components/murmur/page-backdrop";
 
 const SLIDER_MAX_USD = Math.min(100, CUSTOM_TOPUP_MAX_USD);
 const SLIDER_MAX_CNY = 500;
-const PLAN_LABEL_KEYS: Record<string, string> = {
-  topup_30_notes: "topup.plan.starter",
-  topup_120_notes: "topup.plan.creator",
-  topup_400_notes: "topup.plan.patron",
+const TIME_RANGES = ["1H", "1D", "7D", "1M", "All"] as const;
+type TopupTimeRange = (typeof TIME_RANGES)[number];
+
+type BalanceChartPoint = {
+  date: string;
+  timestamp: string;
+  value: number;
 };
 
 const paperTextureStyle = {
@@ -64,18 +67,6 @@ const paperTextureStyle = {
   `,
 };
 
-// Unified pricing-card treatment (SKU tiles + custom card share one language):
-//   - single 20px radius, hairline cream border, soft paper fill
-//   - idle: subtle cream border that warms on hover
-//   - selected: coral accent border + soft coral-tinted shadow + gentle lift
-// Kept subtle so the selected state reads clearly without shouting.
-const PRICE_CARD_BASE =
-  "border backdrop-blur-sm transition-all duration-200";
-const PRICE_CARD_IDLE =
-  "border-[#E5DDD0]/70 bg-white/55 hover:border-[#C8C0B4]";
-const PRICE_CARD_SELECTED =
-  "border-[#FF5924] bg-white/85 shadow-[0_4px_18px_rgba(255,89,36,0.12)]";
-
 function formatRefillTime(iso: string, locale: string): string {
   try {
     return new Intl.DateTimeFormat(locale, {
@@ -87,6 +78,136 @@ function formatRefillTime(iso: string, locale: string): string {
   } catch {
     return iso;
   }
+}
+
+function formatChartLabel(date: Date, range: TopupTimeRange) {
+  if (range === "1H") {
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  }
+  if (range === "1D") {
+    const hours = String(date.getHours()).padStart(2, "0");
+    return `${hours}:00`;
+  }
+
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  return `${month}/${day}`;
+}
+
+function buildBalanceChartData(range: TopupTimeRange, currentBalance: number): BalanceChartPoint[] {
+  const dataPoints =
+    range === "1H" ? 12 :
+    range === "1D" ? 24 :
+    range === "7D" ? 7 :
+    range === "1M" ? 30 : 365;
+  const now = Date.now();
+  const stepMs =
+    range === "1H" ? 5 * 60_000 :
+    range === "1D" ? 3_600_000 :
+    86_400_000;
+
+  // Keep old or partial topup-surface payloads truthful instead of fabricating movement.
+  return Array.from({ length: dataPoints }, (_, index) => {
+    const date = new Date(now - (dataPoints - 1 - index) * stepMs);
+    return {
+      date: formatChartLabel(date, range),
+      timestamp: date.toISOString(),
+      value: currentBalance,
+    };
+  });
+}
+
+function formatHistoryChartData(
+  range: TopupTimeRange,
+  points: Array<{ timestamp: string; balance: number }>,
+): BalanceChartPoint[] {
+  return points.flatMap((point): BalanceChartPoint[] => {
+    const date = new Date(point.timestamp);
+    if (!Number.isFinite(date.getTime()) || !Number.isFinite(point.balance)) return [];
+    return [{
+      date: formatChartLabel(date, range),
+      timestamp: point.timestamp,
+      value: point.balance,
+    }];
+  });
+}
+
+function BalanceLineChart({ data, timeRange }: { data: BalanceChartPoint[]; timeRange: TopupTimeRange }) {
+  const width = 320;
+  const height = 192;
+  const padding = { top: 10, right: 10, bottom: 25, left: 0 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const values = data.map((point) => point.value);
+  const minValue = Math.min(...values, 0);
+  const maxValue = Math.max(...values, 1);
+  const spread = maxValue - minValue;
+  const points = data.map((point, index) => {
+    const x = padding.left + (index / Math.max(data.length - 1, 1)) * chartWidth;
+    const y = spread === 0
+      ? padding.top + chartHeight / 2
+      : padding.top + (1 - (point.value - minValue) / spread) * chartHeight;
+    return { x, y, point };
+  });
+  const linePath = points
+    .map(({ x, y }, index) => `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`)
+    .join(" ");
+  const interval = timeRange === "1H" ? 2 : timeRange === "1D" ? 5 : Math.floor(data.length / 6);
+  const ticks = points.filter((_, index) => {
+    if (index === 0 || index === points.length - 1) return true;
+    return interval > 0 && index % interval === 0;
+  });
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="h-full w-full"
+      role="img"
+      aria-hidden="true"
+      preserveAspectRatio="none"
+    >
+      {[0, 1, 2, 3, 4].map((index) => {
+        const y = padding.top + (index / 4) * chartHeight;
+        return (
+          <line
+            key={index}
+            x1={padding.left}
+            x2={width - padding.right}
+            y1={y}
+            y2={y}
+            stroke="#E5DDD0"
+            strokeWidth="1"
+            vectorEffect="non-scaling-stroke"
+          />
+        );
+      })}
+      <path
+        d={linePath}
+        fill="none"
+        stroke="#B7AEA1"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+      {ticks.map(({ x, point }, index) => (
+        <text
+          key={`${point.timestamp}-${index}`}
+          x={x}
+          y={height - 5}
+          fill="#B7AEA1"
+          fontSize="10"
+          fontWeight="500"
+          textAnchor={index === 0 ? "start" : index === ticks.length - 1 ? "end" : "middle"}
+          style={{ fontFamily: "system-ui" }}
+        >
+          {point.date}
+        </text>
+      ))}
+    </svg>
+  );
 }
 
 export function TopupScreen() {
@@ -107,6 +228,14 @@ export function TopupScreen() {
 
   // Sync detected currency on first load when no saved preference
   const initializedRef = useRef(false);
+  const rangeGroupRef = useRef<HTMLDivElement | null>(null);
+  const rangeButtonRefs = useRef<Record<TopupTimeRange, HTMLButtonElement | null>>({
+    "1H": null,
+    "1D": null,
+    "7D": null,
+    "1M": null,
+    "All": null,
+  });
   useEffect(() => {
     if (!initializedRef.current && currency && !getSavedCurrency()) {
       initializedRef.current = true;
@@ -147,6 +276,8 @@ export function TopupScreen() {
   const [selectedId, setSelectedId] = useState<string>(
     TOPUP_SKUS.find((s) => s.highlight === "popular")?.id ?? TOPUP_SKUS[0]!.id,
   );
+  const [timeRange, setTimeRange] = useState<TopupTimeRange>("7D");
+  const [rangeIndicator, setRangeIndicator] = useState({ left: 0, width: 0 });
   const [customAmountByCurrency, setCustomAmountByCurrency] = useState<Record<string, number>>({});
   const [isRestoring, setIsRestoring] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -168,6 +299,7 @@ export function TopupScreen() {
 
   const notesSpring = useSpring(0, { stiffness: 100, damping: 20 });
   const balanceUSDSpring = useSpring(0, { stiffness: 100, damping: 20 });
+  const notesInUseSpring = useSpring(0, { stiffness: 100, damping: 20 });
 
   const selected = effectiveSkus.find((s) => s.id === selectedId);
   const customQuote = useMemo(() => getCustomTopupQuote(customAmount), [customAmount]);
@@ -187,12 +319,6 @@ export function TopupScreen() {
       : 0;
 
   const currentBalance = balance?.notes ?? 0;
-  const purchasedPlanKey = topupSurface?.latestPlanSkuId
-    ? PLAN_LABEL_KEYS[topupSurface.latestPlanSkuId]
-    : null;
-  const selectedPlanLabel = purchasedPlanKey
-    ? t(purchasedPlanKey)
-    : balance?.planTier === "premium" ? t("topup.plan.premium") : t("topup.plan.free");
   const nextRefillLabel = balance?.nextRefillAt
     ? t("topup.next_refill").replace(
         "{time}",
@@ -200,6 +326,27 @@ export function TopupScreen() {
       )
     : null;
   const balanceUSD = (topupSurface?.lifetimeTopupCents ?? 0) / 100;
+  const notesInUse = topupSurface?.notesInUse ?? 0;
+  const activeHistory = topupSurface?.balanceHistory.find((history) => history.range === timeRange);
+  const dailyHistory = topupSurface?.balanceHistory.find((history) => history.range === "1D");
+  const chartData = useMemo(() => {
+    const historyData = activeHistory ? formatHistoryChartData(timeRange, activeHistory.points) : [];
+    return historyData.length >= 2 ? historyData : buildBalanceChartData(timeRange, currentBalance);
+  }, [activeHistory, currentBalance, timeRange]);
+  const dailyChartData = useMemo(() => {
+    const historyData = dailyHistory ? formatHistoryChartData("1D", dailyHistory.points) : [];
+    return historyData.length >= 2 ? historyData : buildBalanceChartData("1D", currentBalance);
+  }, [currentBalance, dailyHistory]);
+  const firstDailyValue = dailyChartData[0]?.value ?? 0;
+  const lastDailyValue = dailyChartData.at(-1)?.value ?? 0;
+  const change24hValue = dailyHistory?.changeValue ?? lastDailyValue - firstDailyValue;
+  const change24hPercent = dailyHistory?.changePercent
+    ?? (firstDailyValue !== 0 ? (change24hValue / firstDailyValue) * 100 : 0);
+  const changeText = `${change24hValue > 0 ? "+" : ""}${change24hValue.toFixed(0)} (${change24hPercent > 0 ? "+" : ""}${change24hPercent.toFixed(2)}%)`;
+  const changeColor =
+    change24hValue > 0 ? "#5F8A6B" :
+    change24hValue < 0 ? "#C87355" :
+    "#8C8780";
 
   // ── Actions ───────────────────────────────────────────────────────
   const handleProceed = () => {
@@ -219,15 +366,18 @@ export function TopupScreen() {
   };
 
   const animateBalance = useCallback(
-    (notesValue: number, usdValue: number) => {
+    (notesValue: number, usdValue: number, notesInUseValue: number) => {
       animate(notesSpring, 0, { duration: 0.25 }).then(() => {
         animate(notesSpring, notesValue, { duration: 0.5 });
       });
       animate(balanceUSDSpring, 0, { duration: 0.25 }).then(() => {
         animate(balanceUSDSpring, usdValue, { duration: 0.5 });
       });
+      animate(notesInUseSpring, 0, { duration: 0.25 }).then(() => {
+        animate(notesInUseSpring, notesInUseValue, { duration: 0.5 });
+      });
     },
-    [balanceUSDSpring, notesSpring],
+    [balanceUSDSpring, notesInUseSpring, notesSpring],
   );
 
   const handleRefresh = async () => {
@@ -242,6 +392,7 @@ export function TopupScreen() {
         animateBalance(
           result.balance.notes,
           (surface?.lifetimeTopupCents ?? topupSurface?.lifetimeTopupCents ?? 0) / 100,
+          surface?.notesInUse ?? topupSurface?.notesInUse ?? 0,
         );
       } else if (result && !result.ok) {
         toast.error(t("topup.refresh_failed") || "Couldn't refresh balance — try again.");
@@ -288,6 +439,7 @@ export function TopupScreen() {
           animateBalance(
             result?.balance?.notes ?? currentBalance,
             (surface?.lifetimeTopupCents ?? topupSurface?.lifetimeTopupCents ?? 0) / 100,
+            surface?.notesInUse ?? topupSurface?.notesInUse ?? 0,
           );
         } else {
           toast.info(
@@ -313,11 +465,25 @@ export function TopupScreen() {
   useEffect(() => {
     notesSpring.set(currentBalance);
     balanceUSDSpring.set(balanceUSD);
-  }, [balanceUSD, balanceUSDSpring, currentBalance, notesSpring]);
+    notesInUseSpring.set(notesInUse);
+  }, [balanceUSD, balanceUSDSpring, currentBalance, notesInUse, notesInUseSpring, notesSpring]);
 
   const displayNotesBalance = useTransform(notesSpring, (v) => Math.round(v));
   const displayBalanceUSD = useTransform(balanceUSDSpring, (v) => v.toFixed(2));
+  const displayNotesInUse = useTransform(notesInUseSpring, (v) => Math.round(v));
   const sliderSpan = sliderMax - sliderMin;
+
+  useEffect(() => {
+    const button = rangeButtonRefs.current[timeRange];
+    const parent = rangeGroupRef.current;
+    if (!button || !parent) return;
+    const parentRect = parent.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+    setRangeIndicator({
+      left: buttonRect.left - parentRect.left,
+      width: buttonRect.width,
+    });
+  }, [timeRange]);
 
   // ── Render ────────────────────────────────────────────────────────
   return (
@@ -325,11 +491,30 @@ export function TopupScreen() {
       <PageBackdrop variant="soft" />
 
       <div className="relative z-10 flex min-h-svh flex-col">
-        <div className="flex-1 px-5 pb-48 md:px-12 md:pb-28">
-          <div
-            className="mx-auto max-w-lg md:max-w-2xl"
-            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 52px)" }}
-          >
+        <div
+          className="flex items-center justify-end px-5 pb-3"
+          style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 20px)" }}
+        >
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void handleRefresh()}
+              disabled={isRefreshing}
+              className="flex h-9 w-9 items-center justify-center disabled:opacity-50"
+              aria-label={t("topup.refresh")}
+            >
+              <RefreshCw className={`h-5 w-5 text-[#8C8780] ${isRefreshing ? "animate-spin" : ""}`} />
+            </button>
+            <button className="flex h-9 w-9 items-center justify-center" aria-label={t("topup.search")}>
+              <Search className="h-5 w-5 text-[#8C8780]" />
+            </button>
+            <button className="flex h-9 w-9 items-center justify-center" aria-label={t("topup.share")}>
+              <Share2 className="h-5 w-5 text-[#8C8780]" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 px-5 pb-32">
+          <div className="mx-auto max-w-lg">
             {/* ── Assets ─────────────────────────────────────────── */}
             <section>
               <motion.h2
@@ -357,19 +542,31 @@ export function TopupScreen() {
                 <button
                   onClick={() => void handleRefresh()}
                   disabled={isRefreshing}
-                  className="mt-1 flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-black/5 disabled:opacity-50"
+                  className="mt-1 flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/5 transition-colors disabled:opacity-50"
                   aria-label={t("topup.refresh")}
                 >
                   <RefreshCw className={`h-4 w-4 text-[#8C8780] ${isRefreshing ? "animate-spin" : ""}`} />
                 </button>
               </motion.div>
 
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.08, duration: 0.5 }}
+                className="mt-2.5 flex items-center gap-1.5 text-[14px] font-medium"
+                style={{ color: changeColor }}
+              >
+                <span>{change24hValue > 0 ? "↑" : change24hValue < 0 ? "↓" : "–"}</span>
+                <span className="tabular-nums">{changeText}</span>
+                <span className="text-[#B7AEA1]">· {t("topup.24h")}</span>
+              </motion.p>
+
               {nextRefillLabel && (
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.08, duration: 0.5 }}
-                  className="mt-2.5 text-[14px] text-[#8C8780]"
+                  transition={{ delay: 0.1, duration: 0.5 }}
+                  className="mt-2 text-[14px] text-[#8C8780]"
                 >
                   {nextRefillLabel}
                 </motion.p>
@@ -392,11 +589,61 @@ export function TopupScreen() {
 
                 <div className="rounded-[20px] bg-white/60 backdrop-blur-sm border border-[#E5DDD0]/40 px-5 py-5">
                   <p className="text-[11px] text-[#B7AEA1] font-semibold mb-3 tracking-wider uppercase">
-                    {t("topup.plan_label")}
+                    {t("topup.in_use")}
                   </p>
-                  <p className="font-serif text-[#1A1A1A] text-[28px] leading-none">
-                    {selectedPlanLabel}
+                  <p className="font-serif text-[#1A1A1A] text-[28px] leading-none tabular-nums">
+                    <motion.span>{displayNotesInUse}</motion.span>
+                    <span className="text-[14px] font-normal text-[#1A1A1A] ml-1">{t("topup.notes")}</span>
                   </p>
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.16, duration: 0.5 }}
+                className="mt-5 rounded-[22px] bg-white/50 backdrop-blur-sm border border-[#E5DDD0]/40 px-6 py-6"
+              >
+                <div ref={rangeGroupRef} className="relative inline-flex items-center mb-5 bg-white rounded-full p-1 mx-auto">
+                  {TIME_RANGES.map((range, idx) => {
+                    const isSelected = timeRange === range;
+                    return (
+                      <button
+                        key={range}
+                        id={`time-range-${idx}`}
+                        ref={(node) => {
+                          rangeButtonRefs.current[range] = node;
+                        }}
+                        type="button"
+                        onClick={() => setTimeRange(range)}
+                        className={`relative z-10 text-[14px] font-semibold transition-colors px-5 py-2 rounded-full ${
+                          isSelected
+                            ? "text-white"
+                            : "text-[#B7AEA1] hover:text-[#8C8780]"
+                        }`}
+                      >
+                        {range}
+                      </button>
+                    );
+                  })}
+                  <motion.div
+                    className="absolute rounded-full z-0 pointer-events-none"
+                    animate={rangeIndicator}
+                    initial={false}
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    style={{
+                      top: "4px",
+                      bottom: "4px",
+                      ...paperTextureStyle,
+                    }}
+                  />
+                </div>
+
+                <div
+                  className="h-48 -ml-1 -mr-1 [&_*]:outline-none [&_*]:focus:outline-none"
+                  aria-label={t("topup.balance_chart")}
+                >
+                  <BalanceLineChart data={chartData} timeRange={timeRange} />
                 </div>
               </motion.div>
             </section>
@@ -432,8 +679,10 @@ export function TopupScreen() {
                       key={sku.id}
                       whileTap={{ scale: 0.97 }}
                       onClick={() => setSelectedId(sku.id)}
-                      className={`relative rounded-[20px] px-4 py-5 text-center ${PRICE_CARD_BASE} ${
-                        isSelected ? PRICE_CARD_SELECTED : PRICE_CARD_IDLE
+                      className={`relative rounded-[18px] border backdrop-blur-sm px-4 py-5 text-center transition-all ${
+                        isSelected
+                          ? "border-[#1A1A1A] bg-white/80 shadow-[0_2px_12px_rgba(0,0,0,0.08)]"
+                          : "border-[#E5DDD0]/40 bg-white/50 hover:border-[#C8C0B4]"
                       }`}
                     >
                       {sku.highlight && (
@@ -473,8 +722,10 @@ export function TopupScreen() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3, duration: 0.5 }}
-                className={`rounded-[20px] px-6 py-6 ${PRICE_CARD_BASE} ${
-                  selectedId === CUSTOM_TOPUP_ID ? PRICE_CARD_SELECTED : PRICE_CARD_IDLE
+                className={`rounded-[20px] border backdrop-blur-sm px-6 py-6 transition-all ${
+                  selectedId === CUSTOM_TOPUP_ID
+                    ? "border-[#1A1A1A] bg-white/80 shadow-[0_2px_12px_rgba(0,0,0,0.08)]"
+                    : "border-[#E5DDD0]/40 bg-white/50"
                 }`}
                 onClick={() => setSelectedId(CUSTOM_TOPUP_ID)}
               >

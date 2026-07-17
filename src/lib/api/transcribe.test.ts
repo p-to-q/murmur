@@ -191,6 +191,13 @@ function ndjsonResponse(lines: string[]): Response {
   });
 }
 
+function ndjsonResponseWithoutTrailingNewline(lines: string[]): Response {
+  return new Response(lines.join("\n"), {
+    status: 200,
+    headers: { "Content-Type": "text/x-ndjson; charset=utf-8" },
+  });
+}
+
 describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
@@ -210,6 +217,17 @@ describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
     });
 
     expect(phases).toEqual(["billing_ok", "worker_started", "complete"]);
+    expect((result as { provider: string }).provider).toBe("swiftf0");
+  });
+
+  it("consumes a final NDJSON event without a trailing newline", async () => {
+    globalThis.fetch = createFetchMock(async () =>
+      ndjsonResponseWithoutTrailingNewline([
+        JSON.stringify({ phase: "billing_ok", balanceBefore: 9 }),
+        JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
+      ]));
+
+    const result = await transcribeRecordingStreaming(blob());
     expect((result as { provider: string }).provider).toBe("swiftf0");
   });
 
