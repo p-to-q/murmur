@@ -5,7 +5,7 @@ import {
 } from "@/lib/auth/local-creator-client";
 import { __resetCurrentAccountCacheForTesting } from "@/lib/hooks/use-current-account";
 import { __resetUserBalanceCacheForTesting } from "@/lib/hooks/use-user-balance";
-import { gallerySongHref, loadGallerySongsOnce } from "./GalleryScreen";
+import { gallerySongAction, loadGallerySongsOnce } from "./GalleryScreen";
 
 const originalFetch = globalThis.fetch;
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -225,14 +225,14 @@ describe("loadGallerySongsOnce", () => {
   });
 });
 
-describe("gallerySongHref", () => {
-  it("keeps demo cards from navigating to missing song details", () => {
-    expect(gallerySongHref("demo-1", true)).toBe("/");
-    expect(gallerySongHref("song_real", true)).toBe("/song/song_real");
+describe("gallerySongAction", () => {
+  it("previews demo cards in an empty gallery instead of navigating", () => {
+    expect(gallerySongAction("demo-1", true)).toBe("preview");
+    expect(gallerySongAction("song_real", true)).toBe("detail");
   });
 
   it("opens persisted songs from the song detail route", () => {
-    expect(gallerySongHref("song_real", false)).toBe("/song/song_real");
-    expect(gallerySongHref("demo-1", false)).toBe("/song/demo-1");
+    expect(gallerySongAction("song_real", false)).toBe("detail");
+    expect(gallerySongAction("demo-1", false)).toBe("detail");
   });
 });

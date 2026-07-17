@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -28,6 +28,7 @@ import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useNotificationStore } from "@/lib/store/notification-store";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
 import { ARTWORK_CATALOG } from "@/presets/artworks/catalog";
+import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
 
 // The gallery only renders light metadata; the heavy SongCard fields
 // (visualConfig, duration, arrangementState) stay optional so demo
@@ -95,8 +96,8 @@ const DEMO_SONGS: SongWithMeta[] = [
   },
 ];
 
-export function gallerySongHref(songId: string, isShowingDemo: boolean): string {
-  return isShowingDemo && songId.startsWith("demo-") ? "/" : `/song/${songId}`;
+export function gallerySongAction(songId: string, isShowingDemo: boolean): "preview" | "detail" {
+  return isShowingDemo && isDemoSongId(songId) ? "preview" : "detail";
 }
 
 function displayVibe(song: SongWithMeta, lang: Lang): string {
@@ -155,8 +156,10 @@ export function GalleryScreen() {
   const [sort, setSort] = useState<SortMode>("newest");
   const [deleteTarget, setDeleteTarget] = useState<SongWithMeta | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [playingDemoId, setPlayingDemoId] = useState<string | null>(null);
   const currentFlowId = useMurmurStore((state) => state.currentFlowId);
   const currentDraftId = useMurmurStore((state) => state.currentDraftId);
+  const demoAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Use demo songs when user has no real songs
   const displaySongs = songs.length > 0 ? songs : DEMO_SONGS;
@@ -194,6 +197,69 @@ export function GalleryScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      const audio = demoAudioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.removeAttribute("src");
+        demoAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  const stopDemoPreview = useCallback(() => {
+    const audio = demoAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      demoAudioRef.current = null;
+    }
+    setPlayingDemoId(null);
+  }, []);
+
+  const toggleDemoPreview = useCallback(
+    async (song: SongWithMeta) => {
+      if (playingDemoId === song.id) {
+        stopDemoPreview();
+        return;
+      }
+
+      const demo = getDemoSong(song.id);
+      if (!demo) return;
+
+      stopDemoPreview();
+      const audio = new Audio(demo.mp3Url);
+      audio.loop = true;
+      audio.onended = () => setPlayingDemoId(null);
+      audio.onerror = () => {
+        if (demoAudioRef.current === audio) demoAudioRef.current = null;
+        setPlayingDemoId(null);
+        toast.error(t("cards.play_error") || "Playback failed, please retry");
+      };
+      demoAudioRef.current = audio;
+
+      try {
+        await audio.play();
+        setPlayingDemoId(song.id);
+        memory
+          .reportAction({
+            content: `Previewed demo "${song.title}" from gallery`,
+            event_type: "play",
+            page: "gallery",
+            metadata: { type: "demo_preview", song_id: song.id },
+          })
+          .catch(() => {});
+      } catch (error) {
+        if (demoAudioRef.current === audio) demoAudioRef.current = null;
+        audio.removeAttribute("src");
+        console.error("[Gallery] demo preview failed:", error);
+        toast.error(t("cards.play_error") || "Playback failed, please retry");
+      }
+    },
+    [playingDemoId, stopDemoPreview, t],
+  );
+
   const sorted = useMemo(() => {
     const list = [...displaySongs];
     if (sort === "alpha") {
@@ -211,6 +277,10 @@ export function GalleryScreen() {
     (id: string) => {
       const song = displaySongs.find((s) => s.id === id);
       if (!song) return;
+      if (gallerySongAction(song.id, isShowingDemo) === "preview") {
+        void toggleDemoPreview(song);
+        return;
+      }
       memory
         .reportAction({
           content: `Opened "${song.title}" from gallery`,
@@ -219,9 +289,10 @@ export function GalleryScreen() {
           metadata: { type: "open_song", song_id: song.id },
         })
         .catch(() => {});
-      router.push(gallerySongHref(song.id, isShowingDemo));
+      stopDemoPreview();
+      router.push(`/song/${song.id}`);
     },
-    [displaySongs, isShowingDemo, router],
+    [displaySongs, isShowingDemo, router, stopDemoPreview, toggleDemoPreview],
   );
 
   const handleDeleteRequest = useCallback(
@@ -354,6 +425,13 @@ export function GalleryScreen() {
                 onDelete={isShowingDemo ? undefined : handleDeleteRequest}
                 isDraft={song.hasAudio === false}
                 draftLabel={t("gallery.draft") || "Draft"}
+                isPlaying={
+                  isShowingDemo && isDemoSongId(song.id)
+                    ? playingDemoId === song.id
+                    : undefined
+                }
+                playLabel={t("common.play") || "Play"}
+                pauseLabel={t("common.pause") || "Pause"}
               />
             ))}
           </div>

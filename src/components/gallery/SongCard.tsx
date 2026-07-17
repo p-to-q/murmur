@@ -27,6 +27,10 @@ export interface SongCardProps {
   isDraft?: boolean;
   /** Localized "Draft" label for the badge. */
   draftLabel?: string;
+  /** Optional preview state for playable cards that do not navigate. */
+  isPlaying?: boolean;
+  playLabel?: string;
+  pauseLabel?: string;
 }
 
 function makeEntryVariants(reduceMotion: boolean | null) {
@@ -93,6 +97,9 @@ export const SongCard = memo(function SongCard({
   onDelete,
   isDraft,
   draftLabel,
+  isPlaying,
+  playLabel,
+  pauseLabel,
 }: SongCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -151,6 +158,23 @@ export const SongCard = memo(function SongCard({
           {isDraft && (
             <div className="absolute top-2 left-2 z-10 rounded-full bg-[#1A1A1A]/55 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.16em] text-white/95 backdrop-blur-sm">
               {draftLabel || "Draft"}
+            </div>
+          )}
+
+          {typeof isPlaying === "boolean" && (
+            <div className="absolute top-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-[#1A1A1A]/45 text-white/95 backdrop-blur-sm ring-1 ring-white/25">
+              <span className="sr-only">{isPlaying ? (pauseLabel || "Pause") : (playLabel || "Play")}</span>
+              {isPlaying ? (
+                <span className="flex items-center gap-[3px]" aria-hidden>
+                  <span className="h-3 w-[3px] rounded-full bg-current" />
+                  <span className="h-3 w-[3px] rounded-full bg-current" />
+                </span>
+              ) : (
+                <span
+                  aria-hidden
+                  className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-current"
+                />
+              )}
             </div>
           )}
 

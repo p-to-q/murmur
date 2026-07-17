@@ -10,7 +10,7 @@
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { motion, useSpring, useTransform, animate } from "framer-motion";
+import { AnimatePresence, motion, useSpring, useTransform, animate } from "framer-motion";
 import { RefreshCw, Search, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatSupportCode } from "@/lib/observability/support-code";
@@ -31,6 +31,7 @@ import {
 import { useTopupSurface } from "@/lib/hooks/use-topup-surface";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
+import { copyTextToClipboard } from "@/lib/platform/clipboard";
 
 const SLIDER_MAX_USD = Math.min(100, CUSTOM_TOPUP_MAX_USD);
 const SLIDER_MAX_CNY = 500;
@@ -42,6 +43,34 @@ type BalanceChartPoint = {
   timestamp: string;
   value: number;
 };
+
+export type TopupSearchItem = {
+  id: string;
+  title: string;
+  detail: string;
+  terms: string[];
+};
+
+export function topupSearchMatches(item: TopupSearchItem, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return [item.title, item.detail, ...item.terms]
+    .join(" ")
+    .toLowerCase()
+    .includes(needle);
+}
+
+export function buildTopupSharePayload(origin: string, lang: "zh" | "en") {
+  const cleanOrigin = origin.replace(/\/$/, "");
+  const url = `${cleanOrigin}/topup`;
+  return {
+    url,
+    title: "Murmur",
+    text: lang === "zh"
+      ? "来 Murmur 补给音磅，把哼唱变成可以保存和分享的歌。"
+      : "Top up Murmur notes and turn a hum into a song you can save and share.",
+  };
+}
 
 const paperTextureStyle = {
   background: `
@@ -281,6 +310,8 @@ export function TopupScreen() {
   const [customAmountByCurrency, setCustomAmountByCurrency] = useState<Record<string, number>>({});
   const [isRestoring, setIsRestoring] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const customAmount = Math.min(
     customConfig.maxAmount,
@@ -301,7 +332,6 @@ export function TopupScreen() {
   const balanceUSDSpring = useSpring(0, { stiffness: 100, damping: 20 });
   const notesInUseSpring = useSpring(0, { stiffness: 100, damping: 20 });
 
-  const selected = effectiveSkus.find((s) => s.id === selectedId);
   const customQuote = useMemo(() => getCustomTopupQuote(customAmount), [customAmount]);
   const customDisplay = isCny
     ? `¥${customAmount.toFixed(2)}`
@@ -309,14 +339,6 @@ export function TopupScreen() {
   const customNotes = isCny
     ? customAmount * notesPerUnit
     : customQuote?.notesGranted ?? 0;
-  const displayAmount = selectedId === CUSTOM_TOPUP_ID
-    ? customDisplay
-    : selected?.display ?? "$0";
-  const displayNotes = selectedId === CUSTOM_TOPUP_ID
-    ? customNotes
-    : selected
-      ? selected.notes + (selected.bonusNotes ?? 0)
-      : 0;
 
   const currentBalance = balance?.notes ?? 0;
   const nextRefillLabel = balance?.nextRefillAt
@@ -347,11 +369,76 @@ export function TopupScreen() {
     change24hValue > 0 ? "#5F8A6B" :
     change24hValue < 0 ? "#C87355" :
     "#8C8780";
+  const tierNames = useMemo(
+    () => [t("topup.starter"), t("topup.creator"), t("topup.patron")],
+    [t],
+  );
+  const skuSearchItems = useMemo(
+    () => effectiveSkus.map((sku, idx): TopupSearchItem => {
+      const totalNotes = sku.notes + (sku.bonusNotes ?? 0);
+      const songCount = Math.floor(totalNotes / 5);
+      return {
+        id: sku.id,
+        title: tierNames[idx] ?? sku.id,
+        detail: `${sku.display} ${totalNotes} ${t("topup.notes")} ${t("topup.songs").replace("{n}", String(songCount))}`,
+        terms: [
+          sku.id,
+          sku.display,
+          String(sku.notes),
+          String(totalNotes),
+          sku.highlight ?? "",
+          effectiveCurrency,
+        ],
+      };
+    }),
+    [effectiveCurrency, effectiveSkus, t, tierNames],
+  );
+  const customSearchItem = useMemo<TopupSearchItem>(() => ({
+    id: CUSTOM_TOPUP_ID,
+    title: t("topup.custom"),
+    detail: `${t("topup.custom.desc")} ${customDisplay} ${Math.floor(customAmount * notesPerUnit)} ${t("topup.notes")}`,
+    terms: [
+      CUSTOM_TOPUP_ID,
+      "custom",
+      customDisplay,
+      String(customAmount),
+      String(Math.floor(customAmount * notesPerUnit)),
+      effectiveCurrency,
+    ],
+  }), [customAmount, customDisplay, effectiveCurrency, notesPerUnit, t]);
+  const filteredSkuIds = useMemo(
+    () => new Set(skuSearchItems.filter((item) => topupSearchMatches(item, searchQuery)).map((item) => item.id)),
+    [searchQuery, skuSearchItems],
+  );
+  const showCustomTopup = topupSearchMatches(customSearchItem, searchQuery);
+  const hasSearchQuery = searchQuery.trim().length > 0;
+  const hasSearchResults = !hasSearchQuery || filteredSkuIds.size > 0 || showCustomTopup;
+  const activeSelectedId = useMemo<string>(() => {
+    if (!hasSearchQuery || !hasSearchResults) return selectedId;
+    if (selectedId === CUSTOM_TOPUP_ID) {
+      return showCustomTopup
+        ? selectedId
+        : effectiveSkus.find((sku) => filteredSkuIds.has(sku.id))?.id ?? selectedId;
+    }
+    if (filteredSkuIds.has(selectedId)) return selectedId;
+    return effectiveSkus.find((sku) => filteredSkuIds.has(sku.id))?.id
+      ?? (showCustomTopup ? CUSTOM_TOPUP_ID : selectedId);
+  }, [effectiveSkus, filteredSkuIds, hasSearchQuery, hasSearchResults, selectedId, showCustomTopup]);
+  const selected = effectiveSkus.find((s) => s.id === activeSelectedId);
+  const displayAmount = activeSelectedId === CUSTOM_TOPUP_ID
+    ? customDisplay
+    : selected?.display ?? "$0";
+  const displayNotes = activeSelectedId === CUSTOM_TOPUP_ID
+    ? customNotes
+    : selected
+      ? selected.notes + (selected.bonusNotes ?? 0)
+      : 0;
 
   // ── Actions ───────────────────────────────────────────────────────
   const handleProceed = () => {
+    if (!hasSearchResults) return;
     const methodParam = payMethod === "wxpay" ? "&payMethod=wxpay" : "";
-    if (selectedId === CUSTOM_TOPUP_ID) {
+    if (activeSelectedId === CUSTOM_TOPUP_ID) {
       if (isCny) {
         router.push(`/topup/checkout?customAmountCny=${encodeURIComponent(String(customAmount))}&currency=CNY${methodParam}`);
       } else {
@@ -401,6 +488,27 @@ export function TopupScreen() {
       toast.error(t("topup.refresh_failed") || "Couldn't refresh balance — try again.");
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  const handleShareTopup = async () => {
+    if (typeof window === "undefined") return;
+    const payload = buildTopupSharePayload(window.location.origin, lang);
+    try {
+      if (navigator.share) {
+        await navigator.share(payload);
+        toast.success(t("topup.share.done") || "Top up link shared");
+        return;
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+    }
+
+    const copied = await copyTextToClipboard(`${payload.text}\n${payload.url}`);
+    if (copied) {
+      toast.success(t("topup.share.copied") || "Top up link copied");
+    } else {
+      toast.error(t("topup.share.failed") || "Couldn't share this link");
     }
   };
 
@@ -506,25 +614,49 @@ export function TopupScreen() {
             </button>
             <button
               type="button"
-              disabled
-              className="flex h-9 w-9 cursor-default items-center justify-center opacity-40"
+              onClick={() => setIsSearchOpen((open) => !open)}
+              className={`flex h-9 w-9 items-center justify-center transition-colors ${
+                isSearchOpen ? "text-[#1A1A1A]" : "text-[#8C8780] hover:text-[#1A1A1A]"
+              }`}
+              aria-expanded={isSearchOpen}
               aria-label={t("topup.search")}
             >
-              <Search className="h-5 w-5 text-[#8C8780]" />
+              <Search className="h-5 w-5" />
             </button>
             <button
               type="button"
-              disabled
-              className="flex h-9 w-9 cursor-default items-center justify-center opacity-40"
+              onClick={() => void handleShareTopup()}
+              className="flex h-9 w-9 items-center justify-center text-[#8C8780] transition-colors hover:text-[#1A1A1A]"
               aria-label={t("topup.share")}
             >
-              <Share2 className="h-5 w-5 text-[#8C8780]" />
+              <Share2 className="h-5 w-5" />
             </button>
           </div>
         </div>
 
         <div className="flex-1 px-5 pb-32">
           <div className="mx-auto max-w-lg">
+            <AnimatePresence initial={false}>
+              {isSearchOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: "auto" }}
+                  exit={{ opacity: 0, y: -8, height: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="mb-5 overflow-hidden"
+                >
+                  <input
+                    autoFocus
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder={t("topup.search.placeholder") || "Search notes, prices, history"}
+                    className="h-11 w-full rounded-full border border-[#E5DDD0]/70 bg-white/70 px-5 text-[14px] text-[#1A1A1A] outline-none placeholder:text-[#B7AEA1] focus:border-[#1A1A1A]/50"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* ── Assets ─────────────────────────────────────────── */}
             <section>
               <motion.h2
@@ -678,9 +810,9 @@ export function TopupScreen() {
               </div>
 
               <div className="grid grid-cols-3 gap-3 mb-6">
-                {effectiveSkus.map((sku, idx) => {
-                  const isSelected = sku.id === selectedId;
-                  const tierNames = [t("topup.starter"), t("topup.creator"), t("topup.patron")];
+                {effectiveSkus.filter((sku) => filteredSkuIds.has(sku.id)).map((sku, idx) => {
+                  const isSelected = sku.id === activeSelectedId;
+                  const originalIndex = effectiveSkus.findIndex((entry) => entry.id === sku.id);
                   const skuNotes = sku.notes + (sku.bonusNotes ?? 0);
                   const songCount = Math.floor(skuNotes / 5);
 
@@ -707,7 +839,7 @@ export function TopupScreen() {
                       )}
 
                       <p className="text-[11px] text-[#B7AEA1] font-semibold uppercase tracking-wider mb-3">
-                        {tierNames[idx]}
+                        {tierNames[originalIndex] ?? tierNames[idx] ?? sku.id}
                       </p>
                       <p className="font-serif text-[#1A1A1A] text-[28px] leading-none mb-1">
                         {sku.display}
@@ -728,32 +860,33 @@ export function TopupScreen() {
               </div>
 
               {/* Custom amount */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3, duration: 0.5 }}
-                className={`rounded-[20px] border backdrop-blur-sm px-6 py-6 transition-all ${
-                  selectedId === CUSTOM_TOPUP_ID
-                    ? "border-[#1A1A1A] bg-white/80 shadow-[0_2px_12px_rgba(0,0,0,0.08)]"
-                    : "border-[#E5DDD0]/40 bg-white/50"
-                }`}
-                onClick={() => setSelectedId(CUSTOM_TOPUP_ID)}
-              >
-                <div className="mb-5 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-[16px] font-semibold text-[#1A1A1A] mb-1">
-                      {t("topup.custom")}
-                    </p>
-                    <p className="text-[12px] text-[#B7AEA1]">
-                      {t("topup.custom.desc")}
-                    </p>
+              {showCustomTopup && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3, duration: 0.5 }}
+                  className={`rounded-[20px] border backdrop-blur-sm px-6 py-6 transition-all ${
+                    activeSelectedId === CUSTOM_TOPUP_ID
+                      ? "border-[#1A1A1A] bg-white/80 shadow-[0_2px_12px_rgba(0,0,0,0.08)]"
+                      : "border-[#E5DDD0]/40 bg-white/50"
+                  }`}
+                  onClick={() => setSelectedId(CUSTOM_TOPUP_ID)}
+                >
+                  <div className="mb-5 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-[16px] font-semibold text-[#1A1A1A] mb-1">
+                        {t("topup.custom")}
+                      </p>
+                      <p className="text-[12px] text-[#B7AEA1]">
+                        {t("topup.custom.desc")}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-serif text-[#1A1A1A] text-[32px] leading-none">
+                        {currencySymbol}{customAmount}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-serif text-[#1A1A1A] text-[32px] leading-none">
-                      {currencySymbol}{customAmount}
-                    </p>
-                  </div>
-                </div>
 
                 <div className="relative mb-6 pt-2">
                   <div className="mb-3 flex justify-between text-[11px] font-medium text-[#B7AEA1]">
@@ -821,7 +954,14 @@ export function TopupScreen() {
                     ≈ {Math.floor(customAmount * notesPerUnit)} {t("topup.notes")}
                   </p>
                 </div>
-              </motion.div>
+                </motion.div>
+              )}
+
+              {!hasSearchResults && (
+                <p className="rounded-[18px] border border-[#E5DDD0]/50 bg-white/45 px-4 py-5 text-center text-[13px] text-[#8C8780]">
+                  {t("topup.search.empty") || "No matching top-up items."}
+                </p>
+              )}
 
               {/* ── Desktop: payment + CTA + restore ─────────────── */}
               <div className="mt-6 hidden md:block">
@@ -830,7 +970,8 @@ export function TopupScreen() {
                 <motion.button
                   whileTap={{ scale: 0.98 }}
                   onClick={handleProceed}
-                  className="h-12 w-full rounded-full text-[15px] font-semibold text-white transition-all hover:brightness-110"
+                  disabled={!hasSearchResults}
+                  className="h-12 w-full rounded-full text-[15px] font-semibold text-white transition-all hover:brightness-110 disabled:opacity-45"
                   style={paperTextureStyle}
                 >
                   {(t("topup.cta") || "买 {notes} 颗 — {price}")
@@ -873,7 +1014,8 @@ export function TopupScreen() {
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={handleProceed}
-              className="h-12 w-full rounded-full text-[15px] font-semibold text-white transition-all hover:brightness-110"
+              disabled={!hasSearchResults}
+              className="h-12 w-full rounded-full text-[15px] font-semibold text-white transition-all hover:brightness-110 disabled:opacity-45"
               style={paperTextureStyle}
             >
               {(t("topup.cta") || "买 {notes} 颗 — {price}")
