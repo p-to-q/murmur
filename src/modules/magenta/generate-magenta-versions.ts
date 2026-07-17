@@ -17,6 +17,7 @@ import { sendBrowserNotification } from "@/lib/hooks/use-browser-notification";
 import { addMurmurNotification } from "@/lib/store/notification-store";
 import { useI18nStore } from "@/lib/i18n";
 import { songGeneratedNotificationCopy } from "@/lib/notifications/notification-copy";
+import { request } from "@/lib/api/request";
 
 /**
  * Magenta RealTime version flow.
@@ -47,11 +48,6 @@ const HEALTH_RETRY_DELAYS_MS = [0, 1000] as const;
 // margin) can only be a hung socket — resolve it into the error card's
 // retry affordance instead.
 const GENERATE_FETCH_TIMEOUT_MS = 320_000;
-// Keep the user path moving: a whole batch should not wait for clip 1 to
-// finish before clip 2 even reaches the worker. Two lanes avoid a full thundering
-// herd against cold/serverless workers while still letting ready cards land
-// much earlier than the old strict serial queue.
-const CLIP_GENERATION_CONCURRENCY = 2;
 
 export type MusicEngineStatus = {
   configured: boolean;
@@ -178,7 +174,7 @@ export async function fetchMusicEngineStatus(force = false): Promise<MusicEngine
 
 async function probeHealthOnce(): Promise<MusicEngineStatus | null> {
   try {
-    const res = await fetch("/api/music/health", {
+    const res = await request("/api/music/health", {
       signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
       cache: "no-store",
     });
@@ -408,44 +404,25 @@ function startBatchGeneration(
   for (const url of liveObjectUrls) URL.revokeObjectURL(url);
   liveObjectUrls = [];
 
-  void requestBatchClipsConcurrently(versions, humBlob, controller.signal, batchId);
+  void requestBatchClipsSequentially(versions, humBlob, controller.signal, batchId);
 }
 
-async function requestBatchClipsConcurrently(
+async function requestBatchClipsSequentially(
   versions: VibeVersion[],
   humBlob: Blob | null,
   signal: AbortSignal,
   batchId: string,
 ): Promise<void> {
-  let nextIndex = 0;
-  const worker = async () => {
-    while (nextIndex < versions.length) {
-      const version = versions[nextIndex++]!;
-      if (signal.aborted) {
-        settleQueuedClipAfterAbort(version, signal);
-        continue;
-      }
-      await requestClip(version, humBlob, signal, batchId, version.generation?.operationId);
+  // The local worker serializes model work internally, and the serverless path
+  // also benefits from avoiding three sibling jobs competing during cold start.
+  // Cards still render immediately; the first completed clip becomes usable
+  // while the remaining two continue in the background.
+  for (const version of versions) {
+    if (signal.aborted) {
+      settleQueuedClipAfterAbort(version, signal);
+      continue;
     }
-  };
-
-  const laneCount = Math.max(
-    1,
-    Math.min(CLIP_GENERATION_CONCURRENCY, versions.length),
-  );
-  await Promise.all(Array.from({ length: laneCount }, () => worker()));
-
-  // If the batch was canceled while all lanes were occupied, any never-started
-  // cards still need to resolve into an explicit retry state rather than sit
-  // pending forever in a restored draft.
-  if (signal.aborted) {
-    const latest = useMurmurStore.getState().vibeVersions;
-    for (const version of versions) {
-      const current = latest.find((candidate) => candidate.id === version.id);
-      if (current?.generation?.status === "pending") {
-        settleQueuedClipAfterAbort(version, signal);
-      }
-    }
+    await requestClip(version, humBlob, signal, batchId, version.generation?.operationId);
   }
 }
 
@@ -494,7 +471,7 @@ async function requestClip(
     // resume/retry of the same clip never double-charges (#300).
     if (operationId) headers["x-generation-clip-id"] = operationId;
 
-    const res = await fetch("/api/music/generate", {
+    const res = await request("/api/music/generate", {
       method: "POST",
       body: form,
       headers,

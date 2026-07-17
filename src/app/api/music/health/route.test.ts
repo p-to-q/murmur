@@ -35,6 +35,11 @@ mock.module("@/lib/platform/runpod-serverless", () => ({
     status: 200,
     body: { workers: { idle: 0, running: 1 } },
   }),
+  parseQueueDepth: () => ({
+    inQueue: 0,
+    inProgress: 1,
+    workers: { idle: 0, running: 1, total: 1 },
+  }),
   runJob: async () => {
     throw new Error("runJob should not be called in health route tests");
   },

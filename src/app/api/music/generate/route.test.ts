@@ -6,6 +6,8 @@ import type {
   BalanceResult,
   RefundNotesInput,
   RefundNotesResult,
+  SettleOperationDeliveryInput,
+  SettleOperationDeliveryResult,
   SpendNotesInput,
   SpendNotesResult,
 } from "@/lib/db/queries/notes-ledger";
@@ -38,6 +40,15 @@ let nextEngineMode: "serverless" | "http" | null = null;
 let nextRunJobThrows: Error | null = null;
 let nextRefundResult: RefundNotesResult | null = null;
 let nextRefundThrows: Error | null = null;
+let nextSettleResult: SettleOperationDeliveryResult = {
+  ok: true,
+  state: "delivered",
+  delivered: true,
+  recharged: false,
+  duplicate: false,
+  rechargeLedgerId: null,
+  balanceAfter: 9,
+};
 type QueueDepthShape = {
   inQueue: number;
   inProgress: number;
@@ -47,6 +58,7 @@ let nextQueueDepth: QueueDepthShape | null = null;
 const lastSpendInputs: SpendNotesInput[] = [];
 const lastRefundInputs: RefundNotesInput[] = [];
 const lastPendingRefundInputs: Array<{ userId: string; originalLedgerId: string }> = [];
+const lastSettleInputs: SettleOperationDeliveryInput[] = [];
 let runJobCallCount = 0;
 
 mock.module("@/lib/auth", () => ({
@@ -81,6 +93,10 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
       externalRef: `refund_pending:${input.originalLedgerId}`,
       duplicate: false,
     };
+  },
+  settleOperationDelivery: async (input: SettleOperationDeliveryInput) => {
+    lastSettleInputs.push(input);
+    return nextSettleResult;
   },
   reverseTopupGrant: async () => ({ ok: false as const, reason: "purchase_grant_not_found" as const }),
   grantNotes: async () => ({
@@ -232,10 +248,20 @@ beforeEach(async () => {
   nextRunJobThrows = null;
   nextRefundResult = null;
   nextRefundThrows = null;
+  nextSettleResult = {
+    ok: true,
+    state: "delivered",
+    delivered: true,
+    recharged: false,
+    duplicate: false,
+    rechargeLedgerId: null,
+    balanceAfter: 9,
+  };
   nextQueueDepth = null;
   lastSpendInputs.length = 0;
   lastRefundInputs.length = 0;
   lastPendingRefundInputs.length = 0;
+  lastSettleInputs.length = 0;
   runJobCallCount = 0;
   publishedNotifications.length = 0;
 });
@@ -366,6 +392,102 @@ describe("POST /api/music/generate", () => {
     // ledger dedupes a resumed/retried clip instead of double-charging it.
     expect(lastSpendInputs[0]?.externalRef).toBe(`music_generate:${clipId}`);
     expect(lastSpendInputs[1]?.externalRef).toBe(`music_generate:${clipId}`);
+  });
+
+  it("settles a successfully delivered stable clip operation", async () => {
+    nextEngineMode = "serverless";
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_settle", email: null, name: "Settle", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_settle",
+    };
+
+    const response = await POST(buildRequest("req_settle", {
+      "x-generation-clip-id": "clip-settle-abcdef",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(lastSettleInputs).toHaveLength(1);
+    expect(lastSettleInputs[0]).toMatchObject({
+      userId: "usr_settle",
+      spendLedgerId: "nle_music_generate",
+      metadata: {
+        requestId: "req_settle",
+        operationId: "clip-settle-abcdef",
+        trigger: "music_generate_delivered",
+      },
+    });
+  });
+
+  it("settles a successful retry after the stable clip's original spend was refunded", async () => {
+    nextEngineMode = "serverless";
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_retry", email: null, name: "Retry", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_retry",
+    };
+    nextSpendResult = {
+      ok: true,
+      ledgerId: "nle_refunded_music_generate",
+      balanceBefore: 10,
+      balanceAfter: 10,
+      duplicate: true,
+    };
+    nextSettleResult = {
+      ok: true,
+      state: "delivered",
+      delivered: true,
+      recharged: true,
+      duplicate: false,
+      rechargeLedgerId: "nle_music_recharge",
+      balanceAfter: 9,
+    };
+
+    const response = await POST(buildRequest("req_retry", {
+      "x-generation-clip-id": "clip-retry-abcdef",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(lastSettleInputs).toHaveLength(1);
+    expect(lastSettleInputs[0]?.spendLedgerId).toBe("nle_refunded_music_generate");
+    expect(lastRefundInputs).toHaveLength(0);
+  });
+
+  it("accepts duplicate delivery settlement as an idempotent successful replay", async () => {
+    nextEngineMode = "serverless";
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_replay", email: null, name: "Replay", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_replay",
+    };
+    nextSpendResult = {
+      ok: true,
+      ledgerId: "nle_delivered_music_generate",
+      balanceBefore: 9,
+      balanceAfter: 9,
+      duplicate: true,
+    };
+    nextSettleResult = {
+      ok: true,
+      state: "delivered",
+      delivered: true,
+      recharged: false,
+      duplicate: true,
+      rechargeLedgerId: null,
+      balanceAfter: 9,
+    };
+
+    const response = await POST(buildRequest("req_replay", {
+      "x-generation-clip-id": "clip-replay-abcdef",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(lastSettleInputs).toHaveLength(1);
+    expect(lastSettleInputs[0]?.spendLedgerId).toBe("nle_delivered_music_generate");
+    expect(lastRefundInputs).toHaveLength(0);
   });
 
   it("ignores a malformed clip id and falls back to a per-request spend ref (#300)", async () => {

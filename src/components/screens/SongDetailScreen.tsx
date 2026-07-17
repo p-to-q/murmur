@@ -51,7 +51,7 @@ import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
 import { downloadUrlAsFile } from "@/lib/platform/download";
-import { fetchWithTimeout } from "@/lib/api/timeout";
+import { requestWithTimeout } from "@/lib/api/timeout";
 import {
   createSongShareLink,
   SongShareRequestError,
@@ -86,6 +86,7 @@ type RelatedSong = Pick<Song, "id" | "title" | "vibe" | "tags">;
 
 type ExportKey = "audio" | "video" | "share" | "link";
 type ShareCardMode = "image" | "video";
+type SongLoadResult = { status: "found"; song: Song } | { status: "not_found" };
 const CJK_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
 
 // Pick the download extension for an audio source. Handles both legacy base64
@@ -123,6 +124,18 @@ function entryMotion(reduce: boolean | null, opts: EntryOpts = {}) {
   };
 }
 
+export async function loadSongDetailOnce(songId: string): Promise<SongLoadResult> {
+  await ensureLocalCreatorSession();
+  const response = await requestWithTimeout(`/api/songs/${songId}`, {}, 10_000);
+  return readSongDetailResponse(response);
+}
+
+export async function readSongDetailResponse(response: Response): Promise<SongLoadResult> {
+  if (response.ok) return { status: "found", song: (await response.json()) as Song };
+  if (response.status === 404 || response.status === 410) return { status: "not_found" };
+  throw new ApiEnvelopeError(await readApiErrorEnvelope(response, "song_load_failed"));
+}
+
 export function SongDetailScreen({ songId }: { songId: string }) {
   const router = useRouter();
   const t = useTranslator();
@@ -137,6 +150,8 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const [parentSong, setParentSong] = useState<RelatedSong | null>(null);
   const [rootSong, setRootSong] = useState<RelatedSong | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState<ExportKey | null>(null);
@@ -146,19 +161,40 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const [shareCardOpen, setShareCardOpen] = useState(false);
   const [shareCardMode, setShareCardMode] = useState<ShareCardMode>("image");
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement | null>(null);
+  const deleteReturnFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!deleteOpen) return;
+
+    deleteReturnFocusRef.current = document.activeElement as HTMLElement | null;
+    deleteCancelRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDeleteOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      deleteReturnFocusRef.current?.focus();
+    };
+  }, [deleteOpen]);
 
   /* ── Load ──────────────────────────────────────────────────────────── */
   useEffect(() => {
     let active = true;
     (async () => {
+      setIsLoading(true);
+      setLoadError(false);
       try {
-        await ensureLocalCreatorSession();
-        const res = await fetchWithTimeout(`/api/songs/${songId}`, {}, 10_000);
-        if (!res.ok) {
+        const result = await loadSongDetailOnce(songId);
+        if (result.status === "not_found") {
           if (active) setSong(null);
           return;
         }
-        const data = (await res.json()) as Song;
+        const data = result.song;
         if (!active) return;
         setSong(data);
         memory
@@ -171,6 +207,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
           .catch(() => {});
       } catch (err) {
         console.warn("[SongDetail] load error:", err);
+        if (active) setLoadError(true);
       } finally {
         if (active) setIsLoading(false);
       }
@@ -178,7 +215,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     return () => {
       active = false;
     };
-  }, [songId]);
+  }, [loadAttempt, songId]);
 
   /* ── Cleanup ───────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -425,7 +462,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     if (!song || isDeleting) return;
     setIsDeleting(true);
     try {
-      const res = await fetchWithTimeout(`/api/songs/${song.id}`, { method: "DELETE" }, 10_000);
+      const res = await requestWithTimeout(`/api/songs/${song.id}`, { method: "DELETE" }, 10_000);
       if (!res.ok) {
         throw new ApiEnvelopeError(await readApiErrorEnvelope(res, "delete_failed"));
       }
@@ -456,6 +493,26 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
   if (isLoading) {
     return <GlobalLoadingIndicator />;
+  }
+
+  if (loadError) {
+    return (
+      <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+        <PageBackdrop />
+        <div className="relative z-10 flex min-h-svh flex-col items-center justify-center px-6 text-center">
+          <p className="eyebrow mb-3 text-[#FF8A5C]">{t("song.load_error.eyebrow") || "SONG"}</p>
+          <h1 className="hero-serif text-[28px] text-[#1A1A1A] md:text-[40px]">
+            {t("song.load_error.title") || "Couldn't open this song."}
+          </h1>
+          <p className="mt-4 max-w-md text-[15px] leading-relaxed text-[#6F6A63]">
+            {t("song.load_error.body") || "It may be a temporary connection problem. Try again."}
+          </p>
+          <button type="button" onClick={() => setLoadAttempt((value) => value + 1)} className="mm-btn-primary mt-8">
+            {t("song.load_error.retry") || "Try again"}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (!song) {
@@ -671,8 +728,16 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               </div>
 
               <div className="absolute bottom-6 right-6">
-                <motion.div
+                <motion.button
+                  type="button"
                   whileTap={{ scale: 0.92 }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    startAudioContext();
+                    void handlePlay();
+                  }}
+                  aria-label={isPlaying ? t("common.pause") : t("common.play")}
+                  aria-pressed={isPlaying}
                   className={`flex h-14 w-14 md:h-16 md:w-16 items-center justify-center rounded-full border border-white/60 backdrop-blur-md transition-colors ${
                     isPlaying ? "bg-white/40" : "bg-white/22"
                   }`}
@@ -685,7 +750,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                       fill="white"
                     />
                   )}
-                </motion.div>
+                </motion.button>
               </div>
             </motion.div>
 
@@ -898,6 +963,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-md px-5"
             onClick={() => setDeleteOpen(false)}
+            role="presentation"
           >
             <motion.div
               initial={{ opacity: 0, y: 12, scale: 0.96 }}
@@ -906,17 +972,22 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
               className="mm-card w-full max-w-sm px-6 py-7 text-center"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="song-delete-title"
+              aria-describedby="song-delete-description"
             >
               <p className="eyebrow text-[#FF8A5C] mb-3">{t("song.delete.eyebrow") || "REMOVE"}</p>
-              <h3 className="font-serif text-[24px] text-[#1A1A1A] leading-tight">
+              <h3 id="song-delete-title" className="font-serif text-[24px] text-[#1A1A1A] leading-tight">
                 {t("song.delete.title") || "Delete this little song?"}
               </h3>
-              <p className="mt-2 text-[13px] text-[#8C8780] leading-relaxed">
+              <p id="song-delete-description" className="mt-2 text-[13px] text-[#8C8780] leading-relaxed">
                 {t("song.delete.body") ||
                   "It will be gone from your gallery. You can hum it again later."}
               </p>
               <div className="mt-6 flex gap-3">
                 <button
+                  ref={deleteCancelRef}
                   onClick={() => setDeleteOpen(false)}
                   className="flex-1 h-11 rounded-[18px] border border-[#E5DDD0] text-[#1A1A1A] text-[14px] hover:bg-white transition-colors"
                 >
@@ -941,7 +1012,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 async function fetchRelatedSong(songId: string | null): Promise<RelatedSong | null> {
   if (!songId) return null;
   try {
-    const response = await fetchWithTimeout(`/api/songs/${songId}?view=summary`, {}, 8_000);
+    const response = await requestWithTimeout(`/api/songs/${songId}?view=summary`, {}, 8_000);
     if (!response.ok) return null;
     return await response.json() as RelatedSong;
   } catch {

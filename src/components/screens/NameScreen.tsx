@@ -28,7 +28,7 @@ import {
   apiErrorEnvelopeFrom,
   readApiErrorEnvelope,
 } from "@/lib/api/error-envelope";
-import { fetchWithTimeout, isApiTimeoutError, withTimeout } from "@/lib/api/timeout";
+import { isApiTimeoutError, requestWithTimeout, withTimeout } from "@/lib/api/timeout";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { trackStageEntered, trackStageCompleted } from "@/lib/observability/stage-tracking";
 import { addMurmurNotification } from "@/lib/store/notification-store";
@@ -250,7 +250,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       if (!hasCreatorSession) {
         console.warn("[Name] Local Creator session unavailable; trying local preview save fallback.");
       }
-      const response = await fetchWithTimeout("/api/songs", {
+      const response = await requestWithTimeout("/api/songs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

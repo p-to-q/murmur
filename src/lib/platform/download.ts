@@ -10,7 +10,10 @@ export async function downloadUrlAsFile(url: string, filename: string): Promise<
 
   let response: Response;
   try {
-    response = await fetch(url, { cache: "no-store" });
+    response = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
   } catch {
     triggerDownload(url, filename);
     return;

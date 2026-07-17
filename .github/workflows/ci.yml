@@ -44,6 +44,13 @@ jobs:
           ./.venv/bin/python -m pip install --upgrade pip
           ./.venv/bin/pip install -r requirements.txt
 
+      - name: Install music worker test dependencies
+        run: |
+          cd workers/music-engine
+          python -m venv .venv
+          ./.venv/bin/python -m pip install --upgrade pip
+          ./.venv/bin/pip install numpy fastapi httpx python-multipart
+
       - name: Lint
         run: bun run lint
 
@@ -60,6 +67,9 @@ jobs:
 
       - name: Audio worker tests
         run: bun run test:audio
+
+      - name: Music worker tests
+        run: bun run test:music
 
       - name: Build audit
         run: bun run build:audit

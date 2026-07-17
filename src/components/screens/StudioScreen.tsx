@@ -21,6 +21,10 @@ import {
 import { classifyPromptWithLLM, StrummerEditRequestError } from "@/lib/api/strummer";
 import { formatStudioSupportCode } from "@/lib/observability/support-code";
 import { studioPromptRecoveryForCode } from "@/components/screens/studio-prompt-recovery";
+import {
+  canRetryGeneration,
+  generationErrorRecovery,
+} from "@/components/screens/vibe-generation-recovery";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { memory } from "@/lib/platform/memory";
 import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
@@ -135,7 +139,6 @@ function StudioContent({ version }: { version: VibeVersion }) {
   const t = useTranslator();
   const lang = useCurrentLang();
   const setCurrentVersion = useMurmurStore((state) => state.setCurrentVersion);
-  const setVibeVersions = useMurmurStore((state) => state.setVibeVersions);
   const { refresh: refreshBalance } = useUserBalance();
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -334,25 +337,17 @@ function StudioContent({ version }: { version: VibeVersion }) {
 
   const handleRetryGeneratedTake = () => {
     if (!currentVersion.generation || currentVersion.generation.status !== "error") return;
-    const nextVersion: VibeVersion = {
-      ...currentVersion,
-      generation: {
-        ...currentVersion.generation,
-        status: "pending",
-        error: undefined,
-        errorCode: undefined,
-        currentBalance: undefined,
-        cost: undefined,
-      },
-    };
+    if (!canRetryGeneration(currentVersion)) {
+      if (currentVersion.generation.errorCode === "insufficient_notes") {
+        toast(t("vibe.gen.insufficient_toast") || "Top up notes before brewing more.");
+        router.push("/topup");
+      } else {
+        toast(t("vibe.gen.rate_limited_toast") || "Too many generations in a row. Try again shortly.");
+      }
+      return;
+    }
     setIsPlaying(false);
     versionPreview.stop();
-    setCurrentVersion(nextVersion);
-    setVibeVersions(
-      useMurmurStore.getState().vibeVersions.map((candidate) =>
-        candidate.id === currentVersion.id ? nextVersion : candidate,
-      ),
-    );
     regenerateVersionAudio(currentVersion);
     toast(t("vibe.gen.retrying") || "Brewing this one again…");
   };
@@ -471,10 +466,17 @@ function StudioContent({ version }: { version: VibeVersion }) {
 
             {/* Play disc — center */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <motion.div
+              <motion.button
+                type="button"
                 whileTap={{ scale: 0.88 }}
                 animate={isPlaying ? { scale: [1, 1.06, 1] } : { scale: 1 }}
                 transition={isPlaying ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" } : {}}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void togglePlay();
+                }}
+                aria-label={isPlaying ? t("common.pause") : t("common.play")}
+                aria-pressed={isPlaying}
                 className={`flex h-[60px] w-[60px] items-center justify-center rounded-full backdrop-blur-md pointer-events-auto transition-all ${
                   isPlaying
                     ? "bg-white/30 shadow-[0_0_24px_rgba(255,255,255,0.2)]"
@@ -486,7 +488,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
                 ) : (
                   <Play className="ml-0.5 h-5 w-5 text-white" fill="white" />
                 )}
-              </motion.div>
+              </motion.button>
             </div>
 
             {/* Turntable */}
@@ -569,7 +571,10 @@ function StudioContent({ version }: { version: VibeVersion }) {
                         onClick={handleRetryGeneratedTake}
                         className="rounded-full bg-white/90 px-3.5 py-2 text-[12px] font-medium text-[#1A1A1A] transition-colors hover:bg-white"
                       >
-                        {t("studio.magenta.retry") || "Retry this take"}
+                        {(() => {
+                          const recovery = generationErrorRecovery(currentVersion);
+                          return t(recovery.ctaKey) || recovery.ctaFallback;
+                        })()}
                       </button>
                     )}
                     <button

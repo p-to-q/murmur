@@ -480,6 +480,10 @@ export const DICT = {
   "gallery.demo.cta_create": { zh: "开始创作", en: "Start creating" },
   "gallery.demo.hint":   { zh: "这些是示例歌曲 ↓", en: "These are demo songs ↓" },
   "gallery.start_hum":   { zh: "开始哼唱", en: "Start humming" },
+  "gallery.load_error.eyebrow": { zh: "藏歌", en: "GALLERY" },
+  "gallery.load_error.title": { zh: "暂时没能打开藏歌。", en: "Couldn't open your gallery." },
+  "gallery.load_error.body": { zh: "歌还好好存着，重新加载一次就好。", en: "Your songs are still saved. Try loading them again." },
+  "gallery.load_error.retry": { zh: "重新加载", en: "Try again" },
 
   // ── Activity heatmap（Gallery 顶部）───────────────────────────────
   "gallery.heatmap.less":   { zh: "少",   en: "Less" },
@@ -497,6 +501,10 @@ export const DICT = {
   // ── SongDetail ─────────────────────────────────────────────────────
   "song.not_found.eyebrow": { zh: "空白唱片", en: "EMPTY RECORD" },
   "song.not_found":      { zh: "找不到这首歌",       en: "Song not found" },
+  "song.load_error.eyebrow": { zh: "小歌", en: "SONG" },
+  "song.load_error.title": { zh: "暂时没能打开这首歌。", en: "Couldn't open this song." },
+  "song.load_error.body": { zh: "可能只是连接晃了一下，再试一次。", en: "It may be a temporary connection problem. Try again." },
+  "song.load_error.retry": { zh: "重新加载", en: "Try again" },
   "song.back_to_gallery":{ zh: "返回藏歌",           en: "Back to Gallery" },
   "song.remix_again":    { zh: "再生三版",           en: "Try new versions" },
   "song.edit_again":     { zh: "再改一改",           en: "Edit again" },
@@ -599,6 +607,10 @@ export const DICT = {
   "public_song.loading_audio": { zh: "启动中…", en: "Starting…" },
   "public_song.not_found.eyebrow": { zh: "没有找到", en: "MISSING" },
   "public_song.not_found":    { zh: "这条分享链接已经听不到了。", en: "This shared song is no longer here." },
+  "public_song.load_error.eyebrow": { zh: "MURMUR", en: "MURMUR" },
+  "public_song.load_error.title": { zh: "暂时没能打开这首分享歌。", en: "Couldn't open this shared song." },
+  "public_song.load_error.body": { zh: "链接可能仍然有效，重新加载一次试试。", en: "The link may still be fine. Try loading it again." },
+  "public_song.load_error.retry": { zh: "重新加载", en: "Try again" },
 
   // ── Me ─────────────────────────────────────────────────────────────
   "me.title":              { zh: "我的", en: "Me!" },

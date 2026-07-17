@@ -26,14 +26,29 @@ const fallbackResult: TranscriptionResult = {
     notes: [
       { pitch: 60, start: 0, duration: 0.5, velocity: 0.8, confidence: 0.9 },
     ],
-    totalDuration: 0.5,
     key: "C",
     scale: "major",
-    phrases: [],
+    bpm: 90,
+    duration: 0.5,
+    contour: "flat",
   },
-  selectedMelodyKind: "main",
+  melodies: {
+    intent: {
+      notes: [{ pitch: 60, start: 0, duration: 0.5, velocity: 0.8, confidence: 0.9 }],
+      key: "C", scale: "major", bpm: 90, duration: 0.5, contour: "flat",
+    },
+    corrected: {
+      notes: [{ pitch: 60, start: 0, duration: 0.5, velocity: 0.8, confidence: 0.9 }],
+      key: "C", scale: "major", bpm: 90, duration: 0.5, contour: "flat",
+    },
+    musical: {
+      notes: [{ pitch: 60, start: 0, duration: 0.5, velocity: 0.8, confidence: 0.9 }],
+      key: "C", scale: "major", bpm: 90, duration: 0.5, contour: "flat",
+    },
+  },
+  selectedMelodyKind: "corrected",
   warnings: [],
-  diagnostics: {},
+  diagnostics: { duration: 0.5, snr: null, voicedRatio: null },
 };
 
 mock.module("@/lib/api/transcribe", () => ({

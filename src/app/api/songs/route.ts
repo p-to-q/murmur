@@ -21,7 +21,11 @@ import {
   getLocalSongSummariesByUserFallback,
 } from "@/lib/db/queries/local-song-fallback";
 import { isDatabaseUnavailable, objectFieldAsString } from "@/app/api/songs/db-fallback";
-import { uploadSongMasterFromDataUrl } from "@/lib/storage/song-audio";
+import {
+  parseAudioDataUrl,
+  storedSongAudioDigest,
+  uploadSongMasterFromDataUrl,
+} from "@/lib/storage/song-audio";
 import { isObject } from "@/lib/utils/is-object";
 import { log } from "@/lib/observability/log";
 import {
@@ -205,7 +209,49 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const resolvedAudio = await resolveSongAudioForSave(await buildSongInput(body, userId), body, {
+  const baseInput = await buildSongInput(body, userId);
+  const dataUrl =
+    typeof body.mp3DataUrl === "string" && body.mp3DataUrl.length > 0
+      ? body.mp3DataUrl
+      : null;
+  const candidateAudioDigest = dataUrl ? parseAudioDataUrl(dataUrl)?.digest ?? null : null;
+  const candidateFingerprint = computeSaveFingerprint({
+    ...baseInput,
+    mp3Url: null,
+    mp3StorageKey: null,
+    mp3DataUrl: candidateAudioDigest ? null : dataUrl,
+    audioDigest: candidateAudioDigest,
+  });
+
+  // Resolve an explicit id before touching object storage. Content-addressed
+  // audio keys below also protect the race where two first saves arrive at once.
+  if (body.id && candidateAudioDigest) {
+    const existing = await getSongById(baseInput.id);
+    if (existing) {
+      const compatibleFingerprints = [candidateFingerprint];
+      const existingAudioDigest = existing.userId === userId
+        ? parseAudioDataUrl(existing.mp3DataUrl ?? "")?.digest ??
+          await storedSongAudioDigest(existing.mp3StorageKey)
+        : null;
+      if (existingAudioDigest === candidateAudioDigest) {
+        compatibleFingerprints.push(computeSaveFingerprint({
+          ...baseInput,
+          mp3Url: existing.mp3Url,
+          mp3StorageKey: existing.mp3StorageKey,
+          mp3DataUrl: existing.mp3DataUrl,
+        }));
+      }
+      return handleSongIdConflict(
+        baseInput.id,
+        userId,
+        requestId,
+        compatibleFingerprints,
+        existing,
+      );
+    }
+  }
+
+  const resolvedAudio = await resolveSongAudioForSave(baseInput, body, {
     requestId,
     userId,
     sessionId: auth.sessionId,
@@ -214,7 +260,10 @@ export async function POST(req: NextRequest) {
   // distinguishable from a same-id/different-payload conflict (#297).
   const songInput: SongInput = {
     ...resolvedAudio.input,
-    saveFingerprint: computeSaveFingerprint(resolvedAudio.input),
+    saveFingerprint: computeSaveFingerprint({
+      ...resolvedAudio.input,
+      audioDigest: resolvedAudio.audioDigest,
+    }),
   };
   const audioStorageHeaders =
     resolvedAudio.audioStorage === "data_url_fallback"
@@ -472,6 +521,7 @@ async function buildSongInput(body: SongPayload, userId: string): Promise<SongIn
 type ResolvedSongAudio = {
   input: SongInput;
   audioStorage: "object" | "data_url_fallback" | "none";
+  audioDigest: string | null;
 };
 
 async function resolveSongAudioForSave(
@@ -488,8 +538,12 @@ async function resolveSongAudioForSave(
     return {
       input: { ...base, mp3Url: null, mp3StorageKey: null, mp3DataUrl: null },
       audioStorage: "none",
+      audioDigest: null,
     };
   }
+
+  const parsed = parseAudioDataUrl(dataUrl);
+  const audioDigest = parsed?.digest ?? null;
 
   try {
     const uploaded = await uploadSongMasterFromDataUrl({
@@ -506,6 +560,7 @@ async function resolveSongAudioForSave(
           mp3DataUrl: null,
         },
         audioStorage: "object",
+        audioDigest: uploaded.digest,
       };
     }
   } catch (err) {
@@ -526,6 +581,7 @@ async function resolveSongAudioForSave(
   return {
     input: { ...base, mp3Url: null, mp3StorageKey: null, mp3DataUrl: dataUrl },
     audioStorage: "data_url_fallback",
+    audioDigest,
   };
 }
 
@@ -563,9 +619,10 @@ async function handleSongIdConflict(
   songId: string,
   userId: string,
   requestId: string,
-  incomingFingerprint: string | null | undefined,
+  incomingFingerprint: string | null | undefined | string[],
+  knownExisting?: SavedSong | null,
 ) {
-  const existing = await getSongById(songId);
+  const existing = knownExisting ?? await getSongById(songId);
   if (!existing || existing.userId !== userId) {
     // A different user already owns this id — never disclose or overwrite it.
     return songIdConflictResponse(requestId);
@@ -576,10 +633,14 @@ async function handleSongIdConflict(
   // rows have no stored fingerprint — treat those as replays to preserve the
   // pre-#297 idempotent-save behavior.
   const existingFingerprint = existing.saveFingerprint;
+  const incomingFingerprints = Array.isArray(incomingFingerprint)
+    ? incomingFingerprint
+    : [incomingFingerprint];
   const isExactReplay =
     !existingFingerprint ||
-    !incomingFingerprint ||
-    existingFingerprint === incomingFingerprint;
+    incomingFingerprints.some(
+      (fingerprint) => !fingerprint || existingFingerprint === fingerprint,
+    );
   if (isExactReplay) {
     return NextResponse.json(existing, {
       headers: {

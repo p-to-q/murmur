@@ -541,6 +541,10 @@ Privacy and training-use notes:
   Murmur systems without a documented purpose and access control.
 - Do not store raw hum audio in `composition_events.payload`. Raw or rendered
   audio belongs in object storage, referenced by `songs.mp3_storage_key`.
+- Rendered song masters use a content-addressed object key derived from their
+  SHA-256 digest. Exact save retries reuse the same object; a conflicting save
+  with the same song id cannot overwrite the audio already referenced by the
+  persisted row.
 - For training/model work, prefer an internal export job that joins these rows
   and replaces user ids with run-local pseudonyms before producing files.
 - Honor account deletion: hard user delete cascades composition events and

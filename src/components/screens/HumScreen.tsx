@@ -40,6 +40,7 @@ import {
   loadRecordingBlob,
   saveRecordingBlob,
 } from "@/lib/audio/recording-cache";
+import { createRecordingOperationId } from "@/lib/audio/recording-operation";
 import { inputLevelLabelKey, nextInputLevelDecision } from "@/lib/audio/input-level";
 import {
   INITIAL_FIXTURE_RESCUE_STATE,
@@ -596,7 +597,10 @@ export function HumScreen() {
     return true;
   };
 
-  const transcribeAndGenerate = async (blob: Blob | undefined) => {
+  const transcribeAndGenerate = async (
+    blob: Blob | undefined,
+    restoredOperationId?: string | null,
+  ) => {
     setRecordingState("processing");
     tickMessages();
     // Tracks whether *this* run left a recoverable copy in IndexedDB, so the
@@ -621,12 +625,16 @@ export function HumScreen() {
       // A mid-flight network drop then leaves a recoverable copy instead of
       // forcing the user to re-hum. Storage failures degrade to today's
       // behavior (no cache, no retry affordance).
+      const operationId = blob
+        ? restoredOperationId ?? createRecordingOperationId()
+        : undefined;
       if (blob) {
-        persistedRecording = await saveRecordingBlob(blob);
+        persistedRecording = await saveRecordingBlob(blob, operationId);
       }
       const result = await withHumProcessingTimeout(
         transcribeWithStainer({
           audioBlob: preparedBlob,
+          operationId,
           onProgress: (phase) => {
             if (phase === "billing_ok") {
               setProcessingMessage(t("hum.proc.billing_ok"));
@@ -901,9 +909,6 @@ export function HumScreen() {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
         throw new Error("Browser recording APIs are unavailable");
       }
-      if (navigator.onLine === false) {
-        throw new Error("Browser is offline");
-      }
       setRecordingState("processing");
       setProcessingMessage(t("hum.proc.mic"));
       const stream = await getUserMediaWithTimeout({ audio: true });
@@ -1077,7 +1082,7 @@ export function HumScreen() {
     startAudioContext();
     setHumError(null);
     setCachedRecordingAvailable(false);
-    await transcribeAndGenerate(cached.blob);
+    await transcribeAndGenerate(cached.blob, cached.operationId);
   };
 
   const handleRecoveryAction = (action: HumRecoveryAction) => {

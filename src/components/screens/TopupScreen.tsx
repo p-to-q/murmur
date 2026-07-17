@@ -666,7 +666,7 @@ export function TopupScreen() {
           </div>
         </div>
 
-        <div className="flex-1 px-5 pb-32">
+        <div className="flex-1 px-5 pb-52 md:pb-32">
           <div className="mx-auto max-w-lg">
             <AnimatePresence initial={false}>
               {isSearchOpen && (

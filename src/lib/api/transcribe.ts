@@ -85,7 +85,7 @@ export class TranscribeRequestError extends Error {
  */
 export async function transcribeRecording(
   audioBlob: Blob,
-  options: { targetInstrument?: string } = {},
+  options: { targetInstrument?: string; operationId?: string } = {},
 ): Promise<TranscriptionResult> {
   const form = new FormData();
   form.append("audio", audioBlob, filenameForBlob(audioBlob));
@@ -102,6 +102,9 @@ export async function transcribeRecording(
     response = await request("/api/transcribe", {
       method: "POST",
       body: form,
+      headers: options.operationId
+        ? { "x-operation-id": options.operationId }
+        : undefined,
       signal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
     });
   } catch (cause) {
@@ -182,6 +185,7 @@ export async function transcribeRecordingStreaming(
   options: {
     targetInstrument?: string;
     onProgress?: TranscribeProgressCallback;
+    operationId?: string;
   } = {},
 ): Promise<TranscriptionResult> {
   const form = new FormData();
@@ -195,7 +199,12 @@ export async function transcribeRecordingStreaming(
     response = await request("/api/transcribe", {
       method: "POST",
       body: form,
-      headers: { Accept: "text/x-ndjson" },
+      headers: {
+        Accept: "text/x-ndjson",
+        ...(options.operationId
+          ? { "x-operation-id": options.operationId }
+          : {}),
+      },
       signal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
     });
   } catch (cause) {

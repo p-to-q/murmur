@@ -53,7 +53,10 @@ async function decodeAudioBlob(blob: Blob): Promise<AudioBuffer> {
  * is omitted; real audio never silently falls through to demo content.
  */
 export async function transcribeWithStainer(
-  input: TranscriptionInput & { onProgress?: TranscribeProgressCallback },
+  input: TranscriptionInput & {
+    onProgress?: TranscribeProgressCallback;
+    operationId?: string;
+  },
 ): Promise<TranscriptionResult> {
   const startedAt = performance.now();
 
@@ -70,10 +73,12 @@ export async function transcribeWithStainer(
       result = await transcribeRecordingStreaming(input.audioBlob, {
         targetInstrument: input.targetInstrument,
         onProgress: input.onProgress,
+        operationId: input.operationId,
       });
     } else if (input.audioBlob) {
       result = await transcribeRecording(input.audioBlob, {
         targetInstrument: input.targetInstrument,
+        operationId: input.operationId,
       });
     } else {
       result = await transcribeFixture(input);

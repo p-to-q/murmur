@@ -197,6 +197,18 @@ describe("transcribeRecording typed error mapping", () => {
       expect(typed.status).toBe(0);
     }
   });
+
+  it("sends the stable recording operation id on classic requests", async () => {
+    const seenHeaders: Headers[] = [];
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      seenHeaders.push(new Headers(init?.headers));
+      return jsonResponse({ provider: "swiftf0" }, 200);
+    });
+
+    await transcribeRecording(blob(), { operationId: "recording-op-1" });
+
+    expect(seenHeaders[0]?.get("x-operation-id")).toBe("recording-op-1");
+  });
 });
 
 function ndjsonResponse(lines: string[]): Response {
@@ -233,6 +245,23 @@ describe("transcribeRecordingStreaming NDJSON consumer (#224)", () => {
 
     expect(phases).toEqual(["billing_ok", "worker_started", "complete"]);
     expect((result as { provider: string }).provider).toBe("swiftf0");
+  });
+
+  it("sends the stable recording operation id with streaming requests", async () => {
+    const seenHeaders: Headers[] = [];
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      seenHeaders.push(new Headers(init?.headers));
+      return ndjsonResponse([
+        JSON.stringify({ phase: "complete", result: { provider: "swiftf0" } }),
+      ]);
+    });
+
+    await transcribeRecordingStreaming(blob(), {
+      operationId: "recording-op-2",
+    });
+
+    expect(seenHeaders[0]?.get("accept")).toBe("text/x-ndjson");
+    expect(seenHeaders[0]?.get("x-operation-id")).toBe("recording-op-2");
   });
 
   it("consumes a final NDJSON event without a trailing newline", async () => {

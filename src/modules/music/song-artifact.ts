@@ -186,6 +186,7 @@ type FingerprintInput = {
   mp3Url?: string | null;
   mp3StorageKey?: string | null;
   mp3DataUrl?: string | null;
+  audioDigest?: string | null;
 };
 
 function stableStringify(value: unknown): string {
@@ -218,14 +219,15 @@ function cyrb53(input: string, seed = 0): string {
 
 /**
  * Compact, stable fingerprint of the canonical persisted fields. Audio is
- * reduced to its durable identity (key/url, or a length marker for the legacy
- * data-URL fallback) so we never hash megabytes of base64.
+ * reduced to its byte digest when available, then its durable identity for
+ * legacy callers. A legacy data URL is hashed by content rather than length.
  */
 export function computeSaveFingerprint(input: FingerprintInput): string {
   const audioIdentity =
+    nonEmpty(input.audioDigest) ??
     nonEmpty(input.mp3StorageKey) ??
     nonEmpty(input.mp3Url) ??
-    (input.mp3DataUrl ? `data-url:${input.mp3DataUrl.length}` : null);
+    (input.mp3DataUrl ? `data-url:${cyrb53(input.mp3DataUrl)}` : null);
 
   const canonical = {
     title: input.title ?? "",

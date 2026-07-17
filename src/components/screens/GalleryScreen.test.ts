@@ -217,11 +217,23 @@ describe("loadGallerySongsOnce", () => {
       throw new Error(`unexpected fetch ${path}`);
     }) as typeof fetch;
 
-    const songs = await loadGallerySongsOnce();
-
-    expect(songs).toBeNull();
+    await expect(loadGallerySongsOnce()).rejects.toThrow("API 401 unauthorized");
     expect(songFetches).toBe(2);
     expect(bootstrapFetches).toBe(1);
+  });
+
+  it("returns an empty list only after a successful gallery response", async () => {
+    sessionStorage.setItem(BOOTSTRAP_STORAGE_KEY, "1");
+    globalThis.fetch = (async () => jsonResponse([])) as typeof fetch;
+
+    expect(await loadGallerySongsOnce()).toEqual([]);
+  });
+
+  it("rejects a temporary server failure instead of presenting an empty gallery", async () => {
+    sessionStorage.setItem(BOOTSTRAP_STORAGE_KEY, "1");
+    globalThis.fetch = (async () => jsonResponse({ error: "server_error" }, 503)) as typeof fetch;
+
+    await expect(loadGallerySongsOnce()).rejects.toThrow("API 503 server_error");
   });
 });
 

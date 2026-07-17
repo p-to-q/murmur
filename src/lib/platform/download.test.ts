@@ -72,14 +72,14 @@ describe("download helpers", () => {
       revokeObjectURL: (url: string) => {
         revoked = url;
       },
-    } as typeof URL;
+    } as unknown as typeof URL;
 
     downloadBlob(new Blob(["hello"], { type: "text/plain" }), "hello.txt");
 
     expect(clicks).toEqual([
       { href: "blob:test-download", download: "hello.txt", attached: true },
     ]);
-    expect(revoked).toBe("blob:test-download");
+    expect(revoked as string | null).toBe("blob:test-download");
   });
 
   it("fetches remote URLs as blobs before downloading", async () => {
@@ -88,15 +88,19 @@ describe("download helpers", () => {
       ...originalUrl,
       createObjectURL: () => "blob:remote-download",
       revokeObjectURL: () => {},
-    } as typeof URL;
-    globalThis.fetch = (async () =>
-      new Response(new Blob(["audio"], { type: "audio/mpeg" }), { status: 200 })) as typeof fetch;
+    } as unknown as typeof URL;
+    let signal: AbortSignal | null = null;
+    globalThis.fetch = (async (_input, init) => {
+      signal = init?.signal ?? null;
+      return new Response(new Blob(["audio"], { type: "audio/mpeg" }), { status: 200 });
+    }) as typeof fetch;
 
     await downloadUrlAsFile("https://cdn.example/song.mp3", "song.mp3");
 
     expect(clicks).toEqual([
       { href: "blob:remote-download", download: "song.mp3", attached: true },
     ]);
+    expect(signal).toBeInstanceOf(AbortSignal);
   });
 
   it("falls back to a direct attached-link download when remote fetch fails", async () => {
