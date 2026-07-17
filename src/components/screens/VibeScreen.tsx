@@ -59,10 +59,10 @@ import {
 type Phase = "closing" | "opening" | "cards";
 
 // How long the tab must stay backgrounded before we treat an in-flight
-// generation as abandoned and cancel it (issue #212). Long enough to survive a
-// brief app-switch / notification-shade peek on mobile, short enough that a
-// truly abandoned generation stops billing RunPod promptly.
-const BACKGROUND_GENERATION_CANCEL_MS = 60_000;
+// generation as abandoned and cancel it (issue #212). RunPod cold starts can
+// legitimately take multiple minutes, so this needs to protect real waits while
+// still landing before the 300s route ceiling.
+const BACKGROUND_GENERATION_CANCEL_MS = 240_000;
 
 const STAR_SEA_VISUALS = [
   {

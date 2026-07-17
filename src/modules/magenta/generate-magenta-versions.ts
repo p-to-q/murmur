@@ -40,6 +40,8 @@ export const DEFAULT_HUM_STYLE_MIX = 0.35;
 // to the legacy engine for a whole minute.
 const HEALTH_TTL_AVAILABLE_MS = 60_000;
 const HEALTH_TTL_UNAVAILABLE_MS = 10_000;
+const HEALTH_PROBE_TIMEOUT_MS = 13_500;
+const HEALTH_RETRY_DELAYS_MS = [0, 1000] as const;
 // A dead connection would otherwise leave the card pending forever: the
 // server's own ceiling is maxDuration=300s, so anything past that (plus
 // margin) can only be a hung socket — resolve it into the error card's
@@ -132,12 +134,12 @@ export async function fetchMusicEngineStatus(force = false): Promise<MusicEngine
   }
 
   // Concurrent callers (screen-mount prefetch, submit-time gate, remix gate)
-  // share one probe loop instead of each fanning out their own 4-probe
-  // sequence against /api/music/health — which itself calls upstream.
+  // share one short probe loop instead of each fanning out their own retries
+  // against /api/music/health — which itself calls upstream. Keep this tight:
+  // Hum submit is a user-facing transition, not a background monitor.
   if (inflightStatusProbe) return inflightStatusProbe;
 
   inflightStatusProbe = (async () => {
-    const retryDelaysMs = [0, 1500, 3000, 5000];
     let lastStatus: MusicEngineStatus = {
       configured: false,
       available: false,
@@ -145,7 +147,7 @@ export async function fetchMusicEngineStatus(force = false): Promise<MusicEngine
       estimatedWaitMs: null,
     };
 
-    for (const delayMs of retryDelaysMs) {
+    for (const delayMs of HEALTH_RETRY_DELAYS_MS) {
       if (delayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
@@ -172,7 +174,7 @@ export async function fetchMusicEngineStatus(force = false): Promise<MusicEngine
 async function probeHealthOnce(): Promise<MusicEngineStatus | null> {
   try {
     const res = await fetch("/api/music/health", {
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
       cache: "no-store",
     });
     if (!res.ok) {
