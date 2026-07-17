@@ -245,7 +245,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       await player.play(melodyNotes, song.arrangementState, chords, bpm);
     } catch (err) {
       console.error("[SongDetail] tone play error:", err);
-      toast.error(t("song.export.err"), {
+      toast.error(t("cards.play_error") || "Playback failed — please retry", {
         description: formatSupportCode({ area: "SONG", error: "playback_failed", requestId: null }),
       });
       setIsPlaying(false);
@@ -269,8 +269,12 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         try {
           await el.play();
         } catch (err) {
-          console.warn("[SongDetail] audio play denied:", err);
-          await playWithTone();
+          console.error("[SongDetail] audio play failed:", err);
+          audioRef.current = null;
+          setIsPlaying(false);
+          toast.error(t("cards.play_error") || "Playback failed — please retry", {
+            description: formatSupportCode({ area: "SONG", error: "playback_failed", requestId: null }),
+          });
         }
       } else {
         el.pause();
@@ -278,7 +282,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       return;
     }
     await playWithTone();
-  }, [song, playWithTone]);
+  }, [song, playWithTone, t]);
 
   /* ── Exports — same modules as v1; presented differently ──────────── */
 

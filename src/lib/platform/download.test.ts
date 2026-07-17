@@ -98,4 +98,17 @@ describe("download helpers", () => {
       { href: "blob:remote-download", download: "song.mp3", attached: true },
     ]);
   });
+
+  it("falls back to a direct attached-link download when remote fetch fails", async () => {
+    const { clicks } = installDomHarness();
+    globalThis.fetch = (async () => {
+      throw new Error("cors blocked");
+    }) as typeof fetch;
+
+    await downloadUrlAsFile("https://cdn.example/song.mp3", "song.mp3");
+
+    expect(clicks).toEqual([
+      { href: "https://cdn.example/song.mp3", download: "song.mp3", attached: true },
+    ]);
+  });
 });

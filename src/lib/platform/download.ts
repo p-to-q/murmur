@@ -8,9 +8,16 @@ export async function downloadUrlAsFile(url: string, filename: string): Promise<
     return;
   }
 
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`download failed with HTTP ${response.status}`);
+  let response: Response;
+  try {
+    response = await fetch(url, { cache: "no-store" });
+  } catch {
+    triggerDownload(url, filename);
+    return;
+  }
+  if (!response.ok || response.type === "opaque") {
+    triggerDownload(url, filename);
+    return;
   }
   const blob = await response.blob();
   downloadBlob(blob, filename);
