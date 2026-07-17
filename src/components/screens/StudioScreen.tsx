@@ -24,6 +24,7 @@ import { studioPromptRecoveryForCode } from "@/components/screens/studio-prompt-
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { memory } from "@/lib/platform/memory";
 import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
+import { regenerateVersionAudio } from "@/modules/magenta/generate-magenta-versions";
 import {
   bumpVersionEditState,
   resetVersionEditState,
@@ -134,6 +135,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
   const t = useTranslator();
   const lang = useCurrentLang();
   const setCurrentVersion = useMurmurStore((state) => state.setCurrentVersion);
+  const setVibeVersions = useMurmurStore((state) => state.setVibeVersions);
   const { refresh: refreshBalance } = useUserBalance();
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -330,6 +332,37 @@ function StudioContent({ version }: { version: VibeVersion }) {
     }
   };
 
+  const handleRetryGeneratedTake = () => {
+    if (!currentVersion.generation || currentVersion.generation.status !== "error") return;
+    const nextVersion: VibeVersion = {
+      ...currentVersion,
+      generation: {
+        ...currentVersion.generation,
+        status: "pending",
+        error: undefined,
+        errorCode: undefined,
+        currentBalance: undefined,
+        cost: undefined,
+      },
+    };
+    setIsPlaying(false);
+    versionPreview.stop();
+    setCurrentVersion(nextVersion);
+    setVibeVersions(
+      useMurmurStore.getState().vibeVersions.map((candidate) =>
+        candidate.id === currentVersion.id ? nextVersion : candidate,
+      ),
+    );
+    regenerateVersionAudio(currentVersion);
+    toast(t("vibe.gen.retrying") || "Brewing this one again…");
+  };
+
+  const handleChooseAnotherTake = () => {
+    setIsPlaying(false);
+    versionPreview.stop();
+    router.push("/vibe");
+  };
+
   const handleSave = () => {
     const saveBlockReason = getSaveBlockReason(currentVersion);
     if (!canSaveHeardVersion(currentVersion)) {
@@ -521,10 +554,33 @@ function StudioContent({ version }: { version: VibeVersion }) {
                       <Loader2 className="h-3 w-3 animate-spin" />
                       {t("studio.magenta.pending")}
                     </span>
+                  ) : magenta.status === "error" ? (
+                    t("studio.magenta.failed") ||
+                    "This take did not finish. Retry it or choose another ready take."
                   ) : (
                     t("studio.magenta.note")
                   )}
                 </p>
+                {magenta.status !== "ready" && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {magenta.status === "error" && (
+                      <button
+                        type="button"
+                        onClick={handleRetryGeneratedTake}
+                        className="rounded-full bg-white/90 px-3.5 py-2 text-[12px] font-medium text-[#1A1A1A] transition-colors hover:bg-white"
+                      >
+                        {t("studio.magenta.retry") || "Retry this take"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleChooseAnotherTake}
+                      className="rounded-full border border-white/15 bg-white/[0.05] px-3.5 py-2 text-[12px] font-medium text-white/80 transition-colors hover:bg-white/[0.1]"
+                    >
+                      {t("studio.magenta.choose_another") || "Choose another take"}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

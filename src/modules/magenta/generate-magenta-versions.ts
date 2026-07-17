@@ -47,6 +47,11 @@ const HEALTH_RETRY_DELAYS_MS = [0, 1000] as const;
 // margin) can only be a hung socket — resolve it into the error card's
 // retry affordance instead.
 const GENERATE_FETCH_TIMEOUT_MS = 320_000;
+// Keep the user path moving: a whole batch should not wait for clip 1 to
+// finish before clip 2 even reaches the worker. Two lanes avoid a full thundering
+// herd against cold/serverless workers while still letting ready cards land
+// much earlier than the old strict serial queue.
+const CLIP_GENERATION_CONCURRENCY = 2;
 
 export type MusicEngineStatus = {
   configured: boolean;
@@ -403,25 +408,44 @@ function startBatchGeneration(
   for (const url of liveObjectUrls) URL.revokeObjectURL(url);
   liveObjectUrls = [];
 
-  void requestBatchClipsSequentially(versions, humBlob, controller.signal, batchId);
+  void requestBatchClipsConcurrently(versions, humBlob, controller.signal, batchId);
 }
 
-async function requestBatchClipsSequentially(
+async function requestBatchClipsConcurrently(
   versions: VibeVersion[],
   humBlob: Blob | null,
   signal: AbortSignal,
   batchId: string,
 ): Promise<void> {
-  // The Magenta worker serializes model work internally; sending the three
-  // initial clips at once can leave one job succeeding while siblings fail or
-  // hit route/rate limits. Keep the Vibe cards immediate, but queue the network
-  // handoff so the worker sees one clip at a time.
-  for (const version of versions) {
-    if (signal.aborted) {
-      settleQueuedClipAfterAbort(version, signal);
-      continue;
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < versions.length) {
+      const version = versions[nextIndex++]!;
+      if (signal.aborted) {
+        settleQueuedClipAfterAbort(version, signal);
+        continue;
+      }
+      await requestClip(version, humBlob, signal, batchId, version.generation?.operationId);
     }
-    await requestClip(version, humBlob, signal, batchId, version.generation?.operationId);
+  };
+
+  const laneCount = Math.max(
+    1,
+    Math.min(CLIP_GENERATION_CONCURRENCY, versions.length),
+  );
+  await Promise.all(Array.from({ length: laneCount }, () => worker()));
+
+  // If the batch was canceled while all lanes were occupied, any never-started
+  // cards still need to resolve into an explicit retry state rather than sit
+  // pending forever in a restored draft.
+  if (signal.aborted) {
+    const latest = useMurmurStore.getState().vibeVersions;
+    for (const version of versions) {
+      const current = latest.find((candidate) => candidate.id === version.id);
+      if (current?.generation?.status === "pending") {
+        settleQueuedClipAfterAbort(version, signal);
+      }
+    }
   }
 }
 

@@ -70,6 +70,8 @@ import {
 const IDLE_ROTATE_INTERVAL = 9000;
 const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
 const ENABLE_HUM_ENTRANCE_MOTION = true;
+const MIC_PERMISSION_TIMEOUT_MS = 10_000;
+const HUM_PROCESSING_TIMEOUT_MS = 75_000;
 
 // Guest quota stays local and action-time gated. Signed-in users are
 // server-authoritative and skip the local counter.
@@ -139,6 +141,58 @@ class MusicEngineUnavailableError extends Error {
     super("music engine unavailable");
     this.name = "MusicEngineUnavailableError";
   }
+}
+
+class HumProcessingTimeoutError extends Error {
+  constructor() {
+    super("hum processing timed out");
+    this.name = "HumProcessingTimeoutError";
+  }
+}
+
+async function getUserMediaWithTimeout(
+  constraints: MediaStreamConstraints,
+  timeoutMs = MIC_PERMISSION_TIMEOUT_MS,
+): Promise<MediaStream> {
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new DOMException("Microphone permission timed out", "TimeoutError"));
+    }, timeoutMs);
+
+    navigator.mediaDevices.getUserMedia(constraints).then(
+      (stream) => {
+        if (settled) {
+          stopMediaStream(stream);
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve(stream);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function withHumProcessingTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new HumProcessingTimeoutError());
+    }, HUM_PROCESSING_TIMEOUT_MS);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 function clearIntervalRef(
@@ -560,7 +614,9 @@ export function HumScreen() {
       // Overlap Magenta routing with transcription. When the deployment is
       // configured for a worker we never silently downgrade to Tone.js.
       const magentaPathPromise = shouldUseMagentaEngine();
-      const preparedBlob = blob ? await prepareAudioBlob(blob) : undefined;
+      const preparedBlob = blob
+        ? await withHumProcessingTimeout(prepareAudioBlob(blob))
+        : undefined;
       // Persist the raw take locally right before the upload leaves the device.
       // A mid-flight network drop then leaves a recoverable copy instead of
       // forcing the user to re-hum. Storage failures degrade to today's
@@ -568,27 +624,29 @@ export function HumScreen() {
       if (blob) {
         persistedRecording = await saveRecordingBlob(blob);
       }
-      const result = await transcribeWithStainer({
-        audioBlob: preparedBlob,
-        onProgress: (phase) => {
-          if (phase === "billing_ok") {
-            setProcessingMessage(t("hum.proc.billing_ok"));
-          } else if (phase === "worker_started") {
-            setProcessingMessage(t("hum.proc.analyzing"));
-          } else if (phase === "interim_melody") {
-            // The preview is progress-only. Generation waits for the final
-            // humming-engine selection so billing and attribution stay aligned.
-            setProcessingMessage(t("hum.proc.analyzing"));
-          }
-        },
-      });
+      const result = await withHumProcessingTimeout(
+        transcribeWithStainer({
+          audioBlob: preparedBlob,
+          onProgress: (phase) => {
+            if (phase === "billing_ok") {
+              setProcessingMessage(t("hum.proc.billing_ok"));
+            } else if (phase === "worker_started") {
+              setProcessingMessage(t("hum.proc.analyzing"));
+            } else if (phase === "interim_melody") {
+              // The preview is progress-only. Generation waits for the final
+              // humming-engine selection so billing and attribution stay aligned.
+              setProcessingMessage(t("hum.proc.analyzing"));
+            }
+          },
+        }),
+      );
       const draftId = crypto.randomUUID();
       const flowId = currentFlowId ?? crypto.randomUUID();
       const selectedMelody = selectGenerationMelody(result, { repairBias });
       // Magenta is the only music engine. If the worker is unreachable after
       // all health-probe retries we stop with an honest error card — never
       // a silent downgrade to the legacy structured synth.
-      const useMagenta = await magentaPathPromise;
+      const useMagenta = await withHumProcessingTimeout(magentaPathPromise);
       if (!useMagenta) {
         throw new MusicEngineUnavailableError();
       }
@@ -752,6 +810,15 @@ export function HumScreen() {
         showSupportCode: false,
       };
     }
+    if (error instanceof HumProcessingTimeoutError) {
+      return {
+        variant: "unavailable",
+        code: "worker_unavailable",
+        requestId: null,
+        currentBalance: null,
+        showSupportCode: false,
+      };
+    }
     if (error instanceof TranscribeRequestError) {
       return {
         variant: variantForCode(error.code),
@@ -834,7 +901,12 @@ export function HumScreen() {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
         throw new Error("Browser recording APIs are unavailable");
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (navigator.onLine === false) {
+        throw new Error("Browser is offline");
+      }
+      setRecordingState("processing");
+      setProcessingMessage(t("hum.proc.mic"));
+      const stream = await getUserMediaWithTimeout({ audio: true });
       activeStreamRef.current = stream;
       const recorderOptions = mediaRecorderOptions();
 
@@ -920,6 +992,7 @@ export function HumScreen() {
       }, {
         level: "warn",
       });
+      setRecordingState("idle");
       setHumError({
         variant: "mic",
         code: "mic_unavailable",

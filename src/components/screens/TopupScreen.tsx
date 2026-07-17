@@ -11,7 +11,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useSpring, useTransform, animate } from "framer-motion";
-import { RefreshCw, Search, Share2 } from "lucide-react";
+import { LogIn, RefreshCw, Search, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatSupportCode } from "@/lib/observability/support-code";
 import {
@@ -23,6 +23,7 @@ import {
 } from "@murmur/core";
 
 import { useCurrentLang, useTranslator } from "@/lib/i18n";
+import { requestWithTimeout } from "@/lib/api/timeout";
 import {
   useRegionalSkus,
   getSavedCurrency,
@@ -30,6 +31,7 @@ import {
 } from "@/lib/hooks/use-regional-skus";
 import { useTopupSurface } from "@/lib/hooks/use-topup-surface";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
+import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
 
@@ -70,6 +72,31 @@ export function buildTopupSharePayload(origin: string, lang: "zh" | "en") {
       ? "来 Murmur 补给音磅，把哼唱变成可以保存和分享的歌。"
       : "Top up Murmur notes and turn a hum into a song you can save and share.",
   };
+}
+
+export function buildTopupCheckoutHref(input: {
+  selectedId: string;
+  selectedSkuId?: string;
+  customAmount: number;
+  customAmountUsd?: number;
+  currency: Currency;
+  payMethod: "card" | "wxpay";
+  requiresSignIn: boolean;
+}): string | null {
+  const methodParam = input.payMethod === "wxpay" ? "&payMethod=wxpay" : "";
+  const gateParam = input.requiresSignIn ? "&gate=sign_in" : "";
+
+  if (input.selectedId === CUSTOM_TOPUP_ID) {
+    if (input.currency === "CNY") {
+      return `/topup/checkout?customAmountCny=${encodeURIComponent(String(input.customAmount))}&currency=CNY${methodParam}${gateParam}`;
+    }
+    if (input.customAmountUsd == null) return null;
+    return `/topup/checkout?customAmountUsd=${encodeURIComponent(String(input.customAmountUsd))}${methodParam}${gateParam}`;
+  }
+
+  if (!input.selectedSkuId) return null;
+  const currencyParam = input.currency === "CNY" ? "&currency=CNY" : "";
+  return `/topup/checkout?sku=${encodeURIComponent(input.selectedSkuId)}${currencyParam}${methodParam}${gateParam}`;
 }
 
 const paperTextureStyle = {
@@ -243,6 +270,10 @@ export function TopupScreen() {
   const router = useRouter();
   const t = useTranslator();
   const lang = useCurrentLang();
+  const {
+    isRegistered,
+    isLoading: accountLoading,
+  } = useCurrentAccount();
   const { balance, isLoading, error: balanceError, refresh } = useUserBalance();
   const { data: topupSurface, refresh: refreshTopupSurface } = useTopupSurface();
 
@@ -433,23 +464,24 @@ export function TopupScreen() {
     : selected
       ? selected.notes + (selected.bonusNotes ?? 0)
       : 0;
+  const requiresSignIn = !accountLoading && !isRegistered;
+  const topupCtaCopy = requiresSignIn
+    ? t("topup.cta.sign_in") || "Sign in to buy {notes} notes — {price}"
+    : (t("topup.cta") || "Buy {notes} notes — {price}");
 
   // ── Actions ───────────────────────────────────────────────────────
   const handleProceed = () => {
-    if (!hasSearchResults) return;
-    const methodParam = payMethod === "wxpay" ? "&payMethod=wxpay" : "";
-    if (activeSelectedId === CUSTOM_TOPUP_ID) {
-      if (isCny) {
-        router.push(`/topup/checkout?customAmountCny=${encodeURIComponent(String(customAmount))}&currency=CNY${methodParam}`);
-      } else {
-        if (!customQuote) return;
-        router.push(`/topup/checkout?customAmountUsd=${encodeURIComponent(String(customQuote.faceAmount))}${methodParam}`);
-      }
-      return;
-    }
-    if (!selected) return;
-    const currencyParam = isCny ? "&currency=CNY" : "";
-    router.push(`/topup/checkout?sku=${encodeURIComponent(selected.id)}${currencyParam}${methodParam}`);
+    if (!hasSearchResults || accountLoading) return;
+    const href = buildTopupCheckoutHref({
+      selectedId: activeSelectedId,
+      selectedSkuId: selected?.id,
+      customAmount,
+      customAmountUsd: customQuote?.faceAmount,
+      currency: effectiveCurrency,
+      payMethod,
+      requiresSignIn,
+    });
+    if (href) router.push(href);
   };
 
   const animateBalance = useCallback(
@@ -516,9 +548,9 @@ export function TopupScreen() {
     setIsRestoring(true);
 
     try {
-      const response = await fetch("/api/purchases/restore", {
+      const response = await requestWithTimeout("/api/purchases/restore", {
         method: "POST",
-      });
+      }, 12_000);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -970,14 +1002,21 @@ export function TopupScreen() {
                 <motion.button
                   whileTap={{ scale: 0.98 }}
                   onClick={handleProceed}
-                  disabled={!hasSearchResults}
+                  disabled={!hasSearchResults || accountLoading}
                   className="h-12 w-full rounded-full text-[15px] font-semibold text-white transition-all hover:brightness-110 disabled:opacity-45"
                   style={paperTextureStyle}
                 >
-                  {(t("topup.cta") || "买 {notes} 颗 — {price}")
+                  {topupCtaCopy
                     .replace("{notes}", String(displayNotes))
                     .replace("{price}", displayAmount)}
                 </motion.button>
+
+                {requiresSignIn && (
+                  <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[11px] leading-[1.45] text-[#8C8780]">
+                    <LogIn className="h-3.5 w-3.5" />
+                    {t("topup.sign_in_hint") || "Purchases attach to a registered account so your notes can sync."}
+                  </p>
+                )}
 
                 <div className="mt-3 flex items-center justify-center gap-3 text-[11px] text-[#8C8780]">
                   <button
@@ -1014,14 +1053,21 @@ export function TopupScreen() {
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={handleProceed}
-              disabled={!hasSearchResults}
+              disabled={!hasSearchResults || accountLoading}
               className="h-12 w-full rounded-full text-[15px] font-semibold text-white transition-all hover:brightness-110 disabled:opacity-45"
               style={paperTextureStyle}
             >
-              {(t("topup.cta") || "买 {notes} 颗 — {price}")
+              {topupCtaCopy
                 .replace("{notes}", String(displayNotes))
                 .replace("{price}", displayAmount)}
             </motion.button>
+
+            {requiresSignIn && (
+              <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[11px] leading-[1.4] text-[#8C8780]">
+                <LogIn className="h-3.5 w-3.5" />
+                {t("topup.sign_in_hint") || "Purchases attach to a registered account so your notes can sync."}
+              </p>
+            )}
 
             <div className="mt-2 flex items-center justify-center text-[11px] text-[#8C8780]">
               <button

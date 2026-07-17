@@ -6,6 +6,7 @@ import { log } from "@/lib/observability/log";
 import {
   transcribeRecording,
   transcribeRecordingStreaming,
+  TranscribeRequestError,
   type TranscribeProgressCallback,
 } from "@/lib/api/transcribe";
 import { transcribeFixture } from "./providers/fixture";
@@ -16,6 +17,14 @@ import {
 import { buildClientTranscriptionResult } from "@/lib/audio/build-client-transcription-result";
 
 function isNetworkError(error: unknown): boolean {
+  if (
+    error instanceof TranscribeRequestError &&
+    (error.code === "network_error" ||
+      error.code === "worker_unavailable" ||
+      error.code === "worker_unconfigured")
+  ) {
+    return true;
+  }
   if (error instanceof TypeError && /fetch|network/i.test(error.message)) return true;
   if (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError")) return true;
   if (error instanceof Error && /ECONNREFUSED|ETIMEDOUT|503|502/i.test(error.message)) return true;

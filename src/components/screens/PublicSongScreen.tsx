@@ -11,6 +11,7 @@ import { GlobalLoadingIndicator } from "@/components/murmur/global-loading-indic
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
 import { useI18nStore, useTranslator } from "@/lib/i18n";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
+import { fetchWithTimeout, withTimeout } from "@/lib/api/timeout";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import type { VisualConfig } from "@/modules/shared/types";
 
@@ -38,13 +39,18 @@ export function PublicSongScreen({ shareCode }: { shareCode: string }) {
   const [song, setSong] = useState<PublicSong | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isStartingAudio, setIsStartingAudio] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const res = await fetch(`/api/public/songs/${encodeURIComponent(shareCode)}`);
+        const res = await fetchWithTimeout(
+          `/api/public/songs/${encodeURIComponent(shareCode)}`,
+          {},
+          10_000,
+        );
         if (!res.ok) {
           if (active) setSong(null);
           return;
@@ -76,6 +82,7 @@ export function PublicSongScreen({ shareCode }: { shareCode: string }) {
       el.pause();
       audioRef.current = null;
       setIsPlaying(false);
+      setIsStartingAudio(false);
     }
   }, [song?.mp3DataUrl, song?.mp3Url]);
 
@@ -112,13 +119,22 @@ export function PublicSongScreen({ shareCode }: { shareCode: string }) {
     }
 
     if (el.paused) {
-      await el.play().catch(() => {
-        toast(t("public_song.play_failed") || "Tap once more to start audio.");
-      });
+      if (isStartingAudio) return;
+      setIsStartingAudio(true);
+      try {
+        await withTimeout(el.play(), 8_000, "Public song playback timed out");
+      } catch (error) {
+        console.warn("[PublicSong] playback failed:", error);
+        el.pause();
+        setIsPlaying(false);
+        toast.error(t("public_song.play_failed") || "Couldn't start audio. Please try again.");
+      } finally {
+        setIsStartingAudio(false);
+      }
     } else {
       el.pause();
     }
-  }, [song, t]);
+  }, [isStartingAudio, song, t]);
 
   const copyCurrentLink = useCallback(async () => {
     const ok = await copyTextToClipboard(window.location.href);
@@ -185,7 +201,7 @@ export function PublicSongScreen({ shareCode }: { shareCode: string }) {
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <button
                 onClick={togglePlay}
-                disabled={!audioReady}
+                disabled={!audioReady || isStartingAudio}
                 className="inline-flex h-12 items-center gap-3 rounded-full bg-[#1A1A1A] px-5 text-[14px] text-white transition-colors hover:bg-[#333] disabled:opacity-45"
               >
                 {isPlaying ? (
@@ -193,7 +209,9 @@ export function PublicSongScreen({ shareCode }: { shareCode: string }) {
                 ) : (
                   <Play className="h-4 w-4" fill="white" />
                 )}
-                {isPlaying
+                {isStartingAudio
+                  ? t("public_song.loading_audio") || "Starting…"
+                  : isPlaying
                   ? t("public_song.pause") || "Pause"
                   : t("public_song.play") || "Play"}
               </button>
@@ -217,7 +235,7 @@ export function PublicSongScreen({ shareCode }: { shareCode: string }) {
           <motion.button
             type="button"
             onClick={togglePlay}
-            disabled={!audioReady}
+            disabled={!audioReady || isStartingAudio}
             whileTap={audioReady ? { scale: 0.98 } : undefined}
             className="order-1 relative overflow-hidden rounded-[28px] border border-white/45 shadow-[0_28px_70px_rgba(26,26,26,0.13)] disabled:cursor-default md:order-2"
             style={{ aspectRatio: "4/5" }}

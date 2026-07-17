@@ -28,6 +28,11 @@ const zpayCreateOrder = mock(async () => ({
 }));
 const purchaseInserts: Array<Record<string, unknown>> = [];
 const purchaseUpdates: Array<Record<string, unknown>> = [];
+const logEvents: Array<{
+  event: string;
+  fields: Record<string, unknown>;
+  meta: Record<string, unknown>;
+}> = [];
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
@@ -68,6 +73,16 @@ mock.module("@/lib/db/client", () => ({
   },
 }));
 
+mock.module("@/lib/observability/log", () => ({
+  log: (
+    event: string,
+    fields: Record<string, unknown>,
+    meta: Record<string, unknown>,
+  ) => {
+    logEvents.push({ event, fields, meta });
+  },
+}));
+
 const { POST } = await import("./route");
 
 function buildRequest(body: Record<string, unknown>): NextRequest {
@@ -94,6 +109,7 @@ beforeEach(async () => {
   createdSessions.length = 0;
   purchaseInserts.length = 0;
   purchaseUpdates.length = 0;
+  logEvents.length = 0;
   checkoutCreate.mockClear();
   zpayCreateOrder.mockClear();
   waffoConfigured = true;
@@ -219,6 +235,52 @@ describe("POST /api/billing/checkout", () => {
     });
     expect(zpayOrderId.length).toBeLessThanOrEqual(32);
     expect(zpayOrderId).not.toContain(":");
+  });
+
+  it("returns the unified checkout error envelope when ZPay order creation throws", async () => {
+    zpayConfigured = true;
+    zpayCheckoutEnabled = true;
+    zpayCreateOrder.mockImplementationOnce(async () => {
+      throw new Error("zpay upstream unavailable");
+    });
+
+    const response = await POST(
+      buildRequest({
+        sku: "topup_120_notes",
+        currency: "CNY",
+        payMethod: "wxpay",
+      }),
+    );
+
+    expect(response.status).toBe(502);
+    expect(response.headers.get("X-Request-Id")).toBe("req_checkout");
+    const body = (await response.json()) as {
+      error: string;
+      message: string;
+      requestId: string;
+    };
+    expect(body).toEqual({
+      error: "checkout_failed",
+      message: "Could not start checkout. Please try again.",
+      requestId: "req_checkout",
+    });
+    expect(logEvents).toContainEqual(
+      expect.objectContaining({
+        event: "billing.zpay_checkout_failed",
+        fields: expect.objectContaining({
+          error: "zpay upstream unavailable",
+          skuId: "topup_120_notes",
+          payMethod: "wxpay",
+        }),
+        meta: expect.objectContaining({
+          route: "/api/billing/checkout",
+          requestId: "req_checkout",
+          userId: "usr_checkout",
+          sessionId: "sess_checkout",
+          level: "error",
+        }),
+      }),
+    );
   });
 
   it("blocks WeChat checkout when Zpay credentials exist but the launch gate is closed", async () => {

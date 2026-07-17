@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  buildTopupCheckoutHref,
   buildTopupSharePayload,
   topupSearchMatches,
   type TopupSearchItem,
@@ -39,5 +40,49 @@ describe("buildTopupSharePayload", () => {
     const payload = buildTopupSharePayload("https://murmur.example", "zh");
     expect(payload.url).toBe("https://murmur.example/topup");
     expect(payload.text).toContain("补给音磅");
+  });
+});
+
+describe("buildTopupCheckoutHref", () => {
+  it("marks unauthenticated fixed-SKU checkout with the sign-in gate", () => {
+    expect(buildTopupCheckoutHref({
+      selectedId: "topup_120_notes",
+      selectedSkuId: "topup_120_notes",
+      customAmount: 10,
+      customAmountUsd: 10,
+      currency: "USD",
+      payMethod: "card",
+      requiresSignIn: true,
+    })).toBe("/topup/checkout?sku=topup_120_notes&gate=sign_in");
+  });
+
+  it("preserves CNY and WeChat checkout routing", () => {
+    expect(buildTopupCheckoutHref({
+      selectedId: "topup_120_notes",
+      selectedSkuId: "topup_120_notes",
+      customAmount: 50,
+      currency: "CNY",
+      payMethod: "wxpay",
+      requiresSignIn: false,
+    })).toBe("/topup/checkout?sku=topup_120_notes&currency=CNY&payMethod=wxpay");
+  });
+
+  it("builds sign-in-gated custom checkout links", () => {
+    expect(buildTopupCheckoutHref({
+      selectedId: "topup_custom",
+      customAmount: 88,
+      currency: "CNY",
+      payMethod: "wxpay",
+      requiresSignIn: true,
+    })).toBe("/topup/checkout?customAmountCny=88&currency=CNY&payMethod=wxpay&gate=sign_in");
+
+    expect(buildTopupCheckoutHref({
+      selectedId: "topup_custom",
+      customAmount: 10,
+      customAmountUsd: 12,
+      currency: "USD",
+      payMethod: "card",
+      requiresSignIn: false,
+    })).toBe("/topup/checkout?customAmountUsd=12");
   });
 });

@@ -51,6 +51,7 @@ import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
 import { downloadUrlAsFile } from "@/lib/platform/download";
+import { fetchWithTimeout } from "@/lib/api/timeout";
 import {
   createSongShareLink,
   SongShareRequestError,
@@ -152,7 +153,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     (async () => {
       try {
         await ensureLocalCreatorSession();
-        const res = await fetch(`/api/songs/${songId}`);
+        const res = await fetchWithTimeout(`/api/songs/${songId}`, {}, 10_000);
         if (!res.ok) {
           if (active) setSong(null);
           return;
@@ -306,6 +307,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   );
 
   const exportAudio = async () => {
+    if (busy) return;
     const audioSrc = song?.mp3DataUrl || song?.mp3Url;
     if (!audioSrc) {
       toast(t("song.share.no_audio"));
@@ -335,6 +337,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   };
 
   const exportVideo = useCallback(async () => {
+    if (busy) return;
     if (!song) return;
     setBusy("video");
     try {
@@ -356,9 +359,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     } finally {
       setBusy(null);
     }
-  }, [song, t]);
+  }, [busy, song, t]);
 
   const copyShareLink = useCallback(async () => {
+    if (busy) return;
     if (!song) return;
     if (!hasSongShareAudio(song)) {
       toast(t("song.share.no_audio"));
@@ -413,7 +417,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     } finally {
       setBusy(null);
     }
-  }, [song, t]);
+  }, [busy, song, t]);
 
   /* ── Delete ────────────────────────────────────────────────────────── */
 
@@ -421,7 +425,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     if (!song || isDeleting) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/songs/${song.id}`, { method: "DELETE" });
+      const res = await fetchWithTimeout(`/api/songs/${song.id}`, { method: "DELETE" }, 10_000);
       if (!res.ok) {
         throw new ApiEnvelopeError(await readApiErrorEnvelope(res, "delete_failed"));
       }
@@ -775,7 +779,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.share.link.label") || "Share link"}
                 hint={t("song.share.link.hint") || "Anyone with the link can listen"}
                 cost={t("song.export.free") || "free"}
-                disabled={!audioReady}
+                disabled={busy !== null || !audioReady}
                 disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
                 busy={busy === "link"}
                 icon={<Copy className="h-4 w-4" />}
@@ -785,7 +789,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.export.audio.label") || "Audio"}
                 hint={t("song.export.audio.hint") || "mp3"}
                 cost={t("song.export.free") || "free"}
-                disabled={!audioReady}
+                disabled={busy !== null || !audioReady}
                 disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
                 busy={busy === "audio"}
                 onClick={exportAudio}
@@ -794,8 +798,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.export.image.label") || "Share image"}
                 hint={t("song.export.image.hint") || "png"}
                 cost={t("song.export.free") || "free"}
+                disabled={busy !== null}
                 busy={busy === "share"}
                 onClick={() => {
+                  if (busy) return;
                   setShareCardMode("image");
                   setShareCardOpen(true);
                 }}
@@ -804,10 +810,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.export.video.label") || "Video"}
                 hint={t("song.export.video.hint") || "mp4"}
                 cost={t("song.export.free") || "free"}
-                disabled={!audioReady}
+                disabled={busy !== null || !audioReady}
                 disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
                 busy={busy === "video"}
                 onClick={() => {
+                  if (busy) return;
                   setShareCardMode("video");
                   setShareCardOpen(true);
                 }}
@@ -934,7 +941,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 async function fetchRelatedSong(songId: string | null): Promise<RelatedSong | null> {
   if (!songId) return null;
   try {
-    const response = await fetch(`/api/songs/${songId}?view=summary`);
+    const response = await fetchWithTimeout(`/api/songs/${songId}?view=summary`, {}, 8_000);
     if (!response.ok) return null;
     return await response.json() as RelatedSong;
   } catch {

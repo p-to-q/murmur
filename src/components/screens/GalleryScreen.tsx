@@ -10,6 +10,7 @@ import {
   apiErrorEnvelopeFrom,
   readApiErrorEnvelope,
 } from "@/lib/api/error-envelope";
+import { fetchWithTimeout, withTimeout } from "@/lib/api/timeout";
 import { memory } from "@/lib/platform/memory";
 import {
   clearLocalCreatorBootstrapFlag,
@@ -41,6 +42,7 @@ type SongWithMeta = Omit<SongCardType, "visualConfig" | "duration" | "arrangemen
   };
 type SortMode = "newest" | "alpha";
 const LOCAL_CREATOR_BOOTSTRAP_TIMEOUT_MS = 2_000;
+const DEMO_PREVIEW_START_TIMEOUT_MS = 8_000;
 const SONGS_ROUTE = "/api/songs";
 
 function demoArtwork(id: string) {
@@ -130,7 +132,7 @@ export async function loadGallerySongsOnce(): Promise<SongWithMeta[] | null> {
   );
   if (!hasSession) return null;
 
-  const first = await fetch(SONGS_ROUTE);
+  const first = await fetchWithTimeout(SONGS_ROUTE, {}, 10_000);
   if (first.ok) return (await first.json()) as SongWithMeta[];
   if (first.status !== 401) return null;
 
@@ -142,7 +144,7 @@ export async function loadGallerySongsOnce(): Promise<SongWithMeta[] | null> {
   );
   if (!refreshed) return null;
 
-  const second = await fetch(SONGS_ROUTE);
+  const second = await fetchWithTimeout(SONGS_ROUTE, {}, 10_000);
   if (!second.ok) return null;
   return (await second.json()) as SongWithMeta[];
 }
@@ -240,7 +242,11 @@ export function GalleryScreen() {
       demoAudioRef.current = audio;
 
       try {
-        await audio.play();
+        await withTimeout(
+          audio.play(),
+          DEMO_PREVIEW_START_TIMEOUT_MS,
+          "Demo preview timed out",
+        );
         setPlayingDemoId(song.id);
         memory
           .reportAction({
@@ -312,7 +318,7 @@ export function GalleryScreen() {
     if (!target || isDeleting) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/songs/${target.id}`, { method: "DELETE" });
+      const res = await fetchWithTimeout(`/api/songs/${target.id}`, { method: "DELETE" }, 10_000);
       if (!res.ok) {
         throw new ApiEnvelopeError(await readApiErrorEnvelope(res, "delete_failed"));
       }

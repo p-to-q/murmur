@@ -182,6 +182,21 @@ describe("transcribeRecording typed error mapping", () => {
       expect(typed.status).toBe(0);
     }
   });
+
+  it("maps browser abort/timeout failures to worker_unavailable so fallback can run", async () => {
+    globalThis.fetch = createFetchMock(async () => {
+      throw new DOMException("The operation timed out", "TimeoutError");
+    });
+
+    try {
+      await transcribeRecording(blob());
+      throw new Error("expected transcribeRecording to throw");
+    } catch (error) {
+      const typed = error as TranscribeRequestError;
+      expect(typed.code).toBe("worker_unavailable");
+      expect(typed.status).toBe(0);
+    }
+  });
 });
 
 function ndjsonResponse(lines: string[]): Response {
