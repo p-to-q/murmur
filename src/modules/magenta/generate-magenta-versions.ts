@@ -403,9 +403,45 @@ function startBatchGeneration(
   for (const url of liveObjectUrls) URL.revokeObjectURL(url);
   liveObjectUrls = [];
 
+  void requestBatchClipsSequentially(versions, humBlob, controller.signal, batchId);
+}
+
+async function requestBatchClipsSequentially(
+  versions: VibeVersion[],
+  humBlob: Blob | null,
+  signal: AbortSignal,
+  batchId: string,
+): Promise<void> {
+  // The Magenta worker serializes model work internally; sending the three
+  // initial clips at once can leave one job succeeding while siblings fail or
+  // hit route/rate limits. Keep the Vibe cards immediate, but queue the network
+  // handoff so the worker sees one clip at a time.
   for (const version of versions) {
-    void requestClip(version, humBlob, controller.signal, batchId, version.generation?.operationId);
+    if (signal.aborted) {
+      settleQueuedClipAfterAbort(version, signal);
+      continue;
+    }
+    await requestClip(version, humBlob, signal, batchId, version.generation?.operationId);
   }
+}
+
+function settleQueuedClipAfterAbort(version: VibeVersion, signal: AbortSignal): void {
+  if (signal.reason !== BACKGROUND_CANCELLATION_REASON) return;
+  const generation = version.generation;
+  const applied = patchGeneration(version.id, {
+    status: "error",
+    error: "Generation stopped while Murmur was in the background.",
+    errorCode: "background_canceled",
+  });
+  if (!applied) return;
+  log("magenta.clip_background_canceled", {
+    vibe: version.vibe,
+    prompt: generation?.prompt,
+    queued: true,
+  }, {
+    level: "warn",
+  });
+  notifyIfBatchComplete();
 }
 
 async function requestClip(

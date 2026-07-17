@@ -67,7 +67,7 @@ describe("Magenta generation cancellation recovery", () => {
     const fetches = installAbortableFetch();
     startPendingBatch();
 
-    expect(fetches.requestCount()).toBe(3);
+    expect(fetches.requestCount()).toBe(1);
     cancelActiveGeneration("background");
     await flushAsyncWork();
 
@@ -82,11 +82,11 @@ describe("Magenta generation cancellation recovery", () => {
       "background_canceled",
       "background_canceled",
     ]);
-    expect(fetches.requestCount()).toBe(3);
+    expect(fetches.requestCount()).toBe(1);
 
     regenerateVersionAudio(canceled[0]!);
     expect(useMurmurStore.getState().vibeVersions[0]?.generation?.status).toBe("pending");
-    expect(fetches.requestCount()).toBe(4);
+    expect(fetches.requestCount()).toBe(2);
 
     cancelActiveGeneration("background");
     await flushAsyncWork();

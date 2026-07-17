@@ -1244,7 +1244,7 @@ export function HumScreen() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.4 }}
-                    className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-[114%] w-[114%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
+                    className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-[108%] w-[108%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
                     viewBox="0 0 300 300"
                     preserveAspectRatio="xMidYMid meet"
                   >
@@ -1254,8 +1254,8 @@ export function HumScreen() {
                       cy="150"
                       r={ringRadius}
                       fill="none"
-                      stroke="rgba(255,89,36,0.16)"
-                      strokeWidth="3.5"
+                      stroke="rgba(255,255,255,0.25)"
+                      strokeWidth="2.5"
                     />
                     {/* Progress */}
                     <circle
@@ -1264,7 +1264,7 @@ export function HumScreen() {
                       r={ringRadius}
                       fill="none"
                       stroke="#FF5924"
-                      strokeWidth="3.5"
+                      strokeWidth="2.5"
                       strokeLinecap="round"
                       strokeDasharray={ringCircumference}
                       strokeDashoffset={ringOffset}
