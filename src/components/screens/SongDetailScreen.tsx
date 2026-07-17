@@ -50,6 +50,7 @@ import { isIncompleteSongArtifact } from "@/modules/music/song-artifact";
 import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
+import { downloadUrlAsFile } from "@/lib/platform/download";
 import {
   createSongShareLink,
   SongShareRequestError,
@@ -304,10 +305,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     setBusy("audio");
     try {
       const ext = audioFileExtension(audioSrc);
-      const a = document.createElement("a");
-      a.href = audioSrc;
-      a.download = `${slug}.${ext}`;
-      a.click();
+      await downloadUrlAsFile(audioSrc, `${slug}.${ext}`);
       toast.success(t("song.export.ok"));
       memory
         .reportAction({
@@ -317,6 +315,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
           metadata: { type: "download_audio", song_id: song.id, format: ext },
         })
         .catch(() => {});
+    } catch (error) {
+      console.error(error);
+      toast.error(t("song.export.err"), {
+        description: formatShareSupportCode({ code: "export_failed", requestId: null }),
+      });
     } finally {
       setBusy(null);
     }
@@ -369,34 +372,17 @@ export function SongDetailScreen({ songId }: { songId: string }) {
           : current,
       );
 
-      let sharedNatively = false;
-      if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-        try {
-          // The OS share sheet is its own confirmation — no toast on success.
-          await navigator.share({ title: song.title, url: share.url });
-          sharedNatively = true;
-        } catch (shareError) {
-          // Dismissing the sheet is a normal outcome, not an error.
-          if (shareError instanceof DOMException && shareError.name === "AbortError") {
-            return;
-          }
-          // navigator.share can exist yet reject this payload (platform
-          // quirks); fall through to the clipboard path instead of failing.
-        }
+      const copied = await copyTextToClipboard(share.url);
+      if (!copied) {
+        window.open(share.url, "_blank", "noopener,noreferrer");
+        throw new SongShareRequestError({
+          code: "clipboard_unavailable",
+          status: 0,
+          message: "Clipboard unavailable",
+          requestId: share.requestId,
+        });
       }
-      if (!sharedNatively) {
-        const copied = await copyTextToClipboard(share.url);
-        if (!copied) {
-          window.open(share.url, "_blank", "noopener,noreferrer");
-          throw new SongShareRequestError({
-            code: "clipboard_unavailable",
-            status: 0,
-            message: "Clipboard unavailable",
-            requestId: share.requestId,
-          });
-        }
-        toast.success(t("song.share.link_copied") || "Share link copied");
-      }
+      toast.success(t("song.share.link_copied") || "Share link copied");
       memory
         .reportAction({
           content: `Copied share link for "${song.title}"`,

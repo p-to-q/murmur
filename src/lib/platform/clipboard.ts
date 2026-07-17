@@ -1,9 +1,14 @@
+const CLIPBOARD_WRITE_TIMEOUT_MS = 2000;
+
 export async function copyTextToClipboard(text: string): Promise<boolean> {
   if (!text || typeof window === "undefined") return false;
 
   try {
     if (navigator.clipboard) {
-      await navigator.clipboard.writeText(text);
+      await withTimeout(
+        navigator.clipboard.writeText(text),
+        CLIPBOARD_WRITE_TIMEOUT_MS,
+      );
       return true;
     }
   } catch {
@@ -11,6 +16,25 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 
   return copyTextWithSelection(text);
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(
+      () => reject(new Error("clipboard write timed out")),
+      timeoutMs,
+    );
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 }
 
 /**

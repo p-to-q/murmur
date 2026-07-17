@@ -6,6 +6,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { X, Play, Pause, Image as ImageIcon, Video } from "lucide-react";
 import type { VisualArtwork } from "@/modules/shared/types";
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
+import { downloadBlob } from "@/lib/platform/download";
 
 interface ShareTicketCardProps {
   title: string;
@@ -136,12 +137,7 @@ export function ShareTicketCard({
       if (!blob) {
         throw new Error("Image export failed");
       }
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `${slugify(title)}-share-card.png`;
-      anchor.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      downloadBlob(blob, `${slugify(title)}-share-card.png`);
       onImageDownloaded?.();
     } catch (error) {
       onImageDownloadError?.(error);

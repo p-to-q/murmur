@@ -3,6 +3,7 @@ import {
   COVER_ARTWORK_BRIGHTNESS_FILTER,
   applyCoverBrightnessCompensation,
 } from "@/lib/music/cover-visual-treatment";
+import { downloadBlob } from "@/lib/platform/download";
 
 type Song = SongCard & {
   mp3DataUrl?: string | null;
@@ -216,12 +217,7 @@ export async function exportSongAsVideo(song: Song): Promise<void> {
   const blob = await renderSongVideo(song, { silent: true });
   const mimeType = pickSupportedMimeType() ?? "video/mp4";
 
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${slugify(song.title)}.${extensionForMimeType(mimeType)}`;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  downloadBlob(blob, `${slugify(song.title)}.${extensionForMimeType(mimeType)}`);
 }
 
 // ─── Infrastructure helpers ───────────────────────────────
