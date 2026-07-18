@@ -46,7 +46,7 @@
     "db:up": "docker compose up -d murmur-postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f murmur-postgres",
-    "build": "next build --webpack",
+    "build": "\"${npm_execpath:-bun}\" run scripts/env-audit.ts && next build --webpack",
     "build:audit": "\"${npm_execpath:-bun}\" run scripts/env-audit.ts && \"${npm_execpath:-bun}\" run scripts/build-audit.ts",
     "env:audit": "\"${npm_execpath:-bun}\" run scripts/env-audit.ts",
     "check:links": "node scripts/check-links.mjs",
