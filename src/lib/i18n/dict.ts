@@ -584,6 +584,7 @@ export const DICT = {
   "song.share.link.label":    { zh: "分享链接", en: "Share link" },
   "song.share.link.hint":     { zh: "拿到链接的人都可以收听", en: "Anyone with the link can listen" },
   "song.share.link_copied":   { zh: "分享链接已复制", en: "Share link copied" },
+  "song.share.link_opened":   { zh: "分享链接已生成，并已在新标签页打开", en: "Share link created and opened in a new tab" },
   "song.share.link_failed":   { zh: "暂时没能生成分享链接", en: "Couldn't create a share link" },
   "song.share.link_failed_auth": { zh: "请先登录，再生成分享链接", en: "Sign in before creating a share link" },
   "song.share.link_failed_audio": { zh: "音频还在渲染或不可用，请稍候", en: "Audio is still rendering or unavailable" },

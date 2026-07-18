@@ -425,12 +425,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       const copied = await copyTextToClipboard(share.url);
       if (!copied) {
         window.open(share.url, "_blank", "noopener,noreferrer");
-        throw new SongShareRequestError({
-          code: "clipboard_unavailable",
-          status: 0,
-          message: "Clipboard unavailable",
-          requestId: share.requestId,
-        });
+        toast.success(
+          t("song.share.link_opened") ||
+            "Share link created and opened in a new tab",
+        );
+        return;
       }
       toast.success(t("song.share.link_copied") || "Share link copied");
       memory

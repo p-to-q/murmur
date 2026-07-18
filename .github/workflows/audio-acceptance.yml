@@ -38,8 +38,9 @@ jobs:
 
       - name: Install audio worker dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r workers/audio-engine/requirements.txt
+          python -m venv workers/audio-engine/.venv
+          workers/audio-engine/.venv/bin/python -m pip install --upgrade pip
+          workers/audio-engine/.venv/bin/pip install -r workers/audio-engine/requirements.txt
 
       - name: Run audio acceptance suite
         run: bun run audit:audio:acceptance

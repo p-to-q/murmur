@@ -26,7 +26,7 @@ import {
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { classifyError } from "@/lib/errors/transient";
 import { log } from "@/lib/observability/log";
-import { checkBudget } from "@/lib/observability/latency-budgets";
+import { reportBudget } from "@/lib/observability/latency-budgets";
 import { COST } from "@murmur/core";
 
 export type TranscribeStreamEvent =
@@ -305,7 +305,12 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
         });
 
         const totalDurationMs = Math.round(performance.now() - startedAt);
-        const budget = checkBudget("transcribe", totalDurationMs);
+        const budget = reportBudget("transcribe", totalDurationMs, {
+          route: ROUTE,
+          requestId,
+          userId,
+          sessionId: auth.sessionId,
+        });
         log("transcribe.completed", {
           provider: result.provider,
           noteCount: result.cleanMelody.notes.length,
@@ -776,7 +781,12 @@ async function classicTranscribe(request: NextRequest) {
     });
 
     const totalDurationMs = Math.round(performance.now() - startedAt);
-    const budget = checkBudget("transcribe", totalDurationMs);
+    const budget = reportBudget("transcribe", totalDurationMs, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+    });
     log("transcribe.completed", {
       provider: result.provider,
       noteCount: result.cleanMelody.notes.length,

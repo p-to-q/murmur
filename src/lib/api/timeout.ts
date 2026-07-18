@@ -27,16 +27,19 @@ export async function fetchWithTimeout(
   init: RequestInit = {},
   timeoutMs = 12_000,
 ): Promise<Response> {
+  const deadline = createDeadlineSignal(timeoutMs, init.signal ?? undefined);
   try {
     return await fetch(input, {
       ...init,
-      signal: timeoutSignal(timeoutMs, init.signal ?? undefined),
+      signal: deadline.signal,
     });
   } catch (error) {
-    if (isAbortError(error)) {
+    if (deadline.didTimeout() && isAbortError(error)) {
       throw new ApiTimeoutError(timeoutMs);
     }
     throw error;
+  } finally {
+    deadline.cleanup();
   }
 }
 
@@ -45,16 +48,19 @@ export async function requestWithTimeout(
   init: RequestInit = {},
   timeoutMs = 12_000,
 ): Promise<Response> {
+  const deadline = createDeadlineSignal(timeoutMs, init.signal ?? undefined);
   try {
     return await request(input, {
       ...init,
-      signal: timeoutSignal(timeoutMs, init.signal ?? undefined),
+      signal: deadline.signal,
     });
   } catch (error) {
-    if (isAbortError(error)) {
+    if (deadline.didTimeout() && isAbortError(error)) {
       throw new ApiTimeoutError(timeoutMs);
     }
     throw error;
+  } finally {
+    deadline.cleanup();
   }
 }
 
@@ -89,4 +95,36 @@ function isAbortError(error: unknown): boolean {
     error instanceof DOMException &&
     (error.name === "AbortError" || error.name === "TimeoutError")
   );
+}
+
+function createDeadlineSignal(timeoutMs: number, callerSignal?: AbortSignal) {
+  const controller = new AbortController();
+  let cause: "caller" | "timeout" | null = null;
+
+  const abortFromCaller = () => {
+    if (cause !== null) return;
+    cause = "caller";
+    controller.abort(callerSignal?.reason);
+  };
+
+  if (callerSignal?.aborted) {
+    abortFromCaller();
+  } else {
+    callerSignal?.addEventListener("abort", abortFromCaller, { once: true });
+  }
+
+  const timeoutId = setTimeout(() => {
+    if (cause !== null) return;
+    cause = "timeout";
+    controller.abort(new DOMException("Request timed out", "TimeoutError"));
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    didTimeout: () => cause === "timeout",
+    cleanup: () => {
+      clearTimeout(timeoutId);
+      callerSignal?.removeEventListener("abort", abortFromCaller);
+    },
+  };
 }

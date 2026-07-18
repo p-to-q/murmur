@@ -1,5 +1,9 @@
 # Murmur Architecture
 
+Status: current-state reference<br>
+Owner: product engineering<br>
+Last verified: 2026-07-18
+
 Murmur is a single-product Next.js app with a small local platform layer. The
 goal of this document is not to freeze the design forever; it is to make the
 current system legible enough that new work can ship without rediscovering the
@@ -61,14 +65,13 @@ flowchart TB
     user --> app
     app --> ui
     ui --> routes
-    ui --> worker
     ui --> clientPitch
     ui --> storage
     ui --> music
     routes --> platform
     routes --> db
     routes --> ai
-    routes --> clientPitch
+    routes --> worker
     platform --> storage
     music --> storage
 ```
@@ -142,7 +145,7 @@ flowchart TB
   song. `src/lib/db/queries/composition-events.ts` exposes the read shape used
   for internal corpus export; event writes are best-effort and must not block
   the user's creative save path.
-- Per-component latency budgets (`src/lib/observability/latency-budgets.ts`) define P50/P95 ceilings for transcribe, music_generate, llm_edit, and db query paths. When a component exceeds its P95, structured logs carry a `budget_exceeded` flag.
+- Per-component latency budgets (`src/lib/observability/latency-budgets.ts`) define P50/P95 ceilings for transcribe, music_generate, llm_edit, and db query paths. Transcribe, music generation, and Strummer emit a dedicated `latency.budget_exceeded` event when they exceed P95; durable aggregation and paging are not yet connected.
 - Language is negotiated before first paint from the explicit `murmur.lang`
   cookie first, then the request `Accept-Language` header, then the product
   default (`en`). Client hydration re-checks `localStorage`; if the server only
@@ -164,15 +167,15 @@ flowchart TB
   still client-orchestrated clip-by-clip; sibling clips share a browser-minted
   generation batch id (`x-generation-batch-id`) so their pushes and inbox
   entries collapse to one per batch (see "Generation Batch Semantics" in
-  `docs/notifications.md`). After 60 seconds continuously hidden, the browser
+  `docs/notifications.md`). After 4 minutes continuously hidden, the browser
   cancels active requests and turns remaining pending Vibe cards into an
   explicit retry state; it does not auto-retry because a new attempt may have
-  paid-generation consequences. Durable paid clip identity and resume/query
-  recovery remain tracked separately in issue #300. Generation batch pushes
-  are now collapsed per batch
-  (`src/app/api/notifications/cron/route.ts`). Fully durable "batch finished
-  after browser exit" notifications still require a future server-side generation
-  job queue.
+  paid-generation consequences. Stable per-clip operation identities and
+  browser IndexedDB artifact recovery prevent duplicate billing and recover
+  completed local audio. They do not preserve a provider job after the browser
+  request ends. Server-owned job state, result lookup, and fully durable
+  "finished after browser exit" notifications remain future work. Generation
+  notifications are collapsed by browser-minted batch id.
 - AI editing depends on `OPENAI_API_KEY` or an equivalent gateway key.
 - ISR caching (`minimumCacheTTL: 3600`) and AVIF/WebP image optimization are
   configured in `next.config.ts` for gallery artwork and user avatars.

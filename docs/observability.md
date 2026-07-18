@@ -1,12 +1,14 @@
 # Observability
 
-Murmur today logs `console.error` on failure and nothing on success.
-That is the wrong baseline for a product whose biggest risk used to be
-silent fixture substitution, and whose current behavior still includes a
-very narrow auto-rescue path for transient hum failures. v2's
-observability target: **when the user says "音频结果不对," we can find
-out within 60 seconds what went wrong, for which user, in which region,
-with which provider chain, and against what code revision**.
+Status: current capabilities plus target contract<br>
+Owner: product engineering<br>
+Last verified: 2026-07-18
+
+Murmur currently emits typed structured success and failure events to stdout,
+keeps a small process-local recent-event buffer, tracks creation stages in
+memory, and checks static component latency budgets. It does not yet ship the
+durable metrics store, distributed traces, dashboards, or paging described
+below. Those sections are target contracts, not claims about production.
 
 This document specifies what we log, how we structure it, what we trace,
 what we surface to dashboards, and where the budgets land.
@@ -18,7 +20,7 @@ suggests vendors per region.
 
 ## 1. Pillars
 
-Three pillars, named with the v2 names Codex should use everywhere:
+The target uses three engineering pillars:
 
 - **Logs** — structured JSON lines, one event per significant action,
   always tied to a `requestId` and a `userId`.
@@ -157,7 +159,9 @@ from real numbers.
 
 | SLO | Target | Window |
 |---|---|---|
-| `POST /api/transcribe` p95 latency | ≤ 3 s | rolling 5 min |
+| `POST /api/transcribe` p95 latency | ≤ 20 s | rolling 5 min |
+| first playable music take p95 | ≤ 90 s | rolling 30 min |
+| durable song save p95 | ≤ 3 s | rolling 5 min |
 | `POST /api/transcribe` 5xx rate | < 0.5 % | rolling 30 min |
 | `POST /api/songs` 5xx rate | < 0.5 % | rolling 30 min |
 | Webhook signature failures | 0 (page on any) | event |

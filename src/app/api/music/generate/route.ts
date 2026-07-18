@@ -16,7 +16,7 @@ import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { safeHostnameFromUrl } from "@/lib/http/safe-hostname";
 import { classifyError } from "@/lib/errors/transient";
 import { log } from "@/lib/observability/log";
-import { checkBudget } from "@/lib/observability/latency-budgets";
+import { reportBudget } from "@/lib/observability/latency-budgets";
 import {
   getMusicEngineMode,
   getMusicServerlessConfig,
@@ -332,7 +332,12 @@ export async function POST(request: NextRequest) {
     });
 
     const genDurationMs = Math.round(performance.now() - startedAt);
-    const genBudget = checkBudget("music_generate", genDurationMs);
+    const genBudget = reportBudget("music_generate", genDurationMs, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+    });
     log("music.generate_completed", {
       mode,
       batchId,
