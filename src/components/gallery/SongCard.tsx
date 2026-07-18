@@ -23,12 +23,15 @@ export interface SongCardProps {
   onClick: (id: string) => void;
   /** When provided, shows a corner delete affordance on the cover. */
   onDelete?: (id: string) => void;
+  /** When provided, shows a corner play/pause affordance on the cover. */
+  onPlay?: (id: string) => void;
   /** Incomplete/draft song — audio never rendered (#291). Shows a badge. */
   isDraft?: boolean;
   /** Localized "Draft" label for the badge. */
   draftLabel?: string;
   /** Optional preview state for playable cards that do not navigate. */
   isPlaying?: boolean;
+  isPlayLoading?: boolean;
   playLabel?: string;
   pauseLabel?: string;
 }
@@ -95,9 +98,11 @@ export const SongCard = memo(function SongCard({
   index,
   onClick,
   onDelete,
+  onPlay,
   isDraft,
   draftLabel,
   isPlaying,
+  isPlayLoading,
   playLabel,
   pauseLabel,
 }: SongCardProps) {
@@ -162,23 +167,6 @@ export const SongCard = memo(function SongCard({
             </div>
           )}
 
-          {typeof isPlaying === "boolean" && (
-            <div className="absolute top-2 right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-[#1A1A1A]/45 text-white/95 backdrop-blur-sm ring-1 ring-white/25">
-              <span className="sr-only">{isPlaying ? (pauseLabel || "Pause") : (playLabel || "Play")}</span>
-              {isPlaying ? (
-                <span className="flex items-center gap-[3px]" aria-hidden>
-                  <span className="h-3 w-[3px] rounded-full bg-current" />
-                  <span className="h-3 w-[3px] rounded-full bg-current" />
-                </span>
-              ) : (
-                <span
-                  aria-hidden
-                  className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-current"
-                />
-              )}
-            </div>
-          )}
-
           <div className="absolute inset-[42%] rounded-full bg-[#F5F1EB]/70 shadow-[inset_0_1px_5px_rgba(26,26,26,0.16)] ring-1 ring-[#1A1A1A]/10 backdrop-blur-[1px]" />
           <div className="absolute inset-[48.5%] rounded-full bg-[#1A1A1A]/20" />
 
@@ -235,6 +223,33 @@ export const SongCard = memo(function SongCard({
         </div>
       </motion.button>
 
+      {onPlay && typeof isPlaying === "boolean" && !isDraft && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPlay(id);
+          }}
+          aria-busy={isPlayLoading || undefined}
+          aria-label={isPlaying ? (pauseLabel || "Pause") : (playLabel || "Play")}
+          aria-pressed={isPlaying}
+          className="absolute top-2 right-2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-[#1A1A1A]/45 text-white/95 backdrop-blur-sm ring-1 ring-white/25 transition-all hover:bg-[#1A1A1A]/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+        >
+          {isPlayLoading ? (
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" aria-hidden />
+          ) : isPlaying ? (
+            <span className="flex items-center gap-[3px]" aria-hidden>
+              <span className="h-3 w-[3px] rounded-full bg-current" />
+              <span className="h-3 w-[3px] rounded-full bg-current" />
+            </span>
+          ) : (
+            <span
+              aria-hidden
+              className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-current"
+            />
+          )}
+        </button>
+      )}
+
       {/* Delete — sibling of the card button (buttons can't nest), floated
           over the cover corner. Hover-revealed on pointer devices, softly
           visible on touch. */}
@@ -245,7 +260,7 @@ export const SongCard = memo(function SongCard({
             onDelete(id);
           }}
           aria-label={`Delete ${title}`}
-          className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A]/35 text-white/90 backdrop-blur-sm transition-all hover:bg-[#1A1A1A]/60 opacity-60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+          className="absolute bottom-10 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A]/35 text-white/90 opacity-60 backdrop-blur-sm transition-all hover:bg-[#1A1A1A]/60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
         >
           <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
             <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />

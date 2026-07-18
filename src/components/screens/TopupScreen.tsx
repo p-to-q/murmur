@@ -373,6 +373,12 @@ export function TopupScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const hasHydratedBalancesRef = useRef(false);
+  const previousMetricValuesRef = useRef({
+    balance: 0,
+    balanceUSD: 0,
+    notesInUse: 0,
+  });
 
   const customAmount = Math.min(
     customConfig.maxAmount,
@@ -633,9 +639,40 @@ export function TopupScreen() {
   };
 
   useEffect(() => {
-    notesSpring.set(currentBalance);
-    balanceUSDSpring.set(balanceUSD);
-    notesInUseSpring.set(notesInUse);
+    const previous = previousMetricValuesRef.current;
+    previousMetricValuesRef.current = {
+      balance: currentBalance,
+      balanceUSD,
+      notesInUse,
+    };
+
+    if (!hasHydratedBalancesRef.current) {
+      hasHydratedBalancesRef.current = true;
+      notesSpring.set(currentBalance);
+      balanceUSDSpring.set(balanceUSD);
+      notesInUseSpring.set(notesInUse);
+      return;
+    }
+
+    if (currentBalance > previous.balance) {
+      animate(notesSpring, 0, { duration: 0.3 }).then(() => {
+        animate(notesSpring, currentBalance, { duration: 0.5 });
+      });
+    } else {
+      notesSpring.set(currentBalance);
+    }
+
+    if (balanceUSD > previous.balanceUSD) {
+      animate(balanceUSDSpring, 0, { duration: 0.3 }).then(() => {
+        animate(balanceUSDSpring, balanceUSD, { duration: 0.5 });
+      });
+    } else {
+      balanceUSDSpring.set(balanceUSD);
+    }
+
+    if (notesInUse !== previous.notesInUse) {
+      notesInUseSpring.set(notesInUse);
+    }
   }, [balanceUSD, balanceUSDSpring, currentBalance, notesInUse, notesInUseSpring, notesSpring]);
 
   const displayNotesBalance = useTransform(notesSpring, (v) => Math.round(v));

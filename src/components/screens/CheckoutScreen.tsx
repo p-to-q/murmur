@@ -605,7 +605,7 @@ function ReceiptCard({
             </p>
           </div>
 
-          <ReceiptCutEdge position="bottom" />
+          <ReceiptCutEdge position="bottom" showSideCuts={!isTorn} />
         </div>
       </motion.div>
 
@@ -856,11 +856,29 @@ function BillingEmailLine({
   );
 }
 
-function ReceiptCutEdge({ position }: { position: "top" | "bottom" }) {
+function ReceiptCutEdge({
+  position,
+  showSideCuts = true,
+}: {
+  position: "top" | "bottom";
+  showSideCuts?: boolean;
+}) {
   const verticalClass =
     position === "bottom"
       ? "bottom-0 translate-y-1/2"
       : "top-0 -translate-y-1/2";
+  const arcClass =
+    position === "bottom"
+      ? "top-0 rounded-t-full border-b-0"
+      : "bottom-0 rounded-b-full border-t-0";
+  const leftShadow =
+    position === "bottom"
+      ? "shadow-[inset_-1px_1px_0_rgba(210,201,182,0.62)]"
+      : "shadow-[inset_-1px_-1px_0_rgba(210,201,182,0.62)]";
+  const rightShadow =
+    position === "bottom"
+      ? "shadow-[inset_1px_1px_0_rgba(210,201,182,0.62)]"
+      : "shadow-[inset_1px_-1px_0_rgba(210,201,182,0.62)]";
 
   return (
     <div
@@ -868,12 +886,20 @@ function ReceiptCutEdge({ position }: { position: "top" | "bottom" }) {
       aria-hidden
     >
       <div className="absolute inset-x-0 top-1/2 border-t border-dashed border-[#D8CDBB]" />
-      <span className="absolute left-0 top-1/2 h-12 w-6 -translate-y-1/2 overflow-hidden">
-        <span className="absolute left-[-24px] top-0 h-12 w-12 rounded-full bg-[#F5F1EB] shadow-[inset_-1px_0_0_rgba(210,201,182,0.65)]" />
-      </span>
-      <span className="absolute right-0 top-1/2 h-12 w-6 -translate-y-1/2 overflow-hidden">
-        <span className="absolute right-[-24px] top-0 h-12 w-12 rounded-full bg-[#F5F1EB] shadow-[inset_1px_0_0_rgba(210,201,182,0.65)]" />
-      </span>
+      {showSideCuts && (
+        <>
+          <span className="absolute left-0 top-1/2 h-6 w-6 -translate-y-1/2 overflow-hidden">
+            <span
+              className={`absolute left-[-24px] h-6 w-12 border border-[#E1D7C8] bg-[#F5F1EB] ${arcClass} ${leftShadow}`}
+            />
+          </span>
+          <span className="absolute right-0 top-1/2 h-6 w-6 -translate-y-1/2 overflow-hidden">
+            <span
+              className={`absolute right-[-24px] h-6 w-12 border border-[#E1D7C8] bg-[#F5F1EB] ${arcClass} ${rightShadow}`}
+            />
+          </span>
+        </>
+      )}
     </div>
   );
 }

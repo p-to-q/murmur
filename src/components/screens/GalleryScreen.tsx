@@ -36,6 +36,8 @@ import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
 // placeholders don't have to fabricate them.
 type SongWithMeta = Omit<SongCardType, "visualConfig" | "duration" | "arrangementState"> &
   Partial<Pick<SongCardType, "visualConfig" | "duration" | "arrangementState">> & {
+    mp3DataUrl?: string | null;
+    mp3Url?: string | null;
     bpm?: number;
     keySignature?: string;
     tags?: string[];
@@ -164,10 +166,11 @@ export function GalleryScreen() {
   const [sort, setSort] = useState<SortMode>("newest");
   const [deleteTarget, setDeleteTarget] = useState<SongWithMeta | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [playingDemoId, setPlayingDemoId] = useState<string | null>(null);
+  const [playingSongId, setPlayingSongId] = useState<string | null>(null);
+  const [loadingPreviewId, setLoadingPreviewId] = useState<string | null>(null);
   const currentFlowId = useMurmurStore((state) => state.currentFlowId);
   const currentDraftId = useMurmurStore((state) => state.currentDraftId);
-  const demoAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const deleteCancelRef = useRef<HTMLButtonElement | null>(null);
   const deleteReturnFocusRef = useRef<HTMLElement | null>(null);
 
@@ -233,69 +236,99 @@ export function GalleryScreen() {
 
   useEffect(() => {
     return () => {
-      const audio = demoAudioRef.current;
+      const audio = previewAudioRef.current;
       if (audio) {
         audio.pause();
         audio.removeAttribute("src");
-        demoAudioRef.current = null;
+        previewAudioRef.current = null;
       }
     };
   }, []);
 
-  const stopDemoPreview = useCallback(() => {
-    const audio = demoAudioRef.current;
+  const stopSongPreview = useCallback(() => {
+    const audio = previewAudioRef.current;
     if (audio) {
       audio.pause();
       audio.removeAttribute("src");
-      demoAudioRef.current = null;
+      previewAudioRef.current = null;
     }
-    setPlayingDemoId(null);
+    setPlayingSongId(null);
+    setLoadingPreviewId(null);
   }, []);
 
-  const toggleDemoPreview = useCallback(
+  const toggleSongPreview = useCallback(
     async (song: SongWithMeta) => {
-      if (playingDemoId === song.id) {
-        stopDemoPreview();
+      if (playingSongId === song.id) {
+        stopSongPreview();
         return;
       }
 
-      const demo = getDemoSong(song.id);
-      if (!demo) return;
+      const demo = isDemoSongId(song.id) ? getDemoSong(song.id) : null;
+      let audioSrc = demo?.mp3Url ?? song.mp3Url ?? song.mp3DataUrl ?? null;
 
-      stopDemoPreview();
-      const audio = new Audio(demo.mp3Url);
+      if (!audioSrc && !demo) {
+        setLoadingPreviewId(song.id);
+        try {
+          const response = await requestWithTimeout(`/api/songs/${song.id}`, {}, 10_000);
+          if (!response.ok) {
+            throw new ApiEnvelopeError(await readApiErrorEnvelope(response, "song_preview_failed"));
+          }
+          const fullSong = (await response.json()) as SongWithMeta;
+          audioSrc = fullSong.mp3Url ?? fullSong.mp3DataUrl ?? null;
+        } catch (error) {
+          console.error("[Gallery] song preview load failed:", error);
+          toast.error(t("cards.play_error") || "Playback failed, please retry", {
+            description: formatSupportCode({ area: "GALLERY", error: "preview_load_failed", requestId: null }),
+          });
+          setLoadingPreviewId(null);
+          return;
+        }
+      }
+
+      if (!audioSrc) {
+        toast.error(t("cards.play_error") || "Playback failed, please retry");
+        setLoadingPreviewId(null);
+        return;
+      }
+
+      stopSongPreview();
+      setLoadingPreviewId(song.id);
+      const audio = new Audio(audioSrc);
       audio.loop = true;
-      audio.onended = () => setPlayingDemoId(null);
+      audio.onended = () => setPlayingSongId(null);
       audio.onerror = () => {
-        if (demoAudioRef.current === audio) demoAudioRef.current = null;
-        setPlayingDemoId(null);
+        if (previewAudioRef.current === audio) previewAudioRef.current = null;
+        setPlayingSongId(null);
+        setLoadingPreviewId(null);
         toast.error(t("cards.play_error") || "Playback failed, please retry");
       };
-      demoAudioRef.current = audio;
+      previewAudioRef.current = audio;
 
       try {
         await withTimeout(
           audio.play(),
           DEMO_PREVIEW_START_TIMEOUT_MS,
-          "Demo preview timed out",
+          "Gallery preview timed out",
         );
-        setPlayingDemoId(song.id);
+        setPlayingSongId(song.id);
+        setLoadingPreviewId(null);
         memory
           .reportAction({
-            content: `Previewed demo "${song.title}" from gallery`,
+            content: `Previewed "${song.title}" from gallery`,
             event_type: "play",
             page: "gallery",
-            metadata: { type: "demo_preview", song_id: song.id },
+            metadata: { type: demo ? "demo_preview" : "song_preview", song_id: song.id },
           })
           .catch(() => {});
       } catch (error) {
-        if (demoAudioRef.current === audio) demoAudioRef.current = null;
+        if (previewAudioRef.current === audio) previewAudioRef.current = null;
         audio.removeAttribute("src");
         console.error("[Gallery] demo preview failed:", error);
         toast.error(t("cards.play_error") || "Playback failed, please retry");
+        setLoadingPreviewId(null);
       }
     },
-    [playingDemoId, stopDemoPreview, t],
+    [playingSongId, stopSongPreview, t],
   );
 
   const sorted = useMemo(() => {
@@ -316,7 +349,7 @@ export function GalleryScreen() {
       const song = displaySongs.find((s) => s.id === id);
       if (!song) return;
       if (gallerySongAction(song.id, isShowingDemo) === "preview") {
-        void toggleDemoPreview(song);
+        void toggleSongPreview(song);
         return;
       }
       memory
@@ -327,10 +360,18 @@ export function GalleryScreen() {
           metadata: { type: "open_song", song_id: song.id },
         })
         .catch(() => {});
-      stopDemoPreview();
+      stopSongPreview();
       router.push(`/song/${song.id}`);
     },
-    [displaySongs, isShowingDemo, router, stopDemoPreview, toggleDemoPreview],
+    [displaySongs, isShowingDemo, router, stopSongPreview, toggleSongPreview],
+  );
+
+  const handleSongPreviewClick = useCallback(
+    (id: string) => {
+      const song = displaySongs.find((s) => s.id === id);
+      if (song) void toggleSongPreview(song);
+    },
+    [displaySongs, toggleSongPreview],
   );
 
   const handleDeleteRequest = useCallback(
@@ -483,11 +524,9 @@ export function GalleryScreen() {
                 onDelete={isShowingDemo ? undefined : handleDeleteRequest}
                 isDraft={song.hasAudio === false}
                 draftLabel={t("gallery.draft") || "Draft"}
-                isPlaying={
-                  isShowingDemo && isDemoSongId(song.id)
-                    ? playingDemoId === song.id
-                    : undefined
-                }
+                onPlay={song.hasAudio === false ? undefined : handleSongPreviewClick}
+                isPlaying={song.hasAudio === false ? undefined : playingSongId === song.id}
+                isPlayLoading={loadingPreviewId === song.id}
                 playLabel={t("common.play") || "Play"}
                 pauseLabel={t("common.pause") || "Pause"}
               />

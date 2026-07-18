@@ -365,11 +365,6 @@
     will-change: transform;
   }
 
-  /* ── Ring progress for recording ───────────────────────────── */
-  .ring-progress {
-    transition: stroke-dashoffset 1s linear;
-  }
-
   /* ── Camera-snap iris transition ──────────────────────────── */
   @keyframes iris-close {
     0%   { clip-path: circle(100% at 50% 50%); }
