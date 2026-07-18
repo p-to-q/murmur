@@ -1145,7 +1145,10 @@ export function HumScreen() {
   };
 
   // Ring progress SVG values
-  const ringRadius = 140;
+  const ringStrokeWidth = 2.5;
+  // The SVG and orb share the same 300 x 300 boundary. Keeping the stroke's
+  // outer edge at 150 makes the timer sit directly on the white orb edge.
+  const ringRadius = (300 - ringStrokeWidth) / 2;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const recordingProgress = recordingProgressFromElapsed(recordingElapsedMs);
   const recordingElapsedLabel = formatRecordingElapsedSeconds(recordingElapsedMs);
@@ -1364,7 +1367,7 @@ export function HumScreen() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.4 }}
-                    className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-[106%] w-[106%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
+                    className="pointer-events-none absolute inset-0 z-30 h-full w-full overflow-visible"
                     viewBox="0 0 300 300"
                     preserveAspectRatio="xMidYMid meet"
                   >
@@ -1375,7 +1378,7 @@ export function HumScreen() {
                       r={ringRadius}
                       fill="none"
                       stroke="rgba(255,255,255,0.25)"
-                      strokeWidth="2.5"
+                      strokeWidth={ringStrokeWidth}
                     />
                     {/* Progress */}
                     <circle
@@ -1384,7 +1387,7 @@ export function HumScreen() {
                       r={ringRadius}
                       fill="none"
                       stroke="#FF5924"
-                      strokeWidth="2.5"
+                      strokeWidth={ringStrokeWidth}
                       strokeLinecap="round"
                       strokeDasharray={ringCircumference}
                       strokeDashoffset={ringOffset}
