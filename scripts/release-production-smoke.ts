@@ -14,7 +14,7 @@ async function probe(path: string, expectedContentType: string) {
     try {
       const response = await fetch(`${origin}${path}`, {
         headers: { "User-Agent": "murmur-production-smoke" },
-        redirect: "follow",
+        redirect: "manual",
         signal: AbortSignal.timeout(12_000),
       });
       const contentType = response.headers.get("content-type") ?? "";

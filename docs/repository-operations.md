@@ -121,7 +121,7 @@ The production workflow is deliberately one serial chain:
 5. the exact checkout is uploaded for a remote Vercel Production build, where
    Sensitive environment variables remain inside Vercel;
 6. Vercel promotes that completed build to Production;
-7. HTTP smoke runs against both the immutable deployment URL and
+7. HTTP smoke runs against the public Production alias at
    `https://murmur.ptoq.io`.
 
 Any failed stage stops later stages. The workflow uses a non-canceling
@@ -153,6 +153,12 @@ its build environment, so a local prebuild cannot consume production DSNs,
 origins, or worker URLs. The canonical `bun run build` still runs `env:audit`;
 with a remote build it validates the real values inside Vercel before the
 deployment is promoted.
+
+The Vercel deployment URL may be protected by team SSO and is therefore not a
+public health target. Exact-SHA identity is established before upload and
+attached as deployment metadata; post-deploy HTTP probes use the public alias
+that users actually reach. Smoke requests do not follow redirects, so an auth
+or error-page redirect cannot be mistaken for a healthy application response.
 
 ### Branch protection (issue #308)
 
