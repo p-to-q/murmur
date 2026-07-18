@@ -72,11 +72,16 @@ export function nextInputLevelDecision({
 export function inputLevelLabelKey(state: InputLevelState): InputLevelLabelKey {
   switch (state) {
     case "quiet":
-      // Rotate between two quiet messages
-      return Math.random() < 0.5 ? "hum.level.quiet.1" : "hum.level.quiet.2";
+      return randomQuietInputLevelLabelKey();
     case "heard":
       return "hum.level.heard";
     case "idle":
       return "hum.level.idle";
   }
+}
+
+export function randomQuietInputLevelLabelKey(
+  random: () => number = Math.random,
+): Extract<InputLevelLabelKey, "hum.level.quiet.1" | "hum.level.quiet.2"> {
+  return random() < 0.5 ? "hum.level.quiet.1" : "hum.level.quiet.2";
 }

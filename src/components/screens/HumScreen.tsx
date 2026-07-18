@@ -41,7 +41,11 @@ import {
   saveRecordingBlob,
 } from "@/lib/audio/recording-cache";
 import { createRecordingOperationId } from "@/lib/audio/recording-operation";
-import { inputLevelLabelKey, nextInputLevelDecision } from "@/lib/audio/input-level";
+import {
+  nextInputLevelDecision,
+  randomQuietInputLevelLabelKey,
+  type InputLevelLabelKey,
+} from "@/lib/audio/input-level";
 import {
   INITIAL_FIXTURE_RESCUE_STATE,
   type FixtureRescueState,
@@ -296,6 +300,8 @@ export function HumScreen() {
   // upload failure — gates the "retry last recording" affordance (issue #234).
   const [cachedRecordingAvailable, setCachedRecordingAvailable] = useState(false);
   const [levelState, setLevelState] = useState<"idle" | "quiet" | "heard">("idle");
+  const [quietLevelLabelKey, setQuietLevelLabelKey] =
+    useState<InputLevelLabelKey>("hum.level.quiet.1");
   const [showHeardMessage, setShowHeardMessage] = useState(false);
   const { refresh: refreshBalance } = useUserBalance();
   const { account, isLoading: accountLoading } = useCurrentAccount();
@@ -359,9 +365,7 @@ export function HumScreen() {
   const blob1Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.35]);
   const blob2Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.28]);
   const blob3Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.22]);
-  const blobOpacity = useTransform(amplitudeSpring, (value) =>
-    Math.min(1, Math.max(0, 0.82 + value * 0.18)),
-  );
+  const blobOpacity = useTransform(amplitudeSpring, [0, 1], [1, 2.2]);
   // Orb conic glow — bigger range, brighter response
   const glowScale = useTransform(amplitudeSpring, [0, 0.3, 1], [1, 1.15, 1.7]);
   const glowOpacity = useTransform(amplitudeSpring, [0, 0.2, 1], [0.35, 0.55, 1.0]);
@@ -370,6 +374,9 @@ export function HumScreen() {
 
   const setInputLevelState = useCallback((next: "idle" | "quiet" | "heard") => {
     if (levelStateRef.current === next) return;
+    if (next === "quiet") {
+      setQuietLevelLabelKey(randomQuietInputLevelLabelKey());
+    }
     levelStateRef.current = next;
     setLevelState(next);
 
@@ -1030,7 +1037,7 @@ export function HumScreen() {
   const isIdle = recordingState === "idle";
   const isRecording = recordingState === "recording";
   const isProcessing = recordingState === "processing";
-  const isStartingCapture = capturePhase === "starting" && isProcessing;
+  const isStartingCapture = capturePhase === "starting";
   const showRecordingChrome = isRecording || isStartingCapture;
   const onboardingLine = t(`hum.onboarding.line${onboardingStep + 1}`);
   const onboardingA11yLine = onboardingLine.replace(/\s+/g, " ");
@@ -1054,10 +1061,20 @@ export function HumScreen() {
       : null;
 
   const beginIdleCapture = () => {
-    if (isIdle && !humError && startPhaseRef.current === "idle") {
+    if (
+      isIdle &&
+      !humError &&
+      capturePhase === "idle" &&
+      startPhaseRef.current === "idle"
+    ) {
       cancelPendingStartRef.current = false;
+      setCapturePhase("starting");
+      updateRecordingElapsed(0);
       void (async () => {
-        if (!(await passGuestGate())) return;
+        if (!(await passGuestGate())) {
+          setCapturePhase("idle");
+          return;
+        }
         await startRecording();
       })();
     }
@@ -1265,7 +1282,7 @@ export function HumScreen() {
                           transition={{ duration: 0.25 }}
                           className="text-[12px] font-medium leading-[18px] tracking-[0.1em] text-[#B6B0A4]"
                         >
-                          {t(inputLevelLabelKey(levelState))}
+                          {t(quietLevelLabelKey)}
                         </motion.p>
                       ) : null}
                     </AnimatePresence>
@@ -1333,7 +1350,7 @@ export function HumScreen() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.4 }}
-                    className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-[108%] w-[108%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
+                    className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-[114%] w-[114%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
                     viewBox="0 0 300 300"
                     preserveAspectRatio="xMidYMid meet"
                   >
@@ -1343,8 +1360,8 @@ export function HumScreen() {
                       cy="150"
                       r={ringRadius}
                       fill="none"
-                      stroke="rgba(255,255,255,0.25)"
-                      strokeWidth="2.5"
+                      stroke="rgba(255,89,36,0.16)"
+                      strokeWidth="3.5"
                     />
                     {/* Progress */}
                     <circle
@@ -1353,7 +1370,7 @@ export function HumScreen() {
                       r={ringRadius}
                       fill="none"
                       stroke="#FF5924"
-                      strokeWidth="2.5"
+                      strokeWidth="3.5"
                       strokeLinecap="round"
                       strokeDasharray={ringCircumference}
                       strokeDashoffset={ringOffset}
