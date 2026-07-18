@@ -223,6 +223,7 @@ mock.module("@/lib/platform/runpod-serverless", () => ({
       generation_ms: 123,
       style_mix: "0.35",
       input_receipt: {
+        version: 1,
         request_id: input.request_id,
         prompt_sha256: createHash("sha256").update(String(input.prompt)).digest("hex"),
         duration: input.duration,

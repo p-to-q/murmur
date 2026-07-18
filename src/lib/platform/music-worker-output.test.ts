@@ -40,6 +40,7 @@ const expected = {
 function evidencedOutput() {
   return {
     input_receipt: {
+      version: 1,
       request_id: expected.requestId,
       prompt_sha256: createHash("sha256").update(expected.prompt).digest("hex"),
       duration: expected.duration,
@@ -79,6 +80,15 @@ describe("music worker output protocol", () => {
     })).toThrow("music_worker_quality_evidence_missing");
   });
 
+  it("bounds payload size before scanning samples", () => {
+    expect(() => verifyMusicWorkerOutput({
+      output: {},
+      bytes: new Uint8Array(96_000 * 2 * 2 + 64 * 1024 + 1),
+      expected,
+      requireEvidence: false,
+    })).toThrow("payload_too_large");
+  });
+
   it("rejects partial evidence even during rolling deployment", () => {
     expect(() => verifyMusicWorkerOutput({
       output: { quality: evidencedOutput().quality },
@@ -109,5 +119,22 @@ describe("music worker output protocol", () => {
       expected: { ...expected, requestId: "wrong" },
       requireEvidence: true,
     })).toThrow("music_input_receipt_request_mismatch");
+  });
+
+  it("rejects unsupported receipt versions", () => {
+    const output = evidencedOutput();
+    output.input_receipt.version = 2;
+    expect(() => verifyMusicWorkerOutput({
+      output,
+      bytes: toneWav(),
+      expected,
+      requireEvidence: true,
+    })).toThrow("music_input_receipt_version_unsupported");
+  });
+
+  it("rejects negative cost telemetry", () => {
+    process.env.RUNPOD_GPU_USD_PER_SECOND = "0.0004";
+    expect(estimateWorkerCostUsd(-1)).toBeNull();
+    delete process.env.RUNPOD_GPU_USD_PER_SECOND;
   });
 });

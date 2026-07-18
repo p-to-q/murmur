@@ -8,6 +8,8 @@ import {
 
 export const MUSIC_QUALITY_EVIDENCE_REQUIRED_ENV =
   "MURMUR_MUSIC_QUALITY_EVIDENCE_REQUIRED";
+const MAX_PCM_BYTES_PER_SECOND = 96_000 * 2 * 2;
+const MAX_WAV_CONTAINER_OVERHEAD_BYTES = 64 * 1024;
 
 export interface MusicWorkerDiagnostics {
   version: number;
@@ -46,6 +48,11 @@ export function verifyMusicWorkerOutput(input: {
   };
   requireEvidence?: boolean;
 }): VerifiedMusicOutput {
+  const maxBytes = Math.ceil(input.expected.duration * MAX_PCM_BYTES_PER_SECOND)
+    + MAX_WAV_CONTAINER_OVERHEAD_BYTES;
+  if (input.bytes.byteLength > maxBytes) {
+    throw new Error("music_delivery_quality_gate_failed:payload_too_large");
+  }
   const quality = analyzePcm16Wav(input.bytes, input.expected.duration);
   if (!quality.passed) {
     throw new Error(`music_delivery_quality_gate_failed:${quality.failures.join(",")}`);
@@ -113,7 +120,9 @@ export function isMusicQualityEvidenceRequired(): boolean {
 
 export function estimateWorkerCostUsd(workerWallMs: number | null): number | null {
   const rate = Number(process.env.RUNPOD_GPU_USD_PER_SECOND);
-  if (workerWallMs === null || !Number.isFinite(rate) || rate <= 0) return null;
+  if (workerWallMs === null || workerWallMs < 0 || !Number.isFinite(rate) || rate <= 0) {
+    return null;
+  }
   return Math.round((workerWallMs / 1000) * rate * 1_000_000) / 1_000_000;
 }
 
@@ -128,6 +137,9 @@ function verifyInputReceipt(
     humSha256: string | null;
   },
 ): void {
+  if (receipt.version !== 1) {
+    throw new Error("music_input_receipt_version_unsupported");
+  }
   if (receipt.request_id !== expected.requestId) {
     throw new Error("music_input_receipt_request_mismatch");
   }

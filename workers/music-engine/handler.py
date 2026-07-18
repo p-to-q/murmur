@@ -36,7 +36,12 @@ from quality_gate import GATE_VERSION, analyze_wav
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("music-engine")
 
-MAX_QUALITY_ATTEMPTS = max(1, min(3, int(os.getenv("MUSIC_QUALITY_MAX_ATTEMPTS", "2"))))
+try:
+    configured_quality_attempts = int(os.getenv("MUSIC_QUALITY_MAX_ATTEMPTS", "2"))
+except ValueError:
+    configured_quality_attempts = 2
+
+MAX_QUALITY_ATTEMPTS = max(1, min(3, configured_quality_attempts))
 
 
 def _clamp_prompt(value: object) -> str:

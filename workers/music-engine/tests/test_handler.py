@@ -14,6 +14,10 @@ import handler
 
 
 class HandlerTest(unittest.TestCase):
+    def test_invalid_attempt_configuration_uses_default(self):
+        self.assertGreaterEqual(handler.MAX_QUALITY_ATTEMPTS, 1)
+        self.assertLessEqual(handler.MAX_QUALITY_ATTEMPTS, 3)
+
     def test_returns_wav_of_requested_duration(self):
         out = handler.handler({"input": {"prompt": "warm dreamy pads", "duration": 2}})
         self.assertNotIn("error", out)

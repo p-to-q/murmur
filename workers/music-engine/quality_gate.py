@@ -40,6 +40,11 @@ def analyze_wav(blob: bytes, expected_duration: float) -> dict:
         failures.append("empty_audio")
         return _result(failures, duration, channels, sample_rate, frame_count)
 
+    expected_bytes = frame_count * channels * sample_width
+    if len(frames) < expected_bytes or len(frames) % sample_width:
+        failures.append("invalid_audio_data")
+        return _result(failures, duration, channels, sample_rate, frame_count)
+
     sample_count = len(frames) // 2
     values = struct.iter_unpack("<h", frames[: sample_count * 2])
     sum_squares = 0.0

@@ -35,6 +35,13 @@ class QualityGateTest(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertIn("invalid_wav", result["failures"])
 
+    def test_rejects_truncated_pcm_data(self):
+        blob = bytearray(engine.mock_clip("warm piano", 2))
+        del blob[-1]
+        result = analyze_wav(bytes(blob), 2)
+        self.assertFalse(result["passed"])
+        self.assertIn("invalid_audio_data", result["failures"])
+
 
 if __name__ == "__main__":
     unittest.main()
