@@ -406,7 +406,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
-    <div className="relative bg-[#F5F1EB]" style={{ minHeight: 'var(--content-h)' }}>
+    <div data-testid="studio-screen" className="relative bg-[#F5F1EB]" style={{ minHeight: 'var(--content-h)' }}>
       <PageBackdrop />
 
       <div className="relative z-10 mx-auto flex w-full max-w-[560px] flex-col px-4 md:pt-6" style={{ minHeight: 'var(--content-h)' }}>

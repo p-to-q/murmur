@@ -203,7 +203,7 @@ export function PublicSongScreen({ shareCode }: { shareCode: string }) {
   const titleClassName = titleFontClass(song.title);
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div data-testid="public-song-screen" className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
       <div className="relative z-10 mx-auto flex min-h-svh w-full max-w-5xl flex-col px-5 pb-14 pt-10 md:px-10 md:pt-16">
         <motion.div

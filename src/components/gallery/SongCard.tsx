@@ -126,6 +126,7 @@ export const SongCard = memo(function SongCard({
       className="relative group"
     >
       <motion.button
+        data-testid={`gallery-song-${id}`}
         onHoverStart={() => setIsHovered(true)}
         onHoverEnd={() => setIsHovered(false)}
         onClick={() => onClick(id)}

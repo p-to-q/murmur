@@ -175,7 +175,17 @@ flowchart TB
   completed local audio. They do not preserve a provider job after the browser
   request ends. Server-owned job state, result lookup, and fully durable
   "finished after browser exit" notifications remain future work. Generation
-  notifications are collapsed by browser-minted batch id.
+  notifications are collapsed by browser-minted batch id. The first durable
+  paid-generation boundary is available at `POST /api/music/jobs`: the spend
+  and `music_jobs` row are created atomically, `(user_id, operation_id)` is the
+  idempotency key, and a request-hash mismatch returns `409`. `GET` resumes the
+  same provider job after a lost request, `DELETE` records cancellation intent,
+  and successful audio is recovered through the authenticated job audio route.
+  The legacy synchronous `/api/music/generate` route remains in place while the
+  Vibe client migrates. Phase one uses short, one-status-read advances triggered
+  after creation and by client GET polling plus DB leases; a continuously
+  running dispatcher and outbox are the next step. Browser-independent
+  guaranteed completion is explicitly not a phase-one capability.
 - AI editing depends on `OPENAI_API_KEY` or an equivalent gateway key.
 - ISR caching (`minimumCacheTTL: 3600`) and AVIF/WebP image optimization are
   configured in `next.config.ts` for gallery artwork and user avatars.

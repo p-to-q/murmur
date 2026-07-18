@@ -540,7 +540,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   );
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div data-testid="vibe-screen" className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       {/* ── Phase 1: iris-close + rainbow ring ───────────────────── */}
       {phase === "closing" && (
         <div className="pointer-events-none fixed inset-0 z-[60]">
@@ -775,6 +775,8 @@ const VibeCard = memo(function VibeCard({
 
   return (
     <motion.div
+      data-testid={`vibe-card-${cardIndex}`}
+      data-generation-state={isError ? "error" : isPending ? "pending" : "ready"}
       aria-disabled={!canEnterStudio}
       className={[
         "relative h-full min-h-[200px] select-none overflow-hidden rounded-[32px] md:min-h-[240px]",

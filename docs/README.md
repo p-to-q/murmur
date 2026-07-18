@@ -20,6 +20,8 @@ remain the source of truth for everything the v2 docs do not override.
   latency, reliability, and architecture decision framework
 - [worker-architecture.md](worker-architecture.md) — deployed worker topology,
   capacity, and operational constraints
+- [music-jobs.md](music-jobs.md) — durable paid-generation lifecycle,
+  recovery, settlement, and production cutover
 - [tech-stack.md](tech-stack.md) — current stack + deploy topology (Vercel /
   RunPod / Waffo / local cloudflared)
 - [music-engine.md](music-engine.md) — chord / bass / drum engines + assemble-song

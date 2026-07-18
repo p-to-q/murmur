@@ -14,6 +14,7 @@ let nextAuth: ResolvedRequestAuth = {
   source: "session",
   sessionId: "ses_local",
 };
+let emailAuthConfigured = true;
 
 let upsertResult: {
   userId: string;
@@ -34,7 +35,7 @@ const settleRegistrationShareReferralMock = mock(async () => ({
 }));
 
 mock.module("@/lib/auth/email/send-verification", () => ({
-  isEmailAuthConfigured: () => true,
+  isEmailAuthConfigured: () => emailAuthConfigured,
   verifyCode: async () => ({ ok: true as const }),
 }));
 
@@ -87,6 +88,7 @@ mock.module("@/lib/observability/log", () => ({
 const { POST } = await import("./route");
 
 beforeEach(() => {
+  emailAuthConfigured = true;
   nextAuth = {
     ok: true,
     user: {
@@ -158,5 +160,16 @@ describe("POST /api/auth/email/verify-code referral settlement", () => {
         registrationKind: "existing_user",
       }),
     );
+  });
+
+  it("returns 503 when email auth is disabled", async () => {
+    emailAuthConfigured = false;
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: "email_auth_disabled",
+    });
   });
 });

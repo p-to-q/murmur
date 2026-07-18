@@ -172,6 +172,19 @@ describe("sendVerificationCode", () => {
     expect(rows).toHaveLength(1);
     expect(activeRows()).toHaveLength(0);
   });
+
+  it("keeps concurrent sends serialized by the email lock", async () => {
+    const [first, second] = await Promise.all([
+      sendVerificationCode("person@test.local"),
+      sendVerificationCode("person@test.local"),
+    ]);
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    expect(selectCalls).toBe(2);
+    expect(rows).toHaveLength(2);
+    expect(activeRows()).toHaveLength(2);
+  });
 });
 
 describe("verifyCode", () => {
@@ -212,6 +225,16 @@ describe("verifyCode", () => {
     expect(await verifyCode("person@test.local", "222222")).toEqual({
       ok: false,
       error: "invalid_code",
+    });
+  });
+
+  it("returns max_attempts once the shared ceiling is reached", async () => {
+    addCode({ code: "111111", attempts: 5 });
+    addCode({ code: "222222", attempts: 4 });
+
+    expect(await verifyCode("person@test.local", "111111")).toEqual({
+      ok: false,
+      error: "max_attempts",
     });
   });
 });

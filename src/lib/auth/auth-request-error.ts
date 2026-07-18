@@ -125,7 +125,7 @@ export function toAuthRequestError(cause: unknown): AuthRequestError {
 }
 
 function statusToFallbackCode(status: number): AuthRequestErrorCode {
-  if (status === 404) return "email_auth_disabled";
+  if (status === 503) return "email_auth_disabled";
   if (status === 429) return "rate_limit";
   if (status === 400 || status === 422) return "invalid_body";
   return "server_error";

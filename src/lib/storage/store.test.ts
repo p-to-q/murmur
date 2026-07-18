@@ -139,6 +139,30 @@ for (const adapter of adapters) {
       ).rejects.toBeInstanceOf(StorageError);
       await expect(store.get("/abs.bin")).rejects.toBeInstanceOf(StorageError);
     });
+
+    if (adapter.name === "local-fs") {
+      it("cleans up the body when sidecar creation fails", async () => {
+        const root = await fs.mkdtemp(path.join(os.tmpdir(), "murmur-storage-cleanup-"));
+        const cleanupStore = createLocalFsStore({ root, urlPrefix: "/test/storage" });
+        await fs.mkdir(path.join(root, "tmp/_shared/_/cleanup.bin.meta.json"), {
+          recursive: true,
+        });
+
+        try {
+          await expect(
+            cleanupStore.put("tmp/_shared/_/cleanup.bin", sample, {
+              contentType: "application/octet-stream",
+            }),
+          ).rejects.toBeInstanceOf(StorageError);
+          await expect(
+            fs.readFile(path.join(root, "tmp/_shared/_/cleanup.bin")),
+          ).rejects.toThrow();
+          await expect(await cleanupStore.get("tmp/_shared/_/cleanup.bin")).toBeNull();
+        } finally {
+          await fs.rm(root, { recursive: true, force: true });
+        }
+      });
+    }
   });
 }
 

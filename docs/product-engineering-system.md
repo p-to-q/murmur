@@ -136,7 +136,9 @@ Production quality is demonstrated by evidence, not document checkboxes:
   loss, worker queue wait, and orphaned storage objects.
 - Test a journey where the chosen take can go directly to naming/save and
   Studio is an optional path. Promote it only if comprehension and completion
-  improve without harming creative control.
+  improve without harming creative control. The disabled experiment contract,
+  metrics, guardrails, and rollback live in
+  `experiments/studio-optional-and-canonical-draft-first.md`.
 - Split canonical song persistence from audio rendering so the artifact can be
   secured before a slow encode/upload, with explicit processing state.
 

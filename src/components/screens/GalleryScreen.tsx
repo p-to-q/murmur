@@ -401,7 +401,7 @@ export function GalleryScreen() {
   };
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div data-testid="gallery-screen" className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
 
       {/* Activity heatmap — fills the top */}

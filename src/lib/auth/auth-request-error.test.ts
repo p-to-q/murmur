@@ -12,11 +12,11 @@ function jsonResponse(body: unknown, status: number): Response {
 describe("buildAuthRequestError", () => {
   it("maps a known server error code to the client code", async () => {
     const err = await buildAuthRequestError(
-      jsonResponse({ error: "email_auth_disabled", requestId: "req_1" }, 404),
+      jsonResponse({ error: "email_auth_disabled", requestId: "req_1" }, 503),
     );
     expect(err).toBeInstanceOf(AuthRequestError);
     expect(err.code).toBe("email_auth_disabled");
-    expect(err.status).toBe(404);
+    expect(err.status).toBe(503);
     expect(err.requestId).toBe("req_1");
   });
 

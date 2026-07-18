@@ -1121,7 +1121,7 @@ export function HumScreen() {
     ringCircumference - recordingProgress * ringCircumference;
 
   return (
-    <div className="relative overflow-hidden bg-[#F5F1EB]" style={{ minHeight: 'var(--content-h)' }}>
+    <div data-testid="hum-screen" className="relative overflow-hidden bg-[#F5F1EB]" style={{ minHeight: 'var(--content-h)' }}>
       {/* ─── Aurora background blobs — audio-reactive ───────────── */}
       {/* scale and opacity are driven by amplitudeSpring (0→1 RMS).
           CSS drift animations still run; framer-motion adds a reactivity
@@ -1512,6 +1512,7 @@ export function HumScreen() {
         <AnimatePresence>
           {isIdle && humError && errorCopy && (
             <motion.div
+              data-testid="hum-recovery"
               key={`${humError.variant}-${humError.code}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

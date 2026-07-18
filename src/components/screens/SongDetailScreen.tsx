@@ -620,7 +620,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   };
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div data-testid="song-detail-screen" className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
 
       <div className="relative z-10 flex min-h-svh flex-col">

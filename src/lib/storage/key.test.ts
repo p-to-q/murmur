@@ -24,6 +24,15 @@ describe("objectKey", () => {
     expect(key).toBe("shares/_shared/_/share_abc.html");
   });
 
+  it("creates a durable private music-job output namespace", () => {
+    expect(objectKey({
+      kind: "music-job-audio",
+      userId: "usr_owner",
+      id: "a".repeat(64),
+      ext: "wav",
+    })).toBe(`music/jobs/usr_owner/_/${"a".repeat(64)}.wav`);
+  });
+
   it.each([
     [{ id: "../escape" }, "id"],
     [{ userId: "/abs", id: "ok" }, "user"],

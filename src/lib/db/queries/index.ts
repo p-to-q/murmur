@@ -7,3 +7,4 @@ export * from "./share-referrals";
 export * from "./topup-surface";
 export * from "./local-song-fallback";
 export * from "./composition-events";
+export * from "./music-jobs";

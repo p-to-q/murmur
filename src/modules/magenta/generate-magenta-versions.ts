@@ -18,6 +18,10 @@ import { addMurmurNotification } from "@/lib/store/notification-store";
 import { useI18nStore } from "@/lib/i18n";
 import { songGeneratedNotificationCopy } from "@/lib/notifications/notification-copy";
 import { request } from "@/lib/api/request";
+import {
+  durableMusicJobsEnabled,
+  requestDurableMusicAudio,
+} from "@/lib/api/music-jobs";
 
 /**
  * Magenta RealTime version flow.
@@ -471,12 +475,15 @@ async function requestClip(
     // resume/retry of the same clip never double-charges (#300).
     if (operationId) headers["x-generation-clip-id"] = operationId;
 
-    const res = await request("/api/music/generate", {
-      method: "POST",
-      body: form,
-      headers,
-      signal: withGenerateTimeout(signal),
-    });
+    const requestSignal = withGenerateTimeout(signal);
+    const res = durableMusicJobsEnabled()
+      ? await requestDurableMusicAudio({ form, headers, signal: requestSignal })
+      : await request("/api/music/generate", {
+          method: "POST",
+          body: form,
+          headers,
+          signal: requestSignal,
+        });
     if (!res.ok) {
       throw await buildMusicGenerateError(res);
     }
