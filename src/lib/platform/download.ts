@@ -14,13 +14,11 @@ export async function downloadUrlAsFile(url: string, filename: string): Promise<
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
     });
-  } catch {
-    triggerDownload(url, filename);
-    return;
+  } catch (cause) {
+    throw new Error("remote download failed", { cause });
   }
   if (!response.ok || response.type === "opaque") {
-    triggerDownload(url, filename);
-    return;
+    throw new Error(`remote download returned ${response.status || "an opaque response"}`);
   }
   const blob = await response.blob();
   downloadBlob(blob, filename);

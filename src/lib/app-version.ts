@@ -1,4 +1,4 @@
-import { APP_BUILD } from "./release-metadata";
+import { APP_BUILD, APP_VERSION } from "./release-metadata";
 
 export function getAppVersionParts() {
   const gitSha = (
@@ -6,7 +6,7 @@ export function getAppVersionParts() {
   ).slice(0, 7);
 
   return {
-    semver: process.env.NEXT_PUBLIC_APP_VERSION ?? "0.6.0",
+    semver: process.env.NEXT_PUBLIC_APP_VERSION ?? APP_VERSION,
     build: process.env.NEXT_PUBLIC_APP_BUILD ?? APP_BUILD,
     gitSha,
   };

@@ -4,4 +4,5 @@
  * SemVer lives in package.json. Bump APP_BUILD on each product release to the
  * latest merged GitHub PR number at release time.
  */
-export const APP_BUILD = "181";
+export const APP_VERSION = "0.7.0-rc.1";
+export const APP_BUILD = "409";

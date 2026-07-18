@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, context: Context) {
   const job = await getMusicJobForUser(auth.user.id, jobId);
   if (!job) return notFound(requestId);
 
-  if (["accepted", "queued", "running", "result_ready"].includes(job.status)) {
+  if (["accepted", "queued", "running", "result_ready", "cancel_requested"].includes(job.status)) {
     scheduleAfterResponse(() => advanceMusicJob(auth.user.id, job.id));
   }
   return NextResponse.json(toResponse(job), { headers: headers(requestId) });

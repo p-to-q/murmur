@@ -58,7 +58,12 @@ jobs:
       - name: Validate migration configuration
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          VERCEL_NATIVE_PRODUCTION_DISABLED: ${{ vars.VERCEL_NATIVE_PRODUCTION_DISABLED }}
         run: |
+          if [ "${VERCEL_NATIVE_PRODUCTION_DISABLED:-}" != "true" ]; then
+            echo "::error title=Production release cutover is not acknowledged::Disable Vercel native Production auto-deploy for main, retain Preview, then set VERCEL_NATIVE_PRODUCTION_DISABLED=true."
+            exit 1
+          fi
           if [ -z "${DATABASE_URL:-}" ]; then
             echo "::error title=Production migration is not configured::Set DATABASE_URL_UNPOOLED to the direct production Postgres connection string."
             exit 1

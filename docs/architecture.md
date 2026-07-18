@@ -93,6 +93,11 @@ flowchart TB
 ### 2. Arrangement and editing
 
 - The vibe and studio flows transform melody into arrangement choices.
+- Paid music generation currently has two API contracts: the shipped
+  synchronous `/api/music/generate` path and the opt-in recoverable
+  `/api/music/jobs` path. The latter records spend, provider identity, output,
+  and settlement state server-side; it is not the default production client
+  path yet.
 - `src/modules/` owns the arrangement rules, preview behavior, and export logic.
 - `/api/strummer/edit` adds LLM-assisted edit-token classification when a
   compatible AI gateway is configured.
@@ -163,8 +168,9 @@ flowchart TB
   which is lazy-loaded on first use and never inflates the initial bundle.
 - Web Push requires `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, HTTPS
   (localhost is accepted by browsers for development), browser notification
-  permission, and a registered `push_subscriptions` row. Music generation is
-  still client-orchestrated clip-by-clip; sibling clips share a browser-minted
+  permission, and a registered `push_subscriptions` row. On the default legacy
+  path, music generation is still client-orchestrated clip-by-clip; sibling
+  clips share a browser-minted
   generation batch id (`x-generation-batch-id`) so their pushes and inbox
   entries collapse to one per batch (see "Generation Batch Semantics" in
   `docs/notifications.md`). After 4 minutes continuously hidden, the browser
@@ -172,20 +178,23 @@ flowchart TB
   explicit retry state; it does not auto-retry because a new attempt may have
   paid-generation consequences. Stable per-clip operation identities and
   browser IndexedDB artifact recovery prevent duplicate billing and recover
-  completed local audio. They do not preserve a provider job after the browser
-  request ends. Server-owned job state, result lookup, and fully durable
-  "finished after browser exit" notifications remain future work. Generation
-  notifications are collapsed by browser-minted batch id. The first durable
-  paid-generation boundary is available at `POST /api/music/jobs`: the spend
+  completed local audio. That path does not preserve a provider job after the
+  browser request ends. Generation notifications are collapsed by the
+  browser-minted batch id.
+
+  The first server-owned paid-generation boundary is available at
+  `POST /api/music/jobs`: the spend
   and `music_jobs` row are created atomically, `(user_id, operation_id)` is the
   idempotency key, and a request-hash mismatch returns `409`. `GET` resumes the
   same provider job after a lost request, `DELETE` records cancellation intent,
   and successful audio is recovered through the authenticated job audio route.
-  The legacy synchronous `/api/music/generate` route remains in place while the
-  Vibe client migrates. Phase one uses short, one-status-read advances triggered
-  after creation and by client GET polling plus DB leases; a continuously
-  running dispatcher and outbox are the next step. Browser-independent
-  guaranteed completion is explicitly not a phase-one capability.
+  The browser adapter is guarded by
+  `NEXT_PUBLIC_MURMUR_DURABLE_MUSIC_JOBS=1`; the legacy synchronous route remains
+  the default while production cutover is validated. Phase one uses short,
+  one-status-read advances triggered after creation and by client GET polling
+  plus DB leases. It does not yet include a continuously running dispatcher,
+  outbox, or browser-independent completion guarantee. See
+  [music-jobs.md](./music-jobs.md).
 - AI editing depends on `OPENAI_API_KEY` or an equivalent gateway key.
 - ISR caching (`minimumCacheTTL: 3600`) and AVIF/WebP image optimization are
   configured in `next.config.ts` for gallery artwork and user avatars.

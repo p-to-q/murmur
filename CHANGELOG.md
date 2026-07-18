@@ -3,6 +3,37 @@
 All notable product releases for Murmur are documented here. SemVer lives in
 `package.json`. Build numbers live in `src/lib/release-metadata.ts`.
 
+## [0.7.0-rc.1] - 2026-07-18
+
+### Added
+
+- Durable, idempotent music-generation job contracts with persisted state,
+  artifact storage, recovery, cancellation, and settlement boundaries
+- A browser-level Playwright golden path covering creation, save, Gallery,
+  Song detail, sharing, and public playback
+- Ordered production release automation: CI, migration, schema verification,
+  exact-SHA deployment, then production smoke checks
+- Stable experiment assignments for evaluating an optional Studio step and
+  canonical-draft-first persistence independently
+- Indexed composition-event capture and documentation for future product,
+  feedback, and model-quality analysis
+
+### Changed
+
+- Hardened the Hum-to-Song journey with bounded waits, recoverable generation,
+  clearer failure handling, and safer local/demo fallbacks
+- Restored and refined Home recording, Vibe generation, Gallery, Song export,
+  sharing, and Top Up behavior without adding new blocking steps
+- Tightened checkout idempotency, email-verification concurrency, storage
+  cleanup, observability, and music-engine health reporting
+- Version prepared as `0.7.0-rc.1`, build `409`
+
+### Release status
+
+- This is a pre-release candidate. Production cutover still requires green CI,
+  migration and schema verification, exact-SHA deployment, and production smoke
+  evidence for the selected commit.
+
 ## [0.6.0] - 2026-07-11
 
 ### Added

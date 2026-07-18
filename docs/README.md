@@ -36,8 +36,9 @@ remain the source of truth for everything the v2 docs do not override.
 - [delivery-cadence.md](delivery-cadence.md)
 - [review-gates.md](review-gates.md)
 - [packaging-and-release.md](packaging-and-release.md)
-- [repository-operations.md](repository-operations.md)
-- [verification.md](verification.md)
+- [repository-operations.md](repository-operations.md) — authoritative
+  production migration, exact-SHA deploy, smoke, and branch-governance runbook
+- [verification.md](verification.md) — validation commands and current evidence
 
 ## 2. v2 plan — narrative (2026-06)
 
@@ -109,9 +110,10 @@ If you only have 15 minutes to rehydrate on the repo, read in this order:
 
 1. `README.md` — product shape + local runtime commands.
 2. `architecture.md` — current boundaries and runtime flow.
-3. `delivery-cadence.md` — what a "good-sized" Murmur change looks like.
-4. `engineering-principles.md` — how to change the repo without adding drift.
-5. `review-gates.md` + `verification.md` — what counts as proof before merge.
+3. `repository-operations.md` — production release and migration contract.
+4. `delivery-cadence.md` — what a "good-sized" Murmur change looks like.
+5. `engineering-principles.md` — how to change the repo without adding drift.
+6. `review-gates.md` + `verification.md` — what counts as proof before merge.
 
 Historical plans do not supersede current references merely because they are
 newer. When current references disagree, inspect the running boundary and

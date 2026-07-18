@@ -1,21 +1,11 @@
-import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import type { TranscriptionResult } from "@/modules/shared/types";
+import { TranscribeRequestError } from "@/lib/api/transcribe";
+import { transcribeWithStainer } from "./transcribe";
 
 let transcribeError: unknown = null;
 let clientAvailable = true;
 let detectPitchCalls = 0;
-
-class MockTranscribeRequestError extends Error {
-  readonly code: string;
-  readonly status: number;
-
-  constructor(init: { code: string; status: number; message: string }) {
-    super(init.message);
-    this.name = "TranscribeRequestError";
-    this.code = init.code;
-    this.status = init.status;
-  }
-}
 
 const fallbackResult: TranscriptionResult = {
   provider: "client_pyin",
@@ -51,25 +41,21 @@ const fallbackResult: TranscriptionResult = {
   diagnostics: { duration: 0.5, snr: null, voicedRatio: null },
 };
 
-mock.module("@/lib/api/transcribe", () => ({
-  TranscribeRequestError: MockTranscribeRequestError,
-  transcribeRecording: async () => {
+const dependencies = {
+  transcribeRecording: async (): Promise<TranscriptionResult> => {
     if (transcribeError) throw transcribeError;
     return {
       ...fallbackResult,
-      provider: "audio-worker",
+      provider: "swiftf0",
     };
   },
-  transcribeRecordingStreaming: async () => {
+  transcribeRecordingStreaming: async (): Promise<TranscriptionResult> => {
     if (transcribeError) throw transcribeError;
     return {
       ...fallbackResult,
-      provider: "audio-worker",
+      provider: "swiftf0",
     };
   },
-}));
-
-mock.module("@/lib/audio/client-pitch-fallback", () => ({
   isClientPitchAvailable: async () => clientAvailable,
   detectPitchClient: async () => {
     detectPitchCalls += 1;
@@ -84,25 +70,14 @@ mock.module("@/lib/audio/client-pitch-fallback", () => ({
       },
     };
   },
-}));
-
-const { transcribeWithStainer } = await import("./transcribe");
+  decodeAudioBlob: async () => ({} as AudioBuffer),
+};
 
 describe("transcribeWithStainer fallback facade", () => {
   beforeEach(() => {
     transcribeError = null;
     clientAvailable = true;
     detectPitchCalls = 0;
-    Object.defineProperty(globalThis, "AudioContext", {
-      configurable: true,
-      value: class {
-        async decodeAudioData() {
-          return {} as AudioBuffer;
-        }
-
-        async close() {}
-      },
-    });
   });
 
   it("uses client pitch fallback for transient network failures", async () => {
@@ -111,7 +86,7 @@ describe("transcribeWithStainer fallback facade", () => {
     const result = await transcribeWithStainer({
       audioBlob: new Blob(["audio"], { type: "audio/webm" }),
       targetInstrument: "piano",
-    });
+    }, dependencies);
 
     expect(result.provider).toBe("client_pyin");
     expect(result.rawNotes).toHaveLength(1);
@@ -119,7 +94,7 @@ describe("transcribeWithStainer fallback facade", () => {
   });
 
   it("uses client pitch fallback for typed worker timeouts", async () => {
-    transcribeError = new MockTranscribeRequestError({
+    transcribeError = new TranscribeRequestError({
       code: "worker_unavailable",
       status: 0,
       message: "Transcription request timed out",
@@ -128,7 +103,7 @@ describe("transcribeWithStainer fallback facade", () => {
     const result = await transcribeWithStainer({
       audioBlob: new Blob(["audio"], { type: "audio/webm" }),
       targetInstrument: "piano",
-    });
+    }, dependencies);
 
     expect(result.provider).toBe("client_pyin");
     expect(detectPitchCalls).toBe(1);
@@ -141,7 +116,7 @@ describe("transcribeWithStainer fallback facade", () => {
     await expect(
       transcribeWithStainer({
         audioBlob: new Blob(["audio"], { type: "audio/webm" }),
-      }),
+      }, dependencies),
     ).rejects.toBe(error);
     expect(detectPitchCalls).toBe(0);
   });
@@ -154,7 +129,7 @@ describe("transcribeWithStainer fallback facade", () => {
     await expect(
       transcribeWithStainer({
         audioBlob: new Blob(["audio"], { type: "audio/webm" }),
-      }),
+      }, dependencies),
     ).rejects.toBe(error);
     expect(detectPitchCalls).toBe(0);
   });

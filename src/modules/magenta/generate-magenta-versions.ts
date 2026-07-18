@@ -408,26 +408,37 @@ function startBatchGeneration(
   for (const url of liveObjectUrls) URL.revokeObjectURL(url);
   liveObjectUrls = [];
 
-  void requestBatchClipsSequentially(versions, humBlob, controller.signal, batchId);
+  void requestBatchClipsWithConcurrency(versions, humBlob, controller.signal, batchId);
 }
 
-async function requestBatchClipsSequentially(
+async function requestBatchClipsWithConcurrency(
   versions: VibeVersion[],
   humBlob: Blob | null,
   signal: AbortSignal,
   batchId: string,
 ): Promise<void> {
-  // The local worker serializes model work internally, and the serverless path
-  // also benefits from avoiding three sibling jobs competing during cold start.
-  // Cards still render immediately; the first completed clip becomes usable
-  // while the remaining two continue in the background.
-  for (const version of versions) {
-    if (signal.aborted) {
-      settleQueuedClipAfterAbort(version, signal);
-      continue;
+  // Two lanes overlap provider queue/cold-start latency without flooding a
+  // local worker or submitting all sibling jobs at once. Each clip still owns
+  // its operation id, charge, progress, and failure state.
+  let nextIndex = 0;
+  const runLane = async () => {
+    while (nextIndex < versions.length) {
+      const version = versions[nextIndex++];
+      if (!version) return;
+      if (signal.aborted) {
+        settleQueuedClipAfterAbort(version, signal);
+        continue;
+      }
+      await requestClip(
+        version,
+        humBlob,
+        signal,
+        batchId,
+        version.generation?.operationId,
+      );
     }
-    await requestClip(version, humBlob, signal, batchId, version.generation?.operationId);
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(2, versions.length) }, runLane));
 }
 
 function settleQueuedClipAfterAbort(version: VibeVersion, signal: AbortSignal): void {
@@ -477,7 +488,12 @@ async function requestClip(
 
     const requestSignal = withGenerateTimeout(signal);
     const res = durableMusicJobsEnabled()
-      ? await requestDurableMusicAudio({ form, headers, signal: requestSignal })
+      ? await requestDurableMusicAudio({
+          form,
+          headers,
+          signal: requestSignal,
+          cancelSignal: signal ?? undefined,
+        })
       : await request("/api/music/generate", {
           method: "POST",
           body: form,

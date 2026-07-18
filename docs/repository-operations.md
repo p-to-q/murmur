@@ -19,8 +19,9 @@ repo rituals:
 
 - [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
   runs the fast required gate on PRs and pushes to `main`: lint, link checks,
-  TypeScript/Bun tests, audio-worker tests, build audit, and a real local-stack
-  smoke against the built app plus a live worker.
+  TypeScript/Bun tests, audio-worker tests, build audit, a real local-stack
+  smoke against the built app plus a live worker, and the Chromium golden path
+  from capture recovery through public playback.
 - [`.github/workflows/audio-acceptance.yml`](../.github/workflows/audio-acceptance.yml)
   runs the heavier unattended audio acceptance loop on a weekday schedule and
   on manual demand, then uploads the generated reports as artifacts.
@@ -80,8 +81,9 @@ sequence. Vercel's native Git integration remains useful for pull-request
 Previews and **must not auto-deploy `main` to Production**.
 
 - **Preview:** the native Git integration creates Preview deployments.
-- **Production:** [`.github/workflows/migrate.yml`](../.github/workflows/migrate.yml)
-  releases only after the `CI / verify` job succeeds for the current `main` SHA.
+- **Production:** the `Release (production)` workflow in
+  [`.github/workflows/migrate.yml`](../.github/workflows/migrate.yml) releases
+  only after the `CI / verify` job succeeds for the current `main` SHA.
 - **Exact revision:** the release checks out that 40-character SHA, builds it
   with `vercel build --prod`, then deploys only that prebuilt output.
 - **Build command:** `bun run env:audit && bun run build` (see `vercel.json`).
@@ -134,12 +136,15 @@ Required GitHub configuration:
 | Secret | `VERCEL_TOKEN` | Vercel CLI authentication |
 | Variable | `VERCEL_PROJECT_NAME` | Vercel project; defaults to `murmur` |
 | Variable | `VERCEL_SCOPE` | Vercel team/account; defaults to `moapachas-projects` |
+| Variable | `VERCEL_NATIVE_PRODUCTION_DISABLED` | Owner acknowledgement that native `main` Production deploy is disabled; release fails closed unless exactly `true` |
 
 Required Vercel cutover: open the Murmur project Git settings and disable
 Production deployment for pushes to `main` while retaining Preview deployments.
-This external setting cannot be enforced by a repository workflow; leaving it
-enabled recreates the pre-CI production race even though the Actions release
-itself is correctly ordered.
+After verifying the setting, set repository variable
+`VERCEL_NATIVE_PRODUCTION_DISABLED=true`. The workflow cannot query the
+dashboard setting directly, but it fails closed without this auditable owner
+acknowledgement. Leaving native Production enabled still recreates the pre-CI
+race even though the Actions release itself is correctly ordered.
 
 ### Branch protection (issue #308)
 
@@ -203,9 +208,11 @@ rather than trusting this summary to stay complete:
 
 ### Rollback and incident ownership
 
-- **Deploy rollback is automatic-ish:** if a new Vercel deploy fails to build or
-  boot, Vercel keeps the last successful deployment serving. A failed deploy does
-  not take production down.
+- **Failed deploys do not replace the serving alias:** if the exact-SHA build or
+  deploy fails, the workflow stops and the last successful Production
+  deployment remains serving. If post-deploy alias smoke fails, treat the
+  release as an incident and explicitly promote the last known-good Vercel
+  deployment; schema rollback remains a separate decision.
 - **Migrations are not auto-rolled-back:** each migration has a `.down.sql`
   pair, but the workflow only rolls forward. Reversing a migration is a manual,
   owner-run operation against the direct endpoint, and it is only safe when no
@@ -281,12 +288,15 @@ deliberately outside the release workflow:
 
 - **Vercel native-production cutover:** an owner must keep Production
   auto-deploy disabled in the Vercel dashboard; Preview may remain automatic.
-- **Tag-triggered release**: there is no workflow that cuts a GitHub Release on
-  `v*` tags yet; tagging is a manual post-merge step (see
+- **Tag-triggered release:** there is no workflow that cuts a GitHub Release on
+  `v*` tags yet. Tags, prereleases, and final GitHub Releases are manual
+  post-merge operations after the exact `main` SHA passes CI and production
+  release smoke (see
   [packaging-and-release.md](./packaging-and-release.md)).
 
 Current automation is strong on validation, hygiene, and schema migration; the
-gap is ordering and enforcement, not delivery target.
+remaining production-release gap is the dashboard-only Vercel native-deploy
+cutover, which repository code cannot enforce.
 
 ## Optional hardening (not yet adopted)
 

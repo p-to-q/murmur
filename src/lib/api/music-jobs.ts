@@ -38,6 +38,8 @@ export async function requestDurableMusicAudio(input: {
   form: FormData;
   headers: Record<string, string>;
   signal?: AbortSignal;
+  /** Explicit user/batch cancellation. A request deadline must not cancel the durable job. */
+  cancelSignal?: AbortSignal;
 }): Promise<Response> {
   const created = await request("/api/music/jobs", {
     method: "POST",
@@ -62,7 +64,7 @@ export async function requestDurableMusicAudio(input: {
       state = await readState(response);
     }
   } catch (error) {
-    if (input.signal?.aborted) {
+    if (shouldCancelDurableJob(input.cancelSignal)) {
       void request(statusUrl, { method: "DELETE", keepalive: true }).catch(() => {});
     }
     throw error;
@@ -85,6 +87,10 @@ export async function requestDurableMusicAudio(input: {
     cost: state.cost,
     requestId: state.requestId,
   }, { status: state.status === "canceled" ? 409 : 503 });
+}
+
+export function shouldCancelDurableJob(cancelSignal?: AbortSignal): boolean {
+  return cancelSignal?.aborted === true;
 }
 
 async function readState(response: Response): Promise<MusicJobResponse> {

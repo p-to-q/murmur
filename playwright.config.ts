@@ -49,6 +49,7 @@ export default defineConfig({
           NEXT_PUBLIC_MURMUR_AUTH_MODE: "local",
           MURMUR_STORAGE_DRIVER: "memory",
           MURMUR_ALLOW_DEV_BILLING_FALLBACK: "1",
+          NEXT_PUBLIC_MURMUR_DURABLE_MUSIC_JOBS: "1",
         },
       },
 });

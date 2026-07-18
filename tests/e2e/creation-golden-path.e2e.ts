@@ -109,7 +109,13 @@ async function installDeterministicApi(page: Page): Promise<{
     savedSong: JsonObject | null;
     shareCreated: boolean;
     generationCount: number;
-  } = { savedSong: null, shareCreated: false, generationCount: 0 };
+    musicJobs: Map<string, { polls: number; readyAfter: number }>;
+  } = {
+    savedSong: null,
+    shareCreated: false,
+    generationCount: 0,
+    musicJobs: new Map(),
+  };
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -126,14 +132,41 @@ async function installDeterministicApi(page: Page): Promise<{
         requestId: "e2e-transcribe-request",
       }, 422);
     }
-    if (path === "/api/music/generate") {
+    if (path === "/api/music/jobs" && request.method() === "POST") {
       state.generationCount += 1;
-      if (state.generationCount > 1) await delay(5_000);
+      const jobId = `e2e-music-job-${state.generationCount}`;
+      state.musicJobs.set(jobId, {
+        polls: 0,
+        readyAfter: state.generationCount === 1 ? 0 : 4,
+      });
+      return json(route, {
+        jobId,
+        status: "queued",
+        audioUrl: null,
+      }, 202);
+    }
+    const musicJobMatch = path.match(/^\/api\/music\/jobs\/([^/]+)$/);
+    if (musicJobMatch && request.method() === "GET") {
+      const jobId = musicJobMatch[1]!;
+      const job = state.musicJobs.get(jobId);
+      if (!job) return json(route, { error: "not_found" }, 404);
+      job.polls += 1;
+      const ready = job.polls > job.readyAfter;
+      return json(route, {
+        jobId,
+        status: ready ? "succeeded" : "running",
+        audioUrl: ready ? `/api/music/jobs/${jobId}/audio` : null,
+      });
+    }
+    if (/^\/api\/music\/jobs\/[^/]+\/audio$/.test(path)) {
       return route.fulfill({
         status: 200,
         contentType: "audio/wav",
         body: Buffer.from(AUDIO_DATA_URL.split(",")[1]!, "base64"),
       });
+    }
+    if (path === "/api/music/generate") {
+      return json(route, { error: "legacy_path_used" }, 500);
     }
     if (path === "/api/auth/local-creator" && request.method() === "POST") {
       return json(route, { ok: true });
@@ -258,8 +291,4 @@ function publicSongFrom(song: JsonObject): JsonObject {
 
 function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

@@ -103,16 +103,16 @@ describe("download helpers", () => {
     expect(signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("falls back to a direct attached-link download when remote fetch fails", async () => {
+  it("does not report success when a remote download cannot be verified", async () => {
     const { clicks } = installDomHarness();
     globalThis.fetch = (async () => {
       throw new Error("cors blocked");
     }) as typeof fetch;
 
-    await downloadUrlAsFile("https://cdn.example/song.mp3", "song.mp3");
+    await expect(
+      downloadUrlAsFile("https://cdn.example/song.mp3", "song.mp3"),
+    ).rejects.toThrow("remote download failed");
 
-    expect(clicks).toEqual([
-      { href: "https://cdn.example/song.mp3", download: "song.mp3", attached: true },
-    ]);
+    expect(clicks).toEqual([]);
   });
 });

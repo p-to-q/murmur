@@ -6,7 +6,8 @@ Last verified: 2026-07-18
 
 Paid music generation uses `music_jobs` as its recoverable source of truth.
 This boundary exists alongside the legacy synchronous `/api/music/generate`
-route until Vibe is migrated and the old contract can be retired safely.
+route. The browser adapter is implemented but remains off by default until a
+measured Preview/canary cutover proves the new path in production conditions.
 
 ## API contract
 
@@ -26,24 +27,27 @@ route until Vibe is migrated and the old contract can be retired safely.
 ## State machine
 
 ```text
-accepted -> running -> queued -> running -> result_ready -> succeeded
-    |          |          |          +----> failed / expired
-    +----------+----------+---------------> canceled
-               +--------------------------> submission_unknown
-                          +---------------> cancel_requested -> canceled
+accepted -> running -> queued <-> running -> result_ready -> succeeded
+    |          |          |          |             |
+    +----------+----------+----------+------------> failed / expired
+    +----------+----------+-----------------------> canceled
+               +----------------------------------> submission_unknown
+                          +-----------------------> cancel_requested -> canceled
 ```
 
 The database stores the operation id, canonical request hash, provider job id,
 attempt, lease, paid ledger id, terminal output key, and classified error. A
 network failure while submitting is terminalized as `submission_unknown` and
 refunded; without a provider job id Murmur never automatically submits a second
-GPU job. The spend and initial job row share one transaction. Successful delivery uses the
-existing operation settlement ledger; failed and canceled jobs use the existing
-idempotent refund/pending-refund path.
+GPU job. The spend and initial job row share one transaction. Successful
+delivery uses the existing operation settlement ledger; failed and canceled
+jobs use the existing idempotent refund/pending-refund path. A recorded
+`result_ready` output is never recomputed merely because settlement needs
+another attempt.
 
 ## Phase-one limit
 
-The Runner is triggered after the creation response and by later GET/DELETE
+The runner is triggered after the creation response and by later GET/DELETE
 requests. Each advance does at most one provider status read and stays inside a
 short request budget. A DB lease prevents concurrent progression and is
 released after a non-terminal status read so the next client poll can continue
@@ -66,7 +70,9 @@ clip operation ids and first-ready progressive presentation.
 
 The browser compatibility switch is
 `NEXT_PUBLIC_MURMUR_DURABLE_MUSIC_JOBS=1`. It is off by default. In a Preview
-with migration `0027` applied, the existing sequential first-ready flow creates
-and polls durable jobs; abort sends a best-effort cancellation. Do not enable it
-in Production until the schema is deployed, the golden path passes against the
-real route, and job terminal/refund metrics are visible.
+with migration `0027` applied, the existing first-ready flow creates and polls
+one durable job per clip; sibling clips may still be in flight concurrently,
+and abort sends a best-effort cancellation. Do not enable it in Production
+until the schema is deployed, the golden path passes against the real route,
+and job terminal, latency, duplicate-operation, settlement, and refund metrics
+are visible. Keep the synchronous route available during canary rollback.

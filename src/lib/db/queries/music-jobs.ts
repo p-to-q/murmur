@@ -122,7 +122,7 @@ export async function claimMusicJob(input: {
   const [job] = await db
     .update(musicJobs)
     .set({
-      status: "running",
+      status: sql`case when ${musicJobs.status} = 'cancel_requested' then 'cancel_requested' else 'running' end`,
       leaseUntil,
       startedAt: sql`coalesce(${musicJobs.startedAt}, ${now})`,
       attempt: sql`${musicJobs.attempt} + 1`,
@@ -136,7 +136,7 @@ export async function claimMusicJob(input: {
           eq(musicJobs.status, "accepted"),
           eq(musicJobs.status, "result_ready"),
           and(
-            inArray(musicJobs.status, ["queued", "running"]),
+            inArray(musicJobs.status, ["queued", "running", "cancel_requested"]),
             or(lt(musicJobs.leaseUntil, now), sql`${musicJobs.leaseUntil} IS NULL`),
           ),
         ),
@@ -149,6 +149,7 @@ export async function claimMusicJob(input: {
 export async function attachMusicJobProvider(input: {
   userId: string;
   jobId: string;
+  attempt: number;
   provider: string;
   providerJobId: string;
   leaseMs: number;
@@ -157,7 +158,7 @@ export async function attachMusicJobProvider(input: {
   const [job] = await db
     .update(musicJobs)
     .set({
-      status: "queued",
+      status: sql`case when ${musicJobs.status} = 'cancel_requested' then 'cancel_requested' else 'queued' end`,
       provider: input.provider,
       providerJobId: input.providerJobId,
       leaseUntil: new Date(now.getTime() + input.leaseMs),
@@ -167,7 +168,8 @@ export async function attachMusicJobProvider(input: {
       and(
         eq(musicJobs.id, input.jobId),
         eq(musicJobs.userId, input.userId),
-        eq(musicJobs.status, "running"),
+        eq(musicJobs.attempt, input.attempt),
+        inArray(musicJobs.status, ["running", "cancel_requested"]),
       ),
     )
     .returning();
@@ -177,6 +179,7 @@ export async function attachMusicJobProvider(input: {
 export async function renewMusicJobLease(input: {
   userId: string;
   jobId: string;
+  attempt: number;
   leaseMs: number;
 }): Promise<void> {
   const now = new Date();
@@ -187,7 +190,8 @@ export async function renewMusicJobLease(input: {
       and(
         eq(musicJobs.id, input.jobId),
         eq(musicJobs.userId, input.userId),
-        inArray(musicJobs.status, ["queued", "running"]),
+        eq(musicJobs.attempt, input.attempt),
+        inArray(musicJobs.status, ["queued", "running", "cancel_requested"]),
       ),
     );
 }
@@ -195,6 +199,7 @@ export async function renewMusicJobLease(input: {
 export async function releaseMusicJobLease(input: {
   userId: string;
   jobId: string;
+  attempt: number;
 }): Promise<void> {
   await db
     .update(musicJobs)
@@ -203,7 +208,8 @@ export async function releaseMusicJobLease(input: {
       and(
         eq(musicJobs.id, input.jobId),
         eq(musicJobs.userId, input.userId),
-        inArray(musicJobs.status, ["queued", "running"]),
+        eq(musicJobs.attempt, input.attempt),
+        inArray(musicJobs.status, ["queued", "running", "cancel_requested"]),
       ),
     );
 }
@@ -223,6 +229,7 @@ export async function succeedMusicJob(input: {
 export async function recordMusicJobResult(input: {
   userId: string;
   jobId: string;
+  attempt: number;
   output: MusicJobOutput;
 }): Promise<MusicJob | null> {
   const now = new Date();
@@ -240,7 +247,8 @@ export async function recordMusicJobResult(input: {
       and(
         eq(musicJobs.id, input.jobId),
         eq(musicJobs.userId, input.userId),
-        inArray(musicJobs.status, ["queued", "running", "result_ready"]),
+        eq(musicJobs.attempt, input.attempt),
+        inArray(musicJobs.status, ["queued", "running", "cancel_requested", "result_ready"]),
       ),
     )
     .returning();
@@ -278,13 +286,14 @@ export async function markMusicJobSubmissionUnknown(input: {
 export async function failMusicJob(input: {
   userId: string;
   jobId: string;
+  attempt?: number;
   errorCode: string;
   errorMessage: string;
 }): Promise<MusicJob | null> {
   return finishMusicJob(input.userId, input.jobId, "failed", {
     errorCode: input.errorCode,
     errorMessage: input.errorMessage.slice(0, 2_000),
-  });
+  }, input.attempt);
 }
 
 export type CancelMusicJobResult =
@@ -308,9 +317,17 @@ export async function requestMusicJobCancellation(
     if (TERMINAL_STATUSES.includes(current.status)) {
       return { kind: "terminal" as const, job: current };
     }
+    // Once output is durably recorded, delivery settlement owns the outcome.
+    // Refunding here would give away completed provider work and race success.
+    const cancellationStatus = nextMusicJobCancellationStatus(current);
+    if (cancellationStatus === "terminal") {
+      return { kind: "terminal" as const, job: current };
+    }
 
     const now = new Date();
-    const nextStatus: MusicJobStatus = current.providerJobId ? "cancel_requested" : "canceled";
+    // `running` with no provider id can mean submit is in flight. Preserve a
+    // cancellation intent so the runner can attach then cancel the returned id.
+    const nextStatus = cancellationStatus;
     const [job] = await tx
       .update(musicJobs)
       .set({
@@ -328,11 +345,23 @@ export async function requestMusicJobCancellation(
   });
 }
 
+export function nextMusicJobCancellationStatus(
+  job: Pick<MusicJob, "status" | "providerJobId" | "output">,
+): "terminal" | "canceled" | "cancel_requested" {
+  if (TERMINAL_STATUSES.includes(job.status) || job.status === "result_ready" || job.output) {
+    return "terminal";
+  }
+  return job.providerJobId || job.status === "running"
+    ? "cancel_requested"
+    : "canceled";
+}
+
 export async function confirmMusicJobCanceled(
   userId: string,
   jobId: string,
+  attempt?: number,
 ): Promise<MusicJob | null> {
-  return finishMusicJob(userId, jobId, "canceled", {});
+  return finishMusicJob(userId, jobId, "canceled", {}, attempt);
 }
 
 async function finishMusicJob(
@@ -340,6 +369,7 @@ async function finishMusicJob(
   jobId: string,
   status: Extract<MusicJobStatus, "succeeded" | "failed" | "canceled">,
   values: Partial<Pick<MusicJob, "output" | "errorCode" | "errorMessage">>,
+  attempt?: number,
 ): Promise<MusicJob | null> {
   const now = new Date();
   const [job] = await db
@@ -349,6 +379,7 @@ async function finishMusicJob(
       and(
         eq(musicJobs.id, jobId),
         eq(musicJobs.userId, userId),
+        ...(attempt === undefined ? [] : [eq(musicJobs.attempt, attempt)]),
         inArray(musicJobs.status, [...ACTIVE_STATUSES, "cancel_requested"]),
       ),
     )
