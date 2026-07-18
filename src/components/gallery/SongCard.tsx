@@ -21,8 +21,6 @@ export interface SongCardProps {
   /** Receives the song id so parents can pass one stable handler to every
    *  card — inline per-card closures would defeat the React.memo below. */
   onClick: (id: string) => void;
-  /** When provided, shows a corner delete affordance on the cover. */
-  onDelete?: (id: string) => void;
   /** When provided, shows a corner play/pause affordance on the cover. */
   onPlay?: (id: string) => void;
   /** Incomplete/draft song — audio never rendered (#291). Shows a badge. */
@@ -97,7 +95,6 @@ export const SongCard = memo(function SongCard({
   bpm,
   index,
   onClick,
-  onDelete,
   onPlay,
   isDraft,
   draftLabel,
@@ -247,24 +244,6 @@ export const SongCard = memo(function SongCard({
               className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-current"
             />
           )}
-        </button>
-      )}
-
-      {/* Delete — sibling of the card button (buttons can't nest), floated
-          over the cover corner. Hover-revealed on pointer devices, softly
-          visible on touch. */}
-      {onDelete && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(id);
-          }}
-          aria-label={`Delete ${title}`}
-          className="absolute bottom-10 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-[#1A1A1A]/35 text-white/90 opacity-60 backdrop-blur-sm transition-all hover:bg-[#1A1A1A]/60 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
-        >
-          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
-            <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          </svg>
         </button>
       )}
     </motion.div>
