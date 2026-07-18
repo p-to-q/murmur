@@ -49,6 +49,8 @@ interface HumOnboardingOverlayProps {
 }
 
 const MYMIND_EASE = [0.22, 1, 0.36, 1] as const;
+export const HUM_ONBOARDING_REVEAL_DURATION_MS = 2300;
+const BACKDROP_EXIT_DURATION_SECONDS = 1.08;
 const PITCH_MARKS = new Set(["↗", "↘"]);
 const PITCH_MARK_FONT =
   "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI Symbol', 'Apple Symbols', sans-serif";
@@ -60,20 +62,21 @@ const INTENT_TEXT_EASE = [0.2, 0.8, 0.2, 1] as const;
 const COPY_CONTAINER_VARIANTS = {
   hidden: { opacity: 0 },
   visible: { opacity: 1 },
-  exit: (isRippling: boolean) => ({ opacity: isRippling ? 1 : 0 }),
 };
 const COPY_LINE_VARIANTS = {
   hidden: { opacity: 0, y: 5, filter: "blur(0px)" },
   visible: { opacity: 1, y: 0, filter: "blur(0px)" },
-  exit: (isRippling: boolean) =>
-    isRippling
-      ? {
-          opacity: 0,
-          y: 10,
-          filter: "blur(10px)",
-          transition: { duration: 0.42, ease: INTENT_TEXT_EASE },
-        }
-      : { opacity: 0, y: -5, filter: "blur(0px)" },
+  rippleExit: {
+    opacity: 0,
+    y: 12,
+    filter: "blur(12px)",
+    transition: {
+      delay: BACKDROP_EXIT_DURATION_SECONDS,
+      duration: 0.82,
+      ease: INTENT_TEXT_EASE,
+    },
+  },
+  swapExit: { opacity: 0, y: -5, filter: "blur(0px)" },
 };
 const WEB_STRANDS = [
   { rotate: -28, y: -72, delay: 0.06 },
@@ -135,7 +138,7 @@ export function HumOnboardingOverlay({
             initial={{ opacity: 0 }}
             animate={{ opacity: rippling ? 0 : 1 }}
             transition={{
-              duration: reduceMotion ? 0.18 : rippling ? 1.08 : 0.9,
+              duration: reduceMotion ? 0.18 : rippling ? BACKDROP_EXIT_DURATION_SECONDS : 0.9,
               delay: rippling ? 0 : introDelay,
               ease: MYMIND_EASE,
             }}
@@ -221,48 +224,41 @@ export function HumOnboardingOverlay({
             )}
           </AnimatePresence>
 
-          <AnimatePresence custom={rippling}>
-            {!rippling && (
-              <motion.div
-                key="onboarding-copy"
-                data-hum-onboarding-copy
-                className="absolute flex w-[min(92vw,560px)] flex-col items-center text-center"
-                custom={rippling}
-                variants={COPY_CONTAINER_VARIANTS}
+          <motion.div
+            key="onboarding-copy"
+            data-hum-onboarding-copy
+            className="absolute flex w-[min(92vw,560px)] flex-col items-center text-center"
+            variants={COPY_CONTAINER_VARIANTS}
+            initial="hidden"
+            animate="visible"
+            transition={{
+              duration: reduceMotion ? 0.24 : 0.62,
+              delay: copyDelay,
+              ease: MYMIND_EASE,
+            }}
+            style={{ top: copyTop, left: orbCenter.x, x: "-50%", y: "-100%" }}
+          >
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={line}
+                variants={COPY_LINE_VARIANTS}
+                className={[
+                  "hero-serif whitespace-pre-line text-[#1A1A1A]/80 tracking-normal",
+                  COPY_CLASS,
+                ].join(" ")}
                 initial="hidden"
-                animate="visible"
-                exit="exit"
+                animate={rippling && !reduceMotion ? "rippleExit" : "visible"}
+                exit="swapExit"
                 transition={{
-                  duration: reduceMotion ? 0.24 : 0.62,
-                  delay: copyDelay,
+                  duration: reduceMotion ? 0.16 : 0.34,
                   ease: MYMIND_EASE,
                 }}
-                style={{ top: copyTop, left: orbCenter.x, x: "-50%", y: "-100%" }}
+                style={{ letterSpacing: 0 }}
               >
-                <AnimatePresence mode="wait" custom={rippling && !reduceMotion}>
-                  <motion.p
-                    key={line}
-                    custom={rippling && !reduceMotion}
-                    variants={COPY_LINE_VARIANTS}
-                    className={[
-                      "hero-serif whitespace-pre-line text-[#1A1A1A]/80 tracking-normal",
-                      COPY_CLASS,
-                    ].join(" ")}
-                    initial="hidden"
-                    animate="visible"
-                    exit="exit"
-                    transition={{
-                      duration: reduceMotion ? 0.16 : rippling ? 0.42 : 0.34,
-                      ease: rippling ? INTENT_TEXT_EASE : MYMIND_EASE,
-                    }}
-                    style={{ letterSpacing: 0 }}
-                  >
-                    {renderOnboardingLine(line, reduceMotion)}
-                  </motion.p>
-                </AnimatePresence>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                {renderOnboardingLine(line, reduceMotion)}
+              </motion.p>
+            </AnimatePresence>
+          </motion.div>
 
           <AnimatePresence>
             {rippling && !reduceMotion && (

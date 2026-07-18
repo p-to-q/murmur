@@ -16,7 +16,7 @@ describe("nextInputLevelDecision", () => {
 
     decision = nextInputLevelDecision({
       rms: 0.008,
-      elapsedMs: 900,
+      elapsedMs: 400,
       quietSinceMs: decision.quietSinceMs,
       hasHeardSignal: decision.hasHeardSignal,
     });
@@ -40,7 +40,7 @@ describe("nextInputLevelDecision", () => {
   it("waits for sustained quiet after warmup before warning", () => {
     const first = nextInputLevelDecision({
       rms: 0.008,
-      elapsedMs: 2000,
+      elapsedMs: 600,
       quietSinceMs: null,
       hasHeardSignal: false,
     });
@@ -49,7 +49,7 @@ describe("nextInputLevelDecision", () => {
 
     const second = nextInputLevelDecision({
       rms: 0.008,
-      elapsedMs: 3500,
+      elapsedMs: 1300,
       quietSinceMs: first.quietSinceMs,
       hasHeardSignal: first.hasHeardSignal,
     });

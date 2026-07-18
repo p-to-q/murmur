@@ -11,7 +11,10 @@ import { AuthButtons } from "@/components/auth/auth-buttons";
 import { EmailLoginForm } from "@/components/auth/email-login-form";
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useMotionTemplate } from "framer-motion";
-import { HumOnboardingOverlay } from "@/components/screens/hum-onboarding";
+import {
+  HUM_ONBOARDING_REVEAL_DURATION_MS,
+  HumOnboardingOverlay,
+} from "@/components/screens/hum-onboarding";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { resetStageTracking, trackStageEntered } from "@/lib/observability/stage-tracking";
 import { usePreferencesStore } from "@/lib/store/preferences-store";
@@ -34,6 +37,10 @@ import {
   formatRecordingElapsedSeconds,
   recordingProgressFromElapsed,
 } from "@/lib/audio/recording-progress";
+import {
+  shouldShowRecordingChrome,
+  visibleRecordingProgress,
+} from "@/lib/audio/recording-chrome";
 import { trimRecordingForUpload } from "@/lib/audio/recording-trim";
 import {
   clearRecordingBlob,
@@ -362,14 +369,14 @@ export function HumScreen() {
   const amplitudeMv = useMotionValue(0);
   const amplitudeSpring = useSpring(amplitudeMv, { stiffness: 40, damping: 10 });
   // Derived: scale and opacity intensifiers for the three blobs
-  const blob1Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.35]);
-  const blob2Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.28]);
-  const blob3Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.22]);
-  const blobOpacity = useTransform(amplitudeSpring, [0, 1], [1, 2.2]);
-  // Orb conic glow — bigger range, brighter response
-  const glowScale = useTransform(amplitudeSpring, [0, 0.3, 1], [1, 1.15, 1.7]);
-  const glowOpacity = useTransform(amplitudeSpring, [0, 0.2, 1], [0.35, 0.55, 1.0]);
-  const glowBlur = useTransform(amplitudeSpring, [0, 1], [44, 28]);
+  const blob1Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.2]);
+  const blob2Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.16]);
+  const blob3Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.12]);
+  const blobOpacity = useTransform(amplitudeSpring, [0, 1], [0.82, 1]);
+  // Keep the voice response tactile without letting the glow outrun the orb.
+  const glowScale = useTransform(amplitudeSpring, [0, 0.3, 1], [1, 1.08, 1.35]);
+  const glowOpacity = useTransform(amplitudeSpring, [0, 0.2, 1], [0.35, 0.5, 0.82]);
+  const glowBlur = useTransform(amplitudeSpring, [0, 1], [44, 34]);
   const glowFilter = useMotionTemplate`blur(${glowBlur}px)`;
 
   const setInputLevelState = useCallback((next: "idle" | "quiet" | "heard") => {
@@ -503,7 +510,7 @@ export function HumScreen() {
       setShowOnboarding(false);
       setOnboardingRippling(false);
       markOnboardingSeen();
-    }, 1520);
+    }, HUM_ONBOARDING_REVEAL_DURATION_MS);
   }, [markOnboardingSeen]);
 
   // Rotate idle headlines only while the landing state is truly quiet.
@@ -1038,7 +1045,10 @@ export function HumScreen() {
   const isRecording = recordingState === "recording";
   const isProcessing = recordingState === "processing";
   const isStartingCapture = capturePhase === "starting";
-  const showRecordingChrome = isRecording || isStartingCapture;
+  const showRecordingChrome = shouldShowRecordingChrome({
+    isRecording,
+    isStartingCapture,
+  });
   const onboardingLine = t(`hum.onboarding.line${onboardingStep + 1}`);
   const onboardingA11yLine = onboardingLine.replace(/\s+/g, " ");
   const orbAriaLabel =
@@ -1135,12 +1145,16 @@ export function HumScreen() {
   };
 
   // Ring progress SVG values
+  const ringStrokeWidth = 3.5;
   const ringRadius = 140;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const recordingProgress = recordingProgressFromElapsed(recordingElapsedMs);
   const recordingElapsedLabel = formatRecordingElapsedSeconds(recordingElapsedMs);
+  // Keep a bright start cap visible while the microphone is opening and at
+  // elapsed zero. The real 15-second clock still begins with MediaRecorder.
+  const ringProgress = visibleRecordingProgress(recordingProgress, showRecordingChrome);
   const ringOffset =
-    ringCircumference - recordingProgress * ringCircumference;
+    ringCircumference - ringProgress * ringCircumference;
 
   return (
     <div data-testid="hum-screen" className="relative overflow-hidden bg-[#F5F1EB]" style={{ minHeight: 'var(--content-h)' }}>
@@ -1346,11 +1360,12 @@ export function HumScreen() {
               <AnimatePresence>
                 {showRecordingChrome && (
                   <motion.svg
+                    data-testid="hum-recording-progress"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.4 }}
-                    className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-[114%] w-[114%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
+                    className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-[107.75%] w-[107.75%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
                     viewBox="0 0 300 300"
                     preserveAspectRatio="xMidYMid meet"
                   >
@@ -1360,8 +1375,8 @@ export function HumScreen() {
                       cy="150"
                       r={ringRadius}
                       fill="none"
-                      stroke="rgba(255,89,36,0.16)"
-                      strokeWidth="3.5"
+                      stroke="rgba(255,255,255,0.25)"
+                      strokeWidth={ringStrokeWidth}
                     />
                     {/* Progress */}
                     <circle
@@ -1370,11 +1385,10 @@ export function HumScreen() {
                       r={ringRadius}
                       fill="none"
                       stroke="#FF5924"
-                      strokeWidth="3.5"
+                      strokeWidth={ringStrokeWidth}
                       strokeLinecap="round"
                       strokeDasharray={ringCircumference}
                       strokeDashoffset={ringOffset}
-                      className="ring-progress"
                       style={{
                         transformOrigin: "center",
                         transform: "rotate(-90deg)",

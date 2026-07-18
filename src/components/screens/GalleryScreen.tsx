@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { formatSupportCode } from "@/lib/observability/support-code";
 import {
   ApiEnvelopeError,
-  apiErrorEnvelopeFrom,
   readApiErrorEnvelope,
 } from "@/lib/api/error-envelope";
 import { requestWithTimeout, withTimeout } from "@/lib/api/timeout";
@@ -36,6 +35,8 @@ import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
 // placeholders don't have to fabricate them.
 type SongWithMeta = Omit<SongCardType, "visualConfig" | "duration" | "arrangementState"> &
   Partial<Pick<SongCardType, "visualConfig" | "duration" | "arrangementState">> & {
+    mp3DataUrl?: string | null;
+    mp3Url?: string | null;
     bpm?: number;
     keySignature?: string;
     tags?: string[];
@@ -162,32 +163,12 @@ export function GalleryScreen() {
   const [loadError, setLoadError] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [sort, setSort] = useState<SortMode>("newest");
-  const [deleteTarget, setDeleteTarget] = useState<SongWithMeta | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [playingDemoId, setPlayingDemoId] = useState<string | null>(null);
+  const [playingSongId, setPlayingSongId] = useState<string | null>(null);
+  const [loadingPreviewId, setLoadingPreviewId] = useState<string | null>(null);
   const currentFlowId = useMurmurStore((state) => state.currentFlowId);
   const currentDraftId = useMurmurStore((state) => state.currentDraftId);
-  const demoAudioRef = useRef<HTMLAudioElement | null>(null);
-  const deleteCancelRef = useRef<HTMLButtonElement | null>(null);
-  const deleteReturnFocusRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!deleteTarget) return;
-
-    deleteReturnFocusRef.current = document.activeElement as HTMLElement | null;
-    deleteCancelRef.current?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setDeleteTarget(null);
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      deleteReturnFocusRef.current?.focus();
-    };
-  }, [deleteTarget]);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewOperationRef = useRef(0);
 
   // Use demo songs when user has no real songs
   const displaySongs = useMemo(
@@ -233,69 +214,133 @@ export function GalleryScreen() {
 
   useEffect(() => {
     return () => {
-      const audio = demoAudioRef.current;
+      previewOperationRef.current += 1;
+      const audio = previewAudioRef.current;
       if (audio) {
         audio.pause();
         audio.removeAttribute("src");
-        demoAudioRef.current = null;
+        previewAudioRef.current = null;
       }
     };
   }, []);
 
-  const stopDemoPreview = useCallback(() => {
-    const audio = demoAudioRef.current;
+  const stopSongPreview = useCallback(() => {
+    previewOperationRef.current += 1;
+    const audio = previewAudioRef.current;
     if (audio) {
       audio.pause();
       audio.removeAttribute("src");
-      demoAudioRef.current = null;
+      previewAudioRef.current = null;
     }
-    setPlayingDemoId(null);
+    setPlayingSongId(null);
+    setLoadingPreviewId(null);
   }, []);
 
-  const toggleDemoPreview = useCallback(
+  const toggleSongPreview = useCallback(
     async (song: SongWithMeta) => {
-      if (playingDemoId === song.id) {
-        stopDemoPreview();
+      if (playingSongId === song.id) {
+        stopSongPreview();
         return;
       }
 
-      const demo = getDemoSong(song.id);
-      if (!demo) return;
+      const operationId = previewOperationRef.current + 1;
+      previewOperationRef.current = operationId;
+      const isCurrentOperation = () => previewOperationRef.current === operationId;
+      const demo = isDemoSongId(song.id) ? getDemoSong(song.id) : null;
+      let audioSrc = demo?.mp3Url ?? song.mp3Url ?? song.mp3DataUrl ?? null;
 
-      stopDemoPreview();
-      const audio = new Audio(demo.mp3Url);
+      if (!audioSrc && !demo) {
+        setLoadingPreviewId(song.id);
+        try {
+          const response = await requestWithTimeout(`/api/songs/${song.id}`, {}, 10_000);
+          if (!isCurrentOperation()) {
+            setLoadingPreviewId((current) => (current === song.id ? null : current));
+            return;
+          }
+          if (!response.ok) {
+            throw new ApiEnvelopeError(await readApiErrorEnvelope(response, "song_preview_failed"));
+          }
+          const fullSong = (await response.json()) as SongWithMeta;
+          if (!isCurrentOperation()) {
+            setLoadingPreviewId((current) => (current === song.id ? null : current));
+            return;
+          }
+          audioSrc = fullSong.mp3Url ?? fullSong.mp3DataUrl ?? null;
+        } catch (error) {
+          if (!isCurrentOperation()) return;
+          console.error("[Gallery] song preview load failed:", error);
+          toast.error(t("cards.play_error") || "Playback failed, please retry", {
+            description: formatSupportCode({ area: "GALLERY", error: "preview_load_failed", requestId: null }),
+          });
+          setLoadingPreviewId(null);
+          return;
+        }
+      }
+
+      if (!audioSrc) {
+        if (!isCurrentOperation()) return;
+        toast.error(t("cards.play_error") || "Playback failed, please retry");
+        setLoadingPreviewId(null);
+        return;
+      }
+
+      const previousAudio = previewAudioRef.current;
+      if (previousAudio) {
+        previousAudio.pause();
+        previousAudio.removeAttribute("src");
+        previewAudioRef.current = null;
+      }
+      setPlayingSongId(null);
+      setLoadingPreviewId(song.id);
+      const audio = new Audio(audioSrc);
       audio.loop = true;
-      audio.onended = () => setPlayingDemoId(null);
+      audio.onended = () => {
+        if (isCurrentOperation()) setPlayingSongId(null);
+      };
       audio.onerror = () => {
-        if (demoAudioRef.current === audio) demoAudioRef.current = null;
-        setPlayingDemoId(null);
+        if (!isCurrentOperation()) return;
+        if (previewAudioRef.current === audio) previewAudioRef.current = null;
+        setPlayingSongId(null);
+        setLoadingPreviewId(null);
         toast.error(t("cards.play_error") || "Playback failed, please retry");
       };
-      demoAudioRef.current = audio;
+      previewAudioRef.current = audio;
 
       try {
         await withTimeout(
           audio.play(),
           DEMO_PREVIEW_START_TIMEOUT_MS,
-          "Demo preview timed out",
+          "Gallery preview timed out",
         );
-        setPlayingDemoId(song.id);
+        if (!isCurrentOperation()) {
+          audio.pause();
+          audio.removeAttribute("src");
+          return;
+        }
+        setPlayingSongId(song.id);
+        setLoadingPreviewId(null);
         memory
           .reportAction({
-            content: `Previewed demo "${song.title}" from gallery`,
+            content: `Previewed "${song.title}" from gallery`,
             event_type: "play",
             page: "gallery",
-            metadata: { type: "demo_preview", song_id: song.id },
+            metadata: { type: demo ? "demo_preview" : "song_preview", song_id: song.id },
           })
           .catch(() => {});
       } catch (error) {
-        if (demoAudioRef.current === audio) demoAudioRef.current = null;
+        if (!isCurrentOperation()) {
+          audio.pause();
+          audio.removeAttribute("src");
+          return;
+        }
+        if (previewAudioRef.current === audio) previewAudioRef.current = null;
         audio.removeAttribute("src");
         console.error("[Gallery] demo preview failed:", error);
         toast.error(t("cards.play_error") || "Playback failed, please retry");
+        setLoadingPreviewId(null);
       }
     },
-    [playingDemoId, stopDemoPreview, t],
+    [playingSongId, stopSongPreview, t],
   );
 
   const sorted = useMemo(() => {
@@ -316,7 +361,7 @@ export function GalleryScreen() {
       const song = displaySongs.find((s) => s.id === id);
       if (!song) return;
       if (gallerySongAction(song.id, isShowingDemo) === "preview") {
-        void toggleDemoPreview(song);
+        void toggleSongPreview(song);
         return;
       }
       memory
@@ -327,18 +372,18 @@ export function GalleryScreen() {
           metadata: { type: "open_song", song_id: song.id },
         })
         .catch(() => {});
-      stopDemoPreview();
+      stopSongPreview();
       router.push(`/song/${song.id}`);
     },
-    [displaySongs, isShowingDemo, router, stopDemoPreview, toggleDemoPreview],
+    [displaySongs, isShowingDemo, router, stopSongPreview, toggleSongPreview],
   );
 
-  const handleDeleteRequest = useCallback(
+  const handleSongPreviewClick = useCallback(
     (id: string) => {
       const song = displaySongs.find((s) => s.id === id);
-      if (song) setDeleteTarget(song);
+      if (song) void toggleSongPreview(song);
     },
-    [displaySongs],
+    [displaySongs, toggleSongPreview],
   );
 
   if (isLoading) {
@@ -364,41 +409,6 @@ export function GalleryScreen() {
       </div>
     );
   }
-
-  const handleConfirmDelete = async () => {
-    const target = deleteTarget;
-    if (!target || isDeleting) return;
-    setIsDeleting(true);
-    try {
-      const res = await requestWithTimeout(`/api/songs/${target.id}`, { method: "DELETE" }, 10_000);
-      if (!res.ok) {
-        throw new ApiEnvelopeError(await readApiErrorEnvelope(res, "delete_failed"));
-      }
-      setSongs((prev) => prev.filter((s) => s.id !== target.id));
-      setDeleteTarget(null);
-      memory
-        .reportAction({
-          content: `Deleted "${target.title}" from gallery`,
-          event_type: "delete",
-          page: "gallery",
-          metadata: { type: "song_delete", song_id: target.id },
-        })
-        .catch(() => {});
-      toast.success(t("gallery.delete.done") || "Deleted.");
-    } catch (error) {
-      console.error("[Gallery] delete failed:", error);
-      const envelope = apiErrorEnvelopeFrom(error);
-      toast.error(t("song.delete.failed") || "Couldn't delete that one. Try again?", {
-        description: formatSupportCode({
-          area: "GALLERY",
-          error: envelope?.code ?? "delete_failed",
-          requestId: envelope?.requestId ?? null,
-        }),
-      });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
   return (
     <div data-testid="gallery-screen" className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
@@ -480,14 +490,11 @@ export function GalleryScreen() {
                 createdAt={song.createdAt}
                 index={i}
                 onClick={handleSongClick}
-                onDelete={isShowingDemo ? undefined : handleDeleteRequest}
                 isDraft={song.hasAudio === false}
                 draftLabel={t("gallery.draft") || "Draft"}
-                isPlaying={
-                  isShowingDemo && isDemoSongId(song.id)
-                    ? playingDemoId === song.id
-                    : undefined
-                }
+                onPlay={song.hasAudio === false ? undefined : handleSongPreviewClick}
+                isPlaying={song.hasAudio === false ? undefined : playingSongId === song.id}
+                isPlayLoading={loadingPreviewId === song.id}
                 playLabel={t("common.play") || "Play"}
                 pauseLabel={t("common.pause") || "Pause"}
               />
@@ -512,60 +519,6 @@ export function GalleryScreen() {
           </motion.div>
         </div>
       )}
-
-      {/* Delete confirm — same dialog language as SongDetail */}
-      <AnimatePresence>
-        {deleteTarget && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-md px-5"
-            onClick={() => setDeleteTarget(null)}
-            role="presentation"
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 12, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.96 }}
-              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-              onClick={(e) => e.stopPropagation()}
-              className="mm-card w-full max-w-sm px-6 py-7 text-center"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="gallery-delete-title"
-              aria-describedby="gallery-delete-description"
-            >
-              <p className="eyebrow text-[#FF8A5C] mb-3">{t("song.delete.eyebrow") || "REMOVE"}</p>
-              <h3 id="gallery-delete-title" className="font-serif text-[24px] text-[#1A1A1A] leading-tight">
-                {t("song.delete.title") || "Delete this little song?"}
-              </h3>
-              <p id="gallery-delete-description" className="mt-2 text-[13px] text-[#8C8780] leading-relaxed">
-                &ldquo;{deleteTarget.title}&rdquo; —{" "}
-                {t("song.delete.body") ||
-                  "It will be gone from your gallery. You can hum it again later."}
-              </p>
-              <div className="mt-6 flex gap-3">
-                <button
-                  ref={deleteCancelRef}
-                  onClick={() => setDeleteTarget(null)}
-                  className="flex-1 h-11 rounded-[18px] border border-[#E5DDD0] text-[#1A1A1A] text-[14px] hover:bg-white transition-colors"
-                >
-                  {t("common.cancel") || "Keep"}
-                </button>
-                <button
-                  onClick={handleConfirmDelete}
-                  disabled={isDeleting}
-                  className="flex-1 h-11 rounded-[18px] bg-[#1A1A1A] text-white text-[14px] hover:bg-[#3A3A3A] transition-colors disabled:opacity-60"
-                >
-                  {isDeleting ? "…" : t("song.delete.confirm") || "Delete"}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
     </div>
   );
 }
