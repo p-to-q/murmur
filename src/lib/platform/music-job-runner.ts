@@ -23,10 +23,19 @@ import {
   RunpodError,
   submitJob,
 } from "@/lib/platform/runpod-serverless";
+import { verifyMusicWorkerOutput } from "@/lib/platform/music-worker-output";
 import { getObjectStore } from "@/lib/storage";
 import { storeMusicJobOutput } from "@/lib/storage/music-job-artifacts";
+import { createHash } from "node:crypto";
 
 const LEASE_MS = 45_000;
+
+class MusicOutputRejectedError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "MusicOutputRejectedError";
+  }
+}
 
 /**
  * Advance one durable job. It may be called after creation or from any later
@@ -96,6 +105,12 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
         await cancelSubmittedJob(config, providerJobId).catch(() => false);
         throw new Error("music_job_provider_attach_failed");
       }
+      log("music.job_provider_attached", {
+        jobId,
+        provider: "runpod",
+        providerJobId,
+        generationBatchId: claimed.input.generationBatchId,
+      }, { userId });
       if (submitted.immediateOutput) {
         providerOutputObserved = true;
         await completeFromProviderOutput(
@@ -145,6 +160,12 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
     }
 
     const state = await getJobStatus(config, providerJobId);
+    log("music.job_provider_status", {
+      jobId,
+      providerJobId,
+      providerStatus: state.status,
+      generationBatchId: claimed.input.generationBatchId,
+    }, { userId });
     if (state.status === "succeeded") {
       providerOutputObserved = true;
       await completeFromProviderOutput(userId, jobId, claimed.attempt, state.output);
@@ -174,14 +195,17 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
     }
   } catch (error) {
     const current = await getMusicJobForUser(userId, jobId);
-    const recoverable = musicJobFailureDisposition({
+    const qualityRejected = error instanceof MusicOutputRejectedError;
+    const recoverable = !qualityRejected && musicJobFailureDisposition({
       hasRecordedOutput: Boolean(current?.output),
       providerOutputObserved,
       hasProviderJobId: Boolean(providerJobId),
       errorKind: error instanceof RunpodError ? error.kind : null,
     }) === "resume";
     if (!recoverable && current) {
-      const errorCode = error instanceof RunpodError ? `runpod_${error.kind}` : "runner_error";
+      const errorCode = qualityRejected
+        ? "music_quality_rejected"
+        : error instanceof RunpodError ? `runpod_${error.kind}` : "runner_error";
       const failed = await failMusicJob({
         userId,
         jobId,
@@ -195,6 +219,7 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
       jobId,
       retryable: recoverable,
       reason: error instanceof Error ? error.message : String(error),
+      providerFailure: summarizeProviderFailure(error),
     }, { userId, level: recoverable ? "warn" : "error" });
   }
 }
@@ -252,9 +277,52 @@ async function completeFromProviderOutput(
   const audioB64 = output.audio_b64;
   if (typeof audioB64 !== "string" || !audioB64) throw new Error("provider_audio_missing");
   const bytes = new Uint8Array(Buffer.from(audioB64, "base64"));
-  const artifact = await storeMusicJobOutput({ userId, jobId, bytes, contentType: "audio/wav" });
   const job = await getMusicJobForUser(userId, jobId);
   if (!job) throw new Error("music_job_missing_during_completion");
+  const hum = job.input.humStorageKey
+    ? await getObjectStore().get(job.input.humStorageKey)
+    : null;
+  if (job.input.humStorageKey && !hum) throw new Error("hum_artifact_missing_during_verification");
+  const humWasSent = Boolean(hum && job.input.styleMix > 0);
+  let verified: ReturnType<typeof verifyMusicWorkerOutput>;
+  try {
+    verified = verifyMusicWorkerOutput({
+      output,
+      bytes,
+      expected: {
+        requestId: jobId,
+        prompt: job.input.prompt,
+        duration: job.input.duration,
+        styleMix: job.input.humStorageKey ? job.input.styleMix : 0,
+        melody: job.input.melody,
+        humSha256: humWasSent && hum
+          ? createHash("sha256").update(hum.body).digest("hex")
+          : null,
+      },
+    });
+  } catch (error) {
+    log("music.quality_gate_failed", {
+      jobId,
+      generationBatchId: job.input.generationBatchId,
+      reason: error instanceof Error ? error.message : String(error),
+      outputBytes: bytes.byteLength,
+    }, { userId, level: "error" });
+    throw new MusicOutputRejectedError(error);
+  }
+  log("music.quality_gate_passed", {
+    jobId,
+    generationBatchId: job.input.generationBatchId,
+    gateVersion: verified.quality.version,
+    qualityEvidence: verified.diagnostics.evidence,
+    candidateCount: verified.diagnostics.candidateCount,
+    qualityMetrics: verified.quality.metrics,
+    workerWallMs: verified.diagnostics.workerWallMs,
+    totalGenerationMs: verified.diagnostics.totalGenerationMs,
+    estimatedCostUsd: verified.diagnostics.estimatedCostUsd,
+    model: verified.diagnostics.runtime.model ?? null,
+    outputBytes: bytes.byteLength,
+  }, { userId });
+  const artifact = await storeMusicJobOutput({ userId, jobId, bytes, contentType: "audio/wav" });
   const recorded = await recordMusicJobResult({
     userId,
     jobId,
@@ -264,10 +332,30 @@ async function completeFromProviderOutput(
       model: typeof output.model === "string" ? output.model : "",
       generationMs: typeof output.generation_ms === "number" ? output.generation_ms : null,
       styleMix: output.style_mix == null ? "" : String(output.style_mix),
+      quality: verified.quality,
+      diagnostics: verified.diagnostics,
     },
   });
   if (!recorded) throw new Error("music_job_result_record_failed");
   await settleRecordedResult(recorded);
+}
+
+function summarizeProviderFailure(error: unknown): Record<string, unknown> | null {
+  if (!(error instanceof RunpodError) || !error.detail || typeof error.detail !== "object") {
+    return null;
+  }
+  const detail = error.detail as Record<string, unknown>;
+  const diagnostics = detail.diagnostics && typeof detail.diagnostics === "object"
+    ? detail.diagnostics as Record<string, unknown>
+    : null;
+  return {
+    code: typeof detail.error === "string" ? detail.error : error.kind,
+    gateVersion: typeof diagnostics?.gate_version === "string" ? diagnostics.gate_version : null,
+    candidateCount: typeof diagnostics?.candidate_count === "number" ? diagnostics.candidate_count : null,
+    totalGenerationMs: typeof diagnostics?.total_generation_ms === "number"
+      ? diagnostics.total_generation_ms
+      : null,
+  };
 }
 
 async function settleRecordedResult(

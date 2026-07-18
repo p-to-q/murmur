@@ -14,11 +14,18 @@ import handler
 
 
 class HandlerTest(unittest.TestCase):
+    def test_invalid_attempt_configuration_uses_default(self):
+        self.assertGreaterEqual(handler.MAX_QUALITY_ATTEMPTS, 1)
+        self.assertLessEqual(handler.MAX_QUALITY_ATTEMPTS, 3)
+
     def test_returns_wav_of_requested_duration(self):
         out = handler.handler({"input": {"prompt": "warm dreamy pads", "duration": 2}})
         self.assertNotIn("error", out)
         self.assertIn("audio_b64", out)
         self.assertEqual(out["sample_rate"], 48_000)  # engine.SAMPLE_RATE
+        self.assertTrue(out["quality"]["passed"])
+        self.assertEqual(out["quality"]["version"], "music-technical-v1")
+        self.assertEqual(out["diagnostics"]["candidate_count"], 1)
 
         blob = base64.b64decode(out["audio_b64"])
         with wave.open(io.BytesIO(blob)) as reader:
@@ -41,6 +48,19 @@ class HandlerTest(unittest.TestCase):
     def test_empty_input_object(self):
         out = handler.handler({})
         self.assertEqual(out.get("error"), "prompt_required")
+
+    def test_returns_a_safe_input_receipt(self):
+        out = handler.handler({"input": {
+            "prompt": "private prompt",
+            "duration": 2,
+            "request_id": "mjob_test",
+            "melody": {"notes": [{"pitch": 60}]},
+        }})
+        receipt = out["input_receipt"]
+        self.assertEqual(receipt["request_id"], "mjob_test")
+        self.assertNotIn("private prompt", str(receipt))
+        self.assertEqual(len(receipt["prompt_sha256"]), 64)
+        self.assertTrue(receipt["melody_accepted"])
 
 
 if __name__ == "__main__":

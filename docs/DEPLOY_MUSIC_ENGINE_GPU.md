@@ -45,7 +45,7 @@ docker buildx build --platform linux/amd64 \
 
 ```bash
 export RUNPOD_API_KEY=rpa_xxxxxxxx
-export VERCEL=1          # 自动 vercel env add + redeploy
+export VERCEL=1          # 自动 vercel env add；不会绕过 Actions 直接部署
 bun run deploy:music-serverless
 ```
 
@@ -56,7 +56,12 @@ bun run deploy:music-serverless
 3. 创建/更新 **serverless endpoint**（`workersMin=0`、`flashboot=true`、`idleTimeout=120s`、挂载网络卷、GPU 候选列表）
 4. 发一个 **warm-up** 作业并轮询 `/status`：首次会拉镜像 + 下载 ~4 GB 模型到网络卷（约 ~20 min），把模型缓存下来
 5. 写入 Vercel `RUNPOD_SERVERLESS_ENDPOINT_ID` / `RUNPOD_API_KEY` /
-   `MUSIC_ENGINE_MODE=serverless` 并 redeploy
+   `MUSIC_ENGINE_MODE=serverless` /
+   `MURMUR_MUSIC_QUALITY_EVIDENCE_REQUIRED=1`。只有 warm-up 输出
+   通过 `music-technical-v1` 协议校验后才会执行这一步；旧 warm worker 或旧镜像
+   仍在服务时，脚本会拒绝切换。环境同步后，通过 GitHub Actions 的
+   **Release (production)** 对最新 `main` SHA 进行正式发布；脚本不会直接执行
+   `vercel --prod`。
 
 端点信息保存在 `.env.workers.cloud`（已 gitignore）：`RUNPOD_SERVERLESS_ENDPOINT_ID` + `RUNPOD_NETWORK_VOLUME_ID`。
 

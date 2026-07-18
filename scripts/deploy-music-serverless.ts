@@ -103,13 +103,14 @@ async function main() {
   console.log(`Serverless endpoint: ${endpointId} (${ENDPOINT_NAME})`);
   console.log(`Invoke URL: ${RUN_BASE}/${endpointId}/run`);
 
+  let qualityProtocolVerified = false;
   if (shouldWarmUp()) {
     console.log(
       "Warming up — first cold start pulls the image and downloads the ~4 GB model onto the volume (allow up to ~20 min)…",
     );
-    const ok = await warmUp(apiKey, endpointId);
-    if (ok) {
-      console.log("Warm-up job completed — model cached on the volume, endpoint healthy.");
+    qualityProtocolVerified = await warmUp(apiKey, endpointId);
+    if (qualityProtocolVerified) {
+      console.log("Warm-up completed — model cached and music-technical-v1 evidence verified.");
     } else {
       console.warn(
         "Warm-up did not complete in time. The endpoint is created; the model will download on the first real request instead. Check the RunPod console logs.",
@@ -122,6 +123,11 @@ async function main() {
   persistEnv(endpointId, volume.id);
 
   if (shouldSyncVercel()) {
+    if (!qualityProtocolVerified) {
+      throw new Error(
+        "Refusing Vercel cutover: warm-up did not prove music-technical-v1. Drain old RunPod workers, confirm the SHA image is active, and rerun with WARMUP=1.",
+      );
+    }
     await syncVercelEnv(apiKey, endpointId);
   } else {
     console.log("Skipped Vercel sync — rerun with VERCEL=1 after `vercel login`.");
@@ -329,20 +335,29 @@ async function warmUp(apiKey: string, endpointId: string): Promise<boolean> {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",
   };
+  const requestId = `deploy-warmup-${Date.now()}`;
   let jobId: string;
   try {
     const submit = await fetch(`${RUN_BASE}/${endpointId}/run`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ input: { prompt: "warm up the model", duration: 2 } }),
+      body: JSON.stringify({
+        input: { prompt: "warm up the model", duration: 2, request_id: requestId },
+      }),
       signal: AbortSignal.timeout(30_000),
     });
-    const body = (await submit.json()) as { id?: string; status?: string };
+    const body = (await submit.json()) as {
+      id?: string;
+      status?: string;
+      output?: unknown;
+    };
     if (!submit.ok || !body.id) {
       console.warn(`Warm-up submit failed: HTTP ${submit.status}`);
       return false;
     }
-    if ((body.status ?? "").toUpperCase() === "COMPLETED") return true;
+    if ((body.status ?? "").toUpperCase() === "COMPLETED") {
+      return hasExpectedQualityProtocol(body.output, requestId);
+    }
     jobId = body.id;
   } catch (error) {
     console.warn(`Warm-up submit error: ${error instanceof Error ? error.message : error}`);
@@ -357,9 +372,13 @@ async function warmUp(apiKey: string, endpointId: string): Promise<boolean> {
         headers,
         signal: AbortSignal.timeout(15_000),
       });
-      const body = (await res.json()) as { status?: string };
+      const body = (await res.json()) as { status?: string; output?: unknown };
       const status = (body.status ?? "").toUpperCase();
-      if (status === "COMPLETED") return true;
+      if (status === "COMPLETED") {
+        const verified = hasExpectedQualityProtocol(body.output, requestId);
+        if (!verified) console.warn("Warm-up completed without music-technical-v1 evidence.");
+        return verified;
+      }
       if (status === "FAILED" || status === "CANCELLED" || status === "TIMED_OUT") {
         console.warn(`Warm-up job ${status}.`);
         return false;
@@ -371,6 +390,20 @@ async function warmUp(apiKey: string, endpointId: string): Promise<boolean> {
   }
   process.stdout.write("\n");
   return false;
+}
+
+function hasExpectedQualityProtocol(output: unknown, requestId: string): boolean {
+  if (!output || typeof output !== "object" || Array.isArray(output)) return false;
+  const value = output as Record<string, unknown>;
+  const quality = value.quality && typeof value.quality === "object"
+    ? value.quality as Record<string, unknown>
+    : null;
+  const receipt = value.input_receipt && typeof value.input_receipt === "object"
+    ? value.input_receipt as Record<string, unknown>
+    : null;
+  return quality?.version === "music-technical-v1"
+    && quality.passed === true
+    && receipt?.request_id === requestId;
 }
 
 // ── Persistence + Vercel ───────────────────────────────────────────────
@@ -393,14 +426,16 @@ async function syncVercelEnv(apiKey: string, endpointId: string) {
     ["RUNPOD_SERVERLESS_ENDPOINT_ID", endpointId],
     ["RUNPOD_API_KEY", apiKey],
     ["MUSIC_ENGINE_MODE", "serverless"],
+    ["MURMUR_MUSIC_QUALITY_EVIDENCE_REQUIRED", "1"],
   ] as const) {
     await runShell(
       `printf '%s' '${value.replace(/'/g, `'\\''`)}' | vercel env add ${key} production --force`,
       { cwd: ROOT, pathEnv },
     );
   }
-  console.log("Redeploying production…");
-  await runShell("vercel --prod --yes", { cwd: ROOT, pathEnv });
+  console.log(
+    "Vercel production env updated. Release the exact main SHA through the GitHub Actions Release (production) workflow; this script does not bypass that gate.",
+  );
 }
 
 // ── Small utilities ────────────────────────────────────────────────────

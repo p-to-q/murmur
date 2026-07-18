@@ -50,6 +50,15 @@ WebM/Opus blob directly, the worker transcodes it through ffmpeg to a temporary
 | `MUSIC_WORKER_REQUIRE_AUTH` | _(unset)_ | `1` forces startup to fail when `MUSIC_WORKER_TOKEN` is missing |
 | `MUSIC_ENGINE_MOCK` | _(unset)_ | `1` → sine-chord placeholder clips, no model |
 | `MUSIC_ENGINE_PRELOAD` | `1` | `0` → lazy-load on first request |
+| `MUSIC_QUALITY_MAX_ATTEMPTS` | `2` | generate at most 1–3 candidates until the technical Gate passes |
+
+The serverless handler returns a hashed input receipt and `music-technical-v1`
+quality evidence. It retries failed technical candidates inside the same RunPod
+job; raw prompts, melody arrays, and hum bytes are not included in diagnostics.
+The Web runtime independently applies the same versioned signal checks. Keep
+threshold changes synchronized across `quality_gate.py` and
+`src/lib/music/music-output-quality.ts`, and bump the Gate version whenever the
+acceptance contract changes.
 
 ## Tests
 
