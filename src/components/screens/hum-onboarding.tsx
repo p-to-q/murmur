@@ -67,7 +67,12 @@ const COPY_LINE_VARIANTS = {
   visible: { opacity: 1, y: 0, filter: "blur(0px)" },
   exit: (isRippling: boolean) =>
     isRippling
-      ? { opacity: 0, y: 10, filter: "blur(10px)" }
+      ? {
+          opacity: 0,
+          y: 10,
+          filter: "blur(10px)",
+          transition: { duration: 0.42, ease: INTENT_TEXT_EASE },
+        }
       : { opacity: 0, y: -5, filter: "blur(0px)" },
 };
 const WEB_STRANDS = [
