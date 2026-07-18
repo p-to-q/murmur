@@ -14,7 +14,7 @@ import {
   gitHubOAuthProviderOptions,
   isGitHubOAuthConfigured,
 } from "@/lib/auth/github-config";
-import { resolveAuthSecret } from "@/lib/auth/env";
+import { prepareAuthUrlEnv, resolveAuthSecret } from "@/lib/auth/env";
 import { assertProductionAuthConfig } from "@/lib/auth/assert-config";
 import { upsertOAuthUser } from "@/lib/db/queries/users";
 import { getSessionByToken } from "@/lib/db/queries/sessions";
@@ -27,6 +27,7 @@ const googleConfigured = isGoogleOAuthConfigured();
 const githubConfigured = isGitHubOAuthConfigured();
 
 assertProductionAuthConfig();
+prepareAuthUrlEnv();
 
 const providers = [
   ...(googleConfigured ? [Google(googleOAuthProviderOptions())] : []),

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { inputLevelLabelKey, nextInputLevelDecision } from "./input-level";
+import {
+  inputLevelLabelKey,
+  nextInputLevelDecision,
+  randomQuietInputLevelLabelKey,
+} from "./input-level";
 import type { InputLevelDecision } from "./input-level";
 
 describe("nextInputLevelDecision", () => {
@@ -67,10 +71,15 @@ describe("nextInputLevelDecision", () => {
 
   it("maps every meter state to explicit product copy", () => {
     expect(inputLevelLabelKey("idle")).toBe("hum.level.idle");
-    // Quiet copy rotates between two variants to feel less naggy.
+    // Back-compat helper still picks one quiet copy.
     expect(["hum.level.quiet.1", "hum.level.quiet.2"]).toContain(
       inputLevelLabelKey("quiet"),
     );
     expect(inputLevelLabelKey("heard")).toBe("hum.level.heard");
+  });
+
+  it("chooses one quiet hint from the two available variants", () => {
+    expect(randomQuietInputLevelLabelKey(() => 0.1)).toBe("hum.level.quiet.1");
+    expect(randomQuietInputLevelLabelKey(() => 0.9)).toBe("hum.level.quiet.2");
   });
 });
