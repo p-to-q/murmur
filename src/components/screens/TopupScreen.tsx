@@ -190,10 +190,38 @@ function formatHistoryChartData(
   });
 }
 
+function targetChartTickCount(range: TopupTimeRange, length: number) {
+  const maxTicks =
+    range === "7D" ? 7 :
+    range === "1H" ? 6 :
+    5;
+  return Math.max(1, Math.min(maxTicks, length));
+}
+
+function pickChartTickIndexes(range: TopupTimeRange, length: number) {
+  if (length <= 0) return [];
+  const tickCount = targetChartTickCount(range, length);
+  if (tickCount === 1) return [0];
+  const minIndexGap =
+    range === "7D" ? 1 :
+    range === "1H" ? 2 :
+    Math.max(3, Math.floor(length / 6));
+  const chosen: number[] = [];
+
+  for (let slot = 0; slot < tickCount; slot += 1) {
+    const ideal = Math.round((slot / (tickCount - 1)) * (length - 1));
+    const previous = chosen.at(-1);
+    if (previous != null && ideal - previous < minIndexGap) continue;
+    chosen.push(ideal);
+  }
+
+  return chosen;
+}
+
 function BalanceLineChart({ data, timeRange }: { data: BalanceChartPoint[]; timeRange: TopupTimeRange }) {
   const width = 320;
   const height = 192;
-  const padding = { top: 10, right: 10, bottom: 25, left: 0 };
+  const padding = { top: 10, right: 10, bottom: 30, left: 0 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
   const values = data.map((point) => point.value);
@@ -210,59 +238,61 @@ function BalanceLineChart({ data, timeRange }: { data: BalanceChartPoint[]; time
   const linePath = points
     .map(({ x, y }, index) => `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`)
     .join(" ");
-  const interval = timeRange === "1H" ? 2 : timeRange === "1D" ? 5 : Math.floor(data.length / 6);
-  const ticks = points.filter((_, index) => {
-    if (index === 0 || index === points.length - 1) return true;
-    return interval > 0 && index % interval === 0;
-  });
+  const tickIndexes = pickChartTickIndexes(timeRange, points.length);
+  const ticks = tickIndexes.flatMap((index) => points[index] ? [points[index]] : []);
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      className="h-full w-full"
-      role="img"
-      aria-hidden="true"
-      preserveAspectRatio="none"
-    >
-      {[0, 1, 2, 3, 4].map((index) => {
-        const y = padding.top + (index / 4) * chartHeight;
-        return (
-          <line
-            key={index}
-            x1={padding.left}
-            x2={width - padding.right}
-            y1={y}
-            y2={y}
-            stroke="#E5DDD0"
-            strokeWidth="1"
-            vectorEffect="non-scaling-stroke"
-          />
-        );
-      })}
-      <path
-        d={linePath}
-        fill="none"
-        stroke="#B7AEA1"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-      />
-      {ticks.map(({ x, point }, index) => (
-        <text
-          key={`${point.timestamp}-${index}`}
-          x={x}
-          y={height - 5}
-          fill="#B7AEA1"
-          fontSize="10"
-          fontWeight="500"
-          textAnchor={index === 0 ? "start" : index === ticks.length - 1 ? "end" : "middle"}
-          style={{ fontFamily: "system-ui" }}
-        >
-          {point.date}
-        </text>
-      ))}
-    </svg>
+    <div className="relative h-full w-full">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="absolute inset-0 h-full w-full"
+        role="img"
+        aria-hidden="true"
+        preserveAspectRatio="none"
+      >
+        {[0, 1, 2, 3, 4].map((index) => {
+          const y = padding.top + (index / 4) * chartHeight;
+          return (
+            <line
+              key={index}
+              x1={padding.left}
+              x2={width - padding.right}
+              y1={y}
+              y2={y}
+              stroke="#E5DDD0"
+              strokeWidth="1"
+              vectorEffect="non-scaling-stroke"
+            />
+          );
+        })}
+        <path
+          d={linePath}
+          fill="none"
+          stroke="#B7AEA1"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      <div className="absolute inset-x-0 bottom-0 h-5 text-[10px] font-medium tabular-nums text-[#B7AEA1]">
+        {ticks.map(({ x, point }, index) => {
+          const isFirst = index === 0;
+          return (
+            <span
+              key={`${point.timestamp}-${index}`}
+              className="absolute whitespace-nowrap"
+              style={{
+                left: `clamp(${isFirst ? "0px" : "18px"}, ${(x / width) * 100}%, calc(100% - 18px))`,
+                transform: isFirst ? "none" : "translateX(-50%)",
+              }}
+            >
+              {point.date}
+            </span>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -767,7 +797,7 @@ export function TopupScreen() {
                   </p>
                   <p className="font-serif text-[#1A1A1A] text-[28px] leading-none tabular-nums">
                     <motion.span>{displayNotesInUse}</motion.span>
-                    <span className="text-[14px] font-normal text-[#1A1A1A] ml-1">{t("topup.notes")}</span>
+                    <span className="ml-1 text-[14px] font-normal text-[#1A1A1A]">{t("topup.notes")}</span>
                   </p>
                 </div>
               </motion.div>
