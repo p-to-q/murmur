@@ -1,6 +1,7 @@
 "use client";
 
 const STORAGE_KEY = "murmur.local-creator.bootstrapped";
+const LOCAL_CREATOR_SESSION_TIMEOUT_MS = 4_000;
 
 let inflight: Promise<boolean> | null = null;
 
@@ -33,6 +34,7 @@ export async function ensureLocalCreatorSession(
         method: "POST",
         credentials: "include",
         cache: "no-store",
+        signal: AbortSignal.timeout(LOCAL_CREATOR_SESSION_TIMEOUT_MS),
       });
       if (response.ok) {
         window.sessionStorage.setItem(STORAGE_KEY, "1");

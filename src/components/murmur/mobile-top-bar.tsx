@@ -2,6 +2,7 @@
 
 import { useCurrentLang, useI18nStore } from "@/lib/i18n";
 import { MurmurMark } from "./murmur-mark";
+import { NotificationBellButton } from "./side-nav";
 
 export function MobileTopBar() {
   const lang = useCurrentLang();
@@ -18,30 +19,33 @@ export function MobileTopBar() {
     >
       <MurmurMark size={22} className="pointer-events-auto" />
 
-      <div className="pointer-events-auto flex items-baseline gap-1.5">
-        <button
-          type="button"
-          onClick={() => setLang("zh")}
-          className={`text-[13px] transition-colors ${
-            lang === "zh"
-              ? "text-[#1A1A1A]"
-              : "text-[#B6B0A4] hover:text-[#1A1A1A]"
-          }`}
-        >
-          中
-        </button>
-        <span className="text-[16px] leading-none text-[#B6B0A4]">/</span>
-        <button
-          type="button"
-          onClick={() => setLang("en")}
-          className={`text-[13px] transition-colors ${
-            lang === "en"
-              ? "text-[#1A1A1A]"
-              : "text-[#B6B0A4] hover:text-[#1A1A1A]"
-          }`}
-        >
-          EN
-        </button>
+      <div className="pointer-events-auto flex items-center gap-2.5">
+        <NotificationBellButton chromeless />
+        <div className="flex items-baseline gap-1.5">
+          <button
+            type="button"
+            onClick={() => setLang("zh")}
+            className={`text-[13px] transition-colors ${
+              lang === "zh"
+                ? "text-[#1A1A1A]"
+                : "text-[#B6B0A4] hover:text-[#1A1A1A]"
+            }`}
+          >
+            中
+          </button>
+          <span className="text-[16px] leading-none text-[#B6B0A4]">/</span>
+          <button
+            type="button"
+            onClick={() => setLang("en")}
+            className={`text-[13px] transition-colors ${
+              lang === "en"
+                ? "text-[#1A1A1A]"
+                : "text-[#B6B0A4] hover:text-[#1A1A1A]"
+            }`}
+          >
+            EN
+          </button>
+        </div>
       </div>
     </header>
   );

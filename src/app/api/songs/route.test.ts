@@ -38,6 +38,16 @@ let nextAuth: ResolvedRequestAuth = {
 };
 
 const createdSongs: Array<Record<string, unknown>> = [];
+const compositionEvents: Array<Record<string, unknown>> = [];
+const createCompositionEventMock = mock(async (data: Record<string, unknown>) => {
+  compositionEvents.push(data);
+  return {
+    id: "cmp_test",
+    ...data,
+    occurredAt: new Date("2026-06-05T12:00:00.000Z"),
+    createdAt: new Date("2026-06-05T12:00:00.000Z"),
+  };
+});
 let createSongError: unknown = null;
 const createSongMock = mock(async (data: Record<string, unknown>) => {
   if (createSongError) throw createSongError;
@@ -69,7 +79,9 @@ const createSongWithSpendMock = mock(async (data: Record<string, unknown>) => {
   };
 });
 let existingConflictSong: Record<string, unknown> | null = null;
-const getSongByIdMock = mock(async () => existingConflictSong);
+const getSongByIdMock = mock(async (songId: string) =>
+  existingConflictSong?.id === songId ? existingConflictSong : null,
+);
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
@@ -92,6 +104,11 @@ mock.module("@/lib/db/queries/songs", () => ({
   revokeSongShareForUser: mock(async () => null),
   updateSong: mock(async () => null),
   updateSongForUser: mock(async () => null),
+}));
+
+mock.module("@/lib/db/queries/composition-events", () => ({
+  createCompositionEvent: createCompositionEventMock,
+  listCompositionTrainingExamples: mock(async () => []),
 }));
 
 const { POST } = await import("./route");
@@ -123,8 +140,10 @@ beforeEach(async () => {
     sessionId: "sess_song",
   };
   createdSongs.length = 0;
+  compositionEvents.length = 0;
   createSongMock.mockClear();
   createSongWithSpendMock.mockClear();
+  createCompositionEventMock.mockClear();
   getSongByIdMock.mockClear();
   createSongError = null;
   createSongWithSpendError = null;
@@ -137,12 +156,26 @@ afterEach(() => {
   __resetObjectStoreForTesting();
 });
 
-function makeRecordingStore(): { store: ObjectStore; puts: Array<{ key: string }> } {
-  const puts: Array<{ key: string }> = [];
+function makeRecordingStore(): {
+  store: ObjectStore;
+  puts: Array<{ key: string; body: Uint8Array }>;
+} {
+  const puts: Array<{ key: string; body: Uint8Array }> = [];
+  const objects = new Map<string, {
+    body: Uint8Array;
+    contentType: string;
+    scope: "public" | "private";
+  }>();
   const store: ObjectStore = {
     driver: "memory",
     async put(key, body, opts) {
-      puts.push({ key });
+      const storedBody = new Uint8Array(body);
+      puts.push({ key, body: storedBody });
+      objects.set(key, {
+        body: storedBody,
+        contentType: opts.contentType,
+        scope: opts.scope ?? "private",
+      });
       return {
         key,
         url: `https://cdn.test/${key}`,
@@ -152,8 +185,16 @@ function makeRecordingStore(): { store: ObjectStore; puts: Array<{ key: string }
         storedAt: new Date("2026-06-05T12:00:00.000Z"),
       };
     },
-    async get() {
-      return null;
+    async get(key) {
+      const object = objects.get(key);
+      return object
+        ? {
+            ...object,
+            size: object.body.byteLength,
+            meta: {},
+            storedAt: new Date("2026-06-05T12:00:00.000Z"),
+          }
+        : null;
     },
     async delete() {},
     url(key) {
@@ -728,6 +769,73 @@ describe("POST /api/songs", () => {
     expect(response.headers.get("X-Murmur-Audio-Storage")).toBeNull();
   });
 
+  it("does not overwrite stored audio when the same song id conflicts", async () => {
+    const { store, puts } = makeRecordingStore();
+    __setObjectStoreForTesting(store);
+    const payload = {
+      id: "song_audio_conflict",
+      title: "Original Master",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      mp3DataUrl: SAMPLE_MP3_DATA_URL,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    };
+
+    expect((await POST(buildRequest(payload))).status).toBe(200);
+    existingConflictSong = { ...createdSongs[0] };
+    const originalKey = String(createdSongs[0]?.mp3StorageKey);
+    const originalBytes = new Uint8Array(puts[0]!.body);
+    const differentAudio = `data:audio/mpeg;base64,${Buffer.from(
+      "ID3-different-master-bytes",
+    ).toString("base64")}`;
+
+    const response = await POST(buildRequest({
+      ...payload,
+      title: "Conflicting Master",
+      mp3DataUrl: differentAudio,
+    }, "req_audio_conflict"));
+
+    expect(response.status).toBe(409);
+    expect((await response.json() as { error: string }).error).toBe("song_payload_conflict");
+    expect(puts).toHaveLength(1);
+    expect(puts[0]?.key).toBe(originalKey);
+    expect(puts[0]?.body).toEqual(originalBytes);
+  });
+
+  it("replays the same audio payload without rewriting its object", async () => {
+    const { store, puts } = makeRecordingStore();
+    __setObjectStoreForTesting(store);
+    const payload = {
+      id: "song_audio_replay",
+      title: "Replay Master",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      mp3DataUrl: SAMPLE_MP3_DATA_URL,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    };
+
+    expect((await POST(buildRequest(payload))).status).toBe(200);
+    existingConflictSong = { ...createdSongs[0] };
+    const replay = await POST(buildRequest(payload, "req_audio_replay"));
+
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get("X-Murmur-Idempotent-Replay")).toBe("song");
+    expect(puts).toHaveLength(1);
+    expect(createSongMock).toHaveBeenCalledTimes(1);
+  });
+
   it("persists no audio fields when the save carries no rendered audio (#292)", async () => {
     __setObjectStoreForTesting(makeRecordingStore().store);
     const response = await POST(buildRequest({
@@ -841,6 +949,22 @@ describe("POST /api/songs", () => {
     expect(createdSongs[0]?.melody).toEqual(melody);
     expect(createdSongs[0]?.provenance).toEqual({ flow: "flow_abc", draftId: "draft_abc", sourceType: "hum" });
     expect(typeof createdSongs[0]?.saveFingerprint).toBe("string");
+    expect(createCompositionEventMock).toHaveBeenCalledTimes(1);
+    expect(compositionEvents[0]).toEqual(expect.objectContaining({
+      userId: "usr_song",
+      songId: "song_artifact_v2",
+      draftId: "draft_abc",
+      flowId: "flow_abc",
+      eventKind: "song.saved",
+      source: "server",
+    }));
+    expect(compositionEvents[0]?.payload).toEqual(expect.objectContaining({
+      requestId: "req_song",
+      artifactVersion: 2,
+      sourceMelodyKind: "corrected",
+      hasAudio: false,
+      audioStorage: "none",
+    }));
   });
 
   it("derives root + depth from the owned parent, overriding client-supplied lineage (#297)", async () => {

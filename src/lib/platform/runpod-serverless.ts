@@ -61,6 +61,7 @@ export type RunpodErrorKind =
   | "http"
   | "failed"
   | "timeout"
+  | "submission_unknown"
   | "aborted";
 
 /** A failed RunPod invocation, tagged so the route can map it to its error contract. */
@@ -80,6 +81,89 @@ interface RunpodJob {
   status?: string;
   output?: unknown;
   error?: unknown;
+}
+
+export type RunpodJobState =
+  | { status: "queued" | "running" }
+  | { status: "succeeded"; output: Record<string, unknown> }
+  | { status: "failed" | "canceled" | "expired"; message: string; detail: unknown };
+
+export async function submitJob(
+  config: MusicServerlessConfig,
+  input: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<{ providerJobId: string; immediateOutput: Record<string, unknown> | null }> {
+  let submitRes: Response;
+  try {
+    submitRes = await runpodFetch(config, "/run", {
+      method: "POST",
+      body: JSON.stringify({
+        input,
+        policy: { executionTimeout: JOB_EXECUTION_TIMEOUT_MS, ttl: JOB_TTL_MS },
+      }),
+      signal: signal ?? AbortSignal.timeout(PER_CALL_TIMEOUT_MS),
+    });
+  } catch (error) {
+    // The request may have reached RunPod even though its response was lost.
+    // Without a provider job id there is no safe status lookup, so callers must
+    // terminalize/refund instead of automatically submitting a second GPU job.
+    throw new RunpodError(
+      "submission_unknown",
+      "RunPod submission outcome is unknown; automatic resubmission is disabled",
+      error instanceof Error ? error.message : error,
+    );
+  }
+  const submitBody = await safeJson(submitRes);
+  assertAuthorized(submitRes, submitBody);
+  if (!submitRes.ok) {
+    throw new RunpodError("http", `RunPod /run returned HTTP ${submitRes.status}`, submitBody);
+  }
+
+  const job = (submitBody ?? {}) as RunpodJob;
+  const immediateOutput = readTerminal(job);
+  const providerJobId = job.id;
+  if (!providerJobId) {
+    throw new RunpodError("http", "RunPod /run returned no job id", submitBody);
+  }
+  return { providerJobId, immediateOutput };
+}
+
+export async function getJobStatus(
+  config: MusicServerlessConfig,
+  providerJobId: string,
+  signal?: AbortSignal,
+): Promise<RunpodJobState> {
+  const res = await runpodFetch(config, `/status/${providerJobId}`, {
+    method: "GET",
+    signal: signal ?? AbortSignal.timeout(PER_CALL_TIMEOUT_MS),
+  });
+  const body = await safeJson(res);
+  assertAuthorized(res, body);
+  if (!res.ok) {
+    throw new RunpodError("http", `RunPod /status returned HTTP ${res.status}`, body);
+  }
+  const job = (body ?? {}) as RunpodJob;
+  const status = (job.status ?? "").toUpperCase();
+  if (status === "COMPLETED") {
+    return { status: "succeeded", output: readTerminal(job)! };
+  }
+  if (status === "FAILED") {
+    return { status: "failed", message: "RunPod job failed", detail: job.output ?? job.error ?? job };
+  }
+  if (status === "CANCELLED") {
+    return { status: "canceled", message: "RunPod job canceled", detail: job.output ?? job.error ?? job };
+  }
+  if (status === "TIMED_OUT") {
+    return { status: "expired", message: "RunPod job expired", detail: job.output ?? job.error ?? job };
+  }
+  return { status: status === "IN_PROGRESS" ? "running" : "queued" };
+}
+
+export async function cancelSubmittedJob(
+  config: MusicServerlessConfig,
+  providerJobId: string,
+): Promise<boolean> {
+  return cancelJob(config, providerJobId);
 }
 
 export interface RunJobOptions {
@@ -160,14 +244,16 @@ function assertAuthorized(res: Response, body: unknown): void {
   }
 }
 
-async function cancelJob(config: MusicServerlessConfig, jobId: string): Promise<void> {
+async function cancelJob(config: MusicServerlessConfig, jobId: string): Promise<boolean> {
   try {
-    await runpodFetch(config, `/cancel/${jobId}`, {
+    const response = await runpodFetch(config, `/cancel/${jobId}`, {
       method: "POST",
       signal: AbortSignal.timeout(5_000),
     });
+    return response.ok;
   } catch {
     // best-effort — the job's own execution timeout will reap it otherwise
+    return false;
   }
 }
 

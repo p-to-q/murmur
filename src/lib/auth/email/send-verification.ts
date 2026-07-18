@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import { ulid } from "ulid";
 import { randomInt } from "crypto";
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { emailVerificationCodes } from "@/lib/db/schema/email-verification-codes";
 import { normalizeEmail } from "@/lib/db/queries/users";
@@ -32,30 +32,34 @@ export async function sendVerificationCode(rawEmail: string): Promise<{
   const email = normalizeEmail(rawEmail);
 
   const now = new Date();
-  const activeCount = await db
-    .select({ id: emailVerificationCodes.id })
-    .from(emailVerificationCodes)
-    .where(
-      and(
-        eq(emailVerificationCodes.email, email),
-        gt(emailVerificationCodes.expiresAt, now),
-        isNull(emailVerificationCodes.usedAt),
-      ),
-    );
-
-  if (activeCount.length >= MAX_ACTIVE_CODES_PER_EMAIL) {
-    return { ok: false, error: "rate_limit" };
-  }
-
   const code = generateCode();
   const expiresAt = new Date(now.getTime() + CODE_EXPIRY_MINUTES * 60 * 1000);
 
-  await db.insert(emailVerificationCodes).values({
-    id: `evc_${ulid()}`,
-    email,
-    code,
-    expiresAt,
+  const insertedId = `evc_${ulid()}`;
+  const inserted = await db.transaction(async (tx) => {
+    await lockEmailVerification(tx, email);
+
+    const activeCodes = await tx
+      .select({ id: emailVerificationCodes.id })
+      .from(emailVerificationCodes)
+      .where(activeCodeWhere(email, now))
+      .for("update");
+
+    if (activeCodes.length >= MAX_ACTIVE_CODES_PER_EMAIL) {
+      return false;
+    }
+
+    await tx.insert(emailVerificationCodes).values({
+      id: insertedId,
+      email,
+      code,
+      expiresAt,
+    });
+
+    return true;
   });
+
+  if (!inserted) return { ok: false, error: "rate_limit" };
 
   try {
     const resend = getResendClient();
@@ -78,6 +82,10 @@ export async function sendVerificationCode(rawEmail: string): Promise<{
     });
     return { ok: true };
   } catch {
+    await deactivateVerificationCode(insertedId).catch(() => {
+      // Best effort: the request still returns send_failed, and a later send
+      // can proceed once old active rows expire.
+    });
     return { ok: false, error: "send_failed" };
   }
 }
@@ -92,36 +100,63 @@ export async function verifyCode(
   const code = inputCode.trim();
   const now = new Date();
 
-  const activeCodes = await db
-    .select()
-    .from(emailVerificationCodes)
-    .where(
-      and(
-        eq(emailVerificationCodes.email, email),
-        gt(emailVerificationCodes.expiresAt, now),
-        isNull(emailVerificationCodes.usedAt),
-      ),
-    )
-    .orderBy(desc(emailVerificationCodes.createdAt));
+  return db.transaction(async (tx) => {
+    await lockEmailVerification(tx, email);
 
-  if (activeCodes.length === 0) return { ok: false, error: "invalid_code" };
+    const activeCodes = await tx
+      .select()
+      .from(emailVerificationCodes)
+      .where(activeCodeWhere(email, now))
+      .orderBy(desc(emailVerificationCodes.createdAt))
+      .for("update");
 
-  const latest = activeCodes[0];
-  const totalAttempts = activeCodes.reduce((sum, c) => sum + c.attempts, 0);
-  if (totalAttempts >= MAX_ATTEMPTS) return { ok: false, error: "max_attempts" };
+    if (activeCodes.length === 0) return { ok: false, error: "invalid_code" };
 
+    const maxAttempts = Math.max(...activeCodes.map((c) => c.attempts));
+    if (maxAttempts >= MAX_ATTEMPTS) {
+      return { ok: false, error: "max_attempts" };
+    }
+
+    const activeIds = activeCodes.map((c) => c.id);
+    const matched = activeCodes.find((c) => c.code === code);
+
+    if (!matched) {
+      await tx
+        .update(emailVerificationCodes)
+        .set({ attempts: maxAttempts + 1 })
+        .where(inArray(emailVerificationCodes.id, activeIds));
+      return { ok: false, error: "invalid_code" };
+    }
+
+    await tx
+      .update(emailVerificationCodes)
+      .set({ usedAt: now })
+      .where(inArray(emailVerificationCodes.id, activeIds));
+
+    return { ok: true };
+  });
+}
+
+function activeCodeWhere(email: string, now: Date) {
+  return and(
+    eq(emailVerificationCodes.email, email),
+    gt(emailVerificationCodes.expiresAt, now),
+    isNull(emailVerificationCodes.usedAt),
+  );
+}
+
+type EmailVerificationTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function lockEmailVerification(
+  tx: EmailVerificationTx,
+  email: string,
+): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${email}))`);
+}
+
+async function deactivateVerificationCode(id: string): Promise<void> {
   await db
     .update(emailVerificationCodes)
-    .set({ attempts: latest.attempts + 1 })
-    .where(eq(emailVerificationCodes.id, latest.id));
-
-  const matched = activeCodes.find((c) => c.code === code);
-  if (!matched) return { ok: false, error: "invalid_code" };
-
-  await db
-    .update(emailVerificationCodes)
-    .set({ usedAt: now })
-    .where(eq(emailVerificationCodes.id, matched.id));
-
-  return { ok: true };
+    .set({ usedAt: new Date() })
+    .where(eq(emailVerificationCodes.id, id));
 }

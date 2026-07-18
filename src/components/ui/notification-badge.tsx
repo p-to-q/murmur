@@ -1,19 +1,25 @@
 "use client";
 
 import { useNotificationStore } from "@/lib/store/notification-store";
+import type { MurmurNotification } from "@/lib/notifications/types";
+
+export function countUnreadNotifications(items: MurmurNotification[]): number {
+  return items.filter((item) => !item.readAt).length;
+}
 
 export function useUnreadNotificationCount(): number {
   return useNotificationStore((state) =>
-    state.items.filter((item) => !item.readAt).length,
+    countUnreadNotifications(state.items),
   );
 }
 
-export function NotificationBadge({
+function NotificationBadgeView({
+  count,
   className = "",
 }: {
+  count: number;
   className?: string;
 }) {
-  const count = useUnreadNotificationCount();
   if (count === 0) return null;
 
   return (
@@ -31,3 +37,16 @@ export function NotificationBadge({
     </span>
   );
 }
+
+export function NotificationBadge({
+  className = "",
+}: {
+  className?: string;
+}) {
+  const count = useUnreadNotificationCount();
+  return <NotificationBadgeView count={count} className={className} />;
+}
+
+export const __testing = {
+  NotificationBadgeView,
+};

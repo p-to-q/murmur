@@ -317,15 +317,40 @@ export async function POST(request: NextRequest) {
   }
 
   if (useZpay) {
-    return handleZpayCheckout(
-      request,
-      userId,
-      product,
-      payMethod as ZpayPaymentType,
-      billingEmail,
-      requestId,
-      auth.sessionId,
-    );
+    try {
+      return await handleZpayCheckout(
+        request,
+        userId,
+        product,
+        payMethod as ZpayPaymentType,
+        billingEmail,
+        requestId,
+      );
+    } catch (err) {
+      log(
+        "billing.zpay_checkout_failed",
+        {
+          error: err instanceof Error ? err.message : String(err),
+          skuId: product.skuId,
+          payMethod,
+        },
+        {
+          route: ROUTE,
+          requestId,
+          userId,
+          sessionId: auth.sessionId,
+          level: "error",
+        },
+      );
+      return NextResponse.json(
+        {
+          error: "checkout_failed",
+          message: "Could not start checkout. Please try again.",
+          requestId,
+        },
+        { status: 502, headers: { "X-Request-Id": requestId } },
+      );
+    }
   }
 
   const client = getWaffoClient()!;
@@ -436,7 +461,6 @@ async function handleZpayCheckout(
   payMethod: ZpayPaymentType,
   billingEmail: string | null,
   requestId: string,
-  sessionId: string | null,
 ) {
   const origin = resolveAppOrigin(request);
   const outTradeNo = createZpayOrderId();
@@ -448,68 +472,42 @@ async function handleZpayCheckout(
     request.headers.get("x-real-ip") ||
     "127.0.0.1";
 
-  try {
-    // Insert a pending purchase record so the webhook can resolve it
-    await db.insert(purchases).values({
-      id: newId("pur"),
-      userId,
-      provider: "zpay",
-      productId: product.skuId,
-      providerRef: outTradeNo,
-      amountCents: product.amountCents,
-      currency: "CNY",
-      notesGranted: product.notesGranted,
-      status: "pending",
-      rawPayload: {
-        payMethod,
-        outTradeNo,
-        moneyYuan,
-        ...(billingEmail ? { billingEmail } : {}),
-      },
-    });
-
-    const result = await zpayCreateOrder({
+  // Insert a pending purchase record so the webhook can resolve it.
+  await db.insert(purchases).values({
+    id: newId("pur"),
+    userId,
+    provider: "zpay",
+    productId: product.skuId,
+    providerRef: outTradeNo,
+    amountCents: product.amountCents,
+    currency: "CNY",
+    notesGranted: product.notesGranted,
+    status: "pending",
+    rawPayload: {
+      payMethod,
       outTradeNo,
-      money: moneyYuan,
-      name: `Murmur — ${product.notesGranted} 音磅`,
-      type: payMethod,
-      notifyUrl,
-      returnUrl,
-      clientIp,
-    });
+      moneyYuan,
+      ...(billingEmail ? { billingEmail } : {}),
+    },
+  });
 
-    return NextResponse.json(
-      {
-        checkoutUrl: result.payUrl,
-        sessionId: outTradeNo,
-        provider: "zpay",
-        requestId,
-      },
-      { headers: { "X-Request-Id": requestId } },
-    );
-  } catch (err) {
-    log(
-      "billing.zpay_checkout_failed",
-      {
-        error: err instanceof Error ? err.message : String(err),
-        skuId: product.skuId,
-        payMethod,
-      },
-      {
-        route: ROUTE,
-        requestId,
-        userId,
-        sessionId,
-        level: "error",
-      },
-    );
-    return NextResponse.json(
-      {
-        error: "checkout_failed",
-        message: "Could not start checkout. Please try again.",
-        requestId,
-      },
-      { status: 502, headers: { "X-Request-Id": requestId } },
-    );
-  }
+  const result = await zpayCreateOrder({
+    outTradeNo,
+    money: moneyYuan,
+    name: `Murmur — ${product.notesGranted} 音磅`,
+    type: payMethod,
+    notifyUrl,
+    returnUrl,
+    clientIp,
+  });
+
+  return NextResponse.json(
+    {
+      checkoutUrl: result.payUrl,
+      sessionId: outTradeNo,
+      provider: "zpay",
+      requestId,
+    },
+    { headers: { "X-Request-Id": requestId } },
+  );
 }

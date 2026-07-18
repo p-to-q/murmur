@@ -274,7 +274,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
      Opt-in (preferences: autoAudition, default OFF) and always suppressed when
      the device prefers reduced motion — quiet environments and screen-reader
      users get no surprise audio (issue #217). Playback still needs a prior user
-     gesture; when autoplay is blocked, versionPreview.play returns false and we
+     gesture; when autoplay is blocked, versionPreview.play rejects and we
      clear the auditioning flag so the UI stays honest. */
   const autoAuditionedRef = useRef(false);
   useEffect(() => {
@@ -286,14 +286,14 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     );
     if (!firstReady) return;
     autoAuditionedRef.current = true;
-    try {
-      setAuditioning(firstReady.id);
-      if (!versionPreview.play(firstReady)) {
+    setAuditioning(firstReady.id);
+    void versionPreview.play(firstReady)
+      .then((played) => {
+        if (!played) setAuditioning(null);
+      })
+      .catch(() => {
         setAuditioning(null);
-      }
-    } catch {
-      setAuditioning(null);
-    }
+      });
   }, [
     autoAudition,
     prefersReducedMotion,
@@ -433,7 +433,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   );
 
   const handleAudition = useCallback(
-    (version: VibeVersion) => {
+    async (version: VibeVersion) => {
       if (auditionStartTimerRef.current !== null) {
         window.clearTimeout(auditionStartTimerRef.current);
         auditionStartTimerRef.current = null;
@@ -457,8 +457,9 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
       try {
         versionPreview.stop();
-        setAuditioning(version.id); // Immediately set as auditioning
-        if (!versionPreview.play(version)) {
+        setAuditioning(version.id);
+        const didPlay = await versionPreview.play(version);
+        if (!didPlay) {
           setAuditioning(null);
         }
       } catch (err) {
@@ -539,7 +540,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   );
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div data-testid="vibe-screen" className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       {/* ── Phase 1: iris-close + rainbow ring ───────────────────── */}
       {phase === "closing" && (
         <div className="pointer-events-none fixed inset-0 z-[60]">
@@ -774,6 +775,8 @@ const VibeCard = memo(function VibeCard({
 
   return (
     <motion.div
+      data-testid={`vibe-card-${cardIndex}`}
+      data-generation-state={isError ? "error" : isPending ? "pending" : "ready"}
       aria-disabled={!canEnterStudio}
       className={[
         "relative h-full min-h-[200px] select-none overflow-hidden rounded-[32px] md:min-h-[240px]",

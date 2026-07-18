@@ -28,6 +28,7 @@ import {
   apiErrorEnvelopeFrom,
   readApiErrorEnvelope,
 } from "@/lib/api/error-envelope";
+import { isApiTimeoutError, requestWithTimeout, withTimeout } from "@/lib/api/timeout";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { trackStageEntered, trackStageCompleted } from "@/lib/observability/stage-tracking";
 import { addMurmurNotification } from "@/lib/store/notification-store";
@@ -220,7 +221,11 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
 
     let rendered: Awaited<ReturnType<typeof renderAudio>> = null;
     try {
-      rendered = await renderAudio(versionWithName);
+      rendered = await withTimeout(
+        renderAudio(versionWithName),
+        25_000,
+        "Audio render timed out",
+      );
     } catch (error) {
       console.warn("[Name] render failed:", error);
     }
@@ -245,7 +250,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       if (!hasCreatorSession) {
         console.warn("[Name] Local Creator session unavailable; trying local preview save fallback.");
       }
-      const response = await fetch("/api/songs", {
+      const response = await requestWithTimeout("/api/songs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -273,7 +278,7 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
           arrangementState: versionWithName.arrangementState,
           tags: versionWithName.tags,
         }),
-      });
+      }, 20_000);
       if (!response.ok) {
         throw new ApiEnvelopeError(await readApiErrorEnvelope(response, "save_failed"));
       }
@@ -319,18 +324,23 @@ export function NameScreen({ initialDemo = false }: { initialDemo?: boolean }) {
     } catch (error) {
       console.error("[Name] save failed:", error);
       const envelope = apiErrorEnvelopeFrom(error);
-      toast.error(t("studio.save_err"), {
+      toast.error(
+        isApiTimeoutError(error)
+          ? (t("studio.save_timeout") || "Save is taking too long. Your draft is still here — try again.")
+          : t("studio.save_err"),
+        {
         description: formatStudioSupportCode({
-          code: envelope?.code ?? "save_failed",
+          code: envelope?.code ?? (isApiTimeoutError(error) ? "save_timeout" : "save_failed"),
           requestId: envelope?.requestId ?? null,
         }),
-      });
+        },
+      );
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div data-testid="name-screen" className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop />
 
       <div className="relative z-10 flex min-h-svh flex-col">

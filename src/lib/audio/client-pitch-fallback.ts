@@ -238,3 +238,10 @@ function framesToNotes(frames: PitchFrame[], sampleRate: number): MelodyNote[] {
 
   return notes;
 }
+
+export const __testing = {
+  mixToMono,
+  buildFrames,
+  framesToNotes,
+  hzToMidi,
+};

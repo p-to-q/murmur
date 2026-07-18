@@ -17,6 +17,11 @@ import { sendBrowserNotification } from "@/lib/hooks/use-browser-notification";
 import { addMurmurNotification } from "@/lib/store/notification-store";
 import { useI18nStore } from "@/lib/i18n";
 import { songGeneratedNotificationCopy } from "@/lib/notifications/notification-copy";
+import { request } from "@/lib/api/request";
+import {
+  durableMusicJobsEnabled,
+  requestDurableMusicAudio,
+} from "@/lib/api/music-jobs";
 
 /**
  * Magenta RealTime version flow.
@@ -173,7 +178,7 @@ export async function fetchMusicEngineStatus(force = false): Promise<MusicEngine
 
 async function probeHealthOnce(): Promise<MusicEngineStatus | null> {
   try {
-    const res = await fetch("/api/music/health", {
+    const res = await request("/api/music/health", {
       signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
       cache: "no-store",
     });
@@ -403,26 +408,37 @@ function startBatchGeneration(
   for (const url of liveObjectUrls) URL.revokeObjectURL(url);
   liveObjectUrls = [];
 
-  void requestBatchClipsSequentially(versions, humBlob, controller.signal, batchId);
+  void requestBatchClipsWithConcurrency(versions, humBlob, controller.signal, batchId);
 }
 
-async function requestBatchClipsSequentially(
+async function requestBatchClipsWithConcurrency(
   versions: VibeVersion[],
   humBlob: Blob | null,
   signal: AbortSignal,
   batchId: string,
 ): Promise<void> {
-  // The Magenta worker serializes model work internally; sending the three
-  // initial clips at once can leave one job succeeding while siblings fail or
-  // hit route/rate limits. Keep the Vibe cards immediate, but queue the network
-  // handoff so the worker sees one clip at a time.
-  for (const version of versions) {
-    if (signal.aborted) {
-      settleQueuedClipAfterAbort(version, signal);
-      continue;
+  // Two lanes overlap provider queue/cold-start latency without flooding a
+  // local worker or submitting all sibling jobs at once. Each clip still owns
+  // its operation id, charge, progress, and failure state.
+  let nextIndex = 0;
+  const runLane = async () => {
+    while (nextIndex < versions.length) {
+      const version = versions[nextIndex++];
+      if (!version) return;
+      if (signal.aborted) {
+        settleQueuedClipAfterAbort(version, signal);
+        continue;
+      }
+      await requestClip(
+        version,
+        humBlob,
+        signal,
+        batchId,
+        version.generation?.operationId,
+      );
     }
-    await requestClip(version, humBlob, signal, batchId, version.generation?.operationId);
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(2, versions.length) }, runLane));
 }
 
 function settleQueuedClipAfterAbort(version: VibeVersion, signal: AbortSignal): void {
@@ -470,12 +486,20 @@ async function requestClip(
     // resume/retry of the same clip never double-charges (#300).
     if (operationId) headers["x-generation-clip-id"] = operationId;
 
-    const res = await fetch("/api/music/generate", {
-      method: "POST",
-      body: form,
-      headers,
-      signal: withGenerateTimeout(signal),
-    });
+    const requestSignal = withGenerateTimeout(signal);
+    const res = durableMusicJobsEnabled()
+      ? await requestDurableMusicAudio({
+          form,
+          headers,
+          signal: requestSignal,
+          cancelSignal: signal ?? undefined,
+        })
+      : await request("/api/music/generate", {
+          method: "POST",
+          body: form,
+          headers,
+          signal: requestSignal,
+        });
     if (!res.ok) {
       throw await buildMusicGenerateError(res);
     }

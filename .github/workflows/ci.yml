@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   verify:
-    timeout-minutes: 25
+    timeout-minutes: 35
     runs-on: ubuntu-latest
 
     steps:
@@ -37,12 +37,22 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
       - name: Install audio worker dependencies
         run: |
           cd workers/audio-engine
           python -m venv .venv
           ./.venv/bin/python -m pip install --upgrade pip
           ./.venv/bin/pip install -r requirements.txt
+
+      - name: Install music worker test dependencies
+        run: |
+          cd workers/music-engine
+          python -m venv .venv
+          ./.venv/bin/python -m pip install --upgrade pip
+          ./.venv/bin/pip install numpy fastapi httpx python-multipart
 
       - name: Lint
         run: bun run lint
@@ -58,8 +68,14 @@ jobs:
       - name: Test
         run: NODE_ENV=test bun test
 
+      - name: Browser golden path
+        run: bun run test:e2e
+
       - name: Audio worker tests
         run: bun run test:audio
+
+      - name: Music worker tests
+        run: bun run test:music
 
       - name: Build audit
         run: bun run build:audit

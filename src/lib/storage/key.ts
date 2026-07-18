@@ -11,6 +11,7 @@ export type ObjectKind =
   | "song-poster" // social-preview PNG
   | "share-html" // pre-rendered share page HTML
   | "quality-sample" // opt-in audio captured for quality analysis
+  | "music-job-audio" // durable private output of a paid generation job
   | "tmp"; // ephemeral; should carry a ttlSeconds
 
 const KIND_TO_PREFIX: Record<ObjectKind, string> = {
@@ -18,6 +19,7 @@ const KIND_TO_PREFIX: Record<ObjectKind, string> = {
   "song-poster": "songs/poster",
   "share-html": "shares",
   "quality-sample": "quality",
+  "music-job-audio": "music/jobs",
   tmp: "tmp",
 };
 

@@ -39,6 +39,7 @@ import {
 } from "@murmur/core";
 
 import { ensureLocalCreatorSession } from "@/lib/auth/local-creator-client";
+import { isApiTimeoutError, requestWithTimeout } from "@/lib/api/timeout";
 import {
   checkoutFailedPrimaryAction,
   checkoutFailedPrimaryLabelKey,
@@ -86,6 +87,10 @@ const DEFAULT_SKU_ID = "topup_120_notes";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CHECKOUT_BASELINE_STORAGE_KEY = "murmur.checkout.baseline.v1";
 const CHECKOUT_BASELINE_MAX_AGE_MS = 30 * 60 * 1000;
+const BALANCE_CONFIRM_ATTEMPTS = 8;
+const BALANCE_CONFIRM_DELAY_MS = 1_200;
+const BALANCE_CONFIRM_FETCH_TIMEOUT_MS = 3_500;
+const CHECKOUT_REQUEST_TIMEOUT_MS = 15_000;
 
 export function CheckoutScreen() {
   const router = useRouter();
@@ -107,6 +112,7 @@ export function CheckoutScreen() {
   const requestedPayMethod: PayMethod =
     params?.get("payMethod") === "wxpay" ? "wxpay" : "card";
   const returnStatus = params?.get("status");
+  const requestedGate = params?.get("gate");
 
   const [payMethod, setPayMethod] = useState<PayMethod>(requestedPayMethod);
   const [acceptedPolicy, setAcceptedPolicy] = useState(false);
@@ -205,12 +211,12 @@ export function CheckoutScreen() {
       const baseline =
         readCheckoutBaselineBalance() ??
         snapshotCheckoutBalance(
-          (await fetchUserBalance({ force: true }).catch(() => null))?.balance,
+          (await fetchCheckoutBalance({ force: true }))?.balance,
         );
-      for (let attempt = 0; attempt < 8; attempt++) {
+      for (let attempt = 0; attempt < BALANCE_CONFIRM_ATTEMPTS; attempt++) {
         if (signal?.cancelled) return;
-        await new Promise((resolve) => window.setTimeout(resolve, 1200));
-        const next = await fetchUserBalance({ force: true }).catch(() => null);
+        await new Promise((resolve) => window.setTimeout(resolve, BALANCE_CONFIRM_DELAY_MS));
+        const next = await fetchCheckoutBalance({ force: true });
         const nextAccountNotes = next?.balance?.accountNotes;
         if (
           typeof nextAccountNotes === "number" &&
@@ -267,14 +273,14 @@ export function CheckoutScreen() {
           ? { ...baseBody, payMethod, billingEmail: billingEmail.trim() }
           : { ...baseBody, billingEmail: billingEmail.trim() };
 
-      const startingBalance = await fetchUserBalance({ force: true }).catch(() => null);
+      const startingBalance = await fetchCheckoutBalance({ force: true });
       writeCheckoutBaselineBalance(startingBalance?.balance);
 
-      const response = await fetch("/api/billing/checkout", {
+      const response = await requestWithTimeout("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(checkoutBody),
-      });
+      }, CHECKOUT_REQUEST_TIMEOUT_MS);
 
       if (response.ok) {
         const data = (await response.json()) as { checkoutUrl?: string };
@@ -319,8 +325,13 @@ export function CheckoutScreen() {
       setFailureMessage(errorBody.message ?? null);
       setFailureKind("generic");
       setPhase("failed");
-    } catch {
-      setFailureMessage(null);
+    } catch (error) {
+      setFailureMessage(
+        isApiTimeoutError(error)
+          ? t("checkout.request_timeout") ||
+            "Checkout is taking too long. Nothing was charged — try again."
+          : null,
+      );
       setFailureKind("generic");
       setPhase("failed");
     }
@@ -427,6 +438,23 @@ export function CheckoutScreen() {
       };
     }
   }, [confirmGrant, returnStatus]);
+
+  useEffect(() => {
+    if (requestedGate !== "sign_in" || accountLoading || hasSignedInUser) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setFailureMessage(
+        t("checkout.sign_in_required") ||
+          "Sign in first, then top up your notes.",
+      );
+      setFailureKind("sign_in_required");
+      setPhase("failed");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountLoading, hasSignedInUser, requestedGate, t]);
 
   return (
     <div className="relative min-h-svh overflow-x-hidden bg-[#F5F1EB]">
@@ -756,6 +784,20 @@ function ReviewControls({
         )}
         {primaryLabel}
       </button>
+
+      {phase === "failed" && failureMessage && (
+        <p className="rounded-[8px] border border-[#E7DCCB] bg-[#FFF7EF] px-3 py-2 text-[11.5px] leading-[1.45] text-[#8C4F36]">
+          {failureMessage}
+        </p>
+      )}
+
+      {phase === "awaiting_payment" && (
+        <p className="rounded-[8px] border border-[#E7DCCB] bg-white/55 px-3 py-2 text-[11.5px] leading-[1.45] text-[#6F6A63]">
+          {(t("checkout.awaiting_payment_hint") ||
+            "When you finish, you'll return here automatically. You can also reopen the {provider} checkout.")
+            .replace("{provider}", paymentMethodLabel(payMethod, t))}
+        </p>
+      )}
     </div>
   );
 }
@@ -898,6 +940,17 @@ function clearCheckoutBaselineBalance(): void {
   try {
     window.sessionStorage.removeItem(CHECKOUT_BASELINE_STORAGE_KEY);
   } catch {}
+}
+
+async function fetchCheckoutBalance(
+  options: { force?: boolean } = {},
+): Promise<Awaited<ReturnType<typeof fetchUserBalance>> | null> {
+  return Promise.race([
+    fetchUserBalance(options),
+    new Promise<null>((resolve) => {
+      window.setTimeout(resolve, BALANCE_CONFIRM_FETCH_TIMEOUT_MS);
+    }),
+  ]).catch(() => null);
 }
 
 function paymentMethodLabel(method: PayMethod, t: (key: string) => string): string {

@@ -3,6 +3,8 @@ import type { CleanMelody, TranscriptionResult } from "@/modules/shared/types";
 import { log } from "@/lib/observability/log";
 import { request } from "./request";
 
+const TRANSCRIBE_TIMEOUT_MS = 55_000;
+
 /**
  * Stable client-facing transcribe error codes.
  *
@@ -83,7 +85,7 @@ export class TranscribeRequestError extends Error {
  */
 export async function transcribeRecording(
   audioBlob: Blob,
-  options: { targetInstrument?: string } = {},
+  options: { targetInstrument?: string; operationId?: string } = {},
 ): Promise<TranscriptionResult> {
   const form = new FormData();
   form.append("audio", audioBlob, filenameForBlob(audioBlob));
@@ -100,17 +102,13 @@ export async function transcribeRecording(
     response = await request("/api/transcribe", {
       method: "POST",
       body: form,
-      signal: AbortSignal.timeout(55_000),
+      headers: options.operationId
+        ? { "x-operation-id": options.operationId }
+        : undefined,
+      signal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
     });
   } catch (cause) {
-    throw new TranscribeRequestError({
-      code: "network_error",
-      status: 0,
-      message:
-        cause instanceof Error
-          ? `Transcription request failed: ${cause.message}`
-          : "Transcription request failed",
-    });
+    throw buildTransportTranscribeError(cause);
   }
 
   if (!response.ok) {
@@ -187,6 +185,7 @@ export async function transcribeRecordingStreaming(
   options: {
     targetInstrument?: string;
     onProgress?: TranscribeProgressCallback;
+    operationId?: string;
   } = {},
 ): Promise<TranscriptionResult> {
   const form = new FormData();
@@ -200,18 +199,16 @@ export async function transcribeRecordingStreaming(
     response = await request("/api/transcribe", {
       method: "POST",
       body: form,
-      headers: { Accept: "text/x-ndjson" },
-      signal: AbortSignal.timeout(55_000),
+      headers: {
+        Accept: "text/x-ndjson",
+        ...(options.operationId
+          ? { "x-operation-id": options.operationId }
+          : {}),
+      },
+      signal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
     });
   } catch (cause) {
-    throw new TranscribeRequestError({
-      code: "network_error",
-      status: 0,
-      message:
-        cause instanceof Error
-          ? `Transcription request failed: ${cause.message}`
-          : "Transcription request failed",
-    });
+    throw buildTransportTranscribeError(cause);
   }
 
   const contentType = response.headers.get("content-type") ?? "";
@@ -221,6 +218,25 @@ export async function transcribeRecordingStreaming(
   }
 
   return consumeTranscribeStream(response, options.onProgress);
+}
+
+function buildTransportTranscribeError(cause: unknown): TranscribeRequestError {
+  const timedOut = isAbortLikeError(cause);
+  return new TranscribeRequestError({
+    code: timedOut ? "worker_unavailable" : "network_error",
+    status: 0,
+    message:
+      cause instanceof Error
+        ? `Transcription request failed: ${cause.message}`
+        : "Transcription request failed",
+  });
+}
+
+function isAbortLikeError(error: unknown): boolean {
+  return (
+    error instanceof DOMException &&
+    (error.name === "AbortError" || error.name === "TimeoutError")
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

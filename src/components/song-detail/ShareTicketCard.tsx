@@ -7,6 +7,7 @@ import { X, Play, Pause, Image as ImageIcon, Video } from "lucide-react";
 import type { VisualArtwork } from "@/modules/shared/types";
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
 import { downloadBlob } from "@/lib/platform/download";
+import { toast } from "sonner";
 
 interface ShareTicketCardProps {
   title: string;
@@ -102,7 +103,11 @@ export function ShareTicketCard({
       audioRef.current = el;
     }
     if (el.paused) {
-      el.play().catch(() => {});
+      el.play().catch((error) => {
+        console.error("[ShareTicketCard] playback error:", error);
+        setPlaying(false);
+        toast.error("Couldn't play that preview.");
+      });
     } else {
       el.pause();
     }

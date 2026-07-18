@@ -56,6 +56,25 @@ const COPY_CLASS =
   "max-w-[560px] text-[29px] leading-[1.12] md:text-[36px] md:leading-[1.1]";
 const BRAND_FONT =
   "var(--font-instrument-serif), ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif";
+const INTENT_TEXT_EASE = [0.2, 0.8, 0.2, 1] as const;
+const COPY_CONTAINER_VARIANTS = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 },
+  exit: (isRippling: boolean) => ({ opacity: isRippling ? 1 : 0 }),
+};
+const COPY_LINE_VARIANTS = {
+  hidden: { opacity: 0, y: 5, filter: "blur(0px)" },
+  visible: { opacity: 1, y: 0, filter: "blur(0px)" },
+  exit: (isRippling: boolean) =>
+    isRippling
+      ? {
+          opacity: 0,
+          y: 10,
+          filter: "blur(10px)",
+          transition: { duration: 0.42, ease: INTENT_TEXT_EASE },
+        }
+      : { opacity: 0, y: -5, filter: "blur(0px)" },
+};
 const WEB_STRANDS = [
   { rotate: -28, y: -72, delay: 0.06 },
   { rotate: -10, y: -24, delay: 0 },
@@ -202,15 +221,17 @@ export function HumOnboardingOverlay({
             )}
           </AnimatePresence>
 
-          <AnimatePresence>
+          <AnimatePresence custom={rippling}>
             {!rippling && (
               <motion.div
                 key="onboarding-copy"
                 data-hum-onboarding-copy
                 className="absolute flex w-[min(92vw,560px)] flex-col items-center text-center"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
+                custom={rippling}
+                variants={COPY_CONTAINER_VARIANTS}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
                 transition={{
                   duration: reduceMotion ? 0.24 : 0.62,
                   delay: copyDelay,
@@ -218,19 +239,21 @@ export function HumOnboardingOverlay({
                 }}
                 style={{ top: copyTop, left: orbCenter.x, x: "-50%", y: "-100%" }}
               >
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode="wait" custom={rippling && !reduceMotion}>
                   <motion.p
                     key={line}
+                    custom={rippling && !reduceMotion}
+                    variants={COPY_LINE_VARIANTS}
                     className={[
                       "hero-serif whitespace-pre-line text-[#1A1A1A]/80 tracking-normal",
                       COPY_CLASS,
                     ].join(" ")}
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
                     transition={{
-                      duration: reduceMotion ? 0.16 : 0.34,
-                      ease: MYMIND_EASE,
+                      duration: reduceMotion ? 0.16 : rippling ? 0.42 : 0.34,
+                      ease: rippling ? INTENT_TEXT_EASE : MYMIND_EASE,
                     }}
                     style={{ letterSpacing: 0 }}
                   >

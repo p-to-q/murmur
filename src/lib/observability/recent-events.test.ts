@@ -62,6 +62,16 @@ describe("recent events ring buffer", () => {
     expect(event?.ext.stopReason).toBe("limit");
   });
 
+  it("stores billing and auth events needed for ops triage", () => {
+    recordRecentEvent(baseEvent({ event: "billing.checkout_failed", level: "warn" }));
+    recordRecentEvent(baseEvent({ event: "auth.email_code_sent", level: "info" }));
+
+    const events = getRecentEvents();
+    expect(events).toHaveLength(2);
+    expect(events[0]?.event).toBe("auth.email_code_sent");
+    expect(events[1]?.event).toBe("billing.checkout_failed");
+  });
+
   it("caps the buffer at 32 entries", () => {
     for (let i = 0; i < 40; i += 1) {
       recordRecentEvent(baseEvent({ event: "transcribe.completed" }));

@@ -29,12 +29,14 @@ export interface CachedRecording {
   blob: Blob;
   mimeType: string;
   savedAt: number;
+  operationId: string | null;
 }
 
 interface StoredRecord {
   blob: Blob;
   mimeType: string;
   savedAt: number;
+  operationId?: string;
 }
 
 /**
@@ -80,7 +82,10 @@ function openDatabase(): Promise<IDBDatabase | null> {
  * any storage failure resolves `false` so callers can skip the recovery
  * affordance rather than surface a broken retry.
  */
-export async function saveRecordingBlob(blob: Blob): Promise<boolean> {
+export async function saveRecordingBlob(
+  blob: Blob,
+  operationId?: string,
+): Promise<boolean> {
   const db = await openDatabase();
   if (!db) return false;
   try {
@@ -96,6 +101,7 @@ export async function saveRecordingBlob(blob: Blob): Promise<boolean> {
         blob,
         mimeType: blob.type || "application/octet-stream",
         savedAt: Date.now(),
+        operationId,
       };
       try {
         tx.objectStore(STORE_NAME).put(record, RECORD_KEY);
@@ -147,6 +153,8 @@ export async function loadRecordingBlob(): Promise<CachedRecording | null> {
           mimeType:
             value.mimeType || value.blob.type || "application/octet-stream",
           savedAt: typeof value.savedAt === "number" ? value.savedAt : 0,
+          operationId:
+            typeof value.operationId === "string" ? value.operationId : null,
         });
       };
       req.onerror = () => resolve(null);

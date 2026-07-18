@@ -1,6 +1,14 @@
 # Docs Index
 
-Murmur's documentation falls into three layers.
+Status: canonical documentation registry<br>
+Owner: product engineering<br>
+Last verified: 2026-07-18
+
+Murmur documentation has five roles: current reference, contract, decision,
+roadmap, and historical evidence. Executable code, schema, configuration, and
+tests describe what actually runs. Canonical docs explain that reality and the
+intent behind it. A disagreement is documentation drift to resolve, not a rule
+that either side automatically wins.
 
 ## 1. Architecture truth (v1, still current)
 
@@ -8,6 +16,12 @@ How the running system is shaped today. v2 docs build on these; v1 docs
 remain the source of truth for everything the v2 docs do not override.
 
 - [architecture.md](architecture.md) — system intent + boundaries
+- [product-engineering-system.md](product-engineering-system.md) — product,
+  latency, reliability, and architecture decision framework
+- [worker-architecture.md](worker-architecture.md) — deployed worker topology,
+  capacity, and operational constraints
+- [music-jobs.md](music-jobs.md) — durable paid-generation lifecycle,
+  recovery, settlement, and production cutover
 - [tech-stack.md](tech-stack.md) — current stack + deploy topology (Vercel /
   RunPod / Waffo / local cloudflared)
 - [music-engine.md](music-engine.md) — chord / bass / drum engines + assemble-song
@@ -22,8 +36,9 @@ remain the source of truth for everything the v2 docs do not override.
 - [delivery-cadence.md](delivery-cadence.md)
 - [review-gates.md](review-gates.md)
 - [packaging-and-release.md](packaging-and-release.md)
-- [repository-operations.md](repository-operations.md)
-- [verification.md](verification.md)
+- [repository-operations.md](repository-operations.md) — authoritative
+  production migration, exact-SHA deploy, smoke, and branch-governance runbook
+- [verification.md](verification.md) — validation commands and current evidence
 
 ## 2. v2 plan — narrative (2026-06)
 
@@ -40,15 +55,16 @@ builds on the previous.
    plane Compose surface.
 5. [payment-topup-feature.md](payment-topup-feature.md) — credits,
    top-up, billing.
-6. [execution-roadmap.md](execution-roadmap.md) — sequenced 0–7
-   phases.
+6. [execution-roadmap.md](execution-roadmap.md) — historical migration
+   sequencing; do not use it as the current backlog.
 
 ## 3. v2 plan — contracts (2026-06)
 
 The hard surfaces — types, schemas, conventions, standards. Codex reads
 these on every PR.
 
-- [page-contracts.md](page-contracts.md) — per-page state + APIs + JSON.
+- [page-contracts.md](page-contracts.md) — bridge to current page intent and
+  partial contract notes; gaps are explicit in the document.
 - [user-model.md](user-model.md) — identity, plans, entitlements,
   regions, sessions.
 - [data-model.md](data-model.md) — every Postgres table + invariants.
@@ -79,7 +95,8 @@ briefs that drove the v2 work live there:
 
 - Need to **understand current state** → §1 + `tech-stack.md`
   (`archive/diagnosis-2026-06.md` for the file-level 2026-06 snapshot).
-- Need to **decide what to build next** → `execution-roadmap.md`.
+- Need to **decide what to build next** → `product-engineering-system.md`,
+  current issues, and measured production evidence.
 - Need to **implement a page** → `page-contracts.md` + the relevant
   feature doc + `studio-compose-redesign.md` if it's Compose.
 - Need to **add a route** → `api-conventions.md` + the feature doc.
@@ -93,15 +110,12 @@ If you only have 15 minutes to rehydrate on the repo, read in this order:
 
 1. `README.md` — product shape + local runtime commands.
 2. `architecture.md` — current boundaries and runtime flow.
-3. `delivery-cadence.md` — what a "good-sized" Murmur change looks like.
-4. `engineering-principles.md` — how to change the repo without adding drift.
-5. `review-gates.md` + `verification.md` — what counts as proof before merge.
+3. `repository-operations.md` — production release and migration contract.
+4. `delivery-cadence.md` — what a "good-sized" Murmur change looks like.
+5. `engineering-principles.md` — how to change the repo without adding drift.
+6. `review-gates.md` + `verification.md` — what counts as proof before merge.
 
-The v2 docs supersede v1 architecture / music-engine / provider-
-strategy **only where they explicitly say so.** Anything else, v1
-remains authoritative.
-
-If a v2 doc disagrees with the actual code: the doc is right + the
-code is the next PR. If two v2 docs disagree: the more specific doc
-(contracts > narrative) wins, and the conflict gets a note in
-`engineering-standards.md`.
+Historical plans do not supersede current references merely because they are
+newer. When current references disagree, inspect the running boundary and
+tests, record the product decision, then update code and documentation in the
+same change where practical.

@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   if (!isEmailAuthConfigured()) {
     return NextResponse.json(
       { error: "email_auth_disabled", requestId },
-      { status: 404, headers: { "X-Request-Id": requestId } },
+      { status: 503, headers: { "X-Request-Id": requestId } },
     );
   }
 

@@ -9,13 +9,14 @@ import {
   getNotesBalance,
   recordPendingRefund,
   refundNotes,
+  settleOperationDelivery,
   spendNotes,
 } from "@/lib/db/queries/notes-ledger";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { safeHostnameFromUrl } from "@/lib/http/safe-hostname";
 import { classifyError } from "@/lib/errors/transient";
 import { log } from "@/lib/observability/log";
-import { checkBudget } from "@/lib/observability/latency-budgets";
+import { reportBudget } from "@/lib/observability/latency-budgets";
 import {
   getMusicEngineMode,
   getMusicServerlessConfig,
@@ -322,8 +323,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    await settleDeliveredMusicGenerateOperation({
+      clipId,
+      spend: billing.spend,
+      userId,
+      requestId,
+      sessionId: auth.sessionId,
+    });
+
     const genDurationMs = Math.round(performance.now() - startedAt);
-    const genBudget = checkBudget("music_generate", genDurationMs);
+    const genBudget = reportBudget("music_generate", genDurationMs, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+    });
     log("music.generate_completed", {
       mode,
       batchId,
@@ -407,6 +421,58 @@ function readGenerationBatchId(request: NextRequest): string | null {
 function readGenerationClipId(request: NextRequest): string | null {
   const raw = request.headers.get("x-generation-clip-id")?.trim();
   return raw && GENERATION_BATCH_ID_PATTERN.test(raw) ? raw : null;
+}
+
+async function settleDeliveredMusicGenerateOperation(options: {
+  clipId: string | null;
+  spend: SpendForRefund;
+  userId: string;
+  requestId: string;
+  sessionId: string | null;
+}): Promise<void> {
+  if (!options.clipId || options.spend.ledgerId === null) return;
+  const ledgerId = options.spend.ledgerId;
+
+  try {
+    const settled = await settleOperationDelivery({
+      userId: options.userId,
+      spendLedgerId: ledgerId,
+      metadata: {
+        requestId: options.requestId,
+        operationId: options.clipId,
+        trigger: "music_generate_delivered",
+      },
+    });
+
+    if (settled.ok && settled.recharged && !settled.duplicate) {
+      log("notes.spent", {
+        reason: "spend:music_generate",
+        cost: COST.music_generate,
+        balanceAfter: settled.balanceAfter,
+        ledgerId: settled.rechargeLedgerId,
+        recharge: true,
+        operationId: options.clipId,
+      }, {
+        route: ROUTE,
+        requestId: options.requestId,
+        userId: options.userId,
+        sessionId: options.sessionId,
+      });
+    }
+  } catch (error) {
+    log("notes.operation_settlement_failed", {
+      requestLedgerId: ledgerId,
+      operationId: options.clipId,
+      reason: error instanceof Error ? error.message : String(error),
+      reconciliation: "MANUAL_REVIEW",
+    }, {
+      route: ROUTE,
+      requestId: options.requestId,
+      userId: options.userId,
+      sessionId: options.sessionId,
+      level: "error",
+    });
+  }
 }
 
 async function publishMusicGeneratedNotification(input: {

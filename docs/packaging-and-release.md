@@ -234,13 +234,14 @@ after the release PR lands on `main`. They are deliberately kept **out of the
 code PR** so the tag points at the merged commit and never at an unmerged branch
 tip.
 
-Sequence, once the release PR (version bump + `CHANGELOG.md` +
-`docs/release-notes/vX.Y.Z.md`) is merged:
+Sequence, once the release change (version bump + `CHANGELOG.md` +
+`docs/releases/X.Y.Z/release-notes.md`) is merged:
 
 1. update local `main`: `git checkout main && git pull`
 2. confirm CI is green on the merged commit and the migration workflow succeeded
 3. tag the merge commit: `git tag vX.Y.Z && git push origin vX.Y.Z`
-4. create the GitHub Release for `vX.Y.Z`, using `docs/release-notes/vX.Y.Z.md`
+4. create the GitHub Release for `vX.Y.Z`, using
+   `docs/releases/X.Y.Z/release-notes.md`
    as the body
 
 There is intentionally no tag-triggered release workflow yet (see the "optional
@@ -265,12 +266,12 @@ required gate. The remaining operational steps are owner/admin actions, not code
 Murmur uses a hybrid version string with one engineering source of truth and
 two display shapes in the Me screen About card.
 
-### Current release (calibrated 2026-07-11)
+### Current release candidate (calibrated 2026-07-18)
 
-- **SemVer**: `0.6.0`
-- **Build**: `181` (latest merged PR number at calibration time)
-- **Product display**: `v0.6.0 · 181`
-- **Developer mode display**: `v0.6.0 · build 181 · <git-sha>`
+- **SemVer**: `0.7.0-rc.1`
+- **Build**: `409` (release-candidate PR number)
+- **Product display**: `v0.7.0-rc.1 · 409`
+- **Developer mode display**: `v0.7.0-rc.1 · build 409 · <git-sha>`
 
 This release reflects milestones since the earlier `v0.2.0` hackathon label:
 
@@ -279,6 +280,8 @@ This release reflects milestones since the earlier `v0.2.0` hackathon label:
 - `0.4.0` — billing, public share, and launch hardening
 - `0.5.0` — notification delivery and post-launch polish
 - `0.6.0` — browser-side transcription fallback, latency budgets, stage tracking, ISR caching, security hardening, and RTE-Dev infrastructure
+- `0.7.0-rc.1` — recoverable generation jobs, creation-journey hardening,
+  browser golden-path coverage, and ordered exact-SHA release automation
 
 ### Source of truth
 
@@ -306,7 +309,7 @@ release note):
    number
 3. add a short entry to `CHANGELOG.md` and update "Current release" in this
    document
-4. add `docs/release-notes/vX.Y.Z.md` — the release contract test
+4. add `docs/releases/X.Y.Z/release-notes.md` — the release contract test
    (`src/lib/release-contract.test.ts`) requires a release note for the declared
    `package.json` version that references the matching `APP_BUILD`
 5. after the release PR merges, create the git tag `vX.Y.Z` and the GitHub

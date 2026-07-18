@@ -119,10 +119,18 @@ describe("computeSaveFingerprint", () => {
     expect(computeSaveFingerprint({ title: "B", tags: ["x"], mp3StorageKey: "k1" })).not.toBe(a);
   });
 
-  it("collapses a large base64 fallback to a length marker (no megabyte hashing)", () => {
+  it("summarizes a large base64 fallback by content", () => {
     const big = "data:audio/mpeg;base64," + "A".repeat(5_000_000);
     // Should not throw or hang; a fingerprint is produced quickly.
     expect(typeof computeSaveFingerprint({ title: "A", mp3DataUrl: big })).toBe("string");
+    expect(computeSaveFingerprint({ title: "A", mp3DataUrl: "data:audio/mpeg;base64,AAAA" }))
+      .not.toBe(computeSaveFingerprint({ title: "A", mp3DataUrl: "data:audio/mpeg;base64,BBBB" }));
+  });
+
+  it("distinguishes audio byte digests even when durable fields match", () => {
+    const a = computeSaveFingerprint({ title: "A", audioDigest: "digest-a" });
+    const b = computeSaveFingerprint({ title: "A", audioDigest: "digest-b" });
+    expect(a).not.toBe(b);
   });
 
   it("exposes the current artifact version constant", () => {

@@ -19,8 +19,9 @@ repo rituals:
 
 - [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
   runs the fast required gate on PRs and pushes to `main`: lint, link checks,
-  TypeScript/Bun tests, audio-worker tests, build audit, and a real local-stack
-  smoke against the built app plus a live worker.
+  TypeScript/Bun tests, audio-worker tests, build audit, a real local-stack
+  smoke against the built app plus a live worker, and the Chromium golden path
+  from capture recovery through public playback.
 - [`.github/workflows/audio-acceptance.yml`](../.github/workflows/audio-acceptance.yml)
   runs the heavier unattended audio acceptance loop on a weekday schedule and
   on manual demand, then uploads the generated reports as artifacts.
@@ -75,12 +76,16 @@ from this section.
 
 ### Hosting and deploy
 
-Production runs on **Vercel's native Git integration** connected to this repo.
-There is no separate deploy workflow in `.github/workflows/` — the Git
-integration is the deploy path:
+Production runs on Vercel, but GitHub Actions owns the production release
+sequence. Vercel's native Git integration remains useful for pull-request
+Previews and **must not auto-deploy `main` to Production**.
 
-- **Preview:** every pull request gets its own Preview deployment.
-- **Production:** every push to `main` gets a Production deployment.
+- **Preview:** the native Git integration creates Preview deployments.
+- **Production:** the `Release (production)` workflow in
+  [`.github/workflows/migrate.yml`](../.github/workflows/migrate.yml) releases
+  only after the `CI / verify` job succeeds for the current `main` SHA.
+- **Exact revision:** the release checks out that 40-character SHA, builds it
+  with `vercel build --prod`, then deploys only that prebuilt output.
 - **Build command:** `bun run env:audit && bun run build` (see `vercel.json`).
   `env:audit` (`scripts/env-audit.ts`) fails the production build when a required
   environment variable is missing, so a misconfigured production deploy fails
@@ -88,10 +93,11 @@ integration is the deploy path:
 
 ### Migrations
 
-Database migrations do **not** run as part of the Vercel deploy. They run in
+Database migrations run before the Vercel deploy in
 [`.github/workflows/migrate.yml`](../.github/workflows/migrate.yml):
 
-- **Trigger:** every push to `main`, plus manual `workflow_dispatch`.
+- **Trigger:** a successful `CI` workflow on `main`, plus a manual fail-closed
+  dispatch that requires a full SHA and independently verifies successful CI.
 - **What it runs:** `bun run db:migrate`, which applies the Drizzle migrations in
   [`src/lib/db/migrations/`](../src/lib/db/migrations/) tracked by the journal
   `src/lib/db/migrations/meta/_journal.json`.
@@ -104,48 +110,64 @@ Database migrations do **not** run as part of the Vercel deploy. They run in
   — see [Database connection contract](#database-connection-contract) below for
   the full DSN precedence.
 
-### Known ordering gap (issue #307)
+### Authoritative release sequence
 
-`migrate.yml` and the native Vercel Production deploy **start independently and
-in parallel** on each `main` push. There is no ordering between them, so new
-application code can go live before the schema it depends on has finished
-migrating. This is a real race, documented honestly rather than assumed
-harmless: existing migrations create tables, alter columns, delete rows, and add
-constraints that runtime code can depend on immediately.
+The production workflow is deliberately one serial chain:
 
-The **recommended target cutover** (not yet implemented — a deliberate
-owner/admin action tracked in #307) is:
+1. `CI / verify` succeeds for the current `main` SHA;
+2. the release gate proves that SHA is still the tip of `main`;
+3. production migrations run through the direct connection;
+4. the same migration command runs again as a convergence check;
+5. Vercel pulls the production environment and builds that exact checkout;
+6. the prebuilt output is deployed to Production;
+7. HTTP smoke runs against both the immutable deployment URL and
+   `https://murmur.ptoq.io`.
 
-1. disable native Production auto-deploy — either in the Vercel dashboard, or by
-   setting `git.deploymentEnabled.main = false` in `vercel.json`;
-2. add a workflow that migrates first and, only on success, triggers a
-   Production deploy via a Vercel **Deploy Hook** (`VERCEL_DEPLOY_HOOK_URL`
-   secret);
-3. leave **Preview** deployments on the native integration (they carry no
-   production schema risk).
+Any failed stage stops later stages. The workflow uses a non-canceling
+production concurrency group so two merges cannot overlap migrations or
+deployment. A queued stale release also stops before migration because the
+requested SHA no longer matches the tip of `main`.
 
-Do not implement this here. Activation is an owner action because it changes how
-production ships; it is tracked in #307.
+Required GitHub configuration:
+
+| Kind | Name | Purpose |
+|------|------|---------|
+| Secret | `DATABASE_URL_UNPOOLED` | Direct production migration DSN |
+| Secret | `VERCEL_TOKEN` | Vercel CLI authentication |
+| Variable | `VERCEL_PROJECT_NAME` | Vercel project; defaults to `murmur` |
+| Variable | `VERCEL_SCOPE` | Vercel team/account; defaults to `moapachas-projects` |
+| Variable | `VERCEL_NATIVE_PRODUCTION_DISABLED` | Owner acknowledgement that native `main` Production deploy is disabled; release fails closed unless exactly `true` |
+
+Required Vercel cutover: open the Murmur project Git settings and disable
+Production deployment for pushes to `main` while retaining Preview deployments.
+After verifying the setting, set repository variable
+`VERCEL_NATIVE_PRODUCTION_DISABLED=true`. The workflow cannot query the
+dashboard setting directly, but it fails closed without this auditable owner
+acknowledgement. Leaving native Production enabled still recreates the pre-CI
+race even though the Actions release itself is correctly ordered.
 
 ### Branch protection (issue #308)
 
-`main` currently has **no ruleset** — direct pushes are possible even though
-[WORKFLOW.md](../WORKFLOW.md) says there should be none, and nothing enforces it.
-Because every `main` push triggers both the native Production deploy and
-`migrate.yml`, an unreviewed direct push reaches production before review or CI
-can stop it.
+`main` is protected by the GitHub ruleset **Protect main**. Changes must arrive
+through pull requests and pass the `verify` check before merge.
 
-The **required ruleset** (an admin action the owner applies under
-**Settings → Rules → Rulesets** in GitHub — it is a repository setting, not
-application code) is:
+The enforced policy is:
 
 - require a pull request before merging to `main`;
 - require the CI **`verify`** status check (the job in
   [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) to pass;
 - require at least one approving review for non-emergency changes;
-- define a named emergency-bypass owner with an audit expectation for any bypass.
+- block force pushes and branch deletion;
+- require conversation resolution before merge;
+- do not configure a standing bypass actor.
 
-This is tracked in #308.
+The current ruleset has no standing bypass, including for administrators. A
+true repository recovery requires deliberately editing or disabling the
+ruleset, which is itself an auditable owner action. Verify the live rule with:
+
+```bash
+gh api repos/p-to-q/murmur/rulesets
+```
 
 ### Vercel cron constraint (learned empirically)
 
@@ -175,7 +197,7 @@ rather than trusting this summary to stay complete:
 
 | Purpose | Variables |
 |---------|-----------|
-| Production migrations (direct/unpooled) | `DATABASE_URL_UNPOOLED` (repo secret for `migrate.yml`; `POSTGRES_URL_NON_POOLING` also accepted) |
+| Production release | `DATABASE_URL_UNPOOLED`, `VERCEL_TOKEN`; repository variables `VERCEL_PROJECT_NAME`, `VERCEL_SCOPE` |
 | Runtime DB (pooled) | `DATABASE_URL` or `POSTGRES_URL` — must be a Neon pooler host in production |
 | Cron routes | `CRON_SECRET` (non-placeholder) |
 | Web push notifications | `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, `WEB_PUSH_SUBJECT` |
@@ -186,9 +208,11 @@ rather than trusting this summary to stay complete:
 
 ### Rollback and incident ownership
 
-- **Deploy rollback is automatic-ish:** if a new Vercel deploy fails to build or
-  boot, Vercel keeps the last successful deployment serving. A failed deploy does
-  not take production down.
+- **Failed deploys do not replace the serving alias:** if the exact-SHA build or
+  deploy fails, the workflow stops and the last successful Production
+  deployment remains serving. If post-deploy alias smoke fails, treat the
+  release as an incident and explicitly promote the last known-good Vercel
+  deployment; schema rollback remains a separate decision.
 - **Migrations are not auto-rolled-back:** each migration has a `.down.sql`
   pair, but the workflow only rolls forward. Reversing a migration is a manual,
   owner-run operation against the direct endpoint, and it is only safe when no
@@ -231,12 +255,10 @@ limits are different:
 - CodeQL still runs in best-effort mode because plan / entitlement mismatches
   on some private repos can create false red builds unrelated to source
   regressions.
-- Production deploy (Vercel native Git integration) and the migration workflow
-  still start in parallel on each `main` push, so there is an unresolved
-  migrate-before-deploy ordering race (issue #307); see
-  [Production topology and deployment](#production-topology-and-deployment).
-- `main` has no branch-protection ruleset yet, so direct pushes remain possible
-  (issue #308).
+- Vercel's external Git setting must remain configured to skip native Production
+  deploys from `main`; GitHub Actions cannot audit that dashboard-only setting.
+- Production smoke is deliberately read-only. It proves page and music-health
+  contracts, not a paid creation or payment transaction.
 - Audio acceptance is automated, but the dataset mix is still bounded by what
   can be checked in or deterministically scaffolded inside CI.
 - `next build` is green through the configured webpack command path, and
@@ -261,24 +283,20 @@ default place to land without relying on oral tradition.
 
 ## What is intentionally not automated yet
 
-The deploy path is settled (Vercel native Git integration). What remains
-deliberately un-automated is governance that requires an owner/admin decision, not
-a hosting choice:
+The ordered release and branch protection are implemented. What remains
+deliberately outside the release workflow:
 
-- **Ordered migrate-then-deploy** (issue #307): production migrations and the
-  native deploy still race. The recommended Deploy-Hook cutover is documented in
-  [Production topology and deployment](#production-topology-and-deployment) but
-  intentionally not implemented in code, because disabling native production
-  auto-deploy is an owner action.
-- **Branch protection on `main`** (issue #308): the required ruleset is a GitHub
-  repository setting the owner applies; it cannot be committed as application
-  code.
-- **Tag-triggered release**: there is no workflow that cuts a GitHub Release on
-  `v*` tags yet; tagging is a manual post-merge step (see
+- **Vercel native-production cutover:** an owner must keep Production
+  auto-deploy disabled in the Vercel dashboard; Preview may remain automatic.
+- **Tag-triggered release:** there is no workflow that cuts a GitHub Release on
+  `v*` tags yet. Tags, prereleases, and final GitHub Releases are manual
+  post-merge operations after the exact `main` SHA passes CI and production
+  release smoke (see
   [packaging-and-release.md](./packaging-and-release.md)).
 
 Current automation is strong on validation, hygiene, and schema migration; the
-gap is ordering and enforcement, not delivery target.
+remaining production-release gap is the dashboard-only Vercel native-deploy
+cutover, which repository code cannot enforce.
 
 ## Optional hardening (not yet adopted)
 
@@ -342,15 +360,13 @@ Per release candidate:
 
 ## Future additions
 
-Hosting is chosen (Vercel) and preview deployments, a production migration
-workflow, and this rollback/runbook documentation already exist. The next layer,
-in rough priority order:
+Hosting, branch protection, ordered migrations, exact-SHA deployment, production
+smoke, and rollback documentation now exist. The next layer, in rough priority
+order:
 
-1. the ordered migrate-then-deploy cutover (issue #307)
-2. the `main` branch-protection ruleset (issue #308)
-3. environment drift detection between the documented contract and Vercel's
+1. environment drift detection between the documented contract and Vercel's
    configured env
-4. uptime and error-budget alerting
+2. uptime and error-budget alerting
 
 These build on deployment reality rather than guesswork; until they land, the
 repo should keep optimizing for correctness, reviewability, and fast maintenance.

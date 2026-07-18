@@ -120,6 +120,10 @@ export function createLocalFsStore(opts: LocalFsStoreOptions = {}): ObjectStore 
       try {
         await fs.writeFile(`${target}.meta.json`, JSON.stringify(sidecar));
       } catch (cause) {
+        await unlinkIfExists(target).catch(() => {
+          // Best effort: if the data file is already gone or cannot be removed,
+          // the write still fails with the original sidecar error.
+        });
         throw new StorageError(
           "io_error",
           `Failed to write sidecar: ${(cause as Error).message}`,

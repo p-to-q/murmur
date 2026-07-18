@@ -1,4 +1,5 @@
 import { getObjectStore, objectKey } from "@/lib/storage";
+import { createHash } from "node:crypto";
 
 /**
  * Server-side helper that moves a freshly rendered song master from the
@@ -22,6 +23,7 @@ export interface ParsedAudioDataUrl {
   contentType: string;
   ext: string;
   bytes: Uint8Array;
+  digest: string;
 }
 
 /**
@@ -43,7 +45,8 @@ export function parseAudioDataUrl(dataUrl: string): ParsedAudioDataUrl | null {
       ? new Uint8Array(Buffer.from(payload, "base64"))
       : new TextEncoder().encode(decodeURIComponent(payload));
     if (bytes.byteLength === 0) return null;
-    return { contentType, ext, bytes };
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    return { contentType, ext, bytes, digest };
   } catch {
     return null;
   }
@@ -54,12 +57,21 @@ export interface UploadedSongAudio {
   mp3StorageKey: string;
   contentType: string;
   sizeBytes: number;
+  digest: string;
+}
+
+export async function storedSongAudioDigest(
+  storageKey: string | null | undefined,
+): Promise<string | null> {
+  if (!storageKey) return null;
+  const stored = await getObjectStore().get(storageKey);
+  return stored ? createHash("sha256").update(stored.body).digest("hex") : null;
 }
 
 /**
  * Upload a rendered master to object storage under a deterministic,
- * song-scoped key. The key derives solely from `userId` + `songId`, so a
- * save retry overwrites the same object rather than orphaning a new one.
+ * content-addressed song key. Exact retries reuse the existing object while
+ * different audio for the same song id cannot overwrite an earlier master.
  *
  * Returns null when the data URL is not decodable audio (the caller treats
  * that as "no audio"). Storage/adapter failures throw and are handled by the
@@ -77,11 +89,21 @@ export async function uploadSongMasterFromDataUrl(input: {
     kind: "song-master",
     userId: input.userId,
     songId: input.songId,
-    id: input.songId,
+    id: parsed.digest,
     ext: parsed.ext,
   });
 
   const store = getObjectStore();
+  const existing = await store.get(key);
+  if (existing) {
+    return {
+      mp3Url: store.url(key, "public"),
+      mp3StorageKey: key,
+      contentType: existing.contentType,
+      sizeBytes: existing.size,
+      digest: parsed.digest,
+    };
+  }
   const result = await store.put(key, parsed.bytes, {
     // Song masters are fetched directly by the browser <audio> element and by
     // the public share page, so they need a stable URL. Presigned private URLs
@@ -97,5 +119,6 @@ export async function uploadSongMasterFromDataUrl(input: {
     mp3StorageKey: result.key,
     contentType: result.contentType,
     sizeBytes: result.size,
+    digest: parsed.digest,
   };
 }

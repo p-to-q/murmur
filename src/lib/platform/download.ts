@@ -10,14 +10,15 @@ export async function downloadUrlAsFile(url: string, filename: string): Promise<
 
   let response: Response;
   try {
-    response = await fetch(url, { cache: "no-store" });
-  } catch {
-    triggerDownload(url, filename);
-    return;
+    response = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (cause) {
+    throw new Error("remote download failed", { cause });
   }
   if (!response.ok || response.type === "opaque") {
-    triggerDownload(url, filename);
-    return;
+    throw new Error(`remote download returned ${response.status || "an opaque response"}`);
   }
   const blob = await response.blob();
   downloadBlob(blob, filename);

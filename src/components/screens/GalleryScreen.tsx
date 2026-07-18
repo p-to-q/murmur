@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import {
   apiErrorEnvelopeFrom,
   readApiErrorEnvelope,
 } from "@/lib/api/error-envelope";
+import { requestWithTimeout, withTimeout } from "@/lib/api/timeout";
 import { memory } from "@/lib/platform/memory";
 import {
   clearLocalCreatorBootstrapFlag,
@@ -28,6 +29,7 @@ import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useNotificationStore } from "@/lib/store/notification-store";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
 import { ARTWORK_CATALOG } from "@/presets/artworks/catalog";
+import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
 
 // The gallery only renders light metadata; the heavy SongCard fields
 // (visualConfig, duration, arrangementState) stay optional so demo
@@ -40,6 +42,7 @@ type SongWithMeta = Omit<SongCardType, "visualConfig" | "duration" | "arrangemen
   };
 type SortMode = "newest" | "alpha";
 const LOCAL_CREATOR_BOOTSTRAP_TIMEOUT_MS = 2_000;
+const DEMO_PREVIEW_START_TIMEOUT_MS = 8_000;
 const SONGS_ROUTE = "/api/songs";
 
 function demoArtwork(id: string) {
@@ -95,6 +98,10 @@ const DEMO_SONGS: SongWithMeta[] = [
   },
 ];
 
+export function gallerySongAction(songId: string, isShowingDemo: boolean): "preview" | "detail" {
+  return isShowingDemo && isDemoSongId(songId) ? "preview" : "detail";
+}
+
 function displayVibe(song: SongWithMeta, lang: Lang): string {
   return displayVibeLabel(song.vibe, song.tags, lang);
 }
@@ -117,17 +124,19 @@ async function withSoftTimeout<T>(
   }
 }
 
-export async function loadGallerySongsOnce(): Promise<SongWithMeta[] | null> {
+export async function loadGallerySongsOnce(): Promise<SongWithMeta[]> {
   const hasSession = await withSoftTimeout(
     ensureLocalCreatorSession({ background: true }),
     LOCAL_CREATOR_BOOTSTRAP_TIMEOUT_MS,
     false,
   );
-  if (!hasSession) return null;
+  if (!hasSession) return [];
 
-  const first = await fetch(SONGS_ROUTE);
+  const first = await requestWithTimeout(SONGS_ROUTE, {}, 10_000);
   if (first.ok) return (await first.json()) as SongWithMeta[];
-  if (first.status !== 401) return null;
+  if (first.status !== 401) {
+    throw new ApiEnvelopeError(await readApiErrorEnvelope(first, "gallery_load_failed"));
+  }
 
   clearLocalCreatorBootstrapFlag();
   const refreshed = await withSoftTimeout(
@@ -135,10 +144,12 @@ export async function loadGallerySongsOnce(): Promise<SongWithMeta[] | null> {
     LOCAL_CREATOR_BOOTSTRAP_TIMEOUT_MS,
     false,
   );
-  if (!refreshed) return null;
+  if (!refreshed) return [];
 
-  const second = await fetch(SONGS_ROUTE);
-  if (!second.ok) return null;
+  const second = await requestWithTimeout(SONGS_ROUTE, {}, 10_000);
+  if (!second.ok) {
+    throw new ApiEnvelopeError(await readApiErrorEnvelope(second, "gallery_load_failed"));
+  }
   return (await second.json()) as SongWithMeta[];
 }
 
@@ -148,15 +159,42 @@ export function GalleryScreen() {
   const lang = useI18nStore((s) => s.lang);
   const [songs, setSongs] = useState<SongWithMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [sort, setSort] = useState<SortMode>("newest");
   const [deleteTarget, setDeleteTarget] = useState<SongWithMeta | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [playingDemoId, setPlayingDemoId] = useState<string | null>(null);
   const currentFlowId = useMurmurStore((state) => state.currentFlowId);
   const currentDraftId = useMurmurStore((state) => state.currentDraftId);
+  const demoAudioRef = useRef<HTMLAudioElement | null>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement | null>(null);
+  const deleteReturnFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!deleteTarget) return;
+
+    deleteReturnFocusRef.current = document.activeElement as HTMLElement | null;
+    deleteCancelRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDeleteTarget(null);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      deleteReturnFocusRef.current?.focus();
+    };
+  }, [deleteTarget]);
 
   // Use demo songs when user has no real songs
-  const displaySongs = songs.length > 0 ? songs : DEMO_SONGS;
-  const isShowingDemo = songs.length === 0;
+  const displaySongs = useMemo(
+    () => (loadError ? [] : songs.length > 0 ? songs : DEMO_SONGS),
+    [loadError, songs],
+  );
+  const isShowingDemo = !loadError && songs.length === 0;
 
   const markAllRead = useNotificationStore((s) => s.markAllRead);
   useEffect(() => {
@@ -173,13 +211,16 @@ export function GalleryScreen() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      setIsLoading(true);
+      setLoadError(false);
       try {
         const data = await loadGallerySongsOnce();
-        if (data && !cancelled) {
+        if (!cancelled) {
           setSongs(data);
         }
-      } catch {
-        /* offline — keep whatever we have */
+      } catch (error) {
+        console.warn("[Gallery] load error:", error);
+        if (!cancelled) setLoadError(true);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -188,7 +229,74 @@ export function GalleryScreen() {
     return () => {
       cancelled = true;
     };
+  }, [loadAttempt]);
+
+  useEffect(() => {
+    return () => {
+      const audio = demoAudioRef.current;
+      if (audio) {
+        audio.pause();
+        audio.removeAttribute("src");
+        demoAudioRef.current = null;
+      }
+    };
   }, []);
+
+  const stopDemoPreview = useCallback(() => {
+    const audio = demoAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      demoAudioRef.current = null;
+    }
+    setPlayingDemoId(null);
+  }, []);
+
+  const toggleDemoPreview = useCallback(
+    async (song: SongWithMeta) => {
+      if (playingDemoId === song.id) {
+        stopDemoPreview();
+        return;
+      }
+
+      const demo = getDemoSong(song.id);
+      if (!demo) return;
+
+      stopDemoPreview();
+      const audio = new Audio(demo.mp3Url);
+      audio.loop = true;
+      audio.onended = () => setPlayingDemoId(null);
+      audio.onerror = () => {
+        if (demoAudioRef.current === audio) demoAudioRef.current = null;
+        setPlayingDemoId(null);
+        toast.error(t("cards.play_error") || "Playback failed, please retry");
+      };
+      demoAudioRef.current = audio;
+
+      try {
+        await withTimeout(
+          audio.play(),
+          DEMO_PREVIEW_START_TIMEOUT_MS,
+          "Demo preview timed out",
+        );
+        setPlayingDemoId(song.id);
+        memory
+          .reportAction({
+            content: `Previewed demo "${song.title}" from gallery`,
+            event_type: "play",
+            page: "gallery",
+            metadata: { type: "demo_preview", song_id: song.id },
+          })
+          .catch(() => {});
+      } catch (error) {
+        if (demoAudioRef.current === audio) demoAudioRef.current = null;
+        audio.removeAttribute("src");
+        console.error("[Gallery] demo preview failed:", error);
+        toast.error(t("cards.play_error") || "Playback failed, please retry");
+      }
+    },
+    [playingDemoId, stopDemoPreview, t],
+  );
 
   const sorted = useMemo(() => {
     const list = [...displaySongs];
@@ -207,6 +315,10 @@ export function GalleryScreen() {
     (id: string) => {
       const song = displaySongs.find((s) => s.id === id);
       if (!song) return;
+      if (gallerySongAction(song.id, isShowingDemo) === "preview") {
+        void toggleDemoPreview(song);
+        return;
+      }
       memory
         .reportAction({
           content: `Opened "${song.title}" from gallery`,
@@ -215,9 +327,10 @@ export function GalleryScreen() {
           metadata: { type: "open_song", song_id: song.id },
         })
         .catch(() => {});
+      stopDemoPreview();
       router.push(`/song/${song.id}`);
     },
-    [displaySongs, router],
+    [displaySongs, isShowingDemo, router, stopDemoPreview, toggleDemoPreview],
   );
 
   const handleDeleteRequest = useCallback(
@@ -232,12 +345,32 @@ export function GalleryScreen() {
     return <GlobalLoadingIndicator />;
   }
 
+  if (loadError) {
+    return (
+      <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+        <PageBackdrop variant="soft" />
+        <div className="relative z-10 flex min-h-svh flex-col items-center justify-center px-6 text-center">
+          <p className="eyebrow mb-3 text-[#FF8A5C]">{t("gallery.load_error.eyebrow") || "GALLERY"}</p>
+          <h1 className="hero-serif text-[28px] leading-tight text-[#1A1A1A] md:text-[40px]">
+            {t("gallery.load_error.title") || "Couldn't open your gallery."}
+          </h1>
+          <p className="mt-4 max-w-md text-[15px] leading-relaxed text-[#6F6A63]">
+            {t("gallery.load_error.body") || "Your songs are still saved. Try loading them again."}
+          </p>
+          <button type="button" onClick={() => setLoadAttempt((value) => value + 1)} className="mm-btn-primary mt-8">
+            {t("gallery.load_error.retry") || "Try again"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const handleConfirmDelete = async () => {
     const target = deleteTarget;
     if (!target || isDeleting) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/songs/${target.id}`, { method: "DELETE" });
+      const res = await requestWithTimeout(`/api/songs/${target.id}`, { method: "DELETE" }, 10_000);
       if (!res.ok) {
         throw new ApiEnvelopeError(await readApiErrorEnvelope(res, "delete_failed"));
       }
@@ -268,7 +401,7 @@ export function GalleryScreen() {
   };
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div data-testid="gallery-screen" className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
 
       {/* Activity heatmap — fills the top */}
@@ -350,6 +483,13 @@ export function GalleryScreen() {
                 onDelete={isShowingDemo ? undefined : handleDeleteRequest}
                 isDraft={song.hasAudio === false}
                 draftLabel={t("gallery.draft") || "Draft"}
+                isPlaying={
+                  isShowingDemo && isDemoSongId(song.id)
+                    ? playingDemoId === song.id
+                    : undefined
+                }
+                playLabel={t("common.play") || "Play"}
+                pauseLabel={t("common.pause") || "Pause"}
               />
             ))}
           </div>
@@ -382,6 +522,7 @@ export function GalleryScreen() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-md px-5"
             onClick={() => setDeleteTarget(null)}
+            role="presentation"
           >
             <motion.div
               initial={{ opacity: 0, y: 12, scale: 0.96 }}
@@ -390,18 +531,23 @@ export function GalleryScreen() {
               transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
               className="mm-card w-full max-w-sm px-6 py-7 text-center"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gallery-delete-title"
+              aria-describedby="gallery-delete-description"
             >
               <p className="eyebrow text-[#FF8A5C] mb-3">{t("song.delete.eyebrow") || "REMOVE"}</p>
-              <h3 className="font-serif text-[24px] text-[#1A1A1A] leading-tight">
+              <h3 id="gallery-delete-title" className="font-serif text-[24px] text-[#1A1A1A] leading-tight">
                 {t("song.delete.title") || "Delete this little song?"}
               </h3>
-              <p className="mt-2 text-[13px] text-[#8C8780] leading-relaxed">
+              <p id="gallery-delete-description" className="mt-2 text-[13px] text-[#8C8780] leading-relaxed">
                 &ldquo;{deleteTarget.title}&rdquo; —{" "}
                 {t("song.delete.body") ||
                   "It will be gone from your gallery. You can hum it again later."}
               </p>
               <div className="mt-6 flex gap-3">
                 <button
+                  ref={deleteCancelRef}
                   onClick={() => setDeleteTarget(null)}
                   className="flex-1 h-11 rounded-[18px] border border-[#E5DDD0] text-[#1A1A1A] text-[14px] hover:bg-white transition-colors"
                 >

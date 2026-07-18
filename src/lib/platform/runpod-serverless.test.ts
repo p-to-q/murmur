@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { runJob } from "./runpod-serverless";
+import { RunpodError, runJob, submitJob } from "./runpod-serverless";
 
 const realFetch = global.fetch;
 
@@ -46,5 +46,33 @@ describe("runJob RunPod submission", () => {
     expect(runBody!.policy!.ttl).toBeGreaterThanOrEqual(360_000);
     // ...and stay well under RunPod's 24h default so the queue actually drains.
     expect(runBody!.policy!.ttl).toBeLessThan(86_400_000);
+  });
+});
+
+describe("submitJob ambiguity", () => {
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  it("classifies a lost submit response as submission_unknown", async () => {
+    let submissions = 0;
+    global.fetch = (async () => {
+      submissions += 1;
+      throw new DOMException("deadline", "TimeoutError");
+    }) as unknown as typeof fetch;
+
+    let caught: unknown;
+    try {
+      await submitJob(
+        { endpointId: "ep-test", apiKey: "key-test" },
+        { prompt: "hello", request_id: "mjob_stable" },
+      );
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(RunpodError);
+    expect((caught as RunpodError).kind).toBe("submission_unknown");
+    expect(submissions).toBe(1);
   });
 });

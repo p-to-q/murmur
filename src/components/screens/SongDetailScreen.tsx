@@ -51,13 +51,18 @@ import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
 import { downloadUrlAsFile } from "@/lib/platform/download";
+import { requestWithTimeout } from "@/lib/api/timeout";
 import {
   createSongShareLink,
   SongShareRequestError,
   type SongShareRequestErrorCode,
 } from "@/lib/api/song-share";
 import { hasSongShareAudio } from "@/lib/share/song-share";
-import { formatShareSupportCode, formatSupportCode } from "@/lib/observability/support-code";
+import {
+  formatShareSupportCode,
+  formatSupportCode,
+  formatVibeSupportCode,
+} from "@/lib/observability/support-code";
 import {
   ApiEnvelopeError,
   apiErrorEnvelopeFrom,
@@ -81,6 +86,10 @@ type RelatedSong = Pick<Song, "id" | "title" | "vibe" | "tags">;
 
 type ExportKey = "audio" | "video" | "share" | "link";
 type ShareCardMode = "image" | "video";
+type SongLoadResult = { status: "found"; song: Song } | { status: "not_found" };
+type PublicSongDetail = Omit<Song, "arrangementState"> & {
+  arrangementState?: Song["arrangementState"];
+};
 const CJK_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
 
 // Pick the download extension for an audio source. Handles both legacy base64
@@ -118,6 +127,99 @@ function entryMotion(reduce: boolean | null, opts: EntryOpts = {}) {
   };
 }
 
+export async function loadSongDetailOnce(songId: string): Promise<SongLoadResult> {
+  const sessionReady = await ensureLocalCreatorSession();
+  if (sessionReady) {
+    const response = await requestWithTimeout(`/api/songs/${songId}`, {}, 10_000);
+    const result = await readSongDetailResponse(response);
+    if (result.status === "found") return result;
+  }
+
+  return loadPublicSongDetailFallback(songId);
+}
+
+export async function readSongDetailResponse(response: Response): Promise<SongLoadResult> {
+  if (response.ok) return { status: "found", song: (await response.json()) as Song };
+  if (response.status === 404 || response.status === 410) return { status: "not_found" };
+  throw new ApiEnvelopeError(await readApiErrorEnvelope(response, "song_load_failed"));
+}
+
+async function loadPublicSongDetailFallback(songId: string): Promise<SongLoadResult> {
+  const response = await requestWithTimeout(
+    `/api/public/songs/${encodeURIComponent(songId)}`,
+    {},
+    10_000,
+  );
+  if (response.status === 404 || response.status === 410) return { status: "not_found" };
+  if (!response.ok) {
+    throw new ApiEnvelopeError(await readApiErrorEnvelope(response, "song_load_failed"));
+  }
+  const publicSong = (await response.json()) as PublicSongDetail;
+  return { status: "found", song: publicSongToSong(publicSong) };
+}
+
+function publicSongToSong(publicSong: PublicSongDetail): Song {
+  return {
+    ...publicSong,
+    arrangementState:
+      publicSong.arrangementState ??
+      fallbackArrangementState(),
+  };
+}
+
+function fallbackArrangementState(): Song["arrangementState"] {
+  return {
+    melody: {
+      enabled: true,
+      intensity: 0.85,
+      instrument: "piano",
+      originalPattern: "",
+      currentPattern: "",
+      versionHistory: [],
+    },
+    chords: {
+      enabled: true,
+      intensity: 0.45,
+      instrument: "piano",
+      originalPattern: "",
+      currentPattern: "",
+      versionHistory: [],
+    },
+    strings: {
+      enabled: true,
+      intensity: 0.35,
+      instrument: "strings",
+      originalPattern: "",
+      currentPattern: "",
+      versionHistory: [],
+    },
+    drums: {
+      enabled: true,
+      intensity: 0.35,
+      instrument: "drums",
+      originalPattern: "",
+      currentPattern: "",
+      versionHistory: [],
+    },
+    bass: {
+      enabled: true,
+      intensity: 0.4,
+      instrument: "bass",
+      originalPattern: "",
+      currentPattern: "",
+      versionHistory: [],
+    },
+    texture: {
+      enabled: true,
+      intensity: 0.25,
+      instrument: "pad",
+      originalPattern: "",
+      currentPattern: "",
+      versionHistory: [],
+    },
+  };
+}
+
 export function SongDetailScreen({ songId }: { songId: string }) {
   const router = useRouter();
   const t = useTranslator();
@@ -132,27 +234,51 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   const [parentSong, setParentSong] = useState<RelatedSong | null>(null);
   const [rootSong, setRootSong] = useState<RelatedSong | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState<ExportKey | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRemixing, setIsRemixing] = useState(false);
   const [shareCardOpen, setShareCardOpen] = useState(false);
   const [shareCardMode, setShareCardMode] = useState<ShareCardMode>("image");
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement | null>(null);
+  const deleteReturnFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!deleteOpen) return;
+
+    deleteReturnFocusRef.current = document.activeElement as HTMLElement | null;
+    deleteCancelRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setDeleteOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      deleteReturnFocusRef.current?.focus();
+    };
+  }, [deleteOpen]);
 
   /* ── Load ──────────────────────────────────────────────────────────── */
   useEffect(() => {
     let active = true;
     (async () => {
+      setIsLoading(true);
+      setLoadError(false);
       try {
-        await ensureLocalCreatorSession();
-        const res = await fetch(`/api/songs/${songId}`);
-        if (!res.ok) {
+        const result = await loadSongDetailOnce(songId);
+        if (result.status === "not_found") {
           if (active) setSong(null);
           return;
         }
-        const data = (await res.json()) as Song;
+        const data = result.song;
         if (!active) return;
         setSong(data);
         memory
@@ -165,6 +291,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
           .catch(() => {});
       } catch (err) {
         console.warn("[SongDetail] load error:", err);
+        if (active) setLoadError(true);
       } finally {
         if (active) setIsLoading(false);
       }
@@ -172,7 +299,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     return () => {
       active = false;
     };
-  }, [songId]);
+  }, [loadAttempt, songId]);
 
   /* ── Cleanup ───────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -301,6 +428,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   );
 
   const exportAudio = async () => {
+    if (busy) return;
     const audioSrc = song?.mp3DataUrl || song?.mp3Url;
     if (!audioSrc) {
       toast(t("song.share.no_audio"));
@@ -330,6 +458,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
   };
 
   const exportVideo = useCallback(async () => {
+    if (busy) return;
     if (!song) return;
     setBusy("video");
     try {
@@ -351,9 +480,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     } finally {
       setBusy(null);
     }
-  }, [song, t]);
+  }, [busy, song, t]);
 
   const copyShareLink = useCallback(async () => {
+    if (busy) return;
     if (!song) return;
     if (!hasSongShareAudio(song)) {
       toast(t("song.share.no_audio"));
@@ -379,12 +509,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       const copied = await copyTextToClipboard(share.url);
       if (!copied) {
         window.open(share.url, "_blank", "noopener,noreferrer");
-        throw new SongShareRequestError({
-          code: "clipboard_unavailable",
-          status: 0,
-          message: "Clipboard unavailable",
-          requestId: share.requestId,
-        });
+        toast.success(
+          t("song.share.link_opened") ||
+            "Share link created and opened in a new tab",
+        );
+        return;
       }
       toast.success(t("song.share.link_copied") || "Share link copied");
       memory
@@ -408,7 +537,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     } finally {
       setBusy(null);
     }
-  }, [song, t]);
+  }, [busy, song, t]);
 
   /* ── Delete ────────────────────────────────────────────────────────── */
 
@@ -416,7 +545,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     if (!song || isDeleting) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/songs/${song.id}`, { method: "DELETE" });
+      const res = await requestWithTimeout(`/api/songs/${song.id}`, { method: "DELETE" }, 10_000);
       if (!res.ok) {
         throw new ApiEnvelopeError(await readApiErrorEnvelope(res, "delete_failed"));
       }
@@ -447,6 +576,26 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
   if (isLoading) {
     return <GlobalLoadingIndicator />;
+  }
+
+  if (loadError) {
+    return (
+      <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+        <PageBackdrop />
+        <div className="relative z-10 flex min-h-svh flex-col items-center justify-center px-6 text-center">
+          <p className="eyebrow mb-3 text-[#FF8A5C]">{t("song.load_error.eyebrow") || "SONG"}</p>
+          <h1 className="hero-serif text-[28px] text-[#1A1A1A] md:text-[40px]">
+            {t("song.load_error.title") || "Couldn't open this song."}
+          </h1>
+          <p className="mt-4 max-w-md text-[15px] leading-relaxed text-[#6F6A63]">
+            {t("song.load_error.body") || "It may be a temporary connection problem. Try again."}
+          </p>
+          <button type="button" onClick={() => setLoadAttempt((value) => value + 1)} className="mm-btn-primary mt-8">
+            {t("song.load_error.retry") || "Try again"}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (!song) {
@@ -514,8 +663,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     router.push("/studio");
   };
 
-  const handleRemixAgain = () => {
-    void buildSavedSongRemixVersions(song).then((versions) => {
+  const handleRemixAgain = async () => {
+    if (isRemixing) return;
+    setIsRemixing(true);
+    try {
+      const versions = await buildSavedSongRemixVersions(song);
       // Magenta is the only engine — an empty batch means the worker is
       // unreachable. Keep the user on the song rather than pushing an empty
       // /vibe, and tell them to retry.
@@ -541,11 +693,18 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         })
         .catch(() => {});
       router.push("/vibe");
-    });
+    } catch (error) {
+      console.error("[SongDetail] remix error:", error);
+      toast.error(t("vibe.gen.engine_warming") || "Music engine is warming up — try again in a moment.", {
+        description: formatVibeSupportCode({ code: "remix_failed", requestId: null }),
+      });
+    } finally {
+      setIsRemixing(false);
+    }
   };
 
   return (
-    <div className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div data-testid="song-detail-screen" className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
       <PageBackdrop variant="soft" />
 
       <div className="relative z-10 flex min-h-svh flex-col">
@@ -652,8 +811,16 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               </div>
 
               <div className="absolute bottom-6 right-6">
-                <motion.div
+                <motion.button
+                  type="button"
                   whileTap={{ scale: 0.92 }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    startAudioContext();
+                    void handlePlay();
+                  }}
+                  aria-label={isPlaying ? t("common.pause") : t("common.play")}
+                  aria-pressed={isPlaying}
                   className={`flex h-14 w-14 md:h-16 md:w-16 items-center justify-center rounded-full border border-white/60 backdrop-blur-md transition-colors ${
                     isPlaying ? "bg-white/40" : "bg-white/22"
                   }`}
@@ -666,7 +833,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                       fill="white"
                     />
                   )}
-                </motion.div>
+                </motion.button>
               </div>
             </motion.div>
 
@@ -760,7 +927,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.share.link.label") || "Share link"}
                 hint={t("song.share.link.hint") || "Anyone with the link can listen"}
                 cost={t("song.export.free") || "free"}
-                disabled={!audioReady}
+                disabled={busy !== null || !audioReady}
                 disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
                 busy={busy === "link"}
                 icon={<Copy className="h-4 w-4" />}
@@ -770,7 +937,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.export.audio.label") || "Audio"}
                 hint={t("song.export.audio.hint") || "mp3"}
                 cost={t("song.export.free") || "free"}
-                disabled={!audioReady}
+                disabled={busy !== null || !audioReady}
                 disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
                 busy={busy === "audio"}
                 onClick={exportAudio}
@@ -779,8 +946,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.export.image.label") || "Share image"}
                 hint={t("song.export.image.hint") || "png"}
                 cost={t("song.export.free") || "free"}
+                disabled={busy !== null}
                 busy={busy === "share"}
                 onClick={() => {
+                  if (busy) return;
                   setShareCardMode("image");
                   setShareCardOpen(true);
                 }}
@@ -789,10 +958,11 @@ export function SongDetailScreen({ songId }: { songId: string }) {
                 label={t("song.export.video.label") || "Video"}
                 hint={t("song.export.video.hint") || "mp4"}
                 cost={t("song.export.free") || "free"}
-                disabled={!audioReady}
+                disabled={busy !== null || !audioReady}
                 disabledHint={t("song.export.no_audio_yet") || "not yet rendered"}
                 busy={busy === "video"}
                 onClick={() => {
+                  if (busy) return;
                   setShareCardMode("video");
                   setShareCardOpen(true);
                 }}
@@ -807,9 +977,12 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               <button
                 type="button"
                 onClick={handleRemixAgain}
-                className="font-serif-italic text-[15px] text-[#1A1A1A] hover:text-[#B83212] underline-mm transition-colors"
+                disabled={isRemixing}
+                className="font-serif-italic text-[15px] text-[#1A1A1A] hover:text-[#B83212] underline-mm transition-colors disabled:pointer-events-none disabled:opacity-50"
               >
-                {t("song.remix_again") || "Try new versions"}
+                {isRemixing
+                  ? (t("vibe.gen.brewing") || "Brewing")
+                  : (t("song.remix_again") || "Try new versions")}
               </button>
               <button
                 type="button"
@@ -873,6 +1046,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-md px-5"
             onClick={() => setDeleteOpen(false)}
+            role="presentation"
           >
             <motion.div
               initial={{ opacity: 0, y: 12, scale: 0.96 }}
@@ -881,17 +1055,22 @@ export function SongDetailScreen({ songId }: { songId: string }) {
               transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
               onClick={(e) => e.stopPropagation()}
               className="mm-card w-full max-w-sm px-6 py-7 text-center"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="song-delete-title"
+              aria-describedby="song-delete-description"
             >
               <p className="eyebrow text-[#FF8A5C] mb-3">{t("song.delete.eyebrow") || "REMOVE"}</p>
-              <h3 className="font-serif text-[24px] text-[#1A1A1A] leading-tight">
+              <h3 id="song-delete-title" className="font-serif text-[24px] text-[#1A1A1A] leading-tight">
                 {t("song.delete.title") || "Delete this little song?"}
               </h3>
-              <p className="mt-2 text-[13px] text-[#8C8780] leading-relaxed">
+              <p id="song-delete-description" className="mt-2 text-[13px] text-[#8C8780] leading-relaxed">
                 {t("song.delete.body") ||
                   "It will be gone from your gallery. You can hum it again later."}
               </p>
               <div className="mt-6 flex gap-3">
                 <button
+                  ref={deleteCancelRef}
                   onClick={() => setDeleteOpen(false)}
                   className="flex-1 h-11 rounded-[18px] border border-[#E5DDD0] text-[#1A1A1A] text-[14px] hover:bg-white transition-colors"
                 >
@@ -916,7 +1095,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 async function fetchRelatedSong(songId: string | null): Promise<RelatedSong | null> {
   if (!songId) return null;
   try {
-    const response = await fetch(`/api/songs/${songId}?view=summary`);
+    const response = await requestWithTimeout(`/api/songs/${songId}?view=summary`, {}, 8_000);
     if (!response.ok) return null;
     return await response.json() as RelatedSong;
   } catch {

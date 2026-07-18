@@ -10,6 +10,10 @@ Behavioral semantics for each table live in the feature docs
 `audio-pipeline-redesign.md`); this file is the **shape**, plus the
 constraints, indexes, and migration order.
 
+For the analysis/training retrieval shape that ties users, composition
+artifacts, lineage, notes, purchases, and feedback-adjacent events together, see
+[user-composition-data-contract.md](user-composition-data-contract.md).
+
 ---
 
 ## 1. Conventions
@@ -425,7 +429,131 @@ export const eventsWebhook = pgTable(
 Used by every webhook route (`api-conventions.md` §10). Hard-deleted
 after 90 days by a retention job.
 
-### 3.9 `audit_events` (OPTIONAL; postpone if backed externally)
+### 3.9 `composition_events`
+
+`composition_events` is the minimal durable index for Murmur's composition
+training corpus. The song artifact remains the source of truth; this table
+records product events that make the artifact searchable by user, draft,
+generation batch, and lifecycle action.
+
+Authoritative schema:
+[composition-events.ts](../src/lib/db/schema/composition-events.ts).
+
+Current event kinds:
+
+- `song.saved` — written by `POST /api/songs` after a successful DB save.
+- `song.shared` — reserved for the share-link route.
+- `song.exported` — reserved for audio/image/video export adapters.
+- `song.feedback` — reserved for explicit user feedback on a song/version.
+
+Important fields:
+
+- `user_id` — owner identity. Cascades on hard user delete.
+- `song_id` — saved artifact id. `ON DELETE SET NULL` keeps aggregate event
+  history while removing the deleted song pointer.
+- `draft_id` — client draft/session id from `songs.provenance.draftId`.
+- `flow_id` — creation flow id from `VibeVersion.originFlowId` /
+  `songs.provenance.flow`.
+- `generation_batch_id` — sibling generation batch id, shared by the three
+  Vibe candidates when available.
+- `generation_clip_id` — the selected/generated clip operation id.
+- `event_kind` — typed lifecycle action.
+- `source` — writer surface, currently `server`; future values may include
+  `client`, `worker`, or `admin`.
+- `payload` — small, bounded metadata only. It should contain ids, status,
+  model/version labels, error classes, and user feedback values, not raw audio
+  or long free-form text.
+
+Indexes:
+
+- `composition_events_user_time_idx ON (user_id, occurred_at)`
+- `composition_events_song_time_idx ON (song_id, occurred_at)`
+- `composition_events_draft_time_idx ON (draft_id, occurred_at)`
+- `composition_events_generation_batch_idx ON (generation_batch_id, occurred_at)`
+- `composition_events_kind_time_idx ON (event_kind, occurred_at)`
+
+Current writer:
+
+- `POST /api/songs` schedules a best-effort `song.saved` event after successful
+  persistence. Event write failures are logged as
+  `composition_event.write_failed` and do not block the user's save.
+
+Query/export helper:
+
+- `listCompositionTrainingExamples` in
+  [composition-events.ts](../src/lib/db/queries/composition-events.ts)
+  returns one row per saved song with the attached event sequence.
+- Filters: `userId`, `songId`, `draftId`, `generationBatchId`, `from`, `to`,
+  `limit`.
+
+Export shape:
+
+```ts
+type CompositionTrainingExample = {
+  userId: string;
+  songId: string;
+  draftId: string | null;
+  flowId: string | null;
+  generationBatchId: string | null;
+  generationClipId: string | null;
+  sourceType: string | null;
+  sourceMelodyKind: "intent" | "corrected" | "musical";
+  lineage: {
+    parentSongId: string | null;
+    rootSongId: string | null;
+    depth: number;
+    editCount: number;
+    editDepth: "fresh" | "shaped" | "reworked";
+  };
+  artifact: {
+    version: number;
+    title: string;
+    vibe: string;
+    vibeEn: string;
+    bpm: number;
+    keySignature: string;
+    scaleType: string;
+    duration: number;
+    tags: string[];
+    melody: CleanMelody | null;
+    arrangementState: ArrangementState;
+    visualConfig: VisualConfig;
+    hasAudio: boolean;
+    mp3StorageKey: string | null;
+    saveFingerprint: string | null;
+  };
+  events: Array<{
+    id: string;
+    kind: CompositionEventKind;
+    source: string;
+    payload: Record<string, unknown>;
+    occurredAt: Date;
+  }>;
+  createdAt: Date;
+  updatedAt: Date;
+};
+```
+
+Privacy and training-use notes:
+
+- Treat `user_id`, `song_id`, `draft_id`, `flow_id`, generation ids, and
+  storage keys as pseudonymous but still sensitive. Do not export them outside
+  Murmur systems without a documented purpose and access control.
+- Do not store raw hum audio in `composition_events.payload`. Raw or rendered
+  audio belongs in object storage, referenced by `songs.mp3_storage_key`.
+- Rendered song masters use a content-addressed object key derived from their
+  SHA-256 digest. Exact save retries reuse the same object; a conflicting save
+  with the same song id cannot overwrite the audio already referenced by the
+  persisted row.
+- For training/model work, prefer an internal export job that joins these rows
+  and replaces user ids with run-local pseudonyms before producing files.
+- Honor account deletion: hard user delete cascades composition events and
+  songs; soft-delete retention rules must be resolved before using deleted-user
+  rows for model training.
+- `payload` must not contain payment provider payloads, email addresses,
+  access tokens, IP addresses, or full user-agent strings.
+
+### 3.10 `audit_events` (OPTIONAL; postpone if backed externally)
 
 If Codex backs the `memory.reportAction` adapter with Postgres rather
 than Clickhouse, this table exists:
@@ -454,7 +582,7 @@ Codex picks Postgres for v2 and migrates to Clickhouse only when row
 counts demand. Retention: 180 days, downsample weekly to a slim
 aggregate table.
 
-### 3.10 `rate_limits`
+### 3.11 `rate_limits`
 
 Production route-level rate limits use Postgres-backed token buckets by default
 (`MURMUR_RATE_LIMIT_DRIVER=postgres`). Local development and tests keep the
@@ -522,6 +650,7 @@ that lives in `packages/murmur-core/src/shared-types/`.
 | `notes_ledger.metadata` | `Record<string, unknown>` | n/a (free-form) |
 | `purchases.rawPayload` | provider event | n/a |
 | `events_webhook.rawPayload` | provider event | n/a |
+| `composition_events.payload` | `CompositionEventPayload` | `src/lib/db/schema/composition-events.ts` |
 | `audit_events.metadata` | `Record<string, unknown>` | n/a |
 
 A test fixture asserts the JSON shape matches the TS type on insert.

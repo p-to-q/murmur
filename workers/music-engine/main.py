@@ -83,7 +83,12 @@ async def _lifespan(_app: FastAPI):
 
         _executor.submit(_bg)
 
-    yield
+    try:
+        yield
+    finally:
+        # Keep MLX model work pinned to the dedicated executor while serving,
+        # then let an in-flight generation finish during worker shutdown.
+        _executor.shutdown(wait=True)
 
 
 app = FastAPI(title="murmur-music-engine", lifespan=_lifespan)
@@ -147,21 +152,55 @@ def _verify_auth(request: Request) -> None:
         raise HTTPException(status_code=401, detail={"error": "unauthorized"})
 
 
+def _model_unavailable_detail() -> dict[str, object] | None:
+    if engine.MOCK:
+        return None
+
+    load_error = engine.model_load_error()
+    if load_error:
+        return {
+            "error": "model_unavailable",
+            "message": load_error,
+            "loaded": engine.model_loaded(),
+            "loading": engine.model_loading(),
+        }
+
+    if engine.model_loading():
+        return {
+            "error": "model_loading",
+            "message": "Music model is still loading.",
+            "loaded": False,
+            "loading": True,
+        }
+
+    if engine.PRELOAD and not engine.model_loaded():
+        return {
+            "error": "model_not_ready",
+            "message": "Music model has not finished startup preload.",
+            "loaded": False,
+            "loading": False,
+        }
+
+    return None
+
+
 @app.get(
     "/health",
     response_model=None,
-    responses={503: {"description": "Music model failed to load"}},
+    responses={503: {"description": "Music model is not ready to serve"}},
 )
 def health() -> dict[str, object] | JSONResponse:
+    unavailable = _model_unavailable_detail()
     payload = {
-        "status": "degraded" if engine.model_load_error() else "ok",
+        "status": "unavailable" if unavailable else "ok",
         "mock": engine.MOCK,
         "model": engine.MODEL_NAME,
         "loaded": engine.model_loaded(),
         "loading": engine.model_loading(),
         "loadError": engine.model_load_error(),
     }
-    if engine.model_load_error():
+    if unavailable:
+        payload["error"] = unavailable["error"]
         return JSONResponse(status_code=503, content=payload)
     return payload
 
@@ -176,6 +215,10 @@ async def generate(
     hum: UploadFile | None = File(None),
 ) -> Response:
     _verify_auth(request)
+
+    unavailable = _model_unavailable_detail()
+    if unavailable:
+        raise HTTPException(status_code=503, detail=unavailable)
 
     prompt = prompt.strip()
     if not prompt:
@@ -210,6 +253,17 @@ async def generate(
     except HTTPException:
         raise
     except Exception as error:  # noqa: BLE001 — map to a stable error contract
+        load_error = engine.model_load_error()
+        if load_error:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "model_unavailable",
+                    "message": load_error,
+                    "loaded": engine.model_loaded(),
+                    "loading": engine.model_loading(),
+                },
+            ) from error
         logger.exception("Generation failed")
         raise HTTPException(
             status_code=500,

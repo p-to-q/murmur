@@ -1,5 +1,9 @@
 # Murmur Architecture
 
+Status: current-state reference<br>
+Owner: product engineering<br>
+Last verified: 2026-07-18
+
 Murmur is a single-product Next.js app with a small local platform layer. The
 goal of this document is not to freeze the design forever; it is to make the
 current system legible enough that new work can ship without rediscovering the
@@ -61,14 +65,13 @@ flowchart TB
     user --> app
     app --> ui
     ui --> routes
-    ui --> worker
     ui --> clientPitch
     ui --> storage
     ui --> music
     routes --> platform
     routes --> db
     routes --> ai
-    routes --> clientPitch
+    routes --> worker
     platform --> storage
     music --> storage
 ```
@@ -90,6 +93,11 @@ flowchart TB
 ### 2. Arrangement and editing
 
 - The vibe and studio flows transform melody into arrangement choices.
+- Paid music generation currently has two API contracts: the shipped
+  synchronous `/api/music/generate` path and the opt-in recoverable
+  `/api/music/jobs` path. The latter records spend, provider identity, output,
+  and settlement state server-side; it is not the default production client
+  path yet.
 - `src/modules/` owns the arrangement rules, preview behavior, and export logic.
 - `/api/strummer/edit` adds LLM-assisted edit-token classification when a
   compatible AI gateway is configured.
@@ -135,7 +143,14 @@ flowchart TB
   skip cleanly so local demos remain usable.
 - Memory events are stored locally for now, which keeps user flows non-blocking.
 - Stage-based funnel tracking (`src/lib/observability/stage-tracking.ts`) records hum → vibe → studio → save → gallery transitions with dwell times. Callers explicitly pass the creation flow's existing `currentFlowId` / `VibeVersion.originFlowId` (with `draftId` as optional log context), so overlapping flows remain isolated without introducing a second analytics identity. The in-memory state is capped at 100 recently used flows; this remains structured-log observability, not durable analytics storage.
-- Per-component latency budgets (`src/lib/observability/latency-budgets.ts`) define P50/P95 ceilings for transcribe, music_generate, llm_edit, and db query paths. When a component exceeds its P95, structured logs carry a `budget_exceeded` flag.
+- Composition training data has a narrow durable spine: saved songs hold the
+  canonical artifact (`melody`, `arrangementState`, `visualConfig`,
+  `provenance`, lineage, audio storage references) and `composition_events`
+  indexes lifecycle actions by user, draft, flow, generation batch, clip, and
+  song. `src/lib/db/queries/composition-events.ts` exposes the read shape used
+  for internal corpus export; event writes are best-effort and must not block
+  the user's creative save path.
+- Per-component latency budgets (`src/lib/observability/latency-budgets.ts`) define P50/P95 ceilings for transcribe, music_generate, llm_edit, and db query paths. Transcribe, music generation, and Strummer emit a dedicated `latency.budget_exceeded` event when they exceed P95; durable aggregation and paging are not yet connected.
 - Language is negotiated before first paint from the explicit `murmur.lang`
   cookie first, then the request `Accept-Language` header, then the product
   default (`en`). Client hydration re-checks `localStorage`; if the server only
@@ -153,19 +168,33 @@ flowchart TB
   which is lazy-loaded on first use and never inflates the initial bundle.
 - Web Push requires `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, HTTPS
   (localhost is accepted by browsers for development), browser notification
-  permission, and a registered `push_subscriptions` row. Music generation is
-  still client-orchestrated clip-by-clip; sibling clips share a browser-minted
+  permission, and a registered `push_subscriptions` row. On the default legacy
+  path, music generation is still client-orchestrated clip-by-clip; sibling
+  clips share a browser-minted
   generation batch id (`x-generation-batch-id`) so their pushes and inbox
   entries collapse to one per batch (see "Generation Batch Semantics" in
-  `docs/notifications.md`). After 60 seconds continuously hidden, the browser
+  `docs/notifications.md`). After 4 minutes continuously hidden, the browser
   cancels active requests and turns remaining pending Vibe cards into an
   explicit retry state; it does not auto-retry because a new attempt may have
-  paid-generation consequences. Durable paid clip identity and resume/query
-  recovery remain tracked separately in issue #300. Generation batch pushes
-  are now collapsed per batch
-  (`src/app/api/notifications/cron/route.ts`). Fully durable "batch finished
-  after browser exit" notifications still require a future server-side generation
-  job queue.
+  paid-generation consequences. Stable per-clip operation identities and
+  browser IndexedDB artifact recovery prevent duplicate billing and recover
+  completed local audio. That path does not preserve a provider job after the
+  browser request ends. Generation notifications are collapsed by the
+  browser-minted batch id.
+
+  The first server-owned paid-generation boundary is available at
+  `POST /api/music/jobs`: the spend
+  and `music_jobs` row are created atomically, `(user_id, operation_id)` is the
+  idempotency key, and a request-hash mismatch returns `409`. `GET` resumes the
+  same provider job after a lost request, `DELETE` records cancellation intent,
+  and successful audio is recovered through the authenticated job audio route.
+  The browser adapter is guarded by
+  `NEXT_PUBLIC_MURMUR_DURABLE_MUSIC_JOBS=1`; the legacy synchronous route remains
+  the default while production cutover is validated. Phase one uses short,
+  one-status-read advances triggered after creation and by client GET polling
+  plus DB leases. It does not yet include a continuously running dispatcher,
+  outbox, or browser-independent completion guarantee. See
+  [music-jobs.md](./music-jobs.md).
 - AI editing depends on `OPENAI_API_KEY` or an equivalent gateway key.
 - ISR caching (`minimumCacheTTL: 3600`) and AVIF/WebP image optimization are
   configured in `next.config.ts` for gallery artwork and user avatars.

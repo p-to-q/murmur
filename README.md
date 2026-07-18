@@ -2,9 +2,9 @@
 
 Murmur is a humming-to-song studio. A user hums a sketch, the system
 transcribes and polishes it into a melody, generates several vibe-led
-arrangements, then lets the user refine, preview, save, and export the result
-as audio, visuals, share HTML, and an audio-backed shareable video
-(MP4 when supported, WebM as fallback).
+arrangements, then lets the user refine, preview, save, share, and export the
+result as audio, a poster image, or an audio-backed video (MP4 when supported,
+WebM as fallback).
 
 ## For Judges
 
@@ -15,6 +15,12 @@ start here:
   [docs/judges-guide.md](./docs/judges-guide.md)
 - Runtime architecture:
   [docs/architecture.md](./docs/architecture.md)
+- Canonical documentation index:
+  [docs/README.md](./docs/README.md)
+- Production release operations:
+  [docs/repository-operations.md](./docs/repository-operations.md)
+- Durable paid-generation contract:
+  [docs/music-jobs.md](./docs/music-jobs.md)
 - Runtime surfaces:
   [docs/runtime-surfaces.md](./docs/runtime-surfaces.md)
 - Delivery cadence:
@@ -75,7 +81,7 @@ flowchart TB
         direction LR
         aTop[ ]:::anchor
         Transcribe["/api/transcribe"]
-        MusicGen["/api/music/generate"]
+        MusicGen["/api/music/generate<br/>/api/music/jobs"]
         Strummer["/api/strummer/edit"]
         Songs["/api/songs · CRUD"]
         Auth["/api/auth · NextAuth"]
@@ -223,15 +229,15 @@ flowchart TB
 ## What We Tried To Make Deliberately
 
 - A creation flow with a clear emotional arc:
-  `Hum -> Vibe -> Studio -> Gallery -> Song detail`
+  `Hum -> Vibe -> Studio -> Name -> Gallery -> Song detail`
 - A UI tone that feels editorial and restrained rather than tool-heavy:
   fewer knobs, stronger hierarchy, more guided choices
 - A melody pipeline that treats raw humming as imperfect input:
   denoise, pitch correction, tonal inference, cadence stabilization
 - A “what you hear is what you save” architecture:
   live preview, saved audio, and export all share the same arrangement logic
-- Export that is not just static sharing:
-  reusable visual presets, downloadable HTML, poster PNG, and audio-backed video
+- Sharing and export that remain useful outside the editor:
+  public song links, poster PNG, audio download, and audio-backed video
 
 ## Key Visible Files
 
@@ -289,6 +295,17 @@ bun run verify:local
 
 That bundles the stack smoke check with local markdown-link validation,
 repository lint, and audio-worker unit coverage.
+
+The release-gating browser journey is separate because it builds and boots the
+production-shaped app. Install Chromium once, then run it with:
+
+```bash
+bun run test:e2e:install
+bun run test:e2e
+```
+
+It exercises capture recovery through Vibe, Studio, save, Gallery, sharing,
+and public playback with deterministic service boundaries.
 
 For local persistence, start Postgres first:
 
@@ -478,6 +495,7 @@ cp .env.example .env
 | `ZPAY_PID` / `ZPAY_KEY` | Optional WeChat/Alipay route for CNY checkout. If absent, explicit WeChat checkout is unavailable. |
 | `MURMUR_ALLOW_PRODUCTION_ZPAY_WITHOUT_REFUNDS` | Explicit production allow flag for ZPay checkout while Murmur lacks a reliable ZPay refund/chargeback webhook. Must be `1`/`true`/`yes` when `ZPAY_PID` and `ZPAY_KEY` are set in production; otherwise WeChat checkout stays closed. |
 | `RUNPOD_SERVERLESS_ENDPOINT_ID` / `RUNPOD_API_KEY` | RunPod Serverless music-generation endpoint and bearer key. |
+| `NEXT_PUBLIC_MURMUR_DURABLE_MUSIC_JOBS` | Preview/canary switch for the recoverable paid-generation API. Defaults off; enable with `1` only after migration `0027` and the job telemetry/cutover checks in [docs/music-jobs.md](./docs/music-jobs.md). |
 | `MURMUR_AUTH_MODE` | Auth runtime mode. Defaults to production-like behavior even on localhost: no session means 401. Set `demo` or `local` only for explicit preview fallback work. |
 | `NEXT_PUBLIC_MURMUR_AUTH_MODE` | Browser-side companion for local header auth. Set to `local` only with `MURMUR_AUTH_MODE=local` when intentionally exercising localStorage user headers. |
 | `MURMUR_ALLOW_HEADER_AUTH` | Local/demo-only legacy switch for `x-murmur-user-*` identity headers. Ignored in production auth mode. |
@@ -575,8 +593,15 @@ signal: `NODE_ENV=development` / `test`, or `MURMUR_DB_ALLOW_LOCAL_FALLBACK=1`.
 
 **Current architecture**: Next.js frontend on Vercel; transcription (audio-engine) runs on Fly.io; music generation (Magenta RT2) runs on RunPod Serverless (scale-to-zero GPU); Postgres via Drizzle; billing via Waffo.
 
-For deployment, see:
-- **[docs/DEPLOY_MUSIC_ENGINE.md](./docs/DEPLOY_MUSIC_ENGINE.md)** — canonical deploy guide (Vercel shell + workers)
+Production application releases are owned by GitHub Actions and run as
+`CI -> migration -> convergence verify -> exact-SHA prebuilt deploy -> smoke`.
+Vercel's native Git integration may create Previews but must not independently
+deploy `main` to Production. See
+**[docs/repository-operations.md](./docs/repository-operations.md)** for the
+authoritative release contract.
+
+Worker deployment references:
+- **[docs/DEPLOY_MUSIC_ENGINE.md](./docs/DEPLOY_MUSIC_ENGINE.md)** — Vercel shell and worker configuration
 - **[docs/DEPLOY_MUSIC_ENGINE_GPU.md](./docs/DEPLOY_MUSIC_ENGINE_GPU.md)** — RunPod Serverless music-engine deploy
 
 ## Learn More

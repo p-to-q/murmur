@@ -4,7 +4,7 @@ import {
   formatReleaseIdentifier,
   getAppVersionParts,
 } from "./app-version";
-import { APP_BUILD } from "./release-metadata";
+import { APP_BUILD, APP_VERSION } from "./release-metadata";
 
 const ENV_KEYS = [
   "NEXT_PUBLIC_APP_VERSION",
@@ -34,11 +34,11 @@ describe("app-version", () => {
 
   it("falls back to the calibrated release defaults", () => {
     expect(getAppVersionParts()).toEqual({
-      semver: "0.6.0",
+      semver: APP_VERSION,
       build: APP_BUILD,
       gitSha: "local",
     });
-    expect(formatAppVersion(false)).toBe(`v0.6.0 · ${APP_BUILD}`);
+    expect(formatAppVersion(false)).toBe(`v${APP_VERSION} · ${APP_BUILD}`);
   });
 
   it("formats the structured release identifier for logs", () => {

@@ -40,6 +40,7 @@ import {
   loadRecordingBlob,
   saveRecordingBlob,
 } from "@/lib/audio/recording-cache";
+import { createRecordingOperationId } from "@/lib/audio/recording-operation";
 import { inputLevelLabelKey, nextInputLevelDecision } from "@/lib/audio/input-level";
 import {
   INITIAL_FIXTURE_RESCUE_STATE,
@@ -70,6 +71,8 @@ import {
 const IDLE_ROTATE_INTERVAL = 9000;
 const FIXTURE_RESCUE_STORAGE_KEY = "murmur-fixture-rescue";
 const ENABLE_HUM_ENTRANCE_MOTION = true;
+const MIC_PERMISSION_TIMEOUT_MS = 10_000;
+const HUM_PROCESSING_TIMEOUT_MS = 75_000;
 
 // Guest quota stays local and action-time gated. Signed-in users are
 // server-authoritative and skip the local counter.
@@ -139,6 +142,58 @@ class MusicEngineUnavailableError extends Error {
     super("music engine unavailable");
     this.name = "MusicEngineUnavailableError";
   }
+}
+
+class HumProcessingTimeoutError extends Error {
+  constructor() {
+    super("hum processing timed out");
+    this.name = "HumProcessingTimeoutError";
+  }
+}
+
+async function getUserMediaWithTimeout(
+  constraints: MediaStreamConstraints,
+  timeoutMs = MIC_PERMISSION_TIMEOUT_MS,
+): Promise<MediaStream> {
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new DOMException("Microphone permission timed out", "TimeoutError"));
+    }, timeoutMs);
+
+    navigator.mediaDevices.getUserMedia(constraints).then(
+      (stream) => {
+        if (settled) {
+          stopMediaStream(stream);
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        resolve(stream);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function withHumProcessingTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new HumProcessingTimeoutError());
+    }, HUM_PROCESSING_TIMEOUT_MS);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 function clearIntervalRef(
@@ -257,6 +312,7 @@ export function HumScreen() {
   const [showLoginWall, setShowLoginWall] = useState(false);
   const [orbHovered, setOrbHovered] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
+  const [capturePhase, setCapturePhase] = useState<CapturePhase>("idle");
   // Onboarding: first visit gently focuses the already-visible stage.
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingRippling, setOnboardingRippling] = useState(false);
@@ -542,7 +598,10 @@ export function HumScreen() {
     return true;
   };
 
-  const transcribeAndGenerate = async (blob: Blob | undefined) => {
+  const transcribeAndGenerate = async (
+    blob: Blob | undefined,
+    restoredOperationId?: string | null,
+  ) => {
     setRecordingState("processing");
     tickMessages();
     // Tracks whether *this* run left a recoverable copy in IndexedDB, so the
@@ -560,35 +619,43 @@ export function HumScreen() {
       // Overlap Magenta routing with transcription. When the deployment is
       // configured for a worker we never silently downgrade to Tone.js.
       const magentaPathPromise = shouldUseMagentaEngine();
-      const preparedBlob = blob ? await prepareAudioBlob(blob) : undefined;
+      const preparedBlob = blob
+        ? await withHumProcessingTimeout(prepareAudioBlob(blob))
+        : undefined;
       // Persist the raw take locally right before the upload leaves the device.
       // A mid-flight network drop then leaves a recoverable copy instead of
       // forcing the user to re-hum. Storage failures degrade to today's
       // behavior (no cache, no retry affordance).
+      const operationId = blob
+        ? restoredOperationId ?? createRecordingOperationId()
+        : undefined;
       if (blob) {
-        persistedRecording = await saveRecordingBlob(blob);
+        persistedRecording = await saveRecordingBlob(blob, operationId);
       }
-      const result = await transcribeWithStainer({
-        audioBlob: preparedBlob,
-        onProgress: (phase) => {
-          if (phase === "billing_ok") {
-            setProcessingMessage(t("hum.proc.billing_ok"));
-          } else if (phase === "worker_started") {
-            setProcessingMessage(t("hum.proc.analyzing"));
-          } else if (phase === "interim_melody") {
-            // The preview is progress-only. Generation waits for the final
-            // humming-engine selection so billing and attribution stay aligned.
-            setProcessingMessage(t("hum.proc.analyzing"));
-          }
-        },
-      });
+      const result = await withHumProcessingTimeout(
+        transcribeWithStainer({
+          audioBlob: preparedBlob,
+          operationId,
+          onProgress: (phase) => {
+            if (phase === "billing_ok") {
+              setProcessingMessage(t("hum.proc.billing_ok"));
+            } else if (phase === "worker_started") {
+              setProcessingMessage(t("hum.proc.analyzing"));
+            } else if (phase === "interim_melody") {
+              // The preview is progress-only. Generation waits for the final
+              // humming-engine selection so billing and attribution stay aligned.
+              setProcessingMessage(t("hum.proc.analyzing"));
+            }
+          },
+        }),
+      );
       const draftId = crypto.randomUUID();
       const flowId = currentFlowId ?? crypto.randomUUID();
       const selectedMelody = selectGenerationMelody(result, { repairBias });
       // Magenta is the only music engine. If the worker is unreachable after
       // all health-probe retries we stop with an honest error card — never
       // a silent downgrade to the legacy structured synth.
-      const useMagenta = await magentaPathPromise;
+      const useMagenta = await withHumProcessingTimeout(magentaPathPromise);
       if (!useMagenta) {
         throw new MusicEngineUnavailableError();
       }
@@ -752,6 +819,15 @@ export function HumScreen() {
         showSupportCode: false,
       };
     }
+    if (error instanceof HumProcessingTimeoutError) {
+      return {
+        variant: "unavailable",
+        code: "worker_unavailable",
+        requestId: null,
+        currentBalance: null,
+        showSupportCode: false,
+      };
+    }
     if (error instanceof TranscribeRequestError) {
       return {
         variant: variantForCode(error.code),
@@ -818,6 +894,7 @@ export function HumScreen() {
       return;
     }
     startPhaseRef.current = "starting";
+    setCapturePhase("starting");
     cancelPendingStartRef.current = false;
     startAudioContext();
     setHumError(null);
@@ -834,7 +911,9 @@ export function HumScreen() {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
         throw new Error("Browser recording APIs are unavailable");
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setRecordingState("processing");
+      setProcessingMessage(t("hum.proc.mic"));
+      const stream = await getUserMediaWithTimeout({ audio: true });
       activeStreamRef.current = stream;
       const recorderOptions = mediaRecorderOptions();
 
@@ -920,6 +999,7 @@ export function HumScreen() {
       }, {
         level: "warn",
       });
+      setRecordingState("idle");
       setHumError({
         variant: "mic",
         code: "mic_unavailable",
@@ -929,6 +1009,7 @@ export function HumScreen() {
       });
     } finally {
       startPhaseRef.current = "idle";
+      setCapturePhase("idle");
     }
   };
 
@@ -949,6 +1030,8 @@ export function HumScreen() {
   const isIdle = recordingState === "idle";
   const isRecording = recordingState === "recording";
   const isProcessing = recordingState === "processing";
+  const isStartingCapture = capturePhase === "starting" && isProcessing;
+  const showRecordingChrome = isRecording || isStartingCapture;
   const onboardingLine = t(`hum.onboarding.line${onboardingStep + 1}`);
   const onboardingA11yLine = onboardingLine.replace(/\s+/g, " ");
   const orbAriaLabel =
@@ -1004,7 +1087,7 @@ export function HumScreen() {
     startAudioContext();
     setHumError(null);
     setCachedRecordingAvailable(false);
-    await transcribeAndGenerate(cached.blob);
+    await transcribeAndGenerate(cached.blob, cached.operationId);
   };
 
   const handleRecoveryAction = (action: HumRecoveryAction) => {
@@ -1043,7 +1126,7 @@ export function HumScreen() {
     ringCircumference - recordingProgress * ringCircumference;
 
   return (
-    <div className="relative overflow-hidden bg-[#F5F1EB]" style={{ minHeight: 'var(--content-h)' }}>
+    <div data-testid="hum-screen" className="relative overflow-hidden bg-[#F5F1EB]" style={{ minHeight: 'var(--content-h)' }}>
       {/* ─── Aurora background blobs — audio-reactive ───────────── */}
       {/* scale and opacity are driven by amplitudeSpring (0→1 RMS).
           CSS drift animations still run; framer-motion adds a reactivity
@@ -1224,21 +1307,27 @@ export function HumScreen() {
             >
               {/* Rotating conic glow behind the orb */}
               <motion.div
-                className="glow-spin absolute rounded-full"
+                className="absolute rounded-full"
                 style={{
                   inset: "-18%",
-                  background: isRecording
-                    ? "conic-gradient(from 0deg, #FF8A5C, #FF5924, #FF69D2, #FFE040, #FF8A5C)"
-                    : "conic-gradient(from 0deg, #FF8A5C88, #FF69D266, #A7B8C844, #FFE04066, #C9B6E444, #FF8A5C88)",
                   filter: glowFilter,
                   scale: glowScale,
                   opacity: glowOpacity,
                 }}
-              />
+              >
+                <div
+                  className="glow-spin h-full w-full rounded-full"
+                  style={{
+                    background: showRecordingChrome
+                      ? "conic-gradient(from 0deg, #FF8A5C, #FF5924, #FF69D2, #FFE040, #FF8A5C)"
+                      : "conic-gradient(from 0deg, #FF8A5C88, #FF69D266, #A7B8C844, #FFE04066, #C9B6E444, #FF8A5C88)",
+                  }}
+                />
+              </motion.div>
 
               {/* Ring progress SVG (recording state) */}
               <AnimatePresence>
-                {isRecording && (
+                {showRecordingChrome && (
                   <motion.svg
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -1314,7 +1403,7 @@ export function HumScreen() {
                 onPointerMove={() => setOrbHovered(true)}
                 onPointerLeave={() => setOrbHovered(false)}
                 onBlur={() => setOrbHovered(false)}
-                disabled={isProcessing}
+                disabled={isProcessing && !isStartingCapture}
                 whileHover={
                   isIdle
                     ? {
@@ -1332,7 +1421,7 @@ export function HumScreen() {
                   "relative z-10 w-full h-full rounded-full flex items-center justify-center",
                   "bg-white cursor-pointer select-none transition-transform duration-200 ease-out",
                   isIdle ? "hover:scale-[1.03]" : "",
-                  isProcessing ? "opacity-80 cursor-wait" : "",
+                  isProcessing && !isStartingCapture ? "opacity-80 cursor-wait" : "",
                 ].join(" ")}
                 style={{
                   boxShadow:
@@ -1380,7 +1469,7 @@ export function HumScreen() {
                       />
                     </motion.svg>
                   )}
-                  {isRecording && (
+                  {showRecordingChrome && (
                     <motion.div
                       key="recording-pulse"
                       initial={{ scale: 0.5, opacity: 0 }}
@@ -1389,7 +1478,7 @@ export function HumScreen() {
                       className="w-5 h-5 rounded-full bg-[#FF5924]"
                     />
                   )}
-                  {isProcessing && (
+                  {isProcessing && !isStartingCapture && (
                     <motion.div
                       key="processing-spin"
                       initial={{ opacity: 0 }}
@@ -1403,7 +1492,7 @@ export function HumScreen() {
 
               {/* Particle burst when recording — subtle dots expanding outward */}
               <AnimatePresence>
-                {isRecording &&
+                {showRecordingChrome &&
                   [0, 1, 2].map((i) => (
                     <motion.div
                       key={`particle-${i}`}
@@ -1434,6 +1523,7 @@ export function HumScreen() {
         <AnimatePresence>
           {isIdle && humError && errorCopy && (
             <motion.div
+              data-testid="hum-recovery"
               key={`${humError.variant}-${humError.code}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

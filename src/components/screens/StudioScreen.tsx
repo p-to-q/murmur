@@ -21,9 +21,14 @@ import {
 import { classifyPromptWithLLM, StrummerEditRequestError } from "@/lib/api/strummer";
 import { formatStudioSupportCode } from "@/lib/observability/support-code";
 import { studioPromptRecoveryForCode } from "@/components/screens/studio-prompt-recovery";
+import {
+  canRetryGeneration,
+  generationErrorRecovery,
+} from "@/components/screens/vibe-generation-recovery";
 import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { memory } from "@/lib/platform/memory";
 import { buildDemoFlowStateAsync } from "@/modules/demo/demo-flow";
+import { regenerateVersionAudio } from "@/modules/magenta/generate-magenta-versions";
 import {
   bumpVersionEditState,
   resetVersionEditState,
@@ -170,10 +175,20 @@ function StudioContent({ version }: { version: VibeVersion }) {
     });
   };
 
-  const restartPlayback = (nextVersion: VibeVersion): boolean => {
+  const restartPlayback = useCallback(async (nextVersion: VibeVersion): Promise<boolean> => {
     versionPreview.stop();
     return versionPreview.play(nextVersion);
-  };
+  }, []);
+
+  const restartPlaybackAfterEdit = useCallback((nextVersion: VibeVersion) => {
+    void restartPlayback(nextVersion)
+      .then((didPlay) => setIsPlaying(didPlay))
+      .catch((error) => {
+        console.error("[Studio] playback restart error:", error);
+        setIsPlaying(false);
+        toast.error(t("cards.play_error") || "Couldn't play that preview.");
+      });
+  }, [restartPlayback, t]);
 
   const updateTrack = useCallback(
     (key: keyof ArrangementState, patch: Partial<TrackState>) => {
@@ -187,15 +202,15 @@ function StudioContent({ version }: { version: VibeVersion }) {
         strummerCode: generateStrummerCode(nextArrangement),
       });
       setCurrentVersion(nextVersion);
-      if (isPlaying) restartPlayback(nextVersion);
+      if (isPlaying) restartPlaybackAfterEdit(nextVersion);
     },
-    [arrangement, currentVersion, isPlaying, setCurrentVersion],
+    [arrangement, currentVersion, isPlaying, restartPlaybackAfterEdit, setCurrentVersion],
   );
 
   const handleScene = (tokens: EditToken[]) => {
     const nextVersion = applyTokens(currentVersion, tokens);
     setCurrentVersion(nextVersion);
-    if (isPlaying) restartPlayback(nextVersion);
+    if (isPlaying) restartPlaybackAfterEdit(nextVersion);
   };
 
   const handlePrompt = async (prompt: string) => {
@@ -205,7 +220,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
       if (ruleToken) {
         const nextVersion = applyTokens(currentVersion, [ruleToken]);
         setCurrentVersion(nextVersion);
-        if (isPlaying) restartPlayback(nextVersion);
+        if (isPlaying) restartPlaybackAfterEdit(nextVersion);
         toast.success(t("studio.prompt.applied"));
         memory
           .reportAction({
@@ -230,7 +245,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
       if (llmTokens.length > 0) {
         const nextVersion = applyTokens(currentVersion, llmTokens);
         setCurrentVersion(nextVersion);
-        if (isPlaying) restartPlayback(nextVersion);
+        if (isPlaying) restartPlaybackAfterEdit(nextVersion);
         toast.success(t("studio.prompt.applied"));
         memory
           .reportAction({
@@ -277,7 +292,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
       strummerCode: generateStrummerCode(restoredArrangement),
     });
     setCurrentVersion(nextVersion);
-    if (isPlaying) restartPlayback(nextVersion);
+    if (isPlaying) restartPlaybackAfterEdit(nextVersion);
     toast(t("studio.restore_toast"));
     memory
       .reportAction({
@@ -294,7 +309,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
       .catch(() => {});
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (isPlaying) {
       versionPreview.stop();
       setIsPlaying(false);
@@ -307,7 +322,40 @@ function StudioContent({ version }: { version: VibeVersion }) {
       toast(t("studio.magenta.pending") || "Audio is still brewing…");
       return;
     }
-    setIsPlaying(restartPlayback(currentVersion));
+    try {
+      const didPlay = await restartPlayback(currentVersion);
+      setIsPlaying(didPlay);
+      if (!didPlay) {
+        toast.error(t("cards.play_error") || "Couldn't play that preview.");
+      }
+    } catch (error) {
+      console.error("[Studio] playback error:", error);
+      setIsPlaying(false);
+      toast.error(t("cards.play_error") || "Couldn't play that preview.");
+    }
+  };
+
+  const handleRetryGeneratedTake = () => {
+    if (!currentVersion.generation || currentVersion.generation.status !== "error") return;
+    if (!canRetryGeneration(currentVersion)) {
+      if (currentVersion.generation.errorCode === "insufficient_notes") {
+        toast(t("vibe.gen.insufficient_toast") || "Top up notes before brewing more.");
+        router.push("/topup");
+      } else {
+        toast(t("vibe.gen.rate_limited_toast") || "Too many generations in a row. Try again shortly.");
+      }
+      return;
+    }
+    setIsPlaying(false);
+    versionPreview.stop();
+    regenerateVersionAudio(currentVersion);
+    toast(t("vibe.gen.retrying") || "Brewing this one again…");
+  };
+
+  const handleChooseAnotherTake = () => {
+    setIsPlaying(false);
+    versionPreview.stop();
+    router.push("/vibe");
   };
 
   const handleSave = () => {
@@ -358,7 +406,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
-    <div className="relative bg-[#F5F1EB]" style={{ minHeight: 'var(--content-h)' }}>
+    <div data-testid="studio-screen" className="relative bg-[#F5F1EB]" style={{ minHeight: 'var(--content-h)' }}>
       <PageBackdrop />
 
       <div className="relative z-10 mx-auto flex w-full max-w-[560px] flex-col px-4 md:pt-6" style={{ minHeight: 'var(--content-h)' }}>
@@ -418,10 +466,17 @@ function StudioContent({ version }: { version: VibeVersion }) {
 
             {/* Play disc — center */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <motion.div
+              <motion.button
+                type="button"
                 whileTap={{ scale: 0.88 }}
                 animate={isPlaying ? { scale: [1, 1.06, 1] } : { scale: 1 }}
                 transition={isPlaying ? { duration: 1.6, repeat: Infinity, ease: "easeInOut" } : {}}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void togglePlay();
+                }}
+                aria-label={isPlaying ? t("common.pause") : t("common.play")}
+                aria-pressed={isPlaying}
                 className={`flex h-[60px] w-[60px] items-center justify-center rounded-full backdrop-blur-md pointer-events-auto transition-all ${
                   isPlaying
                     ? "bg-white/30 shadow-[0_0_24px_rgba(255,255,255,0.2)]"
@@ -433,7 +488,7 @@ function StudioContent({ version }: { version: VibeVersion }) {
                 ) : (
                   <Play className="ml-0.5 h-5 w-5 text-white" fill="white" />
                 )}
-              </motion.div>
+              </motion.button>
             </div>
 
             {/* Turntable */}
@@ -501,10 +556,36 @@ function StudioContent({ version }: { version: VibeVersion }) {
                       <Loader2 className="h-3 w-3 animate-spin" />
                       {t("studio.magenta.pending")}
                     </span>
+                  ) : magenta.status === "error" ? (
+                    t("studio.magenta.failed") ||
+                    "This take did not finish. Retry it or choose another ready take."
                   ) : (
                     t("studio.magenta.note")
                   )}
                 </p>
+                {magenta.status !== "ready" && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {magenta.status === "error" && (
+                      <button
+                        type="button"
+                        onClick={handleRetryGeneratedTake}
+                        className="rounded-full bg-white/90 px-3.5 py-2 text-[12px] font-medium text-[#1A1A1A] transition-colors hover:bg-white"
+                      >
+                        {(() => {
+                          const recovery = generationErrorRecovery(currentVersion);
+                          return t(recovery.ctaKey) || recovery.ctaFallback;
+                        })()}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleChooseAnotherTake}
+                      className="rounded-full border border-white/15 bg-white/[0.05] px-3.5 py-2 text-[12px] font-medium text-white/80 transition-colors hover:bg-white/[0.1]"
+                    >
+                      {t("studio.magenta.choose_another") || "Choose another take"}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

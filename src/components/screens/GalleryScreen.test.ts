@@ -5,7 +5,7 @@ import {
 } from "@/lib/auth/local-creator-client";
 import { __resetCurrentAccountCacheForTesting } from "@/lib/hooks/use-current-account";
 import { __resetUserBalanceCacheForTesting } from "@/lib/hooks/use-user-balance";
-import { loadGallerySongsOnce } from "./GalleryScreen";
+import { gallerySongAction, loadGallerySongsOnce } from "./GalleryScreen";
 
 const originalFetch = globalThis.fetch;
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -217,10 +217,34 @@ describe("loadGallerySongsOnce", () => {
       throw new Error(`unexpected fetch ${path}`);
     }) as typeof fetch;
 
-    const songs = await loadGallerySongsOnce();
-
-    expect(songs).toBeNull();
+    await expect(loadGallerySongsOnce()).rejects.toThrow("API 401 unauthorized");
     expect(songFetches).toBe(2);
     expect(bootstrapFetches).toBe(1);
+  });
+
+  it("returns an empty list only after a successful gallery response", async () => {
+    sessionStorage.setItem(BOOTSTRAP_STORAGE_KEY, "1");
+    globalThis.fetch = (async () => jsonResponse([])) as typeof fetch;
+
+    expect(await loadGallerySongsOnce()).toEqual([]);
+  });
+
+  it("rejects a temporary server failure instead of presenting an empty gallery", async () => {
+    sessionStorage.setItem(BOOTSTRAP_STORAGE_KEY, "1");
+    globalThis.fetch = (async () => jsonResponse({ error: "server_error" }, 503)) as typeof fetch;
+
+    await expect(loadGallerySongsOnce()).rejects.toThrow("API 503 server_error");
+  });
+});
+
+describe("gallerySongAction", () => {
+  it("previews demo cards in an empty gallery instead of navigating", () => {
+    expect(gallerySongAction("demo-1", true)).toBe("preview");
+    expect(gallerySongAction("song_real", true)).toBe("detail");
+  });
+
+  it("opens persisted songs from the song detail route", () => {
+    expect(gallerySongAction("song_real", false)).toBe("detail");
+    expect(gallerySongAction("demo-1", false)).toBe("detail");
   });
 });

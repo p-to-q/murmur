@@ -1,5 +1,13 @@
 # Verification Log
 
+Status: historical evidence log, not a current guarantee<br>
+Owner: product engineering<br>
+Last verified: 2026-07-18
+
+Entries below accumulated across multiple revisions. Before release, record the
+exact SHA, environment, date, and command output in release evidence; an old
+checkbox does not prove the current tree.
+
 ## Status
 
 ### Tested
@@ -51,11 +59,13 @@
 - [x] StudioScreen mixer + 8 scene presets + restore button
 - [x] StudioScreen prompt bar — rule parser + LLM fallback (/api/strummer/edit)
 - [x] EditToken allowlist (28 tokens, server-side validated)
-- [x] Studio save → Tone.Offline → lamejs MP3 → DB (`mp3DataUrl`)
+- [x] Studio save → audio render → songs API → object storage when configured,
+  with a legacy `mp3DataUrl` fallback when upload is unavailable
 - [x] Studio save renders WAV fallback when MP3 encoding fails
 - [x] SongDetail uses real MP3 playback (HTMLAudioElement) with Tone fallback
-- [x] SongDetail 3 downloads: audio / share HTML / poster PNG
-- [x] Self-contained share HTML (embedded base64 audio + inline canvas)
+- [x] SongDetail audio and poster downloads
+- [ ] Self-contained share HTML is dormant reference material under
+  `src/_recovered/`; do not advertise it as a current export
 - [x] Poster PNG rendered via html2canvas at 1080×1080
 - [x] BottomNav simplified to 3 items (Hum / Gallery / Me) — Vibe + Studio hidden via `mobileNav: false`
 - [x] SideNav (desktop) — 252px column with brand + nav; Vibe hidden via `desktopNav: false`

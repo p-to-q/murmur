@@ -194,21 +194,25 @@ function CompactFader({
   const isOff = !track.enabled || track.intensity === 0;
 
   return (
-    <div className={`flex items-center gap-2 transition-opacity ${isOff ? "opacity-35" : ""}`}>
+    <div className={`flex min-h-11 items-center gap-2 transition-opacity ${isOff ? "opacity-35" : ""}`}>
       <button
+        type="button"
         onClick={onToggle}
-        className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
-          track.enabled
-            ? "bg-white/20 text-white"
-            : "bg-white/8 text-white/40"
-        }`}
-        style={{ color: track.enabled ? color : undefined }}
+        className="-mx-2.5 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full"
         aria-label={`Toggle ${label}`}
+        aria-pressed={track.enabled}
       >
-        {icon}
+        <span
+          className={`flex h-6 w-6 items-center justify-center rounded-full transition-colors ${
+            track.enabled ? "bg-white/20 text-white" : "bg-white/8 text-white/40"
+          }`}
+          style={{ color: track.enabled ? color : undefined }}
+        >
+          {icon}
+        </span>
       </button>
 
-      <div className="flex-1 relative h-5 flex items-center">
+      <div className="flex-1 relative h-11 flex items-center">
         <div className="relative w-full h-[3px] bg-white/15 rounded-full">
           <motion.div
             className="absolute left-0 top-0 h-full rounded-full"
@@ -223,7 +227,7 @@ function CompactFader({
             step={5}
             value={pct}
             onChange={(e) => onChange(parseInt(e.target.value, 10) / 100)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            className="absolute left-0 top-1/2 h-11 w-full -translate-y-1/2 cursor-pointer opacity-0"
             style={{ WebkitAppearance: "none" }}
             aria-label={label}
           />
@@ -269,19 +273,25 @@ function StringFader({
       <div className="flex items-center gap-3">
         {/* Icon badge */}
         <button
+          type="button"
           onClick={onToggle}
-          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition-colors"
-          style={{
-            background: track.enabled ? `${color}25` : "rgba(255,255,255,0.05)",
-            color: track.enabled ? color : "rgba(255,255,255,0.25)",
-          }}
+          className="-mx-1.5 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full"
           aria-label={`Toggle ${label}`}
+          aria-pressed={track.enabled}
         >
-          {icon}
+          <span
+            className="flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+            style={{
+              background: track.enabled ? `${color}25` : "rgba(255,255,255,0.05)",
+              color: track.enabled ? color : "rgba(255,255,255,0.25)",
+            }}
+          >
+            {icon}
+          </span>
         </button>
 
         {/* Fader groove container with percentage */}
-        <div className="flex-1 relative h-9 flex items-center gap-3">
+        <div className="flex-1 relative h-11 flex items-center gap-3">
           {/* Groove wrapper - limited width */}
           <div className="flex-1 relative h-9 flex items-center" style={{ maxWidth: 'calc(100% - 48px)' }}>
             {/* Groove channel — inset, tactile */}
@@ -321,7 +331,7 @@ function StringFader({
               step={5}
               value={pct}
               onChange={(e) => onChange(parseInt(e.target.value, 10) / 100)}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              className="absolute left-0 top-1/2 h-11 w-full -translate-y-1/2 cursor-pointer opacity-0"
               style={{ WebkitAppearance: "none" }}
               aria-label={label}
             />
@@ -377,16 +387,20 @@ function FaderRow({
       }`}
     >
       <button
+        type="button"
         onClick={onToggle}
-        className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition-colors ${
-          track.enabled
-            ? "bg-[#EFE8DA]"
-            : "bg-[#E5DDD0]"
-        }`}
-        style={{ color: track.enabled ? color : "#8C8780" }}
+        className="-mx-1.5 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full"
         aria-label={`Toggle ${label}`}
+        aria-pressed={track.enabled}
       >
-        {icon}
+        <span
+          className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+            track.enabled ? "bg-[#EFE8DA]" : "bg-[#E5DDD0]"
+          }`}
+          style={{ color: track.enabled ? color : "#8C8780" }}
+        >
+          {icon}
+        </span>
       </button>
 
       <span className="w-16 flex-shrink-0 font-serif-italic text-[13px] text-[#8C8780]">
@@ -408,7 +422,7 @@ function FaderRow({
             step={5}
             value={pct}
             onChange={(e) => onChange(parseInt(e.target.value, 10) / 100)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            className="absolute left-0 top-1/2 h-11 w-full -translate-y-1/2 cursor-pointer opacity-0"
             style={{ WebkitAppearance: "none" }}
             aria-label={label}
           />

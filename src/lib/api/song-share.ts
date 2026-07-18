@@ -1,4 +1,5 @@
 import { request } from "./request";
+import { timeoutSignal } from "./timeout";
 
 export type SongShareRequestErrorCode =
   | "unauthorized"
@@ -63,6 +64,7 @@ export async function createSongShareLink(input: {
         accept: "application/json",
       },
       body: JSON.stringify({ visibility: input.visibility ?? "unlisted" }),
+      signal: timeoutSignal(12_000),
     });
   } catch (cause) {
     throw new SongShareRequestError({
