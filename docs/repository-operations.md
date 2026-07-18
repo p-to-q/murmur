@@ -118,8 +118,9 @@ The production workflow is deliberately one serial chain:
 2. the release gate proves that SHA is still the tip of `main`;
 3. production migrations run through the direct connection;
 4. the same migration command runs again as a convergence check;
-5. Vercel pulls the production environment and builds that exact checkout;
-6. the prebuilt output is deployed to Production;
+5. the exact checkout is uploaded for a remote Vercel Production build, where
+   Sensitive environment variables remain inside Vercel;
+6. Vercel promotes that completed build to Production;
 7. HTTP smoke runs against both the immutable deployment URL and
    `https://murmur.ptoq.io`.
 
@@ -145,6 +146,13 @@ After verifying the setting, set repository variable
 dashboard setting directly, but it fails closed without this auditable owner
 acknowledgement. Leaving native Production enabled still recreates the pre-CI
 race even though the Actions release itself is correctly ordered.
+
+Do not reintroduce `vercel pull` followed by a runner-local `vercel build` for
+Production. Vercel exports Sensitive variables as redacted placeholders outside
+its build environment, so a local prebuild cannot consume production DSNs,
+origins, or worker URLs. The canonical `bun run build` still runs `env:audit`;
+with a remote build it validates the real values inside Vercel before the
+deployment is promoted.
 
 ### Branch protection (issue #308)
 

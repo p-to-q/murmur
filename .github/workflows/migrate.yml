@@ -134,7 +134,7 @@ jobs:
             fi
           done
 
-      - name: Pull production environment
+      - name: Link Vercel project
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
@@ -142,24 +142,13 @@ jobs:
             --project "$VERCEL_PROJECT_NAME" \
             --scope "$VERCEL_SCOPE" \
             --token "$VERCEL_TOKEN"
-          bunx vercel@56.3.1 pull --yes --environment production \
-            --scope "$VERCEL_SCOPE" \
-            --token "$VERCEL_TOKEN"
 
-      - name: Build exact release SHA
-        env:
-          NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA: ${{ env.RELEASE_SHA }}
-          VERCEL_GIT_COMMIT_SHA: ${{ env.RELEASE_SHA }}
-          VERCEL_GIT_COMMIT_REF: main
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: bunx vercel@56.3.1 build --prod --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN"
-
-      - name: Deploy prebuilt release
+      - name: Deploy exact release SHA
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          deployment_url="$(bunx vercel@56.3.1 deploy --prebuilt --prod --yes \
+          deployment_url="$(bunx vercel@56.3.1 deploy --prod --yes \
             --scope "$VERCEL_SCOPE" \
             --token "$VERCEL_TOKEN" \
             --meta githubCommitSha="$RELEASE_SHA" \
