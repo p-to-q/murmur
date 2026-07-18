@@ -168,6 +168,7 @@ export function GalleryScreen() {
   const currentFlowId = useMurmurStore((state) => state.currentFlowId);
   const currentDraftId = useMurmurStore((state) => state.currentDraftId);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewOperationRef = useRef(0);
 
   // Use demo songs when user has no real songs
   const displaySongs = useMemo(
@@ -213,6 +214,7 @@ export function GalleryScreen() {
 
   useEffect(() => {
     return () => {
+      previewOperationRef.current += 1;
       const audio = previewAudioRef.current;
       if (audio) {
         audio.pause();
@@ -223,6 +225,7 @@ export function GalleryScreen() {
   }, []);
 
   const stopSongPreview = useCallback(() => {
+    previewOperationRef.current += 1;
     const audio = previewAudioRef.current;
     if (audio) {
       audio.pause();
@@ -240,6 +243,9 @@ export function GalleryScreen() {
         return;
       }
 
+      const operationId = previewOperationRef.current + 1;
+      previewOperationRef.current = operationId;
+      const isCurrentOperation = () => previewOperationRef.current === operationId;
       const demo = isDemoSongId(song.id) ? getDemoSong(song.id) : null;
       let audioSrc = demo?.mp3Url ?? song.mp3Url ?? song.mp3DataUrl ?? null;
 
@@ -247,12 +253,21 @@ export function GalleryScreen() {
         setLoadingPreviewId(song.id);
         try {
           const response = await requestWithTimeout(`/api/songs/${song.id}`, {}, 10_000);
+          if (!isCurrentOperation()) {
+            setLoadingPreviewId((current) => (current === song.id ? null : current));
+            return;
+          }
           if (!response.ok) {
             throw new ApiEnvelopeError(await readApiErrorEnvelope(response, "song_preview_failed"));
           }
           const fullSong = (await response.json()) as SongWithMeta;
+          if (!isCurrentOperation()) {
+            setLoadingPreviewId((current) => (current === song.id ? null : current));
+            return;
+          }
           audioSrc = fullSong.mp3Url ?? fullSong.mp3DataUrl ?? null;
         } catch (error) {
+          if (!isCurrentOperation()) return;
           console.error("[Gallery] song preview load failed:", error);
           toast.error(t("cards.play_error") || "Playback failed, please retry", {
             description: formatSupportCode({ area: "GALLERY", error: "preview_load_failed", requestId: null }),
@@ -263,17 +278,27 @@ export function GalleryScreen() {
       }
 
       if (!audioSrc) {
+        if (!isCurrentOperation()) return;
         toast.error(t("cards.play_error") || "Playback failed, please retry");
         setLoadingPreviewId(null);
         return;
       }
 
-      stopSongPreview();
+      const previousAudio = previewAudioRef.current;
+      if (previousAudio) {
+        previousAudio.pause();
+        previousAudio.removeAttribute("src");
+        previewAudioRef.current = null;
+      }
+      setPlayingSongId(null);
       setLoadingPreviewId(song.id);
       const audio = new Audio(audioSrc);
       audio.loop = true;
-      audio.onended = () => setPlayingSongId(null);
+      audio.onended = () => {
+        if (isCurrentOperation()) setPlayingSongId(null);
+      };
       audio.onerror = () => {
+        if (!isCurrentOperation()) return;
         if (previewAudioRef.current === audio) previewAudioRef.current = null;
         setPlayingSongId(null);
         setLoadingPreviewId(null);
@@ -287,6 +312,11 @@ export function GalleryScreen() {
           DEMO_PREVIEW_START_TIMEOUT_MS,
           "Gallery preview timed out",
         );
+        if (!isCurrentOperation()) {
+          audio.pause();
+          audio.removeAttribute("src");
+          return;
+        }
         setPlayingSongId(song.id);
         setLoadingPreviewId(null);
         memory
@@ -298,6 +328,11 @@ export function GalleryScreen() {
           })
           .catch(() => {});
       } catch (error) {
+        if (!isCurrentOperation()) {
+          audio.pause();
+          audio.removeAttribute("src");
+          return;
+        }
         if (previewAudioRef.current === audio) previewAudioRef.current = null;
         audio.removeAttribute("src");
         console.error("[Gallery] demo preview failed:", error);

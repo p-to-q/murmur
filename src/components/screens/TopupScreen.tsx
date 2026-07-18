@@ -305,7 +305,11 @@ export function TopupScreen() {
     isLoading: accountLoading,
   } = useCurrentAccount();
   const { balance, isLoading, error: balanceError, refresh } = useUserBalance();
-  const { data: topupSurface, refresh: refreshTopupSurface } = useTopupSurface();
+  const {
+    data: topupSurface,
+    isLoading: topupLoading,
+    refresh: refreshTopupSurface,
+  } = useTopupSurface();
 
   // ── Currency state ────────────────────────────────────────────────
   const [manualCurrency, setManualCurrency] = useState<Currency | undefined>(
@@ -647,10 +651,12 @@ export function TopupScreen() {
     };
 
     if (!hasHydratedBalancesRef.current) {
-      hasHydratedBalancesRef.current = true;
       notesSpring.set(currentBalance);
       balanceUSDSpring.set(balanceUSD);
       notesInUseSpring.set(notesInUse);
+      if (!isLoading && !topupLoading) {
+        hasHydratedBalancesRef.current = true;
+      }
       return;
     }
 
@@ -673,7 +679,7 @@ export function TopupScreen() {
     if (notesInUse !== previous.notesInUse) {
       notesInUseSpring.set(notesInUse);
     }
-  }, [balanceUSD, balanceUSDSpring, currentBalance, notesInUse, notesInUseSpring, notesSpring]);
+  }, [balanceUSD, balanceUSDSpring, currentBalance, isLoading, notesInUse, notesInUseSpring, notesSpring, topupLoading]);
 
   const displayNotesBalance = useTransform(notesSpring, (v) => Math.round(v));
   const displayBalanceUSD = useTransform(balanceUSDSpring, (v) => v.toFixed(2));

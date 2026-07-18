@@ -605,7 +605,7 @@ function ReceiptCard({
             </p>
           </div>
 
-          <ReceiptCutEdge position="bottom" showSideCuts={!isTorn} />
+          <ReceiptCutEdge position="bottom" />
         </div>
       </motion.div>
 
