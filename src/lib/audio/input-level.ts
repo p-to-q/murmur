@@ -20,8 +20,10 @@ export interface InputLevelSample {
 
 const HEARD_RMS_THRESHOLD = 0.018;
 const QUIET_RMS_THRESHOLD = 0.012;
-const QUIET_WARMUP_MS = 1800;
-const QUIET_CONFIRM_MS = 1400;
+// The original capture surface warned after roughly one second of silence.
+// Keep a short startup cushion, then respond quickly enough to feel live.
+const QUIET_WARMUP_MS = 550;
+const QUIET_CONFIRM_MS = 650;
 
 export function nextInputLevelDecision({
   rms,
