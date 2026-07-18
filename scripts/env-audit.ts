@@ -71,6 +71,39 @@ function isPlaceholderSecret(key: string): boolean {
   return !value || value === "replace_with_a_long_random_string";
 }
 
+type UrlRule = {
+  keys: readonly string[];
+  protocols: readonly string[];
+};
+
+const URL_RULES: readonly UrlRule[] = [
+  { keys: ["DATABASE_URL", "POSTGRES_URL"], protocols: ["postgres:", "postgresql:"] },
+  { keys: ["AUTH_URL", "NEXTAUTH_URL", "MURMUR_APP_URL"], protocols: ["http:", "https:"] },
+  { keys: ["AUDIO_WORKER_URL", "MUSIC_WORKER_URL"], protocols: ["http:", "https:"] },
+  { keys: ["MURMUR_STORAGE_S3_PUBLIC_URL_BASE"], protocols: ["http:", "https:"] },
+];
+
+export function collectUrlEnvAuditIssues(
+  env: Readonly<Record<string, string | undefined>>,
+): string[] {
+  const issues: string[] = [];
+  for (const rule of URL_RULES) {
+    for (const key of rule.keys) {
+      const value = env[key]?.trim();
+      if (!value) continue;
+      try {
+        const url = new URL(value);
+        if (!rule.protocols.includes(url.protocol)) {
+          issues.push(`${key} must use ${rule.protocols.join(" or ")}`);
+        }
+      } catch {
+        issues.push(`${key} must be a valid absolute URL`);
+      }
+    }
+  }
+  return issues;
+}
+
 function main() {
   const onVercel = process.env.VERCEL === "1";
   const inCi = process.env.CI === "true";
@@ -95,6 +128,7 @@ function main() {
   }
 
   missing.push(...collectDatabaseEnvAuditIssues(process.env));
+  missing.push(...collectUrlEnvAuditIssues(process.env));
 
   const googleConfigured =
     Boolean(process.env.GOOGLE_CLIENT_ID?.trim()) &&
@@ -174,4 +208,6 @@ function main() {
   console.log("Production env audit passed.");
 }
 
-main();
+if (import.meta.main) {
+  main();
+}
