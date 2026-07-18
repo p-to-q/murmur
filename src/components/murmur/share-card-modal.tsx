@@ -198,7 +198,7 @@ export function ShareCardModal({ open, onClose, shareUrl }: ShareCardModalProps)
             className="relative mx-4 max-h-[90svh] w-full max-w-md overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative overflow-hidden rounded-[32px] shadow-2xl">
+            <div className="share-card-shell relative isolate overflow-hidden rounded-[32px] shadow-2xl">
               {layers.map((layer) => {
                 const slideItem = CAROUSEL_SLIDES[layer.slideIndex];
                 const enterDirection = invertDirection(layer.direction);
@@ -214,7 +214,7 @@ export function ShareCardModal({ open, onClose, shareUrl }: ShareCardModalProps)
                 return (
                   <div
                     key={`${layer.role}-${layer.id}`}
-                    className="absolute inset-0 will-change-transform"
+                    className="absolute inset-0 overflow-hidden rounded-[32px] will-change-transform"
                     style={{
                       transform,
                       transition: isMoving
@@ -273,7 +273,7 @@ export function ShareCardModal({ open, onClose, shareUrl }: ShareCardModalProps)
               </div>
 
               <div className="absolute bottom-6 left-6 right-6">
-                <div className="rounded-[28px] bg-white/95 backdrop-blur-xl p-8 shadow-xl">
+                <div className="share-card-panel overflow-hidden rounded-[28px] bg-white/95 p-8 shadow-xl backdrop-blur-xl">
                   <h2 className="mb-8 text-center text-[20px] font-medium text-[#1A1A1A] leading-tight">
                     {t("share.tagline")}
                   </h2>
