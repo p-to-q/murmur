@@ -1365,7 +1365,7 @@ export function HumScreen() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.4 }}
-                    className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-[107.5%] w-[107.5%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
+                    className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-[107.75%] w-[107.75%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
                     viewBox="0 0 300 300"
                     preserveAspectRatio="xMidYMid meet"
                   >
