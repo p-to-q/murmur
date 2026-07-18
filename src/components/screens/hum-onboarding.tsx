@@ -49,6 +49,8 @@ interface HumOnboardingOverlayProps {
 }
 
 const MYMIND_EASE = [0.22, 1, 0.36, 1] as const;
+export const HUM_ONBOARDING_REVEAL_DURATION_MS = 2300;
+const BACKDROP_EXIT_DURATION_SECONDS = 1.08;
 const PITCH_MARKS = new Set(["↗", "↘"]);
 const PITCH_MARK_FONT =
   "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI Symbol', 'Apple Symbols', sans-serif";
@@ -66,9 +68,13 @@ const COPY_LINE_VARIANTS = {
   visible: { opacity: 1, y: 0, filter: "blur(0px)" },
   rippleExit: {
     opacity: 0,
-    y: 10,
-    filter: "blur(10px)",
-    transition: { delay: 1.08, duration: 0.52, ease: INTENT_TEXT_EASE },
+    y: 12,
+    filter: "blur(12px)",
+    transition: {
+      delay: BACKDROP_EXIT_DURATION_SECONDS,
+      duration: 0.82,
+      ease: INTENT_TEXT_EASE,
+    },
   },
   swapExit: { opacity: 0, y: -5, filter: "blur(0px)" },
 };
@@ -132,7 +138,7 @@ export function HumOnboardingOverlay({
             initial={{ opacity: 0 }}
             animate={{ opacity: rippling ? 0 : 1 }}
             transition={{
-              duration: reduceMotion ? 0.18 : rippling ? 1.08 : 0.9,
+              duration: reduceMotion ? 0.18 : rippling ? BACKDROP_EXIT_DURATION_SECONDS : 0.9,
               delay: rippling ? 0 : introDelay,
               ease: MYMIND_EASE,
             }}
