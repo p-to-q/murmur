@@ -369,14 +369,14 @@ export function HumScreen() {
   const amplitudeMv = useMotionValue(0);
   const amplitudeSpring = useSpring(amplitudeMv, { stiffness: 40, damping: 10 });
   // Derived: scale and opacity intensifiers for the three blobs
-  const blob1Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.35]);
-  const blob2Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.28]);
-  const blob3Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.22]);
+  const blob1Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.2]);
+  const blob2Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.16]);
+  const blob3Scale = useTransform(amplitudeSpring, [0, 1], [1, 1.12]);
   const blobOpacity = useTransform(amplitudeSpring, [0, 1], [0.82, 1]);
-  // Orb conic glow — bigger range, brighter response
-  const glowScale = useTransform(amplitudeSpring, [0, 0.3, 1], [1, 1.15, 1.7]);
-  const glowOpacity = useTransform(amplitudeSpring, [0, 0.2, 1], [0.35, 0.55, 1.0]);
-  const glowBlur = useTransform(amplitudeSpring, [0, 1], [44, 28]);
+  // Keep the voice response tactile without letting the glow outrun the orb.
+  const glowScale = useTransform(amplitudeSpring, [0, 0.3, 1], [1, 1.08, 1.35]);
+  const glowOpacity = useTransform(amplitudeSpring, [0, 0.2, 1], [0.35, 0.5, 0.82]);
+  const glowBlur = useTransform(amplitudeSpring, [0, 1], [44, 34]);
   const glowFilter = useMotionTemplate`blur(${glowBlur}px)`;
 
   const setInputLevelState = useCallback((next: "idle" | "quiet" | "heard") => {
@@ -1145,10 +1145,8 @@ export function HumScreen() {
   };
 
   // Ring progress SVG values
-  const ringStrokeWidth = 2.5;
-  // The SVG and orb share the same 300 x 300 boundary. Keeping the stroke's
-  // outer edge at 150 makes the timer sit directly on the white orb edge.
-  const ringRadius = (300 - ringStrokeWidth) / 2;
+  const ringStrokeWidth = 3.5;
+  const ringRadius = 140;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const recordingProgress = recordingProgressFromElapsed(recordingElapsedMs);
   const recordingElapsedLabel = formatRecordingElapsedSeconds(recordingElapsedMs);
@@ -1367,7 +1365,7 @@ export function HumScreen() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.4 }}
-                    className="pointer-events-none absolute inset-0 z-30 h-full w-full overflow-visible"
+                    className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-[107.142857%] w-[107.142857%] -translate-x-1/2 -translate-y-1/2 overflow-visible"
                     viewBox="0 0 300 300"
                     preserveAspectRatio="xMidYMid meet"
                   >
