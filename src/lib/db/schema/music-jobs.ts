@@ -44,6 +44,23 @@ export interface MusicJobOutput {
   model: string;
   generationMs: number | null;
   styleMix: string;
+  quality?: {
+    version: string;
+    passed: boolean;
+    failures: string[];
+    metrics: Record<string, number>;
+  };
+  diagnostics?: {
+    version: number;
+    gateVersion: string;
+    evidence: "verified" | "legacy_missing";
+    candidateCount: number;
+    totalGenerationMs: number | null;
+    workerWallMs: number | null;
+    estimatedCostUsd: number | null;
+    runtime: Record<string, string>;
+    candidates: unknown[];
+  };
 }
 
 export const musicJobs = pgTable(

@@ -37,6 +37,11 @@ const TRACKED_EVENTS = new Set([
   "capture.prepared",
   "capture.stopped",
   "arrangement.generated",
+  "music.job_provider_attached",
+  "music.job_provider_status",
+  "music.job_advance_failed",
+  "music.quality_gate_passed",
+  "music.quality_gate_failed",
 ]);
 
 const BUFFER_LIMIT = 32;

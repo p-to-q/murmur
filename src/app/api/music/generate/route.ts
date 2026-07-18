@@ -29,7 +29,9 @@ import {
 } from "@/lib/notifications/notification-copy";
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { RunpodError, runJob, getQueueDepth } from "@/lib/platform/runpod-serverless";
+import { verifyMusicWorkerOutput } from "@/lib/platform/music-worker-output";
 import { COST } from "@murmur/core";
+import { createHash } from "node:crypto";
 
 export const runtime = "nodejs";
 // Vercel Pro ceiling (300 s). Let RunPod finish at its own pace — the client
@@ -107,6 +109,7 @@ type GenerateResult =
       model: string;
       generationMs: string;
       styleMix: string;
+      quality?: ReturnType<typeof verifyMusicWorkerOutput>;
     }
   | {
       ok: false;
@@ -348,6 +351,12 @@ export async function POST(request: NextRequest) {
       generationMs: Number(result.generationMs) || null,
       model: result.model,
       styleMix: result.styleMix,
+      qualityGateVersion: result.quality?.quality.version ?? null,
+      qualityEvidence: result.quality?.diagnostics.evidence ?? null,
+      candidateCount: result.quality?.diagnostics.candidateCount ?? null,
+      workerWallMs: result.quality?.diagnostics.workerWallMs ?? null,
+      totalGenerationMs: result.quality?.diagnostics.totalGenerationMs ?? null,
+      estimatedCostUsd: result.quality?.diagnostics.estimatedCostUsd ?? null,
       budget_exceeded: genBudget.budget_exceeded,
       budget_p95: genBudget.budget_p95,
     }, {
@@ -826,10 +835,12 @@ async function generateViaServerless(
     duration: params.duration,
     request_id: requestId,
   };
+  let humBytes: Uint8Array | null = null;
   if (params.melody) input.melody = params.melody;
   if (params.hum && params.hum.size > 0 && params.styleMix > 0) {
     input.style_mix = params.styleMix;
-    input.hum_b64 = Buffer.from(await params.hum.arrayBuffer()).toString("base64");
+    humBytes = new Uint8Array(await params.hum.arrayBuffer());
+    input.hum_b64 = Buffer.from(humBytes).toString("base64");
   }
 
   let output: Record<string, unknown>;
@@ -879,6 +890,32 @@ async function generateViaServerless(
   // pools small Buffer allocations into a shared backing store, and NextResponse
   // wants a plain ArrayBuffer (a Buffer is generic over ArrayBufferLike).
   const decoded = Buffer.from(audioB64, "base64");
+  let quality: ReturnType<typeof verifyMusicWorkerOutput>;
+  try {
+    quality = verifyMusicWorkerOutput({
+      output,
+      bytes: new Uint8Array(decoded.buffer, decoded.byteOffset, decoded.byteLength),
+      expected: {
+        requestId,
+        prompt: params.prompt,
+        duration: params.duration,
+        styleMix: humBytes ? params.styleMix : 0,
+        melody: params.melody,
+        humSha256: humBytes ? createHash("sha256").update(humBytes).digest("hex") : null,
+      },
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "Generated audio did not pass delivery verification",
+      status: 502,
+      ext: {
+        qualityGateRejected: true,
+        reason: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
   const audio = decoded.buffer.slice(
     decoded.byteOffset,
     decoded.byteOffset + decoded.byteLength,
@@ -891,6 +928,7 @@ async function generateViaServerless(
     model: typeof output.model === "string" ? output.model : "",
     generationMs: output.generation_ms != null ? String(output.generation_ms) : "",
     styleMix: typeof output.style_mix === "string" ? output.style_mix : "",
+    quality,
   };
 }
 

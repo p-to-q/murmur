@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import { createHash } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { setTestNodeEnv } from "@/test-utils/env";
 
@@ -183,6 +184,28 @@ async function flushScheduledPublishes(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+function validWavBase64(duration: number): string {
+  const sampleRate = 16_000;
+  const sampleCount = Math.round(duration * sampleRate);
+  const bytes = Buffer.alloc(44 + sampleCount * 2);
+  bytes.write("RIFF", 0);
+  bytes.writeUInt32LE(bytes.length - 8, 4);
+  bytes.write("WAVEfmt ", 8);
+  bytes.writeUInt32LE(16, 16);
+  bytes.writeUInt16LE(1, 20);
+  bytes.writeUInt16LE(1, 22);
+  bytes.writeUInt32LE(sampleRate, 24);
+  bytes.writeUInt32LE(sampleRate * 2, 28);
+  bytes.writeUInt16LE(2, 32);
+  bytes.writeUInt16LE(16, 34);
+  bytes.write("data", 36);
+  bytes.writeUInt32LE(sampleCount * 2, 40);
+  for (let index = 0; index < sampleCount; index += 1) {
+    bytes.writeInt16LE(Math.round(Math.sin(index / 8) * 8_000), 44 + index * 2);
+  }
+  return bytes.toString("base64");
+}
+
 mock.module("@/lib/platform/runpod-serverless", () => ({
   RunpodError: TestRunpodError,
   endpointHealth: async () => ({
@@ -191,14 +214,41 @@ mock.module("@/lib/platform/runpod-serverless", () => ({
     body: { workers: { idle: 0, running: 0 } },
   }),
   getQueueDepth: async () => nextQueueDepth,
-  runJob: async () => {
+  runJob: async (_config: unknown, input: Record<string, unknown>) => {
     runJobCallCount += 1;
     if (nextRunJobThrows) throw nextRunJobThrows;
     return {
-      audio_b64: Buffer.from(new Uint8Array([82, 73, 70, 70])).toString("base64"),
+      audio_b64: validWavBase64(Number(input.duration)),
       model: "test-model",
       generation_ms: 123,
       style_mix: "0.35",
+      input_receipt: {
+        request_id: input.request_id,
+        prompt_sha256: createHash("sha256").update(String(input.prompt)).digest("hex"),
+        duration: input.duration,
+        style_mix: input.style_mix ?? 0,
+        melody_sha256: typeof input.melody === "string"
+          ? createHash("sha256").update(input.melody).digest("hex")
+          : null,
+        melody_accepted: typeof input.melody === "string",
+        hum_sha256: typeof input.hum_b64 === "string"
+          ? createHash("sha256").update(Buffer.from(input.hum_b64, "base64")).digest("hex")
+          : null,
+      },
+      quality: {
+        version: "music-technical-v1",
+        passed: true,
+        failures: [],
+        metrics: {},
+      },
+      diagnostics: {
+        version: 1,
+        gate_version: "music-technical-v1",
+        candidate_count: 1,
+        total_generation_ms: 123,
+        worker_wall_ms: 140,
+        runtime: { model: "test-model" },
+      },
     };
   },
 }));

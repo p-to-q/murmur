@@ -2,13 +2,21 @@
 
 Status: current capabilities plus target contract<br>
 Owner: product engineering<br>
-Last verified: 2026-07-18
+Last verified: 2026-07-19
 
 Murmur currently emits typed structured success and failure events to stdout,
 keeps a small process-local recent-event buffer, tracks creation stages in
 memory, and checks static component latency budgets. It does not yet ship the
 durable metrics store, distributed traces, dashboards, or paging described
 below. Those sections are target contracts, not claims about production.
+
+Durable music jobs preserve passed-output quality diagnostics in
+`music_jobs.output`. RunPod returns a hashed input receipt, runtime fingerprint,
+candidate Gate evidence, and Worker timing; the Web runner independently checks
+the WAV before delivery and checks the receipt after the explicit rollout
+cutover. `qualityEvidence=legacy_missing|verified` makes that state queryable.
+Failed candidate detail remains in
+structured logs in phase one. This is not yet a general metrics/tracing backend.
 
 This document specifies what we log, how we structure it, what we trace,
 what we surface to dashboards, and where the budgets land.
