@@ -312,6 +312,7 @@ export function HumScreen() {
   const [showLoginWall, setShowLoginWall] = useState(false);
   const [orbHovered, setOrbHovered] = useState(false);
   const [idleIndex, setIdleIndex] = useState(0);
+  const [capturePhase, setCapturePhase] = useState<CapturePhase>("idle");
   // Onboarding: first visit gently focuses the already-visible stage.
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingRippling, setOnboardingRippling] = useState(false);
@@ -893,6 +894,7 @@ export function HumScreen() {
       return;
     }
     startPhaseRef.current = "starting";
+    setCapturePhase("starting");
     cancelPendingStartRef.current = false;
     startAudioContext();
     setHumError(null);
@@ -1007,6 +1009,7 @@ export function HumScreen() {
       });
     } finally {
       startPhaseRef.current = "idle";
+      setCapturePhase("idle");
     }
   };
 
@@ -1027,6 +1030,8 @@ export function HumScreen() {
   const isIdle = recordingState === "idle";
   const isRecording = recordingState === "recording";
   const isProcessing = recordingState === "processing";
+  const isStartingCapture = capturePhase === "starting" && isProcessing;
+  const showRecordingChrome = isRecording || isStartingCapture;
   const onboardingLine = t(`hum.onboarding.line${onboardingStep + 1}`);
   const onboardingA11yLine = onboardingLine.replace(/\s+/g, " ");
   const orbAriaLabel =
@@ -1302,21 +1307,27 @@ export function HumScreen() {
             >
               {/* Rotating conic glow behind the orb */}
               <motion.div
-                className="glow-spin absolute rounded-full"
+                className="absolute rounded-full"
                 style={{
                   inset: "-18%",
-                  background: isRecording
-                    ? "conic-gradient(from 0deg, #FF8A5C, #FF5924, #FF69D2, #FFE040, #FF8A5C)"
-                    : "conic-gradient(from 0deg, #FF8A5C88, #FF69D266, #A7B8C844, #FFE04066, #C9B6E444, #FF8A5C88)",
                   filter: glowFilter,
                   scale: glowScale,
                   opacity: glowOpacity,
                 }}
-              />
+              >
+                <div
+                  className="glow-spin h-full w-full rounded-full"
+                  style={{
+                    background: showRecordingChrome
+                      ? "conic-gradient(from 0deg, #FF8A5C, #FF5924, #FF69D2, #FFE040, #FF8A5C)"
+                      : "conic-gradient(from 0deg, #FF8A5C88, #FF69D266, #A7B8C844, #FFE04066, #C9B6E444, #FF8A5C88)",
+                  }}
+                />
+              </motion.div>
 
               {/* Ring progress SVG (recording state) */}
               <AnimatePresence>
-                {isRecording && (
+                {showRecordingChrome && (
                   <motion.svg
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -1392,7 +1403,7 @@ export function HumScreen() {
                 onPointerMove={() => setOrbHovered(true)}
                 onPointerLeave={() => setOrbHovered(false)}
                 onBlur={() => setOrbHovered(false)}
-                disabled={isProcessing}
+                disabled={isProcessing && !isStartingCapture}
                 whileHover={
                   isIdle
                     ? {
@@ -1410,7 +1421,7 @@ export function HumScreen() {
                   "relative z-10 w-full h-full rounded-full flex items-center justify-center",
                   "bg-white cursor-pointer select-none transition-transform duration-200 ease-out",
                   isIdle ? "hover:scale-[1.03]" : "",
-                  isProcessing ? "opacity-80 cursor-wait" : "",
+                  isProcessing && !isStartingCapture ? "opacity-80 cursor-wait" : "",
                 ].join(" ")}
                 style={{
                   boxShadow:
@@ -1458,7 +1469,7 @@ export function HumScreen() {
                       />
                     </motion.svg>
                   )}
-                  {isRecording && (
+                  {showRecordingChrome && (
                     <motion.div
                       key="recording-pulse"
                       initial={{ scale: 0.5, opacity: 0 }}
@@ -1467,7 +1478,7 @@ export function HumScreen() {
                       className="w-5 h-5 rounded-full bg-[#FF5924]"
                     />
                   )}
-                  {isProcessing && (
+                  {isProcessing && !isStartingCapture && (
                     <motion.div
                       key="processing-spin"
                       initial={{ opacity: 0 }}
@@ -1481,7 +1492,7 @@ export function HumScreen() {
 
               {/* Particle burst when recording — subtle dots expanding outward */}
               <AnimatePresence>
-                {isRecording &&
+                {showRecordingChrome &&
                   [0, 1, 2].map((i) => (
                     <motion.div
                       key={`particle-${i}`}

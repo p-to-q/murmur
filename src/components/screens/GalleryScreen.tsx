@@ -130,7 +130,7 @@ export async function loadGallerySongsOnce(): Promise<SongWithMeta[]> {
     LOCAL_CREATOR_BOOTSTRAP_TIMEOUT_MS,
     false,
   );
-  if (!hasSession) throw new Error("Local creator session is unavailable");
+  if (!hasSession) return [];
 
   const first = await requestWithTimeout(SONGS_ROUTE, {}, 10_000);
   if (first.ok) return (await first.json()) as SongWithMeta[];
@@ -144,7 +144,7 @@ export async function loadGallerySongsOnce(): Promise<SongWithMeta[]> {
     LOCAL_CREATOR_BOOTSTRAP_TIMEOUT_MS,
     false,
   );
-  if (!refreshed) throw new Error("Local creator session refresh failed");
+  if (!refreshed) return [];
 
   const second = await requestWithTimeout(SONGS_ROUTE, {}, 10_000);
   if (!second.ok) {

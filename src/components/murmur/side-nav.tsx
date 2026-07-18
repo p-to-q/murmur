@@ -697,7 +697,7 @@ function BellIcon({ className }: { className?: string }) {
 
 /* ── NotificationBellButton — in-app inbox + browser alert preference ───── */
 
-function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }) {
+export function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }) {
   const t = useTranslator();
   const {
     permission,
@@ -722,10 +722,22 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
       const button = buttonRef.current.getBoundingClientRect();
       const isCollapsed = document.documentElement.classList.contains("nav-collapsed");
       const popoverHeight = 70;
+      const width = 264;
+      const margin = 12;
       if (isCollapsed) {
-        setPosition({ left: button.right + 12, top: button.top - 4, isCollapsed: true, width: 264 });
+        setPosition({
+          left: Math.min(window.innerWidth - width - margin, Math.max(margin, button.right + 12)),
+          top: Math.min(window.innerHeight - popoverHeight - margin, Math.max(margin, button.top - 4)),
+          isCollapsed: true,
+          width,
+        });
       } else {
-        setPosition({ left: 28, top: button.top - popoverHeight - 8, isCollapsed: false, width: 264 });
+        setPosition({
+          left: Math.min(window.innerWidth - width - margin, Math.max(margin, 28)),
+          top: Math.min(window.innerHeight - popoverHeight - margin, Math.max(margin, button.top - popoverHeight - 8)),
+          isCollapsed: false,
+          width,
+        });
       }
     };
     updatePosition();
@@ -763,7 +775,13 @@ function NotificationBellButton({ chromeless = false }: { chromeless?: boolean }
         : t("nav.notify.desc");
   const handleAlertsToggle = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
-    void setBrowserAlertsEnabled(!alertsOn);
+    void setBrowserAlertsEnabled(!alertsOn).then((nextPermission) => {
+      if (nextPermission === "unsupported") {
+        toast(t("nav.notify.unsupported") || "System alerts are not supported here.");
+      } else if (nextPermission === "denied") {
+        toast.error(t("nav.notify.denied") || "Notifications are blocked.");
+      }
+    });
   };
 
   const buttonCls = chromeless

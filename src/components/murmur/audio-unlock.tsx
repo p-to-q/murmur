@@ -43,7 +43,7 @@ function storeAudioUnlock() {
 
 export function AudioUnlock() {
   const t = useTranslator();
-  const [showHint, setShowHint] = useState(false);
+  const [showHint, setShowHint] = useState(true);
   const [done, setDone] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
 
@@ -102,27 +102,12 @@ export function AudioUnlock() {
     };
   }, [done]);
 
-  // 提示 toast：仍然受 onboardingComplete 限制，避免在首屏引导遮罩里弹出。
-  useEffect(() => {
-    if (typeof window === "undefined" || done || !onboardingComplete) return;
-
-    // 延迟 1.5s 显示提示（只有在用户没有主动点击时）
-    const hintTimer = setTimeout(() => {
-      if (!hasStoredAudioUnlock()) {
-        setShowHint(true);
-      }
-    }, 1500);
-
-    return () => {
-      clearTimeout(hintTimer);
-    };
-  }, [done, onboardingComplete]);
-
   if (done) return null;
+  const shouldShowHint = showHint && onboardingComplete;
 
   return (
     <AnimatePresence>
-      {showHint && (
+      {shouldShowHint && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

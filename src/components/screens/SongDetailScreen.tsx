@@ -87,6 +87,9 @@ type RelatedSong = Pick<Song, "id" | "title" | "vibe" | "tags">;
 type ExportKey = "audio" | "video" | "share" | "link";
 type ShareCardMode = "image" | "video";
 type SongLoadResult = { status: "found"; song: Song } | { status: "not_found" };
+type PublicSongDetail = Omit<Song, "arrangementState"> & {
+  arrangementState?: Song["arrangementState"];
+};
 const CJK_TEXT_RE = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/;
 
 // Pick the download extension for an audio source. Handles both legacy base64
@@ -125,15 +128,96 @@ function entryMotion(reduce: boolean | null, opts: EntryOpts = {}) {
 }
 
 export async function loadSongDetailOnce(songId: string): Promise<SongLoadResult> {
-  await ensureLocalCreatorSession();
-  const response = await requestWithTimeout(`/api/songs/${songId}`, {}, 10_000);
-  return readSongDetailResponse(response);
+  const sessionReady = await ensureLocalCreatorSession();
+  if (sessionReady) {
+    const response = await requestWithTimeout(`/api/songs/${songId}`, {}, 10_000);
+    const result = await readSongDetailResponse(response);
+    if (result.status === "found") return result;
+  }
+
+  return loadPublicSongDetailFallback(songId);
 }
 
 export async function readSongDetailResponse(response: Response): Promise<SongLoadResult> {
   if (response.ok) return { status: "found", song: (await response.json()) as Song };
   if (response.status === 404 || response.status === 410) return { status: "not_found" };
   throw new ApiEnvelopeError(await readApiErrorEnvelope(response, "song_load_failed"));
+}
+
+async function loadPublicSongDetailFallback(songId: string): Promise<SongLoadResult> {
+  const response = await requestWithTimeout(
+    `/api/public/songs/${encodeURIComponent(songId)}`,
+    {},
+    10_000,
+  );
+  if (response.status === 404 || response.status === 410) return { status: "not_found" };
+  if (!response.ok) {
+    throw new ApiEnvelopeError(await readApiErrorEnvelope(response, "song_load_failed"));
+  }
+  const publicSong = (await response.json()) as PublicSongDetail;
+  return { status: "found", song: publicSongToSong(publicSong) };
+}
+
+function publicSongToSong(publicSong: PublicSongDetail): Song {
+  return {
+    ...publicSong,
+    arrangementState:
+      publicSong.arrangementState ??
+      fallbackArrangementState(),
+  };
+}
+
+function fallbackArrangementState(): Song["arrangementState"] {
+  return {
+    melody: {
+      enabled: true,
+      intensity: 0.85,
+      instrument: "piano",
+      originalPattern: "",
+      currentPattern: "",
+      versionHistory: [],
+    },
+    chords: {
+      enabled: true,
+      intensity: 0.45,
+      instrument: "piano",
+      originalPattern: "",
+      currentPattern: "",
+      versionHistory: [],
+    },
+    strings: {
+      enabled: true,
+      intensity: 0.35,
+      instrument: "strings",
+      originalPattern: "",
+      currentPattern: "",
+      versionHistory: [],
+    },
+    drums: {
+      enabled: true,
+      intensity: 0.35,
+      instrument: "drums",
+      originalPattern: "",
+      currentPattern: "",
+      versionHistory: [],
+    },
+    bass: {
+      enabled: true,
+      intensity: 0.4,
+      instrument: "bass",
+      originalPattern: "",
+      currentPattern: "",
+      versionHistory: [],
+    },
+    texture: {
+      enabled: true,
+      intensity: 0.25,
+      instrument: "pad",
+      originalPattern: "",
+      currentPattern: "",
+      versionHistory: [],
+    },
+  };
 }
 
 export function SongDetailScreen({ songId }: { songId: string }) {

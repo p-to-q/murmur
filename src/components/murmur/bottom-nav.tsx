@@ -16,10 +16,12 @@ import {
   MOBILE_JOURNEY_STEPS,
   ownsJourneyNav,
   resolveMobileJourneyStage,
+  type MobileJourneyStep,
 } from "./nav-items";
 import { cn } from "@/lib/cn";
 
 const MOBILE_RAIL_STOP_HREFS = new Set(["/", "/gallery"]);
+const MOBILE_RAIL_MAJOR_STAGES = new Set([0, 4]);
 const SOUNDWAVE_BAR_COUNT = 9;
 const SOUNDWAVE_BAR_WIDTH = 1.35;
 
@@ -44,15 +46,8 @@ export function BottomNav() {
   };
 
   const stage = resolveMobileJourneyStage(pathname);
-  const visibleSteps = useMemo(
-    () =>
-      MOBILE_JOURNEY_STEPS.filter((step) => {
-        if (MOBILE_RAIL_STOP_HREFS.has(step.href)) return true;
-        return stage >= step.unlockAt;
-      }),
-    [stage],
-  );
-  const activeIndex = resolveMobileActiveIndex(stage, visibleSteps.length);
+  const visibleSteps = useMemo(() => resolveMobileRailSteps(stage), [stage]);
+  const activeIndex = resolveMobileActiveIndex(stage, visibleSteps);
   const activeBridgeIndex = resolveActiveBridgeIndex(activeIndex, visibleSteps.length);
 
   useEffect(() => {
@@ -123,10 +118,26 @@ export function BottomNav() {
   );
 }
 
-function resolveMobileActiveIndex(stage: number, visibleCount: number): number {
-  if (visibleCount <= 0) return 0;
-  if (stage < 0) return 0;
-  return Math.min(stage, visibleCount - 1);
+export function resolveMobileRailSteps(stage: number): MobileJourneyStep[] {
+  if (MOBILE_RAIL_MAJOR_STAGES.has(stage)) {
+    return MOBILE_JOURNEY_STEPS.filter((step) => MOBILE_RAIL_STOP_HREFS.has(step.href));
+  }
+  return MOBILE_JOURNEY_STEPS.filter((step) => {
+    if (MOBILE_RAIL_STOP_HREFS.has(step.href)) return true;
+    return stage >= step.unlockAt;
+  });
+}
+
+function resolveMobileActiveIndex(stage: number, visibleSteps: MobileJourneyStep[]): number {
+  if (visibleSteps.length <= 0) return 0;
+  const activeHref =
+    stage >= 4 ? "/gallery" :
+    stage === 3 ? "/studio/name" :
+    stage === 2 ? "/studio" :
+    stage === 1 ? "/vibe" :
+    "/";
+  const activeIndex = visibleSteps.findIndex((step) => step.href === activeHref);
+  return activeIndex >= 0 ? activeIndex : 0;
 }
 
 function resolveBridgeState(
