@@ -127,125 +127,131 @@ export const SongCard = memo(function SongCard({
       animate={inView ? "visible" : "hidden"}
       className="relative group"
     >
-      <motion.button
-        data-testid={`gallery-song-${id}`}
+      <motion.div
         onHoverStart={() => setIsHovered(true)}
         onHoverEnd={() => setIsHovered(false)}
-        onClick={() => onClick(id)}
         whileHover={reduceMotion ? undefined : { y: -6, transition: { type: "spring", stiffness: 400, damping: 25 } }}
         whileTap={reduceMotion ? undefined : { scale: 0.97, transition: { duration: 0.1 } }}
-        className="group relative block w-full text-left"
+        className="group relative block w-full"
       >
-        {/* Cover — rounded square with record-label detail */}
-        <div className="relative overflow-hidden rounded-[20px] aspect-square bg-[#F5F1EB] shadow-[0_16px_32px_rgba(26,26,26,0.14)] ring-1 ring-[#1A1A1A]/[0.06]">
-          {inView ? (
-            <CanvasCoverArt
-              songId={id}
-              gradient={gradient}
-              vibe={vibe}
-              artwork={artwork}
-              className="w-full h-full"
-            />
-          ) : (
-            <div className="absolute inset-0 rounded-[20px] bg-gradient-to-r from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer" />
-          )}
-
-          {/* Cover zoom on hover */}
-          <motion.div
-            className="absolute inset-0 rounded-[20px] pointer-events-none ring-1 ring-white/35"
-            animate={{ scale: isHovered ? 1.035 : 1 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          />
-
-          {/* Incomplete/draft badge — audio never rendered (#291) */}
-          {isDraft && (
-            <div className="absolute top-2 left-2 z-10 rounded-full bg-[#1A1A1A]/55 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.16em] text-white/95 backdrop-blur-sm">
-              {draftLabel || "Draft"}
-            </div>
-          )}
-
-          <div className="absolute inset-[42%] rounded-full bg-[#F5F1EB]/70 shadow-[inset_0_1px_5px_rgba(26,26,26,0.16)] ring-1 ring-[#1A1A1A]/10 backdrop-blur-[1px]" />
-          <div className="absolute inset-[48.5%] rounded-full bg-[#1A1A1A]/20" />
-
-          {/* Sticker label — text-contour white outline, overlapping bottom of record */}
-          <motion.div
-            custom={index}
-            variants={labelVariants}
-            initial="hidden"
-            animate={inView ? "visible" : "hidden"}
-            className="absolute bottom-3 left-3 right-3 flex items-center justify-center"
-            style={{ transform: `rotate(${labelRotation}deg)` }}
-          >
-            <svg
-              aria-label={title}
-              className="h-[42px] w-full overflow-visible px-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.10)]"
-              role="img"
-              viewBox="0 0 260 48"
-            >
-              {titleLines.map((line, lineIndex) => {
-                const isMultiLine = titleLines.length > 1;
-                const y = isMultiLine ? 18 + lineIndex * 20 : 29;
-                const fontSize = isMultiLine ? 17 : 20;
-
-                return (
-                  <text
-                    key={`${line}-${lineIndex}`}
-                    className="font-serif-italic"
-                    dominantBaseline="middle"
-                    fill="#1A1A1A"
-                    fontSize={fontSize}
-                    paintOrder="stroke fill"
-                    stroke="rgba(255,255,255,0.96)"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    strokeWidth="6"
-                    textAnchor="middle"
-                    x="130"
-                    y={y}
-                  >
-                    {line}
-                  </text>
-                );
-              })}
-            </svg>
-          </motion.div>
-        </div>
-
-        {/* Meta — below card */}
-        <div className="mt-2 px-0.5">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-[#B7AEA1] truncate">
-            {vibe}
-            {bpm ? ` · ${bpm} BPM` : ""}
-          </p>
-        </div>
-      </motion.button>
-
-      {onPlay && typeof isPlaying === "boolean" && !isDraft && (
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onPlay(id);
-          }}
-          aria-busy={isPlayLoading || undefined}
-          aria-label={isPlaying ? (pauseLabel || "Pause") : (playLabel || "Play")}
-          aria-pressed={isPlaying}
-          className="absolute top-2 right-2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-[#1A1A1A]/45 text-white/95 backdrop-blur-sm ring-1 ring-white/25 transition-all hover:bg-[#1A1A1A]/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+          type="button"
+          data-testid={`gallery-song-${id}`}
+          onClick={() => onClick(id)}
+          className="block w-full text-left"
         >
-          {isPlayLoading ? (
-            <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" aria-hidden />
-          ) : isPlaying ? (
-            <span className="flex items-center gap-[3px]" aria-hidden>
-              <span className="h-3 w-[3px] rounded-full bg-current" />
-              <span className="h-3 w-[3px] rounded-full bg-current" />
-            </span>
-          ) : (
-            <span
-              aria-hidden
-              className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-current"
+          {/* Cover — rounded square with record-label detail */}
+          <div className="relative overflow-hidden rounded-[20px] aspect-square bg-[#F5F1EB] shadow-[0_16px_32px_rgba(26,26,26,0.14)] ring-1 ring-[#1A1A1A]/[0.06]">
+            {inView ? (
+              <CanvasCoverArt
+                songId={id}
+                gradient={gradient}
+                vibe={vibe}
+                artwork={artwork}
+                className="w-full h-full"
+              />
+            ) : (
+              <div className="absolute inset-0 rounded-[20px] bg-gradient-to-r from-[#ECE5D6] via-[#F5F1EB] to-[#ECE5D6] animate-shimmer" />
+            )}
+
+            {/* Cover zoom on hover */}
+            <motion.div
+              className="absolute inset-0 rounded-[20px] pointer-events-none ring-1 ring-white/35"
+              animate={{ scale: isHovered ? 1.035 : 1 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             />
-          )}
+
+            {/* Incomplete/draft badge — audio never rendered (#291) */}
+            {isDraft && (
+              <div className="absolute top-2 left-2 z-10 rounded-full bg-[#1A1A1A]/55 px-2.5 py-1 text-[9px] font-medium uppercase tracking-[0.16em] text-white/95 backdrop-blur-sm">
+                {draftLabel || "Draft"}
+              </div>
+            )}
+
+            <div className="absolute inset-[42%] rounded-full bg-[#F5F1EB]/70 shadow-[inset_0_1px_5px_rgba(26,26,26,0.16)] ring-1 ring-[#1A1A1A]/10 backdrop-blur-[1px]" />
+            <div className="absolute inset-[48.5%] rounded-full bg-[#1A1A1A]/20" />
+
+            {/* Sticker label — text-contour white outline, overlapping bottom of record */}
+            <motion.div
+              custom={index}
+              variants={labelVariants}
+              initial="hidden"
+              animate={inView ? "visible" : "hidden"}
+              className="absolute bottom-3 left-3 right-3 flex items-center justify-center"
+              style={{ transform: `rotate(${labelRotation}deg)` }}
+            >
+              <svg
+                aria-label={title}
+                className="h-[42px] w-full overflow-visible px-2 drop-shadow-[0_1px_3px_rgba(0,0,0,0.10)]"
+                role="img"
+                viewBox="0 0 260 48"
+              >
+                {titleLines.map((line, lineIndex) => {
+                  const isMultiLine = titleLines.length > 1;
+                  const y = isMultiLine ? 18 + lineIndex * 20 : 29;
+                  const fontSize = isMultiLine ? 17 : 20;
+
+                  return (
+                    <text
+                      key={`${line}-${lineIndex}`}
+                      className="font-serif-italic"
+                      dominantBaseline="middle"
+                      fill="#1A1A1A"
+                      fontSize={fontSize}
+                      paintOrder="stroke fill"
+                      stroke="rgba(255,255,255,0.96)"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      strokeWidth="6"
+                      textAnchor="middle"
+                      x="130"
+                      y={y}
+                    >
+                      {line}
+                    </text>
+                  );
+                })}
+              </svg>
+            </motion.div>
+          </div>
+
+          {/* Meta — below card */}
+          <div className="mt-2 px-0.5">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-[#B7AEA1] truncate">
+              {vibe}
+              {bpm ? ` · ${bpm} BPM` : ""}
+            </p>
+          </div>
         </button>
-      )}
+
+        {onPlay && typeof isPlaying === "boolean" && !isDraft && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPlay(id);
+            }}
+            aria-busy={isPlayLoading || undefined}
+            aria-label={isPlaying ? (pauseLabel || "Pause") : (playLabel || "Play")}
+            aria-pressed={isPlaying}
+            className="absolute top-2 right-2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-[#1A1A1A]/45 text-white/95 backdrop-blur-sm ring-1 ring-white/25 transition-all hover:bg-[#1A1A1A]/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+          >
+            {isPlayLoading ? (
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" aria-hidden />
+            ) : isPlaying ? (
+              <span className="flex items-center gap-[3px]" aria-hidden>
+                <span className="h-3 w-[3px] rounded-full bg-current" />
+                <span className="h-3 w-[3px] rounded-full bg-current" />
+              </span>
+            ) : (
+              <span
+                aria-hidden
+                className="ml-0.5 h-0 w-0 border-y-[6px] border-l-[9px] border-y-transparent border-l-current"
+              />
+            )}
+          </button>
+        )}
+      </motion.div>
     </motion.div>
   );
 });

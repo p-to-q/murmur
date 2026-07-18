@@ -642,6 +642,14 @@
 
 /* Share invite photo treatment — reusable for future background swaps.
    Natural film color with dense grain, dust, and tiny dark specks. */
+.share-card-shell {
+  clip-path: inset(0 round 32px);
+}
+
+.share-card-panel {
+  clip-path: inset(0 round 28px);
+}
+
 .share-card-photo {
   filter: contrast(1.12) saturate(0.94) sepia(0.06);
 }
