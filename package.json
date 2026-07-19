@@ -71,7 +71,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1085.0",
     "@base-ui/react": "^1.6.0",
     "@breezystack/lamejs": "^1.2.7",
-    "@fontsource/lxgw-wenkai-tc": "5.2.9",
+    "@fontsource/lxgw-wenkai-tc": "5.3.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@waffo/pancake-ts": "^0.11.0",
     "class-variance-authority": "^0.7.1",
