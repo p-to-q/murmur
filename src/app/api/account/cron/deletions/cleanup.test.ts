@@ -11,6 +11,7 @@ function dependencies(
   overrides: Partial<AccountDeletionCleanupDependencies> = {},
 ): AccountDeletionCleanupDependencies {
   return {
+    reconcileMissing: async () => 0,
     claimDue: async () => [{ userId: "usr_delete", attempts: 1 }] as never,
     listUnsettledMusicJobs: async () => [],
     advanceMusicJob: async () => undefined,
@@ -39,12 +40,24 @@ describe("account deletion cleanup orchestration", () => {
 
     expect(calls).toEqual(["snapshot", "delete-object", "receipt", "finalize"]);
     expect(summary).toEqual({
+      reconciled: 0,
       candidates: 1,
       completed: 1,
       deferred: 0,
       failed: 0,
       objectsDeleted: 1,
     });
+  });
+
+  it("repairs missing deletion jobs before claiming due work", async () => {
+    const calls: string[] = [];
+    const summary = await runAccountDeletionCleanup({}, dependencies({
+      reconcileMissing: async () => { calls.push("reconcile"); return 2; },
+      claimDue: async () => { calls.push("claim"); return []; },
+    }));
+
+    expect(calls).toEqual(["reconcile", "claim"]);
+    expect(summary.reconciled).toBe(2);
   });
 
   it("defers finalization and persists retry state when object deletion fails", async () => {
