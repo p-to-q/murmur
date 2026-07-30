@@ -4,6 +4,9 @@ ALTER TABLE "music_jobs" ADD COLUMN IF NOT EXISTS "deadline_at" timestamp;
 --> statement-breakpoint
 ALTER TABLE "music_jobs" ADD COLUMN IF NOT EXISTS "next_run_at" timestamp;
 --> statement-breakpoint
+ALTER TABLE "music_jobs" ALTER COLUMN "deadline_at"
+  SET DEFAULT (now() + interval '15 minutes');
+--> statement-breakpoint
 UPDATE "music_jobs"
 SET
   "deadline_at" = COALESCE("deadline_at", "created_at" + interval '15 minutes'),
