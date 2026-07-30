@@ -17,6 +17,10 @@
   URLs remain a later scaling optimization.
 - Production smoke requires durable owner/share audio fixtures and remains read-
   only. Final release evidence still requires one human browser flow.
+- The strict Preview environment contract currently blocks the Vercel Preview
+  for the environment-gate and release PRs. The detailed Vercel build log is
+  private to the project scope; an owner must correct the real Preview resource
+  configuration and produce a green final-stack deployment before release.
 - The service worker handles Push only. Offline creation, Gallery playback, and
   an offline application shell are not supported in this candidate.
 - Billing/refund rows retained after account cleanup remain pseudonymous, not

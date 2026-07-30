@@ -22,7 +22,12 @@ same merged `main` SHA.
 - Playwright creation golden path passes Hum -> Vibe -> Studio -> Save ->
   Gallery -> Share -> public playback in Chromium;
 - frozen install succeeds and `bun audit` reports no vulnerabilities;
-- stacked PR machine checks are green or must be re-proven after each rebase.
+- PRs #441 and #442 currently have green machine checks. PRs #443 and #440
+  pass repository CI but their Vercel Preview deployments fail after the strict
+  Preview environment contract is introduced. The Vercel project owner must
+  inspect the private deployment log, correct the real Preview configuration,
+  and obtain a green deployment on the final stack before release;
+- stacked PR machine checks must be re-proven after each rebase.
 
 The authoritative repository evidence is the green required checks on the
 final `main` SHA. Local results do not replace review or CI.
@@ -56,8 +61,9 @@ credentials into a PR or release note.
 
 1. Merge release-governance PR #436 before feature PRs so partial merges cannot
    auto-deploy to Production.
-2. Merge the reviewed stack #433 -> #434 -> #439 -> #435 -> #437 -> #438, then
-   this release PR, with required checks green at every boundary.
+2. Merge the reviewed stack #433 -> #434 -> #439 -> #435 -> #437 -> #438 ->
+   #441 -> #442 -> #443, then this release PR #440, with required checks green
+   at every boundary.
 3. Confirm the final `main` SHA has green `verify`, CodeQL, dependency review,
    Bun/Python audits, bundle budget, and Vercel Preview.
 4. Apply migrations through `0032`; re-run journal convergence and the explicit
