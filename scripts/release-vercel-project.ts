@@ -72,6 +72,10 @@ export function collectVercelProjectIssues(input: {
   expectedOrg: string;
   expectedRepo: string;
   previewBranch?: string;
+  expectedMusicWorkerResourceId?: string;
+  expectedMusicWorkerSha?: string;
+  expectedDatabaseResourceId?: string;
+  expectedAudioWorkerResourceId?: string;
 }): string[] {
   const issues: string[] = [];
   if (input.project.name !== input.expectedProject) issues.push("Vercel project identity mismatch");
@@ -102,13 +106,57 @@ export function collectVercelProjectIssues(input: {
     if (previewIdentity && productionIdentity && previewIdentity === productionIdentity) {
       issues.push(`Preview ${key} must differ from Production`);
     }
+    if (
+      key === "MURMUR_DATABASE_RESOURCE_ID"
+      && input.expectedDatabaseResourceId
+      && productionIdentity !== input.expectedDatabaseResourceId.toLowerCase()
+    ) {
+      issues.push("Production database resource marker must equal the verified database identity");
+    }
+    if (
+      key === "MURMUR_AUDIO_WORKER_RESOURCE_ID"
+      && input.expectedAudioWorkerResourceId
+      && productionIdentity?.replace(/\/+$/, "")
+        !== input.expectedAudioWorkerResourceId.toLowerCase().replace(/\/+$/, "")
+    ) {
+      issues.push("Production Audio Worker resource marker must equal the health-checked origin");
+    }
+    if (
+      key === "MURMUR_MUSIC_WORKER_RESOURCE_ID"
+      && input.expectedMusicWorkerResourceId
+      && productionIdentity !== input.expectedMusicWorkerResourceId.toLowerCase()
+    ) {
+      issues.push("Production music resource marker must equal the canary endpoint id");
+    }
+  }
+
+  const productionMusicRevision = effectiveRecord(
+    input.envs,
+    "MURMUR_MUSIC_RELEASE_SHA",
+    "production",
+  );
+  if (
+    productionMusicRevision?.type !== "plain"
+    || !/^[0-9a-f]{40}$/i.test(productionMusicRevision.value?.trim() ?? "")
+  ) {
+    issues.push("Production MURMUR_MUSIC_RELEASE_SHA must be one plain immutable Worker SHA");
+  } else if (
+    input.expectedMusicWorkerSha
+    && productionMusicRevision.value?.trim().toLowerCase()
+      !== input.expectedMusicWorkerSha.toLowerCase()
+  ) {
+    issues.push("Production Worker revision marker must equal the canary Worker SHA");
   }
 
   for (const key of RELEASE_CREDENTIALS) {
     const preview = effectiveRecord(input.envs, key, "preview", input.previewBranch);
     const production = effectiveRecord(input.envs, key, "production");
-    if (!preview?.id) issues.push(`Preview ${key} must have one environment-scoped Vercel record`);
-    if (!production?.id) issues.push(`Production ${key} must have one environment-scoped Vercel record`);
+    if (!preview?.id || preview.type !== "sensitive") {
+      issues.push(`Preview ${key} must have one sensitive environment-scoped Vercel record`);
+    }
+    if (!production?.id || production.type !== "sensitive") {
+      issues.push(`Production ${key} must have one sensitive environment-scoped Vercel record`);
+    }
     if (preview?.id && preview.id === production?.id) {
       issues.push(`${key} must not use one Vercel record for Preview and Production`);
     }
@@ -133,6 +181,10 @@ if (import.meta.main) {
   const scope = process.env.VERCEL_SCOPE?.trim();
   const repository = process.env.GITHUB_REPOSITORY?.trim();
   const previewBranch = process.env.VERCEL_PREVIEW_BRANCH?.trim() || undefined;
+  const expectedMusicWorkerResourceId = process.env.EXPECTED_MUSIC_WORKER_RESOURCE_ID?.trim();
+  const expectedMusicWorkerSha = process.env.EXPECTED_MUSIC_WORKER_SHA?.trim();
+  const expectedDatabaseResourceId = process.env.EXPECTED_DATABASE_RESOURCE_ID?.trim();
+  const expectedAudioWorkerResourceId = process.env.EXPECTED_AUDIO_WORKER_RESOURCE_ID?.trim();
   if (!token || !projectName || !scope || !repository?.includes("/")) {
     throw new Error("VERCEL_TOKEN, VERCEL_PROJECT_NAME, VERCEL_SCOPE, and GITHUB_REPOSITORY are required");
   }
@@ -153,6 +205,10 @@ if (import.meta.main) {
     expectedOrg,
     expectedRepo,
     previewBranch,
+    expectedMusicWorkerResourceId,
+    expectedMusicWorkerSha,
+    expectedDatabaseResourceId,
+    expectedAudioWorkerResourceId,
   });
   if (issues.length > 0) {
     console.error("Vercel project preflight failed:");

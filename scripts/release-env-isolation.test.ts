@@ -83,4 +83,13 @@ describe("release environment isolation", () => {
       C: "line\nnext",
     });
   });
+
+  test("treats Neon direct and pooler DSNs as one database resource", async () => {
+    const { databaseIdentity } = await import("./release-env-isolation");
+    expect(databaseIdentity(
+      "postgresql://user:one@ep-name-pooler.us-east-2.aws.neon.tech/murmur?sslmode=require",
+    )).toBe(databaseIdentity(
+      "postgresql://user:two@ep-name.us-east-2.aws.neon.tech:5432/murmur?sslmode=require",
+    ));
+  });
 });

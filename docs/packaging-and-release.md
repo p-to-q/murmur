@@ -20,15 +20,18 @@ configuration. Source: [GitHub Docs: Sharing actions and workflows with your org
 GitHub Releases can attach distributable assets in addition to the auto-generated
 zip and tarball of the repository at a tag. Source: [GitHub Docs: About releases](https://docs.github.com/articles/about-releases?ref=amos-blog)
 
-### Current Vercel deployment (settled)
+### Current Vercel deployment
 
-The deploy path is no longer open: production runs on **Vercel's native Git
-integration**. Every pull request gets a Preview deployment and every push to
-`main` gets a Production deployment, using the build command
-`bun run env:audit && bun run build` (see `vercel.json`). The operational
-runbook — required env, migration ordering, rollback, and ownership — lives in
-[repository-operations.md](./repository-operations.md); this document covers
-versioning and packaging.
+Pull requests use Vercel's native Git integration for Preview. The canonical
+Production path is the protected **Release (production)** GitHub workflow: it
+proves the exact green `main` SHA, runs the approved provider canary and ordered
+database migration, asks Vercel to build that checkout without assigning the
+Production domains, smokes the immutable deployment, and only then promotes it.
+The owner still has to verify in the Vercel dashboard that native Production
+auto-deploys for `main` are disabled before acknowledging the cutover. The
+operational runbook — required env, migration ordering, rollback, and ownership
+— lives in [repository-operations.md](./repository-operations.md); this document
+covers versioning and packaging.
 
 One plan constraint is load-bearing: the account **rejects sub-daily cron
 schedules** (a Hobby-tier restriction learned empirically — an hourly cron broke
@@ -38,8 +41,9 @@ crons.
 
 ### Prebuilt deploy option (alternative, not current)
 
-Native Git integration is the current path. If provenance control later requires
-decoupling the build from Vercel, Vercel also supports `vercel build` followed by
+The protected workflow currently uploads the exact source checkout for a remote
+Vercel build. If provenance control later requires decoupling the build from
+Vercel, Vercel also supports `vercel build` followed by
 `vercel deploy --prebuilt`, which lets a prebuilt project be deployed without
 sharing source code with Vercel at deploy time. Source:
 
@@ -74,6 +78,8 @@ Required signals:
 - `lint` and `build` are green
 - critical user flow is manually checked
 - environment contract is current
+- final merged PR Preview is bound to its exact head SHA and succeeded
+- protected release credentials and the recent dashboard acknowledgement exist
 
 ### 2. Artifact release
 
@@ -139,18 +145,20 @@ For artifact-oriented milestones, also preserve:
 
 ## Stage 3. Deployable app output
 
-The hosting path is settled: **Option A (Vercel native Git integration)** is the
-production path today. Options B and C are kept as documented alternatives, not
-open decisions.
+The hosting path is settled: **Option A (protected GitHub Actions exact-SHA
+release to Vercel)** is the production path. Vercel's Git integration remains
+enabled only for pull-request Previews. Options B and C are documented
+alternatives, not open decisions.
 
-### Option A. Vercel native Git integration (current)
+### Option A. GitHub Actions exact-SHA Vercel release (current)
 
 This is what production runs on:
 
 - source stays in the private GitHub repo
 - the repo is connected to a Vercel project with Preview + Production
   environments
-- Preview deploys on every PR, Production deploys on every push to `main`
+- Preview deploys on every PR; native Production auto-deploy for `main` is
+  disabled and the protected exact-SHA Actions workflow owns Production
 - schema changes are applied by `.github/workflows/migrate.yml`, not by the
   deploy (see [repository-operations.md](./repository-operations.md))
 
@@ -250,14 +258,15 @@ tag and Release are created by the owner of the production release path.
 
 ## Recommended next operational step for Murmur
 
-The deploy path is settled (Vercel native Git integration; see
-[repository-operations.md](./repository-operations.md)), and CI already runs the
-required gate. The remaining operational steps are owner/admin actions, not code:
+The deploy path is settled (protected exact-SHA Actions release with Vercel
+Preview integration; see [repository-operations.md](./repository-operations.md)).
+The remaining operational steps require owner credentials and protected
+environment approval:
 
 1. keep collaboration in the private GitHub repo
-2. activate the ordered migrate-then-deploy cutover so production code never
-   ships ahead of its schema (tracked in issue #307)
-3. apply a branch-protection ruleset on `main` (tracked in issue #308)
+2. configure the protected Release Evidence and Production values
+3. prove the ordered preflight/canary/migrate/deploy path on the exact green
+   `main` SHA
 4. follow [Post-merge tag and release](#post-merge-tag-and-release) on each
    product release
 
@@ -335,12 +344,7 @@ SemVer or build.
 
 ## Suggested next decision
 
-The deploy-path decision is closed (Vercel native Git integration). The open
-decisions now are operational governance, not hosting:
-
-- **ordered production rollout** (issue #307): serialize migrate-before-deploy
-  instead of the current parallel race — an owner/admin action, documented in
-  [repository-operations.md](./repository-operations.md).
-- **branch protection on `main`** (issue #308): require PR + the CI `verify`
-  check + approval before merge — a repository setting the owner applies in
-  GitHub.
+The deploy-path and branch-protection decisions are closed. The remaining work
+for a release is evidence collection: configure protected credentials, verify
+the Vercel dashboard-only cutover, run the real provider canary, review its WAV,
+and release only the exact green `main` SHA.

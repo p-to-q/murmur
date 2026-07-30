@@ -406,6 +406,11 @@ function verifyV2CandidateEvidence(input: {
     || delivered.conditioning.styleMix === null
     || Math.abs(delivered.conditioning.styleMix - input.expected.styleMix) > 0.0051
     || delivered.conditioning.melodyConditioned !== requestedMelody
+    || delivered.conditioning.preNormalizationPeak === null
+    || delivered.conditioning.preNormalizationPeak <= 0
+    || delivered.conditioning.preNormalizationRms === null
+    || delivered.conditioning.preNormalizationRms <= 0
+    || delivered.conditioning.normalizationGainDb === null
     || (requestedMelody && (
       (delivered.conditioning.melodySegments ?? 0) < 1
       || (delivered.conditioning.melodyCoverage ?? 0) <= 0
