@@ -25,7 +25,7 @@
     },
     {
       "path": "/api/storage/cron/song-audio",
-      "schedule": "*/15 * * * *"
+      "schedule": "30 6 * * *"
     }
   ]
 }
