@@ -81,14 +81,13 @@ sequence. Vercel's native Git integration remains useful for pull-request
 Previews and **must not auto-deploy `main` to Production**.
 
 - **Preview:** the native Git integration creates Preview deployments.
-- **Production:** a maintainer dispatches the `Release (production)` workflow in
-  [`.github/workflows/migrate.yml`](../.github/workflows/migrate.yml) with the
-  exact current `main` SHA. The protected Production environment requires an
-  independent approval before migrations begin, and the workflow independently
-  proves that `CI / verify` succeeded for that SHA.
-- **Exact revision:** the release checks out that 40-character SHA and uploads
-  that checkout for a remote Vercel Production build. The deployed revision is
-  recorded in Vercel metadata and verified before upload.
+- **Production:** the `Release (production)` workflow in
+  [`.github/workflows/migrate.yml`](../.github/workflows/migrate.yml) releases
+  only after the `CI / verify` job succeeds for the current `main` SHA and the
+  protected Release Evidence and Production approvals are granted.
+- **Exact revision:** the release checks out that 40-character SHA, asks Vercel
+  to build it with `--skip-domain`, smokes the immutable URL, then promotes only
+  that verified deployment.
 - **Build command:** `bun run env:audit && bun run build` (see `vercel.json`).
   `env:audit` (`scripts/env-audit.ts`) fails the production build when a required
   environment variable is missing, so a misconfigured production deploy fails
@@ -99,78 +98,115 @@ Previews and **must not auto-deploy `main` to Production**.
 Database migrations run before the Vercel deploy in
 [`.github/workflows/migrate.yml`](../.github/workflows/migrate.yml):
 
-- **Trigger:** a manual fail-closed dispatch that requires the full current
-  `main` SHA and independently verifies successful CI. Ordinary merges do not
-  deploy Production, so a release train can land several reviewed PRs before a
-  single deliberate cutover.
+- **Trigger:** a manual fail-closed dispatch from `main` that requires a full
+  SHA and independently verifies the successful `CI` workflow for that exact
+  current `main` commit. Ordinary merges do not deploy Production, so a release
+  train can land several reviewed PRs before a deliberate cutover.
 - **What it runs:** `bun run db:migrate`, which applies the Drizzle migrations in
   [`src/lib/db/migrations/`](../src/lib/db/migrations/) tracked by the journal
   `src/lib/db/migrations/meta/_journal.json`.
-- **Fail-closed:** a "Validate migration configuration" step exits 1 when the
-  `DATABASE_URL_UNPOOLED` secret is absent, so a green run always means the
-  migration command was actually attempted against a configured target. This
-  closed the earlier migration-secret gap (issue #305) where a missing secret
-  produced a misleadingly green run.
+- **Fail-closed:** migration runs only in the protected Production environment
+  after its second approval, and exits when the dedicated migration direct DSN,
+  pooled runtime identity, or deploy token is absent. A green release therefore
+  means migration was actually attempted against a configured target.
 - **Connection target:** the direct, non-pooled endpoint (`DATABASE_URL_UNPOOLED`)
   — see [Database connection contract](#database-connection-contract) below for
   the full DSN precedence.
+- **Read-only evidence:** `mode=preflight` proves Vercel project settings,
+  Preview/Production resource isolation, Audio Worker readiness, production DB
+  identity, and that the Drizzle ledger is a non-empty exact prefix of the
+  candidate journal. It does not enqueue GPU work or mutate production.
+- **Provider evidence:** `mode=canary` stops after Release Evidence approval and one
+  bounded 10-second hum+melody RunPod job. The workflow requires the immutable
+  Worker revision, JAX backend, full v2 receipts, pre-normalization evidence,
+  zero interior dropouts, and both Worker/Web technical Gates; it retains the
+  non-user canary WAV and sanitized report for 14 days for listening review.
 
 ### Authoritative release sequence
 
 The production workflow is deliberately one serial chain:
 
 1. `CI / verify` succeeds for the current `main` SHA;
-2. a maintainer dispatches that full SHA and the release preflight proves it is
-   still the tip of `main` with a successful CI run; the gate code itself is
-   loaded from protected `main`, never from an arbitrary requested ref;
-3. a different authorized reviewer approves the protected Production
-   environment, then the release gate repeats the SHA/CI check;
-4. production migrations run through the direct connection;
-5. the same migration command runs again as a convergence check;
+2. a maintainer dispatches that full SHA; gate code is loaded from protected
+   `main`, never from an arbitrary requested ref, and read-only preflight proves
+   the SHA is still the tip of `main` with successful CI. Vercel
+   Preview is a READY deployment of the identical Git tree and exact PR head,
+   Rolling Releases are disabled, resources are isolated, the Audio Worker is
+   ready, and the DB ledger is an exact candidate prefix;
+3. protected Release Evidence approval authorizes one bounded provider canary and
+   its evidence artifact;
+4. a second protected approval authorizes production mutation;
+5. production migrations run through the direct connection, then both the
+   migration and read-only catalog connections must see the exact complete
+   ledger and identify the same database as the pooled runtime before schema
+   catalog/data invariants are checked;
 6. the exact checkout is uploaded for a remote Vercel Production build with
-   domain promotion disabled, where Sensitive environment variables remain
-   inside Vercel; the approved SHA is injected as explicit non-secret build
-   metadata instead of relying on remote `.git` availability;
-7. the workflow waits for that immutable deployment to finish and checks its
-   public `/api/release` identity plus the HTTP smoke surface against the full
-   approved SHA;
-8. Vercel explicitly promotes that verified deployment to Production; the
-   release path requires Rolling Releases to be disabled and proves the public
-   alias resolves to the same immutable deployment ID;
-9. the identity-aware HTTP smoke requires three cache-bypassed matches against
-   the public Production alias at `https://murmur.ptoq.io` and fails if any
-   release identity remains stale.
+   domain promotion disabled, where Sensitive values remain inside Vercel; the
+   workflow proves the immutable deployment is READY and its public
+   `/api/release` identity matches the full approved SHA;
+7. Vercel promotes that verified deployment only after Rolling Releases are
+   proved disabled and the public alias converges to the same deployment ID;
+8. identity-aware HTTP and audio smoke run against
+   `https://murmur.ptoq.io` and reject stale release identity.
 
 Any failed stage stops later stages. The workflow uses a non-canceling
 production concurrency group so two merges cannot overlap migrations or
 deployment. A queued stale release also stops before migration because the
 requested SHA no longer matches the tip of `main`.
 
-Required GitHub configuration:
+Required GitHub configuration lives in two protected environments, not at
+repository-secret scope. **Release Evidence** holds only read-only/provider
+canary access; **Production** holds migration and deploy access. Both allow only
+protected branches, require a reviewer other than the dispatcher, and disallow
+administrator bypass. A workflow dispatched from any ref other than `main`
+fails before reading an environment value.
 
-| Kind              | Name                                | Purpose                                                                                                            |
-| ----------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Secret            | `DATABASE_URL_UNPOOLED`             | Direct production migration DSN                                                                                    |
-| Secret            | `VERCEL_TOKEN`                      | Vercel CLI authentication                                                                                          |
-| Variable          | `VERCEL_PROJECT_NAME`               | Vercel project; defaults to `murmur`                                                                               |
-| Variable          | `VERCEL_SCOPE`                      | Vercel team/account; defaults to `moapachas-projects`                                                              |
-| Variable          | `VERCEL_NATIVE_PRODUCTION_DISABLED` | Owner acknowledgement that native `main` Production deploy is disabled; release fails closed unless exactly `true` |
-| Variable          | `VERCEL_ROLLING_RELEASES_DISABLED`  | Owner acknowledgement that Vercel Rolling Releases are disabled; release fails closed unless exactly `true`        |
-| Secret (optional) | `VERCEL_AUTOMATION_BYPASS_SECRET`   | Bypass header for protected deployment smoke; omit when deployment URLs are public                                 |
-
-The GitHub `Production` environment accepts only protected branches, prevents
-self-review and administrator bypass, and requires approval from an authorized
-maintainer. Keep that environment gate before the migration job: approval after
-migration would be too late to stop a database cutover.
+| Kind | Name | Purpose |
+|------|------|---------|
+| Evidence secret | `MURMUR_RELEASE_VERCEL_TOKEN` | Read-only project/env token; duplicate a deploy-capable value only in Production |
+| Evidence secret | `MURMUR_RELEASE_DATABASE_PREFLIGHT_URL_UNPOOLED` | Direct read-only DSN for ledger evidence |
+| Evidence secret | `MURMUR_RELEASE_DATABASE_RUNTIME_URL` | Pooled read-only runtime DSN for identity proof |
+| Evidence secret | `MURMUR_RELEASE_RUNPOD_API_KEY` | RunPod key restricted to the canary endpoint |
+| Evidence variable | `MURMUR_RELEASE_AUDIO_WORKER_URL` | Production Audio Worker health origin |
+| Evidence variable | `MURMUR_RELEASE_RUNPOD_ENDPOINT_ID` | Production music endpoint identity |
+| Evidence variable | `MURMUR_RELEASE_MUSIC_WORKER_SHA` | Full immutable Worker image SHA |
+| Evidence variable | `MURMUR_RELEASE_MUSIC_MODEL` | Expected runtime model; defaults to `mrt2_base` |
+| Production secret | `MURMUR_RELEASE_VERCEL_TOKEN` | Deploy/promote-capable Vercel token |
+| Production secret | `MURMUR_RELEASE_DATABASE_MIGRATION_URL_UNPOOLED` | Direct migration-capable DSN |
+| Production secret | `MURMUR_RELEASE_DATABASE_RUNTIME_URL` | Pooled runtime DSN for post-migrate identity proof |
+| Production secret | `MURMUR_RELEASE_DATABASE_PREFLIGHT_URL_UNPOOLED` | Direct read-only DSN for post-migrate catalog verification |
+| Production secret | `MURMUR_RELEASE_SMOKE_SESSION_TOKEN` | Owner-session token for the fixed audio smoke fixture |
+| Production secret | `MURMUR_RELEASE_VERCEL_BYPASS_SECRET` | Optional deployment-protection bypass for smoke |
+| Production variable | `MURMUR_RELEASE_SMOKE_SHARE_CODE` | Fixed public audio smoke fixture |
+| Production variable | `MURMUR_RELEASE_SMOKE_SONG_ID` | Fixed owner audio smoke fixture |
+| Variable | `VERCEL_PROJECT_NAME` | Vercel project; defaults to `murmur` |
+| Variable | `VERCEL_SCOPE` | Vercel team/account; defaults to `moapachas-projects` |
+| Both-environment variable | `VERCEL_NATIVE_PRODUCTION_DISABLED` | Owner acknowledgement that native `main` Production deploy is disabled; release fails closed unless exactly `true` |
+| Both-environment variable | `VERCEL_NATIVE_PRODUCTION_DISABLED_VERIFIED_AT` | ISO timestamp of the dashboard check; expires after seven days |
 
 Required Vercel cutover: open the Murmur project Git settings and disable
 Production deployment for pushes to `main` while retaining Preview deployments.
-Also disable Rolling Releases for this project. After verifying both settings,
-set repository variables `VERCEL_NATIVE_PRODUCTION_DISABLED=true` and
-`VERCEL_ROLLING_RELEASES_DISABLED=true`. The workflow cannot query those
-dashboard settings directly, but it fails closed without both auditable owner
-acknowledgements. Leaving either mechanism enabled would create an uncontrolled
-cutover path even though the Actions release itself is correctly ordered.
+After verifying the setting, set the two variables in both protected GitHub
+environments
+`VERCEL_NATIVE_PRODUCTION_DISABLED=true` and
+`VERCEL_NATIVE_PRODUCTION_DISABLED_VERIFIED_AT=<current ISO timestamp>`. The
+workflow cannot query the dashboard setting directly, so the acknowledgement
+expires after seven days and must be refreshed for a later release. Leaving
+native Production enabled still recreates the pre-CI race even though the
+Actions release itself is correctly ordered.
+
+Vercel must also hold separate plain Preview/Production resource identity
+markers (`MURMUR_*_RESOURCE_ID`) and an immutable production
+`MURMUR_MUSIC_RELEASE_SHA`. `scripts/deploy-music-serverless.ts` writes the
+music endpoint identity and Worker SHA only after its deploy warm-up verifies
+the v2 protocol. The database marker is `sha256:<database identity hash>` emitted
+by the read-only ledger preflight, and the Audio Worker marker is its canonical
+health-checked origin. The storage marker must be the real bucket/provider
+resource ID verified during owner configuration. Sensitive values are never
+copied into release artifacts.
+Vercel Sensitive variables cannot be decrypted after creation and are available
+only inside Vercel build/runtime, so GitHub uses separately scoped
+Production-environment credentials instead of `vercel env pull/run`.
 
 Do not reintroduce `vercel pull` followed by a runner-local `vercel build` for
 Production. Vercel exports Sensitive variables as redacted placeholders outside
@@ -248,7 +284,7 @@ rather than trusting this summary to stay complete:
 
 | Purpose | Variables |
 |---------|-----------|
-| Production release | `DATABASE_URL_UNPOOLED`, `VERCEL_TOKEN`; repository variables `VERCEL_PROJECT_NAME`, `VERCEL_SCOPE`, `VERCEL_NATIVE_PRODUCTION_DISABLED`, `VERCEL_ROLLING_RELEASES_DISABLED` |
+| Production release | dedicated `MURMUR_RELEASE_*` secrets/variables in Release Evidence and Production; repository variables `VERCEL_PROJECT_NAME`, `VERCEL_SCOPE` |
 | Runtime DB (pooled) | `DATABASE_URL` or `POSTGRES_URL` — must be a Neon pooler host in production |
 | Cron routes | `CRON_SECRET` (non-placeholder) |
 | Web push notifications | `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, `WEB_PUSH_SUBJECT` |
@@ -310,10 +346,13 @@ limits are different:
   regressions.
 - Vercel's external Git setting must remain configured to skip native Production
   deploys from `main`; GitHub Actions cannot audit that dashboard-only setting.
-- Production smoke is deliberately read-only. It proves page and music-health
-  contracts, not a paid creation or payment transaction.
-- Audio acceptance is automated, but the dataset mix is still bounded by what
-  can be checked in or deterministically scaffolded inside CI.
+- Production smoke is deliberately read-only. The separately approved provider
+  canary proves one real RunPod generation from a pinned, MIDI-annotated
+  HumTrans validation case, not billing or a user-owned song.
+- Audio acceptance downloads a bounded official HumTrans validation subset with
+  MIDI references. The weekday run evaluates eight pinned valid-split cases; a
+  manual run may select 1–32. Release evidence hard-gates only the production `auto`
+  transcription path on real cases; all-provider comparisons remain diagnostic.
 - `next build` is green through the configured webpack command path, and
   `bun run build:audit` currently passes without audited Next.js warnings. The
   audit script still recognizes the older local-storage NFT tracing warning if

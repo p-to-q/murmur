@@ -515,17 +515,16 @@ function persistEnv(endpointId: string, volumeId: string) {
 async function syncVercelEnv(apiKey: string, endpointId: string) {
   console.log("Syncing Vercel production env (RunPod serverless music engine)…");
   const pathEnv = `${process.env.HOME}/.bun/bin:${process.env.PATH ?? ""}`;
-  for (const [key, value] of [
-    ["RUNPOD_SERVERLESS_ENDPOINT_ID", endpointId],
-    ["RUNPOD_API_KEY", apiKey],
-    ["MUSIC_ENGINE_MODE", "serverless"],
-    ["MURMUR_MUSIC_QUALITY_EVIDENCE_REQUIRED", "1"],
-    ["MURMUR_MUSIC_V2_EVIDENCE_REQUIRED", "1"],
+  for (const [key, value, sensitivity] of [
+    ["RUNPOD_SERVERLESS_ENDPOINT_ID", endpointId, "--no-sensitive"],
+    ["RUNPOD_API_KEY", apiKey, "--sensitive"],
+    ["MURMUR_MUSIC_RELEASE_SHA", RELEASE_REVISION, "--no-sensitive"],
+    ["MURMUR_MUSIC_WORKER_RESOURCE_ID", endpointId, "--no-sensitive"],
+    ["MUSIC_ENGINE_MODE", "serverless", "--no-sensitive"],
+    ["MURMUR_MUSIC_QUALITY_EVIDENCE_REQUIRED", "1", "--no-sensitive"],
+    ["MURMUR_MUSIC_V2_EVIDENCE_REQUIRED", "1", "--no-sensitive"],
   ] as const) {
-    await runShell(
-      `printf '%s' '${value.replace(/'/g, `'\\''`)}' | vercel env add ${key} production --force`,
-      { cwd: ROOT, pathEnv },
-    );
+    await runVercelEnvAdd(key, value, sensitivity, pathEnv);
   }
   console.log(
     "Vercel production env updated. Release the exact main SHA through the GitHub Actions Release (production) workflow; this script does not bypass that gate.",
@@ -587,21 +586,30 @@ function warmupHumWav(duration: number): Uint8Array {
   return bytes;
 }
 
-function runShell(
-  command: string,
-  options: { cwd?: string; pathEnv?: string } = {},
+function runVercelEnvAdd(
+  key: string,
+  value: string,
+  sensitivity: "--sensitive" | "--no-sensitive",
+  pathEnv: string,
 ): Promise<void> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn("sh", ["-lc", command], {
-      cwd: options.cwd,
-      env: { ...process.env, PATH: options.pathEnv ?? process.env.PATH },
-      stdio: "inherit",
+    const child = spawn(
+      "vercel",
+      ["env", "add", key, "production", "--force", sensitivity],
+      {
+        cwd: ROOT,
+        env: { ...process.env, PATH: pathEnv },
+        stdio: ["pipe", "inherit", "inherit"],
+      },
+    );
+    child.on("error", (error) => {
+      reject(error);
     });
-    child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) resolvePromise();
-      else reject(new Error(`shell ${command} exited with code ${code ?? "unknown"}`));
+      else reject(new Error(`vercel env add ${key} exited with code ${code ?? "unknown"}`));
     });
+    child.stdin.end(value);
   });
 }
 

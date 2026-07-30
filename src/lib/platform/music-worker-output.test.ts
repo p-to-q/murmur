@@ -242,6 +242,19 @@ describe("music worker output protocol", () => {
     })).toThrow("music_conditioning_hum_not_applied");
   });
 
+  it("rejects incomplete v2 pre-normalization evidence", () => {
+    const bytes = toneWav();
+    const output = v2EvidencedOutput(bytes);
+    output.diagnostics.candidates[0].conditioning.pre_normalization_rms = 0;
+    expect(() => verifyMusicWorkerOutput({
+      output,
+      bytes,
+      expected,
+      requireEvidence: true,
+      requireV2Evidence: true,
+    })).toThrow("music_worker_candidate_conditioning_mismatch");
+  });
+
   it("rejects a mismatched receipt", () => {
     expect(() => verifyMusicWorkerOutput({
       output: evidencedOutput(),

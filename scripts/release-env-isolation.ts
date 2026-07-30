@@ -41,13 +41,15 @@ function firstValue(env: Environment, keys: readonly string[]): string | null {
   return null;
 }
 
-function databaseIdentity(value: string): string | null {
+export function databaseIdentity(value: string): string | null {
   try {
     const url = new URL(value);
     if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") return null;
     const database = url.pathname.replace(/^\/+/, "").toLowerCase();
     if (!url.hostname || !database) return null;
-    return `${url.hostname.toLowerCase()}/${database}`;
+    const hostname = url.hostname.toLowerCase().replace(/-pooler(?=\.|$)/, "");
+    const port = url.port || "5432";
+    return `${hostname}:${port}/${database}`;
   } catch {
     return null;
   }
@@ -96,9 +98,6 @@ export function collectReleaseEnvironmentIsolationIssues(
     const productionValue = firstValue(production, rule.keys);
     if (!previewValue) issues.push(`Preview ${rule.label} is missing`);
     if (!productionValue) issues.push(`Production ${rule.label} is missing`);
-    if (previewValue && productionValue && previewValue === productionValue) {
-      issues.push(`Preview ${rule.label} must not be shared with Production`);
-    }
   }
   return issues;
 }

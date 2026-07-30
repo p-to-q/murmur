@@ -34,7 +34,7 @@ describe("release environment isolation", () => {
     expect(collectReleaseEnvironmentIsolationIssues(preview, production)).toEqual([]);
   });
 
-  test("rejects shared resource identities and credentials without exposing values", () => {
+  test("rejects shared resource identities without comparing redacted credentials", () => {
     const issues = collectReleaseEnvironmentIsolationIssues(
       {
         ...preview,
@@ -52,10 +52,28 @@ describe("release environment isolation", () => {
       "Preview storage bucket must differ from Production",
       "Preview audio Worker endpoint must differ from Production",
       "Preview music Worker endpoint must differ from Production",
-      "Preview storage access key must not be shared with Production",
-      "Preview audio Worker token must not be shared with Production",
     ]);
     expect(issues.join(" ")).not.toContain("production-audio-token");
+  });
+
+  test("accepts Vercel's redacted sensitive placeholders when records exist", () => {
+    const redacted = "[SENSITIVE]";
+    expect(collectReleaseEnvironmentIsolationIssues(
+      {
+        ...preview,
+        MURMUR_STORAGE_S3_ACCESS_KEY_ID: redacted,
+        MURMUR_STORAGE_S3_SECRET_ACCESS_KEY: redacted,
+        AUDIO_WORKER_TOKEN: redacted,
+        RUNPOD_API_KEY: redacted,
+      },
+      {
+        ...production,
+        MURMUR_STORAGE_S3_ACCESS_KEY_ID: redacted,
+        MURMUR_STORAGE_S3_SECRET_ACCESS_KEY: redacted,
+        AUDIO_WORKER_TOKEN: redacted,
+        RUNPOD_API_KEY: redacted,
+      },
+    )).toEqual([]);
   });
 
   test("parses Vercel-style quoted dotenv files", () => {
@@ -64,5 +82,14 @@ describe("release environment isolation", () => {
       B: "three",
       C: "line\nnext",
     });
+  });
+
+  test("treats Neon direct and pooler DSNs as one database resource", async () => {
+    const { databaseIdentity } = await import("./release-env-isolation");
+    expect(databaseIdentity(
+      "postgresql://user:one@ep-name-pooler.us-east-2.aws.neon.tech/murmur?sslmode=require",
+    )).toBe(databaseIdentity(
+      "postgresql://user:two@ep-name.us-east-2.aws.neon.tech:5432/murmur?sslmode=require",
+    ));
   });
 });
