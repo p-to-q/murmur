@@ -594,7 +594,7 @@ signal: `NODE_ENV=development` / `test`, or `MURMUR_DB_ALLOW_LOCAL_FALLBACK=1`.
 **Current architecture**: Next.js frontend on Vercel; transcription (audio-engine) runs on Fly.io; music generation (Magenta RT2) runs on RunPod Serverless (scale-to-zero GPU); Postgres via Drizzle; billing via Waffo.
 
 Production application releases are owned by GitHub Actions and run as
-`CI -> migration -> convergence verify -> exact-SHA prebuilt deploy -> smoke`.
+`CI -> exact-SHA preflight -> evidence approval -> migration -> convergence verify -> exact-SHA deploy -> immutable smoke -> promote -> alias and audio smoke`.
 Vercel's native Git integration may create Previews but must not independently
 deploy `main` to Production. See
 **[docs/repository-operations.md](./docs/repository-operations.md)** for the
