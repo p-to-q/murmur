@@ -16,6 +16,7 @@ import { users } from "./users";
 
 export type MusicJobStatus =
   | "accepted"
+  | "submitting"
   | "queued"
   | "running"
   | "result_ready"
@@ -127,8 +128,13 @@ export const musicJobs = pgTable(
     spendLedgerId: text("spend_ledger_id").references(() => notesLedger.id, {
       onDelete: "set null",
     }),
-    attempt: integer("attempt").notNull().default(0),
+    // The physical column remains `attempt` for a no-risk compatibility
+    // migration; semantically this is a fencing epoch, not a model retry.
+    leaseEpoch: integer("attempt").notNull().default(0),
     leaseUntil: timestamp("lease_until"),
+    providerSubmittedAt: timestamp("provider_submitted_at"),
+    deadlineAt: timestamp("deadline_at").notNull(),
+    nextRunAt: timestamp("next_run_at"),
     cancelRequestedAt: timestamp("cancel_requested_at"),
     errorCode: varchar("error_code", { length: 64 }),
     errorMessage: text("error_message"),
@@ -140,7 +146,7 @@ export const musicJobs = pgTable(
   (t) => ({
     operation: uniqueIndex("music_jobs_user_operation_uidx").on(t.userId, t.operationId),
     byUserTime: index("music_jobs_user_time_idx").on(t.userId, t.createdAt),
-    runnable: index("music_jobs_runnable_idx").on(t.status, t.leaseUntil),
+    runnable: index("music_jobs_runnable_v2_idx").on(t.status, t.nextRunAt, t.leaseUntil),
     providerJob: uniqueIndex("music_jobs_provider_job_uidx")
       .on(t.provider, t.providerJobId)
       .where(sql`${t.providerJobId} IS NOT NULL`),

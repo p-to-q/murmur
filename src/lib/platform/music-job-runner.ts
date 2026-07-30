@@ -2,12 +2,13 @@ import {
   attachMusicJobProvider,
   claimMusicJob,
   confirmMusicJobCanceled,
+  expireMusicJob,
   failMusicJob,
   getMusicJobForUser,
   markMusicJobSubmissionUnknown,
   recordMusicJobResult,
+  refreshMusicJobSubmissionLease,
   releaseMusicJobLease,
-  renewMusicJobLease,
   succeedMusicJob,
 } from "@/lib/db/queries/music-jobs";
 import {
@@ -26,6 +27,11 @@ import {
 import { verifyMusicWorkerOutput } from "@/lib/platform/music-worker-output";
 import { getObjectStore } from "@/lib/storage";
 import { storeMusicJobOutput } from "@/lib/storage/music-job-artifacts";
+import {
+  isMusicJobDeadlineReached,
+  musicJobNextPollAt,
+  shouldExpireProviderNotFound,
+} from "@/lib/music/music-job-policy";
 import { createHash } from "node:crypto";
 
 const LEASE_MS = 45_000;
@@ -57,10 +63,30 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
     }
     return;
   }
+  if (
+    !initial.providerJobId
+    && ["submitting", "running", "cancel_requested"].includes(initial.status)
+    && (!initial.leaseUntil || initial.leaseUntil.getTime() < Date.now())
+  ) {
+    const unknown = await markMusicJobSubmissionUnknown({
+      userId,
+      jobId,
+      leaseEpoch: initial.leaseEpoch,
+      leaseExpiredBefore: new Date(),
+      errorMessage: "Provider submission lease expired before a job id was recorded",
+    });
+    if (unknown) await refundJobSpend(unknown, "submission_unknown");
+    return;
+  }
   const config = getMusicServerlessConfig();
   if (!config) {
-    await refundJobSpend(initial, "worker_unconfigured");
-    await failMusicJob({ userId, jobId, errorCode: "worker_unconfigured", errorMessage: "RunPod is not configured" });
+    const failed = await failMusicJob({
+      userId,
+      jobId,
+      errorCode: "worker_unconfigured",
+      errorMessage: "RunPod is not configured",
+    });
+    if (failed) await refundJobSpend(failed, "worker_unconfigured");
     return;
   }
 
@@ -74,8 +100,45 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
       await settleRecordedResult(claimed);
       return;
     }
+    if (isMusicJobDeadlineReached(claimed.deadlineAt)) {
+      if (providerJobId) {
+        await cancelSubmittedJob(config, providerJobId).catch(() => false);
+      }
+      const expired = await expireMusicJob({
+        userId,
+        jobId,
+        leaseEpoch: claimed.leaseEpoch,
+        errorCode: "music_job_deadline_reached",
+        errorMessage: "Music generation exceeded its execution deadline",
+      });
+      if (expired) await refundJobSpend(expired, "music_job_deadline_reached");
+      return;
+    }
     if (!providerJobId) {
       const providerInput = await buildProviderInput(claimed.input, jobId);
+      const submissionLease = await refreshMusicJobSubmissionLease({
+        userId,
+        jobId,
+        leaseEpoch: claimed.leaseEpoch,
+        leaseMs: LEASE_MS,
+      });
+      if (!submissionLease) return;
+      if (submissionLease.status === "cancel_requested") {
+        const canceled = await confirmMusicJobCanceled(userId, jobId, claimed.leaseEpoch);
+        if (canceled) await refundJobSpend(canceled, "user_canceled_before_submit");
+        return;
+      }
+      if (isMusicJobDeadlineReached(submissionLease.deadlineAt)) {
+        const expired = await expireMusicJob({
+          userId,
+          jobId,
+          leaseEpoch: claimed.leaseEpoch,
+          errorCode: "music_job_deadline_reached",
+          errorMessage: "Music generation exceeded its execution deadline before submission",
+        });
+        if (expired) await refundJobSpend(expired, "music_job_deadline_reached");
+        return;
+      }
       let submitted: Awaited<ReturnType<typeof submitJob>>;
       try {
         submitted = await submitJob(config, providerInput);
@@ -84,6 +147,7 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
           const unknown = await markMusicJobSubmissionUnknown({
             userId,
             jobId,
+            leaseEpoch: claimed.leaseEpoch,
             errorMessage: error.message,
           });
           if (unknown) await refundJobSpend(unknown, "submission_unknown");
@@ -94,22 +158,36 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
       }
       const submittedProviderJobId = submitted.providerJobId;
       providerJobId = submittedProviderJobId;
-      const attached = await attachProviderAfterSubmission({
-        input: claimed.input,
-        jobId,
-        userId,
-        attach: () => attachMusicJobProvider({
-          userId,
+      let attached: Awaited<ReturnType<typeof attachMusicJobProvider>>;
+      try {
+        attached = await attachProviderAfterSubmission({
+          input: claimed.input,
           jobId,
-          attempt: claimed.attempt,
-          provider: "runpod",
-          providerJobId: submittedProviderJobId,
-          leaseMs: LEASE_MS,
-        }),
-      });
+          userId,
+          attach: () => attachMusicJobProvider({
+            userId,
+            jobId,
+            leaseEpoch: claimed.leaseEpoch,
+            provider: "runpod",
+            providerJobId: submittedProviderJobId,
+            leaseMs: LEASE_MS,
+          }),
+        });
+      } catch (error) {
+        await cancelSubmittedJob(config, providerJobId).catch(() => false);
+        throw error;
+      }
       if (!attached) {
         await cancelSubmittedJob(config, providerJobId).catch(() => false);
-        throw new Error("music_job_provider_attach_failed");
+        const unknown = await markMusicJobSubmissionUnknown({
+          userId,
+          jobId,
+          leaseEpoch: claimed.leaseEpoch,
+          errorMessage: "Provider accepted the job but its id could not be persisted",
+        });
+        if (unknown) await refundJobSpend(unknown, "provider_attach_failed");
+        log("music.job_provider_attach_failed", { jobId }, { userId, level: "error" });
+        return;
       }
       log("music.job_provider_attached", {
         jobId,
@@ -123,18 +201,31 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
         await completeFromProviderOutput(
           userId,
           jobId,
-          claimed.attempt,
+          claimed.leaseEpoch,
           submitted.immediateOutput,
         );
         return;
       }
       if (attached.status === "cancel_requested") {
         if (await cancelSubmittedJob(config, providerJobId)) {
-          const canceled = await confirmMusicJobCanceled(userId, jobId, claimed.attempt);
+          const canceled = await confirmMusicJobCanceled(userId, jobId, claimed.leaseEpoch);
           if (canceled) await refundJobSpend(canceled, "user_canceled");
+        } else {
+          await releaseMusicJobLease({
+            userId,
+            jobId,
+            leaseEpoch: claimed.leaseEpoch,
+            nextRunAt: musicJobNextPollAt("queued"),
+          });
         }
         return;
       }
+      await releaseMusicJobLease({
+        userId,
+        jobId,
+        leaseEpoch: claimed.leaseEpoch,
+        nextRunAt: musicJobNextPollAt("queued"),
+      });
       return;
     }
 
@@ -142,26 +233,32 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
     if (!current || current.status === "canceled") return;
     if (current.status === "cancel_requested") {
       if (await cancelSubmittedJob(config, providerJobId)) {
-        const canceled = await confirmMusicJobCanceled(userId, jobId, claimed.attempt);
+        const canceled = await confirmMusicJobCanceled(userId, jobId, claimed.leaseEpoch);
         if (canceled) await refundJobSpend(canceled, "user_canceled");
         return;
       }
       const state = await getJobStatus(config, providerJobId);
       if (state.status === "succeeded") {
         providerOutputObserved = true;
-        await completeFromProviderOutput(userId, jobId, claimed.attempt, state.output);
+        await completeFromProviderOutput(userId, jobId, claimed.leaseEpoch, state.output);
       } else if (state.status === "canceled") {
-        const canceled = await confirmMusicJobCanceled(userId, jobId, claimed.attempt);
+        const canceled = await confirmMusicJobCanceled(userId, jobId, claimed.leaseEpoch);
         if (canceled) await refundJobSpend(canceled, "provider_canceled");
       } else if (state.status === "failed" || state.status === "expired") {
-        const failed = await failMusicJob({
+        await terminalizeProviderFailure(
           userId,
           jobId,
-          attempt: claimed.attempt,
-          errorCode: `provider_${state.status}`,
-          errorMessage: state.message,
+          claimed.leaseEpoch,
+          state.status,
+          state.message,
+        );
+      } else {
+        await releaseMusicJobLease({
+          userId,
+          jobId,
+          leaseEpoch: claimed.leaseEpoch,
+          nextRunAt: musicJobNextPollAt(state.status),
         });
-        if (failed) await refundJobSpend(failed, `provider_${state.status}`);
       }
       return;
     }
@@ -176,52 +273,83 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
     }, { userId });
     if (state.status === "succeeded") {
       providerOutputObserved = true;
-      await completeFromProviderOutput(userId, jobId, claimed.attempt, state.output);
+      await completeFromProviderOutput(userId, jobId, claimed.leaseEpoch, state.output);
       return;
     }
     if (state.status === "failed" || state.status === "canceled" || state.status === "expired") {
       if (state.status === "canceled") {
-        const canceled = await confirmMusicJobCanceled(userId, jobId, claimed.attempt);
+        const canceled = await confirmMusicJobCanceled(userId, jobId, claimed.leaseEpoch);
         if (canceled) await refundJobSpend(canceled, "provider_canceled");
       } else {
-        const failed = await failMusicJob({
+        await terminalizeProviderFailure(
           userId,
           jobId,
-          attempt: claimed.attempt,
-          errorCode: `provider_${state.status}`,
-          errorMessage: state.message,
-        });
-        if (failed) await refundJobSpend(failed, `provider_${state.status}`);
+          claimed.leaseEpoch,
+          state.status,
+          state.message,
+        );
       }
       return;
     }
-    await renewMusicJobLease({ userId, jobId, attempt: claimed.attempt, leaseMs: LEASE_MS });
     if (shouldReleaseMusicJobLease(state.status)) {
-      // The lease only excludes concurrent advances. A pending provider job
-      // must remain immediately resumable by the next client poll.
-      await releaseMusicJobLease({ userId, jobId, attempt: claimed.attempt });
+      await releaseMusicJobLease({
+        userId,
+        jobId,
+        leaseEpoch: claimed.leaseEpoch,
+        nextRunAt: musicJobNextPollAt(state.status),
+      });
     }
   } catch (error) {
     const current = await getMusicJobForUser(userId, jobId);
     const qualityRejected = error instanceof MusicOutputRejectedError;
-    const recoverable = !qualityRejected && musicJobFailureDisposition({
-      hasRecordedOutput: Boolean(current?.output),
-      providerOutputObserved,
-      hasProviderJobId: Boolean(providerJobId),
-      errorKind: error instanceof RunpodError ? error.kind : null,
-    }) === "resume";
+    const deadlineReached = Boolean(current && isMusicJobDeadlineReached(current.deadlineAt));
+    const providerMissingExpired = error instanceof RunpodError
+      && error.kind === "not_found"
+      && Boolean(current && shouldExpireProviderNotFound(
+        current.providerSubmittedAt,
+        current.deadlineAt,
+      ));
+    const recoverable = !qualityRejected && !deadlineReached && !providerMissingExpired
+      && musicJobFailureDisposition({
+        hasRecordedOutput: Boolean(current?.output),
+        providerOutputObserved,
+        hasProviderJobId: Boolean(providerJobId),
+        errorKind: error instanceof RunpodError ? error.kind : null,
+      }) === "resume";
     if (!recoverable && current) {
-      const errorCode = qualityRejected
-        ? "music_quality_rejected"
-        : error instanceof RunpodError ? `runpod_${error.kind}` : "runner_error";
-      const failed = await failMusicJob({
+      const errorCode = deadlineReached
+        ? "music_job_deadline_reached"
+        : providerMissingExpired
+          ? "provider_job_not_found"
+          : qualityRejected
+            ? "music_quality_rejected"
+            : error instanceof RunpodError ? `runpod_${error.kind}` : "runner_error";
+      if ((deadlineReached || providerMissingExpired) && providerJobId) {
+        await cancelSubmittedJob(config, providerJobId).catch(() => false);
+      }
+      const terminal = deadlineReached || providerMissingExpired
+        ? await expireMusicJob({
+            userId,
+            jobId,
+            leaseEpoch: claimed.leaseEpoch,
+            errorCode,
+            errorMessage: error instanceof Error ? error.message : String(error),
+          })
+        : await failMusicJob({
+            userId,
+            jobId,
+            leaseEpoch: claimed.leaseEpoch,
+            errorCode,
+            errorMessage: error instanceof Error ? error.message : String(error),
+          });
+      if (terminal) await refundJobSpend(terminal, errorCode);
+    } else if (recoverable) {
+      await releaseMusicJobLease({
         userId,
         jobId,
-        attempt: claimed.attempt,
-        errorCode,
-        errorMessage: error instanceof Error ? error.message : String(error),
+        leaseEpoch: claimed.leaseEpoch,
+        nextRunAt: musicJobNextPollAt("queued"),
       });
-      if (failed) await refundJobSpend(failed, errorCode);
     }
     log("music.job_advance_failed", {
       jobId,
@@ -241,7 +369,11 @@ export function musicJobFailureDisposition(input: {
   if (input.hasRecordedOutput || input.providerOutputObserved) return "resume";
   if (
     input.hasProviderJobId
-    && (input.errorKind === "http" || input.errorKind === "timeout")
+    && (
+      input.errorKind === "http"
+      || input.errorKind === "not_found"
+      || input.errorKind === "timeout"
+    )
   ) {
     return "resume";
   }
@@ -279,7 +411,7 @@ async function buildProviderInput(input: {
 async function completeFromProviderOutput(
   userId: string,
   jobId: string,
-  attempt: number,
+  leaseEpoch: number,
   output: Record<string, unknown>,
 ): Promise<void> {
   const audioB64 = output.audio_b64;
@@ -340,7 +472,7 @@ async function completeFromProviderOutput(
   const recorded = await recordMusicJobResult({
     userId,
     jobId,
-    attempt,
+    leaseEpoch,
     output: {
       ...artifact,
       model: typeof output.model === "string" ? output.model : "",
@@ -451,4 +583,40 @@ async function refundJobSpend(
 export async function refundCanceledMusicJob(userId: string, jobId: string): Promise<void> {
   const job = await getMusicJobForUser(userId, jobId);
   if (job?.status === "canceled") await refundJobSpend(job, "user_canceled");
+}
+
+export async function refundTerminalMusicJob(userId: string, jobId: string): Promise<void> {
+  const job = await getMusicJobForUser(userId, jobId);
+  if (
+    job
+    && ["failed", "canceled", "expired", "submission_unknown"].includes(job.status)
+  ) {
+    await refundJobSpend(job, job.errorCode ?? job.status);
+  }
+}
+
+async function terminalizeProviderFailure(
+  userId: string,
+  jobId: string,
+  leaseEpoch: number,
+  status: "failed" | "expired",
+  message: string,
+): Promise<void> {
+  const trigger = `provider_${status}`;
+  const terminal = status === "expired"
+    ? await expireMusicJob({
+        userId,
+        jobId,
+        leaseEpoch,
+        errorCode: trigger,
+        errorMessage: message,
+      })
+    : await failMusicJob({
+        userId,
+        jobId,
+        leaseEpoch,
+        errorCode: trigger,
+        errorMessage: message,
+      });
+  if (terminal) await refundJobSpend(terminal, trigger);
 }
