@@ -26,11 +26,13 @@ import {
 } from "@/lib/storage";
 import {
   parseAudioDataUrl,
+  ownerSongAudioUrl,
   storedSongAudioDigest,
   uploadSongMasterFromDataUrl,
 } from "@/lib/storage/song-audio";
 import { isObject } from "@/lib/utils/is-object";
 import { log } from "@/lib/observability/log";
+import { serializeOwnerSong } from "@/lib/storage/song-audio-delivery";
 import {
   langFromAcceptLanguage,
   songSavedNotificationCopy,
@@ -119,7 +121,10 @@ export async function GET(req: NextRequest) {
 
   try {
     const rows = await getSongSummariesByUser(userId);
-    return NextResponse.json(rows);
+    return NextResponse.json(rows.map((song) => ({
+      ...song,
+      audioUrl: song.hasAudio ? ownerSongAudioUrl(song.id) : null,
+    })));
   } catch (err) {
     if (shouldUseLocalSongFallback(auth, requestHost) && isDatabaseUnavailable(err)) {
       const rows = getLocalSongSummariesByUserFallback(userId);
@@ -212,12 +217,34 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const baseInput = await buildSongInput(body, userId);
   const dataUrl =
     typeof body.mp3DataUrl === "string" && body.mp3DataUrl.length > 0
       ? body.mp3DataUrl
       : null;
-  const candidateAudioDigest = dataUrl ? parseAudioDataUrl(dataUrl)?.digest ?? null : null;
+  const parsedCandidateAudio = dataUrl ? parseAudioDataUrl(dataUrl) : null;
+  if (dataUrl && !parsedCandidateAudio) {
+    log("song.audio_payload_rejected", {
+      songId: body.id ?? null,
+      reason: "invalid_audio_signature",
+    }, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+      level: "warn",
+    });
+    return NextResponse.json(
+      {
+        error: "invalid_audio",
+        message: "Rendered audio is not a valid MP3 or WAV file",
+        requestId,
+      },
+      { status: 422, headers: { "X-Request-Id": requestId } },
+    );
+  }
+
+  const baseInput = await buildSongInput(body, userId);
+  const candidateAudioDigest = parsedCandidateAudio?.digest ?? null;
   const candidateFingerprint = computeSaveFingerprint({
     ...baseInput,
     mp3Url: null,
@@ -295,7 +322,7 @@ export async function POST(req: NextRequest) {
           audioStorage: resolvedAudio.audioStorage,
         }));
 
-        return NextResponse.json(song, {
+        return NextResponse.json(serializeOwnerSong(song), {
           headers: { "X-Request-Id": requestId, ...audioStorageHeaders },
         });
       } catch (dbError) {
@@ -318,7 +345,7 @@ export async function POST(req: NextRequest) {
             sessionId: auth.sessionId,
             level: "warn",
           });
-          return NextResponse.json(fallbackSong, {
+          return NextResponse.json(serializeOwnerSong(fallbackSong), {
             headers: {
               "X-Request-Id": requestId,
               "X-Murmur-Fallback": "local-song",
@@ -399,7 +426,7 @@ export async function POST(req: NextRequest) {
       audioStorage: resolvedAudio.audioStorage,
     }));
 
-    return NextResponse.json(result.song, {
+    return NextResponse.json(serializeOwnerSong(result.song), {
       headers: { "X-Request-Id": requestId, ...audioStorageHeaders },
     });
   } catch (err) {
@@ -416,7 +443,7 @@ export async function POST(req: NextRequest) {
         sessionId: auth.sessionId,
         level: "warn",
       });
-      return NextResponse.json(fallbackSong, {
+      return NextResponse.json(serializeOwnerSong(fallbackSong), {
         headers: {
           "X-Request-Id": requestId,
           "X-Murmur-Fallback": "local-guest-song",
@@ -566,7 +593,24 @@ async function resolveSongAudioForSave(
   }
 
   const parsed = parseAudioDataUrl(dataUrl);
-  const audioDigest = parsed?.digest ?? null;
+  if (!parsed) {
+    log("song.audio_payload_rejected", {
+      songId: base.id,
+      reason: "invalid_audio_signature",
+    }, {
+      route: ROUTE,
+      requestId: ctx.requestId,
+      userId: ctx.userId,
+      sessionId: ctx.sessionId,
+      level: "warn",
+    });
+    return {
+      input: { ...base, mp3Url: null, mp3StorageKey: null, mp3DataUrl: null },
+      audioStorage: "none",
+      audioDigest: null,
+    };
+  }
+  const audioDigest = parsed.digest;
 
   try {
     const uploaded = await uploadSongMasterFromDataUrl({
@@ -665,7 +709,7 @@ async function handleSongIdConflict(
       (fingerprint) => !fingerprint || existingFingerprint === fingerprint,
     );
   if (isExactReplay) {
-    return NextResponse.json(existing, {
+    return NextResponse.json(serializeOwnerSong(existing), {
       headers: {
         "X-Request-Id": requestId,
         "X-Murmur-Idempotent-Replay": "song",

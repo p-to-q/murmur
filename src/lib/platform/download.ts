@@ -8,6 +8,14 @@ export async function downloadUrlAsFile(url: string, filename: string): Promise<
     return;
   }
 
+  // Controlled song-audio routes already authorize the request and provide a
+  // Content-Disposition filename. Let the browser stream them directly rather
+  // than buffering the whole master into a second Blob in page memory.
+  if (url.startsWith("/") && new URL(url, window.location.href).searchParams.get("download") === "1") {
+    triggerDownload(url);
+    return;
+  }
+
   let response: Response;
   try {
     response = await fetch(url, {
@@ -33,10 +41,10 @@ export function downloadBlob(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-function triggerDownload(url: string, filename: string): void {
+function triggerDownload(url: string, filename?: string): void {
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = filename;
+  anchor.download = filename ?? "";
   anchor.rel = "noopener";
   anchor.style.display = "none";
   document.body.appendChild(anchor);

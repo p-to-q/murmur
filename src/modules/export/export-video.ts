@@ -4,8 +4,10 @@ import {
   applyCoverBrightnessCompensation,
 } from "@/lib/music/cover-visual-treatment";
 import { downloadBlob } from "@/lib/platform/download";
+import { resolveClientSongAudioUrl } from "@/lib/music/song-audio-client";
 
 type Song = SongCard & {
+  audioUrl?: string | null;
   mp3DataUrl?: string | null;
   mp3Url?: string | null;
   bpm?: number;
@@ -78,7 +80,7 @@ export async function renderSongVideo(
   song: Song,
   opts?: RenderVideoOptions,
 ): Promise<Blob> {
-  const audioSrc = song.mp3DataUrl || song.mp3Url;
+  const audioSrc = resolveClientSongAudioUrl(song);
   if (!audioSrc) {
     throw new VideoExportError("audio_required", "Audio is required for video export");
   }

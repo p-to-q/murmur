@@ -107,7 +107,7 @@ beforeEach(async () => {
     title: "Share Me",
     shareCode: null,
     visibility: "private",
-    mp3DataUrl: "data:audio/mpeg;base64,abc",
+    mp3DataUrl: "data:audio/mpeg;base64,SUQzYXVkaW8=",
   };
   getSongError = null;
   publishError = null;
@@ -199,7 +199,7 @@ describe("POST /api/songs/[id]/share", () => {
       title: "Share Me",
       shareCode: "abc234defg",
       visibility: "unlisted",
-      mp3DataUrl: "data:audio/mpeg;base64,abc",
+      mp3DataUrl: "data:audio/mpeg;base64,SUQzYXVkaW8=",
     };
 
     const response = await POST(request({ visibility: "public" }), ctx());
@@ -289,7 +289,7 @@ describe("POST /api/songs/[id]/share", () => {
       keySignature: "C",
       scaleType: "major",
       duration: 20,
-      mp3DataUrl: "data:audio/mpeg;base64,abc",
+      mp3DataUrl: "data:audio/mpeg;base64,SUQzYXVkaW8=",
       visualConfig: {
         preset: "soft_gradient",
         gradient: "linear-gradient(135deg, #f6d365, #fda085)",
@@ -348,7 +348,7 @@ describe("POST /api/songs/[id]/share", () => {
       keySignature: "C",
       scaleType: "major",
       duration: 20,
-      mp3DataUrl: "data:audio/mpeg;base64,abc",
+      mp3DataUrl: "data:audio/mpeg;base64,SUQzYXVkaW8=",
       visualConfig: {
         preset: "soft_gradient",
         gradient: "linear-gradient(135deg, #f6d365, #fda085)",

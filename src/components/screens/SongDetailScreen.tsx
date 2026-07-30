@@ -51,7 +51,7 @@ import { getMelodyOriginCopy } from "@/modules/music/melody-origin";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
 import { downloadUrlAsFile } from "@/lib/platform/download";
-import { requestWithTimeout } from "@/lib/api/timeout";
+import { requestWithTimeout, withTimeout } from "@/lib/api/timeout";
 import {
   createSongShareLink,
   SongShareRequestError,
@@ -69,8 +69,10 @@ import {
   readApiErrorEnvelope,
 } from "@/lib/api/error-envelope";
 import type { SongCard } from "@/modules/shared/types";
+import { resolveClientSongAudioUrl } from "@/lib/music/song-audio-client";
 
 type Song = SongCard & {
+  audioUrl?: string | null;
   mp3DataUrl?: string | null;
   mp3Url?: string | null;
   bpm?: number;
@@ -280,6 +282,13 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         }
         const data = result.song;
         if (!active) return;
+        const previousAudio = audioRef.current;
+        if (previousAudio) {
+          previousAudio.pause();
+          previousAudio.removeAttribute("src");
+          audioRef.current = null;
+          setIsPlaying(false);
+        }
         setSong(data);
         memory
           .reportAction({
@@ -381,7 +390,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
   const handlePlay = useCallback(async () => {
     if (!song) return;
-    const audioSrc = song.mp3DataUrl || song.mp3Url;
+    const audioSrc = resolveClientSongAudioUrl(song);
     if (audioSrc) {
       let el = audioRef.current;
       if (!el) {
@@ -390,13 +399,17 @@ export function SongDetailScreen({ songId }: { songId: string }) {
         el.addEventListener("ended", () => setIsPlaying(false));
         el.addEventListener("pause", () => setIsPlaying(false));
         el.addEventListener("play", () => setIsPlaying(true));
+        el.addEventListener("error", () => setIsPlaying(false));
+        el.addEventListener("stalled", () => setIsPlaying(false));
         audioRef.current = el;
       }
       if (el.paused) {
         try {
-          await el.play();
+          await withTimeout(el.play(), 8_000, "Song playback timed out");
         } catch (err) {
           console.error("[SongDetail] audio play failed:", err);
+          el.pause();
+          el.removeAttribute("src");
           audioRef.current = null;
           setIsPlaying(false);
           toast.error(t("cards.play_error") || "Playback failed — please retry", {
@@ -429,7 +442,8 @@ export function SongDetailScreen({ songId }: { songId: string }) {
 
   const exportAudio = async () => {
     if (busy) return;
-    const audioSrc = song?.mp3DataUrl || song?.mp3Url;
+    if (!song) return;
+    const audioSrc = resolveClientSongAudioUrl(song);
     if (!audioSrc) {
       toast(t("song.share.no_audio"));
       return;
@@ -437,7 +451,10 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     setBusy("audio");
     try {
       const ext = audioFileExtension(audioSrc);
-      await downloadUrlAsFile(audioSrc, `${slug}.${ext}`);
+      const downloadUrl = audioSrc.startsWith("/api/")
+        ? `${audioSrc}${audioSrc.includes("?") ? "&" : "?"}download=1`
+        : audioSrc;
+      await downloadUrlAsFile(downloadUrl, `${slug}.${ext}`);
       toast.success(t("song.export.ok"));
       memory
         .reportAction({
@@ -640,7 +657,7 @@ export function SongDetailScreen({ songId }: { songId: string }) {
     latin: "hero-serif-latin-italic",
     cjk: "hero-serif-italic",
   });
-  const audioSrc = song.mp3DataUrl || song.mp3Url;
+  const audioSrc = resolveClientSongAudioUrl(song);
   const audioReady = hasSongShareAudio(song);
 
   const handleEditAgain = () => {

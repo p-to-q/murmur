@@ -1,5 +1,6 @@
 import { ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV } from "@/lib/billing/zpay";
 import { collectDatabaseEnvAuditIssues } from "@/lib/db/config";
+import { privateSongAudioDeliveryEnabled } from "@/lib/storage/song-audio";
 
 const REQUIRED_IN_PRODUCTION = [
   // The database DSN contract (DATABASE_URL / POSTGRES_URL precedence, pooler
@@ -191,6 +192,14 @@ function main() {
   if (storageDriver === "s3-compatible") {
     for (const key of REQUIRED_S3_ENV) {
       if (!process.env[key]?.trim()) missing.push(key);
+    }
+    if (
+      !privateSongAudioDeliveryEnabled(process.env)
+      && !process.env.MURMUR_STORAGE_S3_PUBLIC_URL_BASE?.trim()
+    ) {
+      missing.push(
+        "MURMUR_STORAGE_S3_PUBLIC_URL_BASE (required until private song audio delivery is enabled)",
+      );
     }
   }
 

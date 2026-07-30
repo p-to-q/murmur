@@ -93,7 +93,7 @@ export function getLocalSongSummariesByUserFallback(userId: string): SongSummary
     shareCode: song.shareCode,
     visualConfig: song.visualConfig,
     tags: song.tags,
-    hasAudio: Boolean(song.mp3Url || song.mp3DataUrl),
+    hasAudio: Boolean(song.mp3StorageKey || song.mp3Url || song.mp3DataUrl),
     createdAt: song.createdAt,
     updatedAt: song.updatedAt,
   }));
