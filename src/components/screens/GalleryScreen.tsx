@@ -479,7 +479,10 @@ export function GalleryScreen() {
             </motion.div>
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
+          <div
+            data-testid="gallery-song-grid"
+            className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 xl:gap-6"
+          >
             {sorted.map((song, i) => (
               <SongCard
                 key={song.id}

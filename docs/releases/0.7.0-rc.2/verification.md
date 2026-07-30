@@ -21,7 +21,8 @@ same merged `main` SHA.
 - lint, application TypeScript, test TypeScript, Markdown link audit, and webpack
   production build pass; the integrated build contains 64 routes;
 - Playwright creation golden path passes Hum -> Vibe -> Studio -> Save ->
-  Gallery -> Share -> public playback in Chromium;
+  Gallery playback -> non-empty audio download -> Share -> public playback in
+  Chromium;
 - frozen install succeeds and `bun audit` reports no vulnerabilities;
 - PRs #441 and #442 currently have green machine checks. PRs #443, #444 and #440
   pass repository CI but their Vercel Preview deployments fail after the strict
