@@ -175,8 +175,7 @@ jobs:
         run: |
           bunx vercel@56.3.1 link --yes \
             --project "$VERCEL_PROJECT_NAME" \
-            --scope "$VERCEL_SCOPE" \
-            --token "$VERCEL_TOKEN"
+            --scope "$VERCEL_SCOPE"
 
       - name: Deploy exact release SHA without promoting domains
         id: deploy
@@ -187,7 +186,6 @@ jobs:
           deployment_url="$(bunx vercel@56.3.1 deploy --prod --yes \
             --skip-domain \
             --scope "$VERCEL_SCOPE" \
-            --token "$VERCEL_TOKEN" \
             --build-env NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA="$RELEASE_SHA" \
             --meta githubCommitSha="$RELEASE_SHA" \
             --meta githubCommitRef=main | tail -n 1)"
@@ -201,36 +199,38 @@ jobs:
       - name: Require immutable deployment readiness
         id: immutable
         env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           inspect_json="$RUNNER_TEMP/vercel-immutable-inspect.json"
-          bunx vercel@56.3.1 inspect "${{ steps.deploy.outputs.deployment_url }}" \
+          bunx vercel@56.3.1 inspect "$DEPLOYMENT_URL" \
             --wait \
             --timeout 10m \
             --format=json \
-            --scope "$VERCEL_SCOPE" \
-            --token "$VERCEL_TOKEN" > "$inspect_json"
+            --scope "$VERCEL_SCOPE" > "$inspect_json"
           deployment_id="$(bun scripts/release-vercel-deployment.ts "$inspect_json")"
           echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
           echo "Immutable deployment $deployment_id is READY with target=production"
 
       - name: Smoke immutable deployment identity
         env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: >-
           bun scripts/release-production-smoke.ts
-          "${{ steps.deploy.outputs.deployment_url }}"
+          "$DEPLOYMENT_URL"
           "$RELEASE_SHA"
 
       - name: Promote verified deployment to Production
         env:
+          DEPLOYMENT_ID: ${{ steps.immutable.outputs.deployment_id }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          promotion_output="$(bunx vercel@56.3.1 promote "${{ steps.deploy.outputs.deployment_url }}" \
+          promotion_output="$(bunx vercel@56.3.1 promote "$DEPLOYMENT_URL" \
             --yes \
             --timeout 5m \
-            --scope "$VERCEL_SCOPE" \
-            --token "$VERCEL_TOKEN" 2>&1)"
+            --scope "$VERCEL_SCOPE" 2>&1)"
           printf '%s\n' "$promotion_output"
           case "$promotion_output" in
             *"queued"*|*"Rolling Releases enabled"*|*"initial percentage"*)
@@ -240,25 +240,24 @@ jobs:
           esac
 
           promoted=false
-          for attempt in $(seq 1 20); do
+          for attempt in $(seq 1 60); do
             inspect_json="$RUNNER_TEMP/vercel-production-inspect.json"
             if bunx vercel@56.3.1 inspect "$PRODUCTION_URL" \
               --format=json \
-              --scope "$VERCEL_SCOPE" \
-              --token "$VERCEL_TOKEN" > "$inspect_json" \
+              --scope "$VERCEL_SCOPE" > "$inspect_json" \
               && bun scripts/release-vercel-deployment.ts \
                 "$inspect_json" \
-                "${{ steps.immutable.outputs.deployment_id }}" > /dev/null; then
+                "$DEPLOYMENT_ID" > /dev/null; then
               promoted=true
               break
             fi
-            sleep 3
+            sleep 5
           done
           if [ "$promoted" != "true" ]; then
             echo "::error title=Production promotion did not converge::The production alias does not resolve to the verified deployment."
             exit 1
           fi
-          echo "Promoted $RELEASE_SHA from ${{ steps.deploy.outputs.deployment_url }}"
+          echo "Promoted $RELEASE_SHA from $DEPLOYMENT_URL"
 
   smoke:
     needs: deploy

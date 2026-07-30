@@ -1,17 +1,7 @@
 import { APP_BUILD, APP_VERSION } from "../src/lib/release-metadata";
 
-const input = process.argv[2]?.trim();
-const expectedSha = process.argv[3]?.trim();
-if (!input || !expectedSha) {
-  throw new Error(
-    "Usage: bun scripts/release-production-smoke.ts <deployment-url> <expected-full-sha>",
-  );
-}
-if (!/^[0-9a-f]{40}$/i.test(expectedSha)) {
-  throw new Error("Expected release SHA must contain exactly 40 hexadecimal characters");
-}
-
-const origin = new URL(input).origin;
+let origin: string;
+let expectedSha: string;
 const probes = [
   { path: "/", contentType: "text/html" },
   { path: "/gallery", contentType: "text/html" },
@@ -58,13 +48,7 @@ async function verifyReleaseIdentity() {
         redirect: "manual",
         signal: AbortSignal.timeout(12_000),
       });
-      const identity = (await response.json()) as {
-        version?: unknown;
-        build?: unknown;
-        sha?: unknown;
-      };
-      if (!response.ok)
-        throw new Error(`/api/release returned ${response.status}`);
+      const identity = await parseReleaseIdentity(response);
       if (
         identity.sha !== expectedSha ||
         identity.version !== APP_VERSION ||
@@ -94,6 +78,17 @@ async function verifyReleaseIdentity() {
   throw lastError;
 }
 
+export async function parseReleaseIdentity(response: Response) {
+  if (!response.ok) {
+    throw new Error(`/api/release returned ${response.status}`);
+  }
+  return (await response.json()) as {
+    version?: unknown;
+    build?: unknown;
+    sha?: unknown;
+  };
+}
+
 function smokeHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "User-Agent": "murmur-production-smoke",
@@ -103,9 +98,29 @@ function smokeHeaders(): Record<string, string> {
   return headers;
 }
 
-await verifyReleaseIdentity();
-for (const probeDefinition of probes) {
-  await probe(probeDefinition.path, probeDefinition.contentType);
+async function main() {
+  const input = process.argv[2]?.trim();
+  expectedSha = process.argv[3]?.trim();
+  if (!input || !expectedSha) {
+    throw new Error(
+      "Usage: bun scripts/release-production-smoke.ts <deployment-url> <expected-full-sha>",
+    );
+  }
+  if (!/^[0-9a-f]{40}$/i.test(expectedSha)) {
+    throw new Error(
+      "Expected release SHA must contain exactly 40 hexadecimal characters",
+    );
+  }
+  origin = new URL(input).origin;
+
+  await verifyReleaseIdentity();
+  for (const probeDefinition of probes) {
+    await probe(probeDefinition.path, probeDefinition.contentType);
+  }
+
+  console.log(`Release smoke passed for ${origin} at ${expectedSha}`);
 }
 
-console.log(`Release smoke passed for ${origin} at ${expectedSha}`);
+if (import.meta.main) {
+  await main();
+}
