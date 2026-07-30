@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gt, isNull } from "drizzle-orm";
 
 import { db } from "../client";
 import { pushSubscriptions } from "../schema/push-subscriptions";
+import { sessions } from "../schema/sessions";
 import type { PushSubscriptionRecord } from "../schema/push-subscriptions";
 
 export type WebPushSubscriptionJSON = {
@@ -28,31 +29,32 @@ export async function upsertPushSubscription(input: {
       ? new Date(input.subscription.expirationTime)
       : null;
 
-  const [row] = await db
-    .insert(pushSubscriptions)
-    .values({
-      id: createPushSubscriptionId(),
-      userId: input.userId,
-      sessionId: input.sessionId ?? null,
-      endpoint: input.subscription.endpoint,
-      p256dh: input.subscription.keys.p256dh,
-      auth: input.subscription.keys.auth,
-      expirationTime,
-      shell: "web",
-      userAgent: input.userAgent ?? null,
-      metadata: {
-        locale: input.locale ?? undefined,
-        timezone: input.timezone ?? undefined,
-      },
-      lastSeenAt: now,
-      updatedAt: now,
-      disabledAt: null,
-    })
-    .onConflictDoUpdate({
-      target: pushSubscriptions.endpoint,
-      set: {
+  return db.transaction(async (tx) => {
+    if (input.sessionId) {
+      const [activeSession] = await tx
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.id, input.sessionId),
+            eq(sessions.userId, input.userId),
+            isNull(sessions.revokedAt),
+          ),
+        )
+        .for("update")
+        .limit(1);
+      if (!activeSession) {
+        throw new Error("Cannot attach push to an inactive session");
+      }
+    }
+
+    const [row] = await tx
+      .insert(pushSubscriptions)
+      .values({
+        id: createPushSubscriptionId(),
         userId: input.userId,
         sessionId: input.sessionId ?? null,
+        endpoint: input.subscription.endpoint,
         p256dh: input.subscription.keys.p256dh,
         auth: input.subscription.keys.auth,
         expirationTime,
@@ -65,11 +67,30 @@ export async function upsertPushSubscription(input: {
         lastSeenAt: now,
         updatedAt: now,
         disabledAt: null,
-      },
-    })
-    .returning();
+      })
+      .onConflictDoUpdate({
+        target: pushSubscriptions.endpoint,
+        set: {
+          userId: input.userId,
+          sessionId: input.sessionId ?? null,
+          p256dh: input.subscription.keys.p256dh,
+          auth: input.subscription.keys.auth,
+          expirationTime,
+          shell: "web",
+          userAgent: input.userAgent ?? null,
+          metadata: {
+            locale: input.locale ?? undefined,
+            timezone: input.timezone ?? undefined,
+          },
+          lastSeenAt: now,
+          updatedAt: now,
+          disabledAt: null,
+        },
+      })
+      .returning();
 
-  return row;
+    return row;
+  });
 }
 
 export async function disablePushSubscriptionByEndpoint(endpoint: string) {
