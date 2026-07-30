@@ -88,7 +88,8 @@ Previews and **must not auto-deploy `main` to Production**.
   proves that `CI / verify` succeeded for that SHA.
 - **Exact revision:** the release checks out that 40-character SHA and uploads
   that checkout for a remote Vercel Production build. The deployed revision is
-  recorded in Vercel metadata and verified before upload.
+  recorded in Vercel metadata, then verified on the completed immutable
+  deployment before any user-facing domain is promoted.
 - **Build command:** `bun run env:audit && bun run build` (see `vercel.json`).
   `env:audit` (`scripts/env-audit.ts`) fails the production build when a required
   environment variable is missing, so a misconfigured production deploy fails
