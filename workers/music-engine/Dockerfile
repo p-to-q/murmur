@@ -17,6 +17,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MAGENTA_MODEL=mrt2_base \
     MUSIC_ENGINE_PRELOAD=1
 
+ARG MURMUR_MUSIC_ENGINE_REVISION=unknown
+ENV MURMUR_MUSIC_ENGINE_REVISION=${MURMUR_MUSIC_ENGINE_REVISION}
+
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ffmpeg curl \
   && rm -rf /var/lib/apt/lists/*
@@ -27,9 +30,13 @@ RUN pip install --upgrade pip \
      fastapi "uvicorn[standard]" python-multipart
 
 WORKDIR /app
-COPY engine.py handler.py main.py ./
+COPY engine.py handler.py main.py pipeline.py protocol.py quality_gate.py ./
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Build-time import smoke catches missing copied modules without loading weights.
+RUN MUSIC_ENGINE_MOCK=1 MUSIC_ENGINE_PRELOAD=0 python -c \
+  "import handler, main; assert handler.GATE_VERSION == 'music-technical-v2'"
 
 # Pod role serves HTTP here; RunPod maps it to https://<podId>-8002.proxy.runpod.net.
 EXPOSE 8002

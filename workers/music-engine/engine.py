@@ -24,9 +24,11 @@ import hashlib
 import logging
 import math
 import os
+import platform
 import subprocess
 import threading
 import time
+from importlib import metadata as importlib_metadata
 
 import numpy as np
 
@@ -50,6 +52,10 @@ NOTES_DIM = 128                 # one slot per MIDI pitch (0–127)
 # while letting the model actually voice it. Retune without a redeploy via
 # the MAGENTA_CFG_NOTES env var; the model's valid range is [-1.0, 7.0].
 CFG_NOTES_MELODY = max(-1.0, min(7.0, float(os.getenv("MAGENTA_CFG_NOTES", "1.5"))))
+SAMPLING_TEMPERATURE = max(
+    0.1, min(2.0, float(os.getenv("MAGENTA_TEMPERATURE", "1.3")))
+)
+SAMPLING_TOP_K = max(1, min(512, int(os.getenv("MAGENTA_TOP_K", "40"))))
 # Sub-perceptual runs (transcription jitter) fold into the prior note so the
 # model isn't machine-gunned with re-onsets. 3 frames ≈ 0.12 s.
 MIN_RUN_FRAMES = 3
@@ -66,8 +72,17 @@ FFMPEG_TIMEOUT_SECONDS = 20
 
 _load_lock = threading.Lock()
 _mrt = None
+_loaded_backend: str | None = None
 _loading = False
 _load_error: str | None = None
+
+
+class ConditioningError(RuntimeError):
+    """A requested conditioning signal could not be applied safely."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
 
 
 def _import_system_class():
@@ -102,7 +117,7 @@ def _import_system_class():
 
 def load_model():
     """Idempotently load the model; safe to call from any thread."""
-    global _mrt, _loading, _load_error
+    global _mrt, _loaded_backend, _loading, _load_error
     if _mrt is not None:
         return _mrt
     with _load_lock:
@@ -116,6 +131,7 @@ def load_model():
             logger.info("Loading Magenta RT model '%s' (%s)…", MODEL_NAME, backend)
             model = system_cls(size=MODEL_NAME)
             _mrt = model
+            _loaded_backend = backend
             _load_error = None
             logger.info("Model '%s' ready in %.1fs", MODEL_NAME, time.time() - started)
             return _mrt
@@ -137,6 +153,32 @@ def model_loading() -> bool:
 
 def model_load_error() -> str | None:
     return _load_error
+
+
+def runtime_fingerprint() -> dict[str, str]:
+    """Return bounded, non-user runtime evidence for incident correlation."""
+
+    return {
+        "model": MODEL_NAME,
+        "backend_configured": os.getenv("MAGENTA_BACKEND", "auto")[:32],
+        "backend_loaded": _loaded_backend or ("mock" if MOCK else "not_loaded"),
+        "engine_revision": os.getenv("MURMUR_MUSIC_ENGINE_REVISION", "unknown")[:64],
+        "magenta_rt": _package_version("magenta-rt"),
+        "jax": _package_version("jax"),
+        "numpy": np.__version__[:32],
+        "python": platform.python_version()[:32],
+        "machine": os.uname().machine[:32] if hasattr(os, "uname") else "unknown",
+        "cfg_notes": f"{CFG_NOTES_MELODY:.3f}",
+        "temperature": f"{SAMPLING_TEMPERATURE:.3f}",
+        "top_k": str(SAMPLING_TOP_K),
+    }
+
+
+def _package_version(name: str) -> str:
+    try:
+        return importlib_metadata.version(name)[:64]
+    except importlib_metadata.PackageNotFoundError:
+        return "not_installed"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -333,6 +375,9 @@ def generate_clip(
     hum_bytes: bytes | None = None,
     style_mix: float = 0.0,
     melody: dict | None = None,
+    *,
+    temperature: float | None = None,
+    top_k: int | None = None,
 ) -> tuple[bytes, dict[str, str]]:
     """Run one full clip generation → (PCM16 WAV bytes, X-* metadata).
 
@@ -341,14 +386,29 @@ def generate_clip(
     under JAX any thread is fine. Returns a mock clip when MUSIC_ENGINE_MOCK.
     """
     started = time.time()
+    applied_temperature = SAMPLING_TEMPERATURE if temperature is None else max(
+        0.1, min(2.0, float(temperature))
+    )
+    applied_top_k = SAMPLING_TOP_K if top_k is None else max(1, min(512, int(top_k)))
+    segments = melody_to_segments(melody, duration) if melody else []
+    has_melody = len(segments) > 0
+    total_frames = int(round(duration * FRAMES_PER_SECOND))
+    conditioned_frames = sum(frames for notes, frames in segments if notes is not None)
+    melody_onsets = sum(1 for notes, _frames in segments if notes is not None)
+    melody_coverage = conditioned_frames / total_frames if total_frames > 0 else 0.0
 
     if MOCK:
         return mock_clip(prompt, duration), {
             "X-Model": "mock",
             "X-Generation-Ms": "0",
-            "X-Style-Mix": "0.00",
-            "X-Melody-Conditioned": "0",
-            "X-Cfg-Notes": "0",
+            "X-Style-Mix": f"{style_mix if hum_bytes and style_mix > 0 else 0.0:.2f}",
+            "X-Melody-Conditioned": "1" if has_melody else "0",
+            "X-Cfg-Notes": f"{CFG_NOTES_MELODY:.1f}" if has_melody else "0",
+            "X-Melody-Segments": str(len(segments)),
+            "X-Melody-Onsets": str(melody_onsets),
+            "X-Melody-Coverage": f"{melody_coverage:.4f}",
+            "X-Temperature": f"{applied_temperature:.3f}",
+            "X-Top-K": str(applied_top_k),
         }
 
     mrt = load_model()
@@ -359,15 +419,16 @@ def generate_clip(
         try:
             hum = decode_hum_waveform(hum_bytes)
             hum_emb = mrt.embed_style(hum)
+            if np.asarray(style).shape != np.asarray(hum_emb).shape:
+                raise ConditioningError("hum_embedding_shape_mismatch")
             style = blend_style_embeddings(style, hum_emb, style_mix)
             mixed = style_mix
-        except Exception as error:  # noqa: BLE001 — hum styling is best-effort
-            logger.warning("Hum style embedding failed, using text only: %s", error)
+        except ConditioningError:
+            raise
+        except Exception as error:  # noqa: BLE001 — normalize vendor failures
+            logger.warning("Hum style conditioning failed: %s", type(error).__name__)
+            raise ConditioningError("hum_style_conditioning_failed") from error
 
-    segments = melody_to_segments(melody, duration) if melody else []
-    has_melody = len(segments) > 0
-
-    total_frames = int(round(duration * FRAMES_PER_SECOND))
     chunks = []
     state = None
 
@@ -383,6 +444,8 @@ def generate_clip(
                     style=style,
                     notes=notes_vec if first else _held_notes(notes_vec),
                     cfg_notes=CFG_NOTES_MELODY,
+                    temperature=applied_temperature,
+                    top_k=applied_top_k,
                     frames=frames,
                     state=state,
                 )
@@ -393,7 +456,13 @@ def generate_clip(
         remaining = total_frames
         while remaining > 0:
             frames = min(MAX_FRAMES_PER_CALL, remaining)
-            wav, state = mrt.generate(style=style, frames=frames, state=state)
+            wav, state = mrt.generate(
+                style=style,
+                temperature=applied_temperature,
+                top_k=applied_top_k,
+                frames=frames,
+                state=state,
+            )
             chunks.append(wav)
             remaining -= frames
 
@@ -403,8 +472,17 @@ def generate_clip(
         from magenta_rt import audio as audio_lib
 
         full = audio_lib.concatenate(chunks)
-    full = full.as_stereo().peak_normalize(0.95)
+    full = full.as_stereo()
+    pre_normalization_samples = np.asarray(full.samples, dtype=np.float32)
+    pre_normalization_peak = float(np.max(np.abs(pre_normalization_samples)))
+    pre_normalization_rms = float(np.sqrt(np.mean(np.square(pre_normalization_samples))))
+    full = full.peak_normalize(0.95)
     samples = np.asarray(full.samples, dtype=np.float32)
+    normalization_gain = (
+        float(np.max(np.abs(samples))) / pre_normalization_peak
+        if pre_normalization_peak > 1e-9
+        else 0.0
+    )
 
     elapsed_ms = int((time.time() - started) * 1000)
     meta = {
@@ -413,10 +491,20 @@ def generate_clip(
         "X-Style-Mix": f"{mixed:.2f}",
         "X-Melody-Conditioned": "1" if has_melody else "0",
         "X-Cfg-Notes": f"{CFG_NOTES_MELODY:.1f}" if has_melody else "0",
+        "X-Melody-Segments": str(len(segments)),
+        "X-Melody-Onsets": str(melody_onsets),
+        "X-Melody-Coverage": f"{melody_coverage:.4f}",
+        "X-Temperature": f"{applied_temperature:.3f}",
+        "X-Top-K": str(applied_top_k),
+        "X-Pre-Normalization-Peak": f"{pre_normalization_peak:.6f}",
+        "X-Pre-Normalization-Rms": f"{pre_normalization_rms:.6f}",
+        "X-Normalization-Gain-Db": f"{20 * math.log10(normalization_gain):.3f}"
+        if normalization_gain > 0
+        else "-120.000",
     }
     logger.info(
-        "Generated %.1fs clip in %dms (prompt=%r, style_mix=%.2f, cfg_notes=%.1f, melody=%s)",
-        duration, elapsed_ms, prompt[:80], mixed, CFG_NOTES_MELODY,
+        "Generated %.1fs clip in %dms (prompt_sha256=%s, style_mix=%.2f, cfg_notes=%.1f, melody=%s)",
+        duration, elapsed_ms, hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:12], mixed, CFG_NOTES_MELODY,
         f"{len(segments)} segments" if has_melody else "none",
     )
     return pcm16_wav_bytes(samples, full.sample_rate), meta

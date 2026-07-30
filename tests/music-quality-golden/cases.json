@@ -1,0 +1,93 @@
+[
+  {
+    "id": "normal.mono-16k",
+    "sampleRate": 16000,
+    "channels": 1,
+    "expectedDuration": 2,
+    "segments": [{ "kind": "sine", "seconds": 2, "amplitudePcm": 9000 }],
+    "expectedFailures": []
+  },
+  {
+    "id": "normal.stereo-48k",
+    "sampleRate": 48000,
+    "channels": 2,
+    "expectedDuration": 2,
+    "segments": [{ "kind": "sine", "seconds": 2, "amplitudePcm": 9000 }],
+    "expectedFailures": []
+  },
+  {
+    "id": "level.low-average",
+    "sampleRate": 16000,
+    "channels": 2,
+    "expectedDuration": 2,
+    "segments": [{ "kind": "sine", "seconds": 2, "amplitudePcm": 393 }],
+    "expectedFailures": ["low_average_level"]
+  },
+  {
+    "id": "fragment.opening-only",
+    "sampleRate": 16000,
+    "channels": 2,
+    "expectedDuration": 2,
+    "segments": [
+      { "kind": "sine", "seconds": 0.3, "amplitudePcm": 9000 },
+      { "kind": "silence", "seconds": 1.7 }
+    ],
+    "expectedFailures": ["excessive_quiet_windows", "prolonged_silence"]
+  },
+  {
+    "id": "dropout.two-interior-400ms",
+    "sampleRate": 16000,
+    "channels": 2,
+    "expectedDuration": 3,
+    "segments": [
+      { "kind": "sine", "seconds": 0.6, "amplitudePcm": 9000 },
+      { "kind": "silence", "seconds": 0.4 },
+      { "kind": "sine", "seconds": 0.6, "amplitudePcm": 9000 },
+      { "kind": "silence", "seconds": 0.4 },
+      { "kind": "sine", "seconds": 1, "amplitudePcm": 9000 }
+    ],
+    "expectedFailures": []
+  },
+  {
+    "id": "duration.mismatch",
+    "sampleRate": 16000,
+    "channels": 1,
+    "expectedDuration": 2,
+    "segments": [{ "kind": "sine", "seconds": 1, "amplitudePcm": 9000 }],
+    "expectedFailures": ["duration_mismatch"]
+  },
+  {
+    "id": "silence.complete",
+    "sampleRate": 16000,
+    "channels": 1,
+    "expectedDuration": 1,
+    "segments": [{ "kind": "silence", "seconds": 1 }],
+    "expectedFailures": ["near_silence", "mostly_silent", "low_average_level", "excessive_quiet_windows"]
+  },
+  {
+    "id": "structure.invalid-riff-size",
+    "sampleRate": 16000,
+    "channels": 1,
+    "expectedDuration": 1,
+    "segments": [{ "kind": "sine", "seconds": 1, "amplitudePcm": 9000 }],
+    "mutation": "riff_size",
+    "expectedFailures": ["invalid_wav_structure"]
+  },
+  {
+    "id": "structure.invalid-byte-rate",
+    "sampleRate": 16000,
+    "channels": 2,
+    "expectedDuration": 1,
+    "segments": [{ "kind": "sine", "seconds": 1, "amplitudePcm": 9000 }],
+    "mutation": "byte_rate",
+    "expectedFailures": ["invalid_wav_structure"]
+  },
+  {
+    "id": "format.unsupported-channels",
+    "sampleRate": 16000,
+    "channels": 3,
+    "expectedDuration": 1,
+    "segments": [{ "kind": "sine", "seconds": 1, "amplitudePcm": 9000 }],
+    "expectedFailures": ["unsupported_pcm_format"]
+  }
+]

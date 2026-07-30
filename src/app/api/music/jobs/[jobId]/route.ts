@@ -9,6 +9,7 @@ import {
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import {
   advanceMusicJob,
+  deleteSubmittedHum,
   refundCanceledMusicJob,
 } from "@/lib/platform/music-job-runner";
 
@@ -42,7 +43,10 @@ export async function DELETE(request: NextRequest, context: Context) {
   if (result.kind === "not_found") return notFound(requestId);
 
   if (result.kind === "canceled") {
-    scheduleAfterResponse(() => refundCanceledMusicJob(auth.user.id, jobId));
+    scheduleAfterResponse(async () => {
+      await deleteSubmittedHum(result.job.input).catch(() => undefined);
+      await refundCanceledMusicJob(auth.user.id, jobId);
+    });
   } else if (result.kind === "cancel_requested") {
     scheduleAfterResponse(() => advanceMusicJob(auth.user.id, jobId));
   }

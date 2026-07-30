@@ -23,25 +23,18 @@ the cached ~4 GB download instead of re-fetching it.
 from __future__ import annotations
 
 import base64
-import hashlib
-import json
 import logging
-import os
-import platform
-import time
 
 import engine
-from quality_gate import GATE_VERSION, analyze_wav
+import pipeline
+import protocol
+from quality_gate import GATE_VERSION
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("music-engine")
 
-try:
-    configured_quality_attempts = int(os.getenv("MUSIC_QUALITY_MAX_ATTEMPTS", "2"))
-except ValueError:
-    configured_quality_attempts = 2
-
-MAX_QUALITY_ATTEMPTS = max(1, min(3, configured_quality_attempts))
+MAX_QUALITY_ATTEMPTS = pipeline.MAX_QUALITY_ATTEMPTS
+_retry_sampling = pipeline.retry_sampling
 
 
 def _clamp_prompt(value: object) -> str:
@@ -103,107 +96,39 @@ def handler(job: dict) -> dict:
     melody = _coerce_melody(melody_input)
 
     request_id = str(job_input.get("request_id") or "")[:128]
-    receipt = _input_receipt(
+    receipt = protocol.input_receipt(
         request_id, prompt, duration, style_mix, melody_input, melody, hum_bytes
     )
-    candidates = []
-    total_generation_ms = 0
-    started = time.monotonic()
-    wav_bytes = b""
-    meta = {}
-    quality = None
-
-    for attempt in range(1, MAX_QUALITY_ATTEMPTS + 1):
-        try:
-            wav_bytes, meta = engine.generate_clip(
-                prompt, duration, hum_bytes, style_mix, melody
-            )
-        except Exception as error:  # noqa: BLE001 — stable error contract
-            logger.exception("Generation failed")
-            return {
-                "error": "generation_failed",
-                "message": str(error),
-                "input_receipt": receipt,
-                "diagnostics": _diagnostics(candidates, total_generation_ms, started),
-            }
-
-        generation_ms = int(meta.get("X-Generation-Ms", "0") or 0)
-        total_generation_ms += generation_ms
-        quality = analyze_wav(wav_bytes, duration)
-        candidates.append({
-            "attempt": attempt,
-            "generation_ms": generation_ms,
-            "quality": quality,
-        })
-        logger.info(
-            "quality_gate request_id=%s attempt=%d passed=%s failures=%s",
-            request_id,
-            attempt,
-            quality["passed"],
-            quality["failures"],
+    try:
+        generated = pipeline.generate_candidates(
+            prompt,
+            duration,
+            hum_bytes,
+            style_mix,
+            melody,
+            request_id=request_id,
+            require_hum=bool(job_input.get("hum_b64")) and style_mix > 0,
+            require_melody=bool(melody_input),
         )
-        if quality["passed"]:
-            break
-
-    if not quality or not quality["passed"]:
+    except pipeline.PipelineError as error:
+        if error.code == "conditioning_failed":
+            receipt["conditioning_error"] = error.reason
         return {
-            "error": "quality_gate_failed",
-            "message": "Generated audio did not pass the technical quality gate",
+            "error": error.code,
+            "message": _pipeline_error_message(error.code),
             "input_receipt": receipt,
-            "diagnostics": _diagnostics(candidates, total_generation_ms, started),
+            "diagnostics": error.diagnostics,
         }
 
-    return {
-        "audio_b64": base64.b64encode(wav_bytes).decode("ascii"),
-        "model": meta.get("X-Model", engine.MODEL_NAME),
-        "generation_ms": int(meta.get("X-Generation-Ms", "0") or 0),
-        "style_mix": meta.get("X-Style-Mix", "0.00"),
-        "melody_conditioned": meta.get("X-Melody-Conditioned", "0"),
-        "cfg_notes": meta.get("X-Cfg-Notes", "0"),
-        "sample_rate": engine.SAMPLE_RATE,
-        "input_receipt": receipt,
-        "quality": quality,
-        "diagnostics": _diagnostics(candidates, total_generation_ms, started),
-    }
+    return protocol.success_output(generated, receipt)
 
 
-def _input_receipt(
-    request_id, prompt, duration, style_mix, melody_input, melody, hum_bytes
-):
-    if isinstance(melody_input, str):
-        melody_json = melody_input
-    elif melody_input:
-        melody_json = json.dumps(
-            melody_input, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-        )
-    else:
-        melody_json = ""
-    return {
-        "version": 1,
-        "request_id": request_id,
-        "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
-        "duration": duration,
-        "style_mix": style_mix,
-        "melody_sha256": hashlib.sha256(melody_json.encode("utf-8")).hexdigest() if melody_json else None,
-        "melody_accepted": melody is not None if melody_json else False,
-        "hum_sha256": hashlib.sha256(hum_bytes).hexdigest() if hum_bytes else None,
-    }
-
-
-def _diagnostics(candidates, total_generation_ms, started):
-    return {
-        "version": 1,
-        "gate_version": GATE_VERSION,
-        "candidate_count": len(candidates),
-        "candidates": candidates,
-        "total_generation_ms": total_generation_ms,
-        "worker_wall_ms": int((time.monotonic() - started) * 1000),
-        "runtime": {
-            "model": engine.MODEL_NAME,
-            "python": platform.python_version(),
-            "backend": os.getenv("MAGENTA_BACKEND", "auto"),
-        },
-    }
+def _pipeline_error_message(code: str) -> str:
+    if code == "conditioning_failed":
+        return "A requested conditioning signal could not be applied"
+    if code == "quality_gate_failed":
+        return "Generated audio did not pass the technical quality gate"
+    return "Music generation failed"
 
 
 # Warm the model at import so the first job after a cold start doesn't pay the

@@ -19,6 +19,7 @@ import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { advanceMusicJob } from "@/lib/platform/music-job-runner";
 import { getMusicEngineMode } from "@/lib/platform/music-worker";
 import { storeMusicJobHum } from "@/lib/storage/music-job-artifacts";
+import { getObjectStore } from "@/lib/storage";
 import { COST } from "@murmur/core";
 
 export const runtime = "nodejs";
@@ -86,8 +87,9 @@ export async function POST(request: NextRequest) {
   const humDigest = humBytes ? createHash("sha256").update(humBytes).digest("hex") : null;
   const requestHash = hashMusicJobRequest({ prompt, duration, styleMix, melody, humDigest });
 
+  let storedHum: Awaited<ReturnType<typeof storeMusicJobHum>> | null = null;
   try {
-    const storedHum = humBytes
+    storedHum = humBytes
       ? await storeMusicJobHum({
           userId: auth.user.id,
           operationId,
@@ -105,17 +107,20 @@ export async function POST(request: NextRequest) {
       requestId,
       bill,
       input: {
+        originRequestId: requestId,
         prompt,
         duration,
         styleMix,
         melody,
         humStorageKey: storedHum?.key ?? null,
+        humDigest: storedHum?.digest ?? null,
         humContentType: hum?.type || null,
         generationBatchId,
       },
     });
 
     if (!created.ok) {
+      if (storedHum) await getObjectStore().delete(storedHum.key).catch(() => undefined);
       if (created.reason === "idempotency_conflict") {
         return NextResponse.json({
           error: "idempotency_conflict",
@@ -134,6 +139,14 @@ export async function POST(request: NextRequest) {
       }, { status, headers: responseHeaders(requestId) });
     }
 
+    if (
+      storedHum
+      && created.duplicate
+      && (created.job.providerJobId || isTerminal(created.job.status))
+    ) {
+      await getObjectStore().delete(storedHum.key).catch(() => undefined);
+    }
+
     if (!isTerminal(created.job.status)) {
       scheduleAfterResponse(() => advanceMusicJob(auth.user.id, created.job.id));
     }
@@ -142,6 +155,7 @@ export async function POST(request: NextRequest) {
       headers: { ...responseHeaders(requestId), Location: `${ROUTE}/${created.job.id}` },
     });
   } catch (cause) {
+    if (storedHum) await getObjectStore().delete(storedHum.key).catch(() => undefined);
     return error(
       "server_error",
       cause instanceof Error ? cause.message : "Could not create music job",

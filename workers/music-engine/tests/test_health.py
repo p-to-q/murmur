@@ -93,6 +93,26 @@ class ReadinessTest(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"]["error"], "model_unavailable")
 
+    def test_generate_json_v2_returns_full_evidence_envelope(self):
+        response = self.client.post(
+            "/generate",
+            data={
+                "prompt": "warm piano",
+                "duration": "2",
+                "response_mode": "json_v2",
+            },
+            headers={"x-request-id": "http_contract_test"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["input_receipt"]["version"], 1)
+        self.assertEqual(body["input_receipt_v2"]["version"], 2)
+        self.assertEqual(body["quality"]["version"], "music-technical-v1")
+        self.assertEqual(body["quality_v2"]["version"], "music-technical-v2")
+        self.assertEqual(body["diagnostics"]["candidate_count"], 1)
+        self.assertTrue(body["audio_b64"].startswith("UklGR"))
+
 
 class LifespanShutdownTest(unittest.TestCase):
     def test_lifespan_gracefully_shuts_down_generation_executor(self):

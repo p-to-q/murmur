@@ -40,7 +40,10 @@ export interface PutOpts {
   contentType: string;
   /** Default `private` unless explicitly opted into `public`. */
   scope?: StorageScope;
-  /** Optional expiry — adapters that support TTL will honor it; others ignore. */
+  /**
+   * Optional expiry intent. Memory/local adapters enforce it on read. S3-like
+   * stores require a lifecycle rule; Cache-Control is not object deletion.
+   */
   ttlSeconds?: number;
   /** Arbitrary opaque metadata; values must be ASCII-safe short strings. */
   meta?: Record<string, string>;
