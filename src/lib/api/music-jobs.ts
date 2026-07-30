@@ -6,9 +6,11 @@ const POLL_INTERVAL_MS = 2_000;
 
 type MusicJobStatus =
   | "accepted"
+  | "submitting"
   | "queued"
   | "running"
   | "result_ready"
+  | "cancel_requested"
   | "succeeded"
   | "failed"
   | "canceled"

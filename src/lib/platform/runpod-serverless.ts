@@ -59,6 +59,7 @@ function clampEnvInt(name: string, fallback: number, min: number, max: number): 
 export type RunpodErrorKind =
   | "unauthorized"
   | "http"
+  | "not_found"
   | "failed"
   | "timeout"
   | "submission_unknown"
@@ -133,12 +134,24 @@ export async function getJobStatus(
   providerJobId: string,
   signal?: AbortSignal,
 ): Promise<RunpodJobState> {
-  const res = await runpodFetch(config, `/status/${providerJobId}`, {
-    method: "GET",
-    signal: signal ?? AbortSignal.timeout(PER_CALL_TIMEOUT_MS),
-  });
+  let res: Response;
+  try {
+    res = await runpodFetch(config, `/status/${providerJobId}`, {
+      method: "GET",
+      signal: signal ?? AbortSignal.timeout(PER_CALL_TIMEOUT_MS),
+    });
+  } catch (error) {
+    const timedOut = error instanceof DOMException && error.name === "TimeoutError";
+    throw new RunpodError(
+      timedOut ? "timeout" : "http",
+      timedOut ? "RunPod status request timed out" : "RunPod status request failed",
+    );
+  }
   const body = await safeJson(res);
   assertAuthorized(res, body);
+  if (res.status === 404) {
+    throw new RunpodError("not_found", "RunPod job was not found");
+  }
   if (!res.ok) {
     throw new RunpodError("http", `RunPod /status returned HTTP ${res.status}`, body);
   }

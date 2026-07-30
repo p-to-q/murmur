@@ -61,7 +61,10 @@ function toResponse(job: import("@/lib/db/schema/music-jobs").MusicJob) {
     jobId: job.id,
     operationId: job.operationId,
     status: job.status,
-    attempt: job.attempt,
+    // Keep the old response key during the client migration; this value is a
+    // fencing epoch, not a provider or model attempt.
+    attempt: job.leaseEpoch,
+    leaseEpoch: job.leaseEpoch,
     audioUrl: job.status === "succeeded" ? `/api/music/jobs/${job.id}/audio` : null,
     error: job.errorCode
       ? { code: job.errorCode, message: job.errorMessage ?? "Music generation failed" }

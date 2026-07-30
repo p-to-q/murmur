@@ -142,7 +142,11 @@ a single clip. Review Essentia's AGPL/commercial licensing before adoption.
 
 - Failed Worker candidate diagnostics live in structured error logs; delivered
   diagnostics persist in `music_jobs.output`.
-- Browser polling still advances durable jobs; there is no dispatcher yet.
+- The protected dispatcher endpoint is implemented, but production scheduling
+  remains a deployment Gate: Vercel Hobby daily cron is insufficient. Until a
+  minute-or-better scheduler is verified, browser polling remains required.
+  Alert when dispatch failures, expired jobs, or `submission_unknown`
+  transitions are non-zero.
 - The Gate is signal/execution-level, not perceptual or melody-similarity aware.
 - Structured events are not distributed traces; no Collector, durable metrics
   store, dashboard, or paging backend is claimed by this runbook.

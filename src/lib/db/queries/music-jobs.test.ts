@@ -11,6 +11,14 @@ describe("music job cancellation transitions", () => {
     })).toBe("cancel_requested");
   });
 
+  it("preserves the submit lease while cancellation is requested", () => {
+    expect(nextMusicJobCancellationStatus({
+      status: "submitting",
+      providerJobId: null,
+      output: null,
+    })).toBe("cancel_requested");
+  });
+
   it("cancels accepted work before provider submission", () => {
     expect(nextMusicJobCancellationStatus({
       status: "accepted",

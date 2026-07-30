@@ -190,10 +190,14 @@ flowchart TB
   and successful audio is recovered through the authenticated job audio route.
   The browser adapter is guarded by
   `NEXT_PUBLIC_MURMUR_DURABLE_MUSIC_JOBS=1`; the legacy synchronous route remains
-  the default while production cutover is validated. Phase one uses short,
-  one-status-read advances triggered after creation and by client GET polling
-  plus DB leases. It does not yet include a continuously running dispatcher,
-  outbox, or browser-independent completion guarantee. See
+  the default while production cutover is validated. Short, one-status-read
+  advances are triggered after creation, by client GET polling, and through the
+  authenticated `/api/music/cron/jobs` dispatcher endpoint when deployment
+  infrastructure schedules it. DB leases, fencing epochs, application
+  deadlines, and atomic terminal/refund intent make concurrent advancement safe.
+  Production must supply minute-or-better scheduling before claiming
+  browser-independent completion. This is database dispatch, not a
+  general-purpose high-throughput queue. See
   [music-jobs.md](./music-jobs.md).
 - AI editing depends on `OPENAI_API_KEY` or an equivalent gateway key.
 - ISR caching (`minimumCacheTTL: 3600`) and AVIF/WebP image optimization are
