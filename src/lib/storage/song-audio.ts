@@ -85,13 +85,14 @@ export function songMasterStorageKey(input: {
   userId: string;
   songId: string;
   digest: string;
+  incarnationId: string;
   ext: string;
 }): string {
   return objectKey({
     kind: "song-master",
     userId: input.userId,
     songId: input.songId,
-    id: input.digest,
+    id: `${input.digest}-${input.incarnationId}`,
     ext: input.ext,
   });
 }
@@ -105,9 +106,9 @@ export async function storedSongAudioDigest(
 }
 
 /**
- * Upload a rendered master to object storage under a deterministic,
- * content-addressed song key. Exact retries reuse the existing object while
- * different audio for the same song id cannot overwrite an earlier master.
+ * Upload a rendered master to a caller-reserved incarnation key. The digest
+ * remains visible in the key, but each upload gets a distinct incarnation so
+ * an expired cleanup worker can never delete bytes from a later save.
  *
  * Returns null when the data URL is not decodable audio (the caller treats
  * that as "no audio"). Storage/adapter failures throw and are handled by the
@@ -116,35 +117,22 @@ export async function storedSongAudioDigest(
 export async function uploadSongMasterFromDataUrl(input: {
   userId: string;
   songId: string;
+  storageKey: string;
   dataUrl: string;
 }): Promise<UploadedSongAudio | null> {
   const parsed = parseAudioDataUrl(input.dataUrl);
   if (!parsed) return null;
 
-  const key = songMasterStorageKey({
-    userId: input.userId,
-    songId: input.songId,
-    digest: parsed.digest,
-    ext: parsed.ext,
-  });
+  const key = input.storageKey;
 
   const store = getObjectStore();
   const privateDelivery = privateSongAudioDeliveryEnabled();
   const existing = await store.get(key);
-  const existingDigest = existing
-    ? createHash("sha256").update(existing.body).digest("hex")
-    : null;
-  if (existing && existingDigest === parsed.digest) {
-    return {
-      mp3Url: privateDelivery
-        ? ownerSongAudioUrl(input.songId)
-        : store.url(key, "public"),
-      mp3StorageKey: key,
-      contentType: existing.contentType,
-      sizeBytes: existing.size,
-      digest: parsed.digest,
-      created: false,
-    };
+  if (existing) {
+    throw new StorageError(
+      "io_error",
+      "Song audio incarnation already exists",
+    );
   }
   const result = await store.put(key, parsed.bytes, {
     scope: privateDelivery ? "private" : "public",

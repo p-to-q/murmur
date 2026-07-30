@@ -22,9 +22,6 @@ import {
 } from "@/lib/db/queries/local-song-fallback";
 import { isDatabaseUnavailable, objectFieldAsString } from "@/app/api/songs/db-fallback";
 import {
-  getObjectStore,
-} from "@/lib/storage";
-import {
   parseAudioDataUrl,
   ownerSongAudioUrl,
   songMasterStorageKey,
@@ -487,27 +484,6 @@ export async function POST(req: NextRequest) {
         },
       });
     }
-    if (
-      resolvedAudio.input.mp3StorageKey
-      && err instanceof Error
-      && err.message === "account_deleted_or_missing"
-    ) {
-      await getObjectStore()
-        .delete(resolvedAudio.input.mp3StorageKey)
-        .catch((cleanupError) => {
-          log("song.audio_cleanup_failed", {
-            songId: songInput.id,
-            reason: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-          }, {
-            route: ROUTE,
-            requestId,
-            userId,
-            sessionId: auth.sessionId,
-            level: "error",
-          });
-        });
-    }
-
     const cause = err instanceof Error && "cause" in err ? err.cause : undefined;
     log("song.create_failed", {
       error: err instanceof Error ? err.message : String(err),
@@ -675,6 +651,7 @@ async function resolveSongAudioForSave(
     userId: base.userId,
     songId: base.id!,
     digest: parsed.digest,
+    incarnationId: ulid(),
     ext: parsed.ext,
   });
 
@@ -688,6 +665,7 @@ async function resolveSongAudioForSave(
     const uploaded = await uploadSongMasterFromDataUrl({
       userId: base.userId,
       songId: base.id!,
+      storageKey,
       dataUrl,
     });
     if (uploaded) {

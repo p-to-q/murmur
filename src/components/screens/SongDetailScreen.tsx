@@ -454,14 +454,15 @@ export function SongDetailScreen({ songId }: { songId: string }) {
       const downloadUrl = audioSrc.startsWith("/api/")
         ? `${audioSrc}${audioSrc.includes("?") ? "&" : "?"}download=1`
         : audioSrc;
-      await downloadUrlAsFile(downloadUrl, `${slug}.${ext}`);
+      const downloadedFilename = await downloadUrlAsFile(downloadUrl, `${slug}.${ext}`);
+      const deliveredFormat = /\.wav$/i.test(downloadedFilename) ? "wav" : ext;
       toast.success(t("song.export.ok"));
       memory
         .reportAction({
           content: `Exported audio for "${song.title}"`,
           event_type: "update",
           page: "song-detail",
-          metadata: { type: "download_audio", song_id: song.id, format: ext },
+          metadata: { type: "download_audio", song_id: song.id, format: deliveredFormat },
         })
         .catch(() => {});
     } catch (error) {

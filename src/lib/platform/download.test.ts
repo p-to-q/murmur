@@ -109,7 +109,7 @@ describe("download helpers", () => {
     resolveResponse?.(
       new Response(new Blob(["audio"], { type: "audio/mpeg" }), { status: 200 }),
     );
-    await download;
+    expect(await download).toBe("song.mp3");
 
     expect(clicks).toEqual([
       { href: "blob:api-download", download: "song.mp3", attached: true },
@@ -117,6 +117,52 @@ describe("download helpers", () => {
     expect(requestInit?.credentials).toBe("include");
     expect(requestInit?.cache).toBe("no-store");
     expect(requestInit?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("uses a same-origin API filename and WAV extension from response metadata", async () => {
+    const { clicks } = installDomHarness();
+    installObjectUrlHarness("blob:wav-download");
+    globalThis.fetch = (async () => new Response(new Blob(["audio"], {
+      type: "audio/wav",
+    }), {
+      status: 200,
+      headers: {
+        "Content-Disposition": "attachment; filename=\"fallback.wav\"; filename*=UTF-8''%E5%93%BC%E5%94%B1.wav",
+        "Content-Type": "audio/wav",
+      },
+    })) as typeof fetch;
+
+    const filename = await downloadUrlAsFile(
+      "/api/songs/song-1/audio?download=1",
+      "wrong.mp3",
+    );
+
+    expect(filename).toBe("哼唱.wav");
+    expect(clicks).toEqual([
+      { href: "blob:wav-download", download: "哼唱.wav", attached: true },
+    ]);
+  });
+
+  it("does not trust cross-origin Content-Disposition filenames", async () => {
+    const { clicks } = installDomHarness();
+    installObjectUrlHarness("blob:remote-download");
+    globalThis.fetch = (async () => new Response(new Blob(["audio"], {
+      type: "audio/wav",
+    }), {
+      status: 200,
+      headers: {
+        "Content-Disposition": "attachment; filename=\"../unsafe.exe\"",
+        "Content-Type": "audio/wav",
+      },
+    })) as typeof fetch;
+
+    const filename = await downloadUrlAsFile(
+      "https://cdn.example/audio",
+      "safe.mp3",
+    );
+
+    expect(filename).toBe("safe.wav");
+    expect(clicks[0]?.download).toBe("safe.wav");
   });
 
   it("keeps data and blob URLs as direct downloads", async () => {

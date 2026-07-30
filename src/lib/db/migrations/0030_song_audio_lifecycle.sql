@@ -35,8 +35,8 @@ SELECT
   "user_id",
   "id",
   CASE
-    WHEN "mp3_storage_key" ~ '/[0-9a-f]{64}[.][A-Za-z0-9]+$'
-      THEN substring("mp3_storage_key" from '/([0-9a-f]{64})[.][A-Za-z0-9]+$')
+    WHEN "mp3_storage_key" ~ '/[0-9a-f]{64}[-A-Za-z0-9_]*[.][A-Za-z0-9]+$'
+      THEN substring("mp3_storage_key" from '/([0-9a-f]{64})[-A-Za-z0-9_]*[.][A-Za-z0-9]+$')
     ELSE repeat('0', 64)
   END,
   'committed',

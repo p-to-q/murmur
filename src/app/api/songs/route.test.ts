@@ -787,7 +787,7 @@ describe("POST /api/songs", () => {
     expect(body).not.toHaveProperty("mp3DataUrl");
   });
 
-  it("deletes an uploaded master when account deletion wins the save race", async () => {
+  it("leaves its unique pending master for outbox cleanup when account deletion wins", async () => {
     const { store, puts, deletes } = makeRecordingStore();
     __setObjectStoreForTesting(store);
     createSongError = new Error("account_deleted_or_missing");
@@ -809,7 +809,7 @@ describe("POST /api/songs", () => {
 
     expect(response.status).toBe(500);
     expect(puts).toHaveLength(1);
-    expect(deletes).toEqual([puts[0]!.key]);
+    expect(deletes).toEqual([]);
     expect(createdSongs).toHaveLength(0);
   });
 

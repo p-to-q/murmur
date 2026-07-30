@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import { parseAudioDataUrl, privateSongAudioDeliveryEnabled } from "./song-audio";
+import {
+  parseAudioDataUrl,
+  privateSongAudioDeliveryEnabled,
+  songMasterStorageKey,
+} from "./song-audio";
 
 describe("song audio persistence", () => {
   it("accepts matching MP3/WAV signatures and rejects mislabeled bytes", () => {
@@ -21,6 +25,20 @@ describe("song audio persistence", () => {
       MURMUR_PRIVATE_SONG_AUDIO_DELIVERY: "1",
     })).toBe(true);
     expect(privateSongAudioDeliveryEnabled({ NODE_ENV: "test" })).toBe(true);
+  });
+
+  it("gives every upload incarnation an isolated storage key", () => {
+    const base = {
+      userId: "usr_song",
+      songId: "song_1",
+      digest: "a".repeat(64),
+      ext: "mp3",
+    };
+    const first = songMasterStorageKey({ ...base, incarnationId: "01AAA" });
+    const second = songMasterStorageKey({ ...base, incarnationId: "01BBB" });
+    expect(first).not.toBe(second);
+    expect(first).toContain(`${base.digest}-01AAA.mp3`);
+    expect(second).toContain(`${base.digest}-01BBB.mp3`);
   });
 });
 

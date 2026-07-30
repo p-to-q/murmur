@@ -61,7 +61,20 @@ export async function reserveSongAudioObject(input: {
     if (existing.state === "delete_pending") {
       throw new Error("song_audio_deletion_in_progress");
     }
-    if (existing.state === "deleted") {
+    if (existing.state === "pending") {
+      await tx
+        .update(songAudioObjects)
+        .set({
+          nextAttemptAt: new Date(now.getTime() + SONG_AUDIO_PENDING_GRACE_MS),
+          leaseUntil: null,
+          lastError: null,
+          updatedAt: now,
+        })
+        .where(and(
+          eq(songAudioObjects.storageKey, input.storageKey),
+          eq(songAudioObjects.state, "pending"),
+        ));
+    } else if (existing.state === "deleted") {
       await tx
         .update(songAudioObjects)
         .set({
@@ -234,5 +247,6 @@ export function songAudioObjectRetryAt(attempts: number, now = new Date()): Date
 }
 
 function digestFromStorageKey(storageKey: string): string {
-  return /\/([0-9a-f]{64})\.[A-Za-z0-9]+$/.exec(storageKey)?.[1] ?? "0".repeat(64);
+  return /\/([0-9a-f]{64})(?:-[A-Za-z0-9_-]+)?\.[A-Za-z0-9]+$/
+    .exec(storageKey)?.[1] ?? "0".repeat(64);
 }
