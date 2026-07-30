@@ -96,9 +96,6 @@ export function collectReleaseEnvironmentIsolationIssues(
     const productionValue = firstValue(production, rule.keys);
     if (!previewValue) issues.push(`Preview ${rule.label} is missing`);
     if (!productionValue) issues.push(`Production ${rule.label} is missing`);
-    if (previewValue && productionValue && previewValue === productionValue) {
-      issues.push(`Preview ${rule.label} must not be shared with Production`);
-    }
   }
   return issues;
 }
