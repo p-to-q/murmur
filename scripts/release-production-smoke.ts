@@ -1,19 +1,8 @@
 import { detectAudioFileType } from "@/lib/audio/file-signature";
 import { APP_BUILD, APP_VERSION } from "../src/lib/release-metadata";
 
-const input = process.argv[2]?.trim();
-const expectedSha = process.argv[3]?.trim();
-const requireAudio = process.argv.includes("--require-audio");
-if (!input || !expectedSha) {
-  throw new Error(
-    "Usage: bun scripts/release-production-smoke.ts <deployment-url> <expected-full-sha> [--require-audio]",
-  );
-}
-if (!/^[0-9a-f]{40}$/i.test(expectedSha)) {
-  throw new Error("Expected release SHA must contain exactly 40 hexadecimal characters");
-}
-
-const origin = new URL(input).origin;
+let origin: string;
+let expectedSha: string;
 const probes = [
   { path: "/", contentType: "text/html" },
   { path: "/gallery", contentType: "text/html" },
@@ -60,13 +49,7 @@ async function verifyReleaseIdentity() {
         redirect: "manual",
         signal: AbortSignal.timeout(12_000),
       });
-      const identity = (await response.json()) as {
-        version?: unknown;
-        build?: unknown;
-        sha?: unknown;
-      };
-      if (!response.ok)
-        throw new Error(`/api/release returned ${response.status}`);
+      const identity = await parseReleaseIdentity(response);
       if (
         identity.sha !== expectedSha ||
         identity.version !== APP_VERSION ||
@@ -96,6 +79,17 @@ async function verifyReleaseIdentity() {
   throw lastError;
 }
 
+export async function parseReleaseIdentity(response: Response) {
+  if (!response.ok) {
+    throw new Error(`/api/release returned ${response.status}`);
+  }
+  return (await response.json()) as {
+    version?: unknown;
+    build?: unknown;
+    sha?: unknown;
+  };
+}
+
 function smokeHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "User-Agent": "murmur-production-smoke",
@@ -105,44 +99,61 @@ function smokeHeaders(): Record<string, string> {
   return headers;
 }
 
-await verifyReleaseIdentity();
-for (const probeDefinition of probes) {
-  await probe(probeDefinition.path, probeDefinition.contentType);
-}
+async function main() {
+  const input = process.argv[2]?.trim();
+  expectedSha = process.argv[3]?.trim();
+  const requireAudio = process.argv.includes("--require-audio");
+  if (!input || !expectedSha) {
+    throw new Error(
+      "Usage: bun scripts/release-production-smoke.ts <deployment-url> <expected-full-sha> [--require-audio]",
+    );
+  }
+  if (!/^[0-9a-f]{40}$/i.test(expectedSha)) {
+    throw new Error(
+      "Expected release SHA must contain exactly 40 hexadecimal characters",
+    );
+  }
+  origin = new URL(input).origin;
 
-const shareCode = process.env.MURMUR_SMOKE_SHARE_CODE?.trim();
-if (requireAudio && !shareCode) {
-  throw new Error("MURMUR_SMOKE_SHARE_CODE is required for release audio smoke");
-}
-if (shareCode) {
-  await probeAudio(
-    `/api/public/songs/${encodeURIComponent(shareCode)}/audio`,
-    {},
-    "public share",
-  );
-}
+  await verifyReleaseIdentity();
+  for (const probeDefinition of probes) {
+    await probe(probeDefinition.path, probeDefinition.contentType);
+  }
 
-const ownerSongId = process.env.MURMUR_SMOKE_SONG_ID?.trim();
-const ownerToken = process.env.MURMUR_SMOKE_SESSION_TOKEN?.trim();
-if (requireAudio && (!ownerSongId || !ownerToken)) {
-  throw new Error(
-    "MURMUR_SMOKE_SONG_ID and MURMUR_SMOKE_SESSION_TOKEN are required for release audio smoke",
-  );
-}
-if (Boolean(ownerSongId) !== Boolean(ownerToken)) {
-  throw new Error(
-    "MURMUR_SMOKE_SONG_ID and MURMUR_SMOKE_SESSION_TOKEN must be set together",
-  );
-}
-if (ownerSongId && ownerToken) {
-  await probeAudio(
-    `/api/songs/${encodeURIComponent(ownerSongId)}/audio`,
-    { Authorization: `Bearer ${ownerToken}` },
-    "owner song",
-  );
-}
+  const shareCode = process.env.MURMUR_SMOKE_SHARE_CODE?.trim();
+  if (requireAudio && !shareCode) {
+    throw new Error("MURMUR_SMOKE_SHARE_CODE is required for release audio smoke");
+  }
+  if (shareCode) {
+    await probeAudio(
+      `/api/public/songs/${encodeURIComponent(shareCode)}/audio`,
+      {},
+      "public share",
+    );
+  }
 
-console.log(`Release smoke passed for ${origin} at ${expectedSha}`);
+  const ownerSongId = process.env.MURMUR_SMOKE_SONG_ID?.trim();
+  const ownerToken = process.env.MURMUR_SMOKE_SESSION_TOKEN?.trim();
+  if (requireAudio && (!ownerSongId || !ownerToken)) {
+    throw new Error(
+      "MURMUR_SMOKE_SONG_ID and MURMUR_SMOKE_SESSION_TOKEN are required for release audio smoke",
+    );
+  }
+  if (Boolean(ownerSongId) !== Boolean(ownerToken)) {
+    throw new Error(
+      "MURMUR_SMOKE_SONG_ID and MURMUR_SMOKE_SESSION_TOKEN must be set together",
+    );
+  }
+  if (ownerSongId && ownerToken) {
+    await probeAudio(
+      `/api/songs/${encodeURIComponent(ownerSongId)}/audio`,
+      { Authorization: `Bearer ${ownerToken}` },
+      "owner song",
+    );
+  }
+
+  console.log(`Release smoke passed for ${origin} at ${expectedSha}`);
+}
 
 async function probeAudio(
   path: string,
@@ -211,4 +222,8 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
     }
   }
   throw lastError;
+}
+
+if (import.meta.main) {
+  await main();
 }
