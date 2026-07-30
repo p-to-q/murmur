@@ -10,7 +10,7 @@ const runCleanup = mock(async (input: { limit?: number; concurrency?: number } =
   if (throws) throw new Error("database unavailable");
   return summary;
 });
-const { createAccountDeletionCronHandler } = await import("./route");
+const { createAccountDeletionCronHandler } = await import("./handler");
 const GET = createAccountDeletionCronHandler(runCleanup);
 
 beforeEach(() => {
