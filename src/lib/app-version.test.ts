@@ -3,6 +3,7 @@ import {
   formatAppVersion,
   formatReleaseIdentifier,
   getAppVersionParts,
+  getReleaseIdentity,
 } from "./app-version";
 import { APP_BUILD, APP_VERSION } from "./release-metadata";
 
@@ -30,6 +31,11 @@ describe("app-version", () => {
     process.env.NEXT_PUBLIC_APP_BUILD = "181";
     process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA = "fbdd34b1234567890";
     expect(formatAppVersion(true)).toBe("v0.6.0 · build 181 · fbdd34b");
+    expect(getReleaseIdentity()).toEqual({
+      version: "0.6.0",
+      build: "181",
+      sha: "fbdd34b1234567890",
+    });
   });
 
   it("falls back to the calibrated release defaults", () => {
