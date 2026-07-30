@@ -147,6 +147,7 @@ export async function clearAllClipArtifacts(): Promise<void> {
       store.clear();
       store.transaction.oncomplete = () => resolve();
       store.transaction.onerror = () => resolve();
+      store.transaction.onabort = () => resolve();
     } catch {
       resolve();
     }

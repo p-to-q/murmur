@@ -27,4 +27,12 @@ export const memory = {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     window.dispatchEvent(new CustomEvent("murmur:memory", { detail: event }));
   },
+  clearLocalEvents(): void {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Storage can be unavailable in private modes; account exit must continue.
+    }
+  },
 };
