@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "../client";
 import { pushSubscriptions } from "../schema/push-subscriptions";
 import { sessions } from "../schema/sessions";
@@ -108,7 +108,7 @@ export async function revokeSessionAndPushByToken(token: string): Promise<{
       .update(sessions)
       .set({ revokedAt: now })
       .where(eq(sessions.tokenHash, hashSessionToken(token)))
-      .returning({ id: sessions.id });
+      .returning({ id: sessions.id, userId: sessions.userId });
 
     if (!session) {
       return { revoked: false, disabledPushSubscriptions: 0 };
@@ -119,8 +119,14 @@ export async function revokeSessionAndPushByToken(token: string): Promise<{
       .set({ disabledAt: now, updatedAt: now })
       .where(
         and(
-          eq(pushSubscriptions.sessionId, session.id),
           isNull(pushSubscriptions.disabledAt),
+          or(
+            eq(pushSubscriptions.sessionId, session.id),
+            and(
+              eq(pushSubscriptions.userId, session.userId),
+              isNull(pushSubscriptions.sessionId),
+            ),
+          ),
         ),
       )
       .returning({ id: pushSubscriptions.id });
