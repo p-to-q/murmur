@@ -4,6 +4,8 @@ import {
   accountDeletionRetryAt,
   isAccountDeletionMusicJobTerminal,
 } from "./account-deletion";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 describe("account deletion lifecycle decisions", () => {
   it("treats only settled music jobs as purgeable", () => {
@@ -13,6 +15,14 @@ describe("account deletion lifecycle decisions", () => {
     for (const status of ["accepted", "submitting", "queued", "running", "result_ready", "cancel_requested"]) {
       expect(isAccountDeletionMusicJobTerminal(status)).toBe(false);
     }
+  });
+
+  it("purges songs before lifecycle receipts so rollout triggers cannot recreate rows", () => {
+    const source = readFileSync(path.join(import.meta.dir, "account-deletion.ts"), "utf8");
+    const deleteSongs = source.indexOf("await tx.delete(songs)");
+    const deleteReceipts = source.indexOf("await tx.delete(songAudioObjects)");
+    expect(deleteSongs).toBeGreaterThan(-1);
+    expect(deleteReceipts).toBeGreaterThan(deleteSongs);
   });
 
   it("backs retries off from five minutes and caps them at one day", () => {

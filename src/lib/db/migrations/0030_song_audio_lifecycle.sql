@@ -46,3 +46,74 @@ SELECT
 FROM "songs"
 WHERE "mp3_storage_key" IS NOT NULL AND "mp3_storage_key" <> ''
 ON CONFLICT ("storage_key") DO NOTHING;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "murmur_track_legacy_song_audio"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  old_key text;
+  new_key text;
+BEGIN
+  old_key := CASE WHEN TG_OP IN ('UPDATE', 'DELETE') THEN OLD."mp3_storage_key" ELSE NULL END;
+  new_key := CASE WHEN TG_OP IN ('INSERT', 'UPDATE') THEN NEW."mp3_storage_key" ELSE NULL END;
+
+  IF old_key IS NOT NULL AND old_key <> ''
+     AND (TG_OP = 'DELETE' OR new_key IS DISTINCT FROM old_key) THEN
+    INSERT INTO "song_audio_objects" (
+      "storage_key", "user_id", "song_id", "digest", "state",
+      "next_attempt_at", "created_at", "updated_at"
+    ) VALUES (
+      old_key, OLD."user_id", OLD."id",
+      CASE
+        WHEN old_key ~ '/[0-9a-f]{64}[-A-Za-z0-9_]*[.][A-Za-z0-9]+$'
+          THEN substring(old_key from '/([0-9a-f]{64})[-A-Za-z0-9_]*[.][A-Za-z0-9]+$')
+        ELSE repeat('0', 64)
+      END,
+      'delete_pending', now(), now(), now()
+    )
+    ON CONFLICT ("storage_key") DO UPDATE SET
+      "state" = 'delete_pending',
+      "next_attempt_at" = now(),
+      "lease_until" = NULL,
+      "last_error" = NULL,
+      "updated_at" = now();
+  END IF;
+
+  IF new_key IS NOT NULL AND new_key <> ''
+     AND (TG_OP = 'INSERT' OR new_key IS DISTINCT FROM old_key) THEN
+    INSERT INTO "song_audio_objects" (
+      "storage_key", "user_id", "song_id", "digest", "state",
+      "next_attempt_at", "committed_at", "created_at", "updated_at"
+    ) VALUES (
+      new_key, NEW."user_id", NEW."id",
+      CASE
+        WHEN new_key ~ '/[0-9a-f]{64}[-A-Za-z0-9_]*[.][A-Za-z0-9]+$'
+          THEN substring(new_key from '/([0-9a-f]{64})[-A-Za-z0-9_]*[.][A-Za-z0-9]+$')
+        ELSE repeat('0', 64)
+      END,
+      'committed', now(), now(), now(), now()
+    )
+    ON CONFLICT ("storage_key") DO UPDATE SET
+      "state" = 'committed',
+      "next_attempt_at" = now(),
+      "lease_until" = NULL,
+      "last_error" = NULL,
+      "committed_at" = COALESCE("song_audio_objects"."committed_at", now()),
+      "deleted_at" = NULL,
+      "updated_at" = now();
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS "songs_audio_lifecycle_trg" ON "songs";
+--> statement-breakpoint
+CREATE TRIGGER "songs_audio_lifecycle_trg"
+AFTER INSERT OR UPDATE OF "mp3_storage_key" OR DELETE ON "songs"
+FOR EACH ROW
+EXECUTE FUNCTION "murmur_track_legacy_song_audio"();
