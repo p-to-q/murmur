@@ -6,6 +6,7 @@ import {
   spendNotesInTransaction,
   type SpendNotesResult,
 } from "./notes-ledger";
+import { users } from "../schema/users";
 
 // Gallery / shelf / profile-count listings never touch the audio or the
 // arrangement editor — they only render cover metadata. `mp3DataUrl` is a
@@ -184,11 +185,17 @@ export async function getSongSummaryByIdForUser(songId: string, userId: string) 
 }
 
 export async function createSong(data: typeof songs.$inferInsert) {
-  const rows = await db
-    .insert(songs)
-    .values(data)
-    .returning();
-  return rows[0];
+  return db.transaction(async (tx) => {
+    const [activeUser] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, data.userId), sql`${users.deletedAt} IS NULL`))
+      .limit(1)
+      .for("update");
+    if (!activeUser) throw new Error("account_deleted_or_missing");
+    const rows = await tx.insert(songs).values(data).returning();
+    return rows[0];
+  });
 }
 
 export type CreateSongWithSpendResult =

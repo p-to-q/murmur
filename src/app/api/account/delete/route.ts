@@ -63,6 +63,8 @@ export async function POST(request: NextRequest) {
       {
         revokedSongs: result.revokedSongs,
         revokedSessions: result.revokedSessions,
+        disabledPushSubscriptions: result.disabledPushSubscriptions,
+        purgeAfter: result.purgeAfter.toISOString(),
         alreadyDeleted: result.alreadyDeleted,
       },
       {
@@ -78,6 +80,8 @@ export async function POST(request: NextRequest) {
         deletedAt: result.deletedAt.toISOString(),
         revokedSongs: result.revokedSongs,
         revokedSessions: result.revokedSessions,
+        disabledPushSubscriptions: result.disabledPushSubscriptions,
+        purgeAfter: result.purgeAfter.toISOString(),
         alreadyDeleted: result.alreadyDeleted,
         requestId,
       },

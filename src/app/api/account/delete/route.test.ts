@@ -20,6 +20,8 @@ let nextDeletion:
       deletedAt: Date;
       revokedSongs: number;
       revokedSessions: number;
+      disabledPushSubscriptions: number;
+      purgeAfter: Date;
       alreadyDeleted: boolean;
     }
   | { ok: false; reason: "user_not_found" } = {
@@ -27,6 +29,8 @@ let nextDeletion:
   deletedAt: new Date("2026-06-23T00:00:00.000Z"),
   revokedSongs: 3,
   revokedSessions: 2,
+  disabledPushSubscriptions: 4,
+  purgeAfter: new Date("2026-07-23T00:00:00.000Z"),
   alreadyDeleted: false,
 };
 let deletionError: unknown = null;
@@ -87,6 +91,8 @@ beforeEach(() => {
     deletedAt: new Date("2026-06-23T00:00:00.000Z"),
     revokedSongs: 3,
     revokedSessions: 2,
+    disabledPushSubscriptions: 4,
+    purgeAfter: new Date("2026-07-23T00:00:00.000Z"),
     alreadyDeleted: false,
   };
   deletionError = null;
@@ -105,12 +111,16 @@ describe("POST /api/account/delete", () => {
       deletedAt?: string;
       revokedSongs?: number;
       revokedSessions?: number;
+      disabledPushSubscriptions?: number;
+      purgeAfter?: string;
     };
     expect(body).toMatchObject({
       ok: true,
       deletedAt: "2026-06-23T00:00:00.000Z",
       revokedSongs: 3,
       revokedSessions: 2,
+      disabledPushSubscriptions: 4,
+      purgeAfter: "2026-07-23T00:00:00.000Z",
     });
 
     const setCookie = response.headers.get("set-cookie") ?? "";
