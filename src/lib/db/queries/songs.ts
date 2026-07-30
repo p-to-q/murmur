@@ -12,6 +12,8 @@ import {
   markSongAudioDeletePendingInTransaction,
 } from "./song-audio-objects";
 
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 // Gallery / shelf / profile-count listings never touch the audio or the
 // arrangement editor — they only render cover metadata. `mp3DataUrl` is a
 // base64 data URL (often multiple MB) and `arrangementState` is a fat jsonb
@@ -197,13 +199,9 @@ export async function getSongSummaryByIdForUser(songId: string, userId: string) 
 
 export async function createSong(data: typeof songs.$inferInsert) {
   return db.transaction(async (tx) => {
-    const [activeUser] = await tx
-      .select({ id: users.id })
-      .from(users)
-      .where(and(eq(users.id, data.userId), sql`${users.deletedAt} IS NULL`))
-      .limit(1)
-      .for("update");
-    if (!activeUser) throw new Error("account_deleted_or_missing");
+    if (!await lockActiveUser(tx, data.userId)) {
+      throw new Error("account_deleted_or_missing");
+    }
     const [song] = await tx.insert(songs).values(data).returning();
     if (data.mp3StorageKey) {
       await commitSongAudioObjectInTransaction(tx, {
@@ -239,6 +237,9 @@ export async function createSongWithSpend(
   await ensureBillingAccount(data.userId);
 
   return db.transaction(async (tx) => {
+    if (!await lockActiveUser(tx, data.userId)) {
+      return { ok: false, reason: "user_not_found", currentBalance: 0 };
+    }
     const spend = await spendNotesInTransaction(tx, {
       userId: data.userId,
       cost: input.cost,
@@ -284,12 +285,15 @@ export async function updateSongForUser(
   userId: string,
   data: Partial<typeof songs.$inferInsert>,
 ) {
-  const rows = await db
-    .update(songs)
-    .set({ ...data, updatedAt: new Date() })
-    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
-    .returning();
-  return rows[0] ?? null;
+  return db.transaction(async (tx) => {
+    if (!await lockActiveUser(tx, userId)) return null;
+    const rows = await tx
+      .update(songs)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+      .returning();
+    return rows[0] ?? null;
+  });
 }
 
 export async function publishSongShareForUser(
@@ -300,29 +304,35 @@ export async function publishSongShareForUser(
     visibility?: "unlisted" | "public";
   },
 ) {
-  const rows = await db
-    .update(songs)
-    .set({
-      shareCode: input.shareCode,
-      visibility: input.visibility ?? "unlisted",
-      updatedAt: new Date(),
-    })
-    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
-    .returning();
-  return rows[0] ?? null;
+  return db.transaction(async (tx) => {
+    if (!await lockActiveUser(tx, userId)) return null;
+    const rows = await tx
+      .update(songs)
+      .set({
+        shareCode: input.shareCode,
+        visibility: input.visibility ?? "unlisted",
+        updatedAt: new Date(),
+      })
+      .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+      .returning();
+    return rows[0] ?? null;
+  });
 }
 
 export async function revokeSongShareForUser(songId: string, userId: string) {
-  const rows = await db
-    .update(songs)
-    .set({
-      shareCode: null,
-      visibility: "private",
-      updatedAt: new Date(),
-    })
-    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
-    .returning();
-  return rows[0] ?? null;
+  return db.transaction(async (tx) => {
+    if (!await lockActiveUser(tx, userId)) return null;
+    const rows = await tx
+      .update(songs)
+      .set({
+        shareCode: null,
+        visibility: "private",
+        updatedAt: new Date(),
+      })
+      .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+      .returning();
+    return rows[0] ?? null;
+  });
 }
 
 export async function deleteSong(songId: string) {
@@ -350,4 +360,14 @@ export async function deleteSongForUser(songId: string, userId: string) {
     }
     return deleted;
   });
+}
+
+async function lockActiveUser(tx: DbTransaction, userId: string): Promise<boolean> {
+  const [activeUser] = await tx
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.id, userId), sql`${users.deletedAt} IS NULL`))
+    .limit(1)
+    .for("update");
+  return Boolean(activeUser);
 }
