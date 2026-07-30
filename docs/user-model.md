@@ -310,15 +310,18 @@ Transitions in detail:
 - **`free → premium`.** Reserved. Will be a webhook from the billing
   provider on subscription start.
 - **`* → deleted`.** User requests deletion in `/me`. Confirm modal,
-  password / re-auth challenge, then:
+  then:
   - all sessions revoked
+  - active Push subscriptions disabled and share capabilities revoked
   - row marked `deletedAt = now()` (but not yet hard-deleted)
-  - background job (within 30 days) cascades the purge to `songs`,
-    `notesLedger`, `purchases`, `sessions`, `external_identities`. Apple
-    + WeChat require the 30-day window per their respective ToS.
-  - account-recovery: a deletedAt-marked row can be undeleted within 7
-    days if the same identity attempts a fresh sign-in (post-30-day,
-    the user starts fresh).
+  - after 30 days, a retryable cleanup job removes songs, composition events,
+    sessions, external identities, Push subscriptions, Worker jobs, and stored
+    creative artifacts
+  - the user row is stripped to a deleted tombstone; purchases and the Notes
+    ledger remain for refund and financial audit, with free-form/provider
+    metadata removed by the purge path
+  - deletion cancellation/recovery is not implemented in this release; a
+    deleted identity cannot sign in again until policy and API support exist
 
 ---
 
@@ -335,7 +338,6 @@ Transitions in detail:
 | `POST /api/auth/link` | link a second provider to an existing user |
 | `POST /api/auth/unlink` | unlink a provider (must leave at least one identity) |
 | `POST /api/account/delete` | initiate account deletion |
-| `POST /api/account/delete/cancel` | cancel deletion within 30 days |
 
 Auth API design follows `api-conventions.md`. Webhooks for billing live
 under `/api/billing/webhook/*` (see `payment-topup-feature.md`).

@@ -21,6 +21,8 @@ import { compositionEvents } from "../schema/composition-events";
 import { emailVerificationCodes } from "../schema/email-verification-codes";
 import { externalIdentities } from "../schema/external-identities";
 import { musicJobs } from "../schema/music-jobs";
+import { notesLedger } from "../schema/notes-ledger";
+import { purchases } from "../schema/purchases";
 import { pushSubscriptions } from "../schema/push-subscriptions";
 import { rateLimits } from "../schema/rate-limits";
 import { sessions } from "../schema/sessions";
@@ -463,6 +465,14 @@ export async function finalizeAccountDeletionPurge(input: {
     await tx.delete(rateLimits).where(
       sql`right(${rateLimits.bucketKey}, char_length(${input.userId}) + 1) = ':' || ${input.userId}`,
     );
+    await tx
+      .update(notesLedger)
+      .set({ metadata: {} })
+      .where(eq(notesLedger.userId, input.userId));
+    await tx
+      .update(purchases)
+      .set({ rawPayload: null, updatedAt: now })
+      .where(eq(purchases.userId, input.userId));
 
     const [user] = await tx
       .select({ email: users.email })

@@ -25,6 +25,17 @@ describe("account deletion lifecycle decisions", () => {
     expect(deleteReceipts).toBeGreaterThan(deleteSongs);
   });
 
+  it("strips free-form billing metadata while retaining audit rows", () => {
+    const source = readFileSync(path.join(import.meta.dir, "account-deletion.ts"), "utf8");
+
+    expect(source).toContain(".update(notesLedger)");
+    expect(source).toContain(".set({ metadata: {} })");
+    expect(source).toContain(".update(purchases)");
+    expect(source).toContain(".set({ rawPayload: null, updatedAt: now })");
+    expect(source).not.toContain("delete(notesLedger)");
+    expect(source).not.toContain("delete(purchases)");
+  });
+
   it("backs retries off from five minutes and caps them at one day", () => {
     const now = new Date("2026-07-30T00:00:00.000Z");
     expect(accountDeletionRetryAt(1, now).toISOString()).toBe("2026-07-30T00:05:00.000Z");

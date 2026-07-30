@@ -57,7 +57,7 @@ describe("authClient.logout", () => {
       return new Response(null, { status: 204 });
     });
 
-    await authClient.logout();
+    const result = await authClient.logout();
 
     expect(requests).toHaveLength(1);
     expect(requests[0]?.[0]).toBe("/api/auth/logout");
@@ -67,6 +67,8 @@ describe("authClient.logout", () => {
     });
     expect(authClient.user.id).toBe("guest");
     expect(localStorage.getItem("murmur.memory-events")).toBeNull();
+    expect(result.serverExitSucceeded).toBe(true);
+    expect(result.deviceCleanup.failed.length).toBeGreaterThan(0);
   });
 
   it("treats HTTP 503 as a failed logout and preserves local identity", async () => {
