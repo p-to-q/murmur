@@ -11,8 +11,16 @@ const contentType = response.headers.get("content-type") ?? "";
 if (!response.ok || !contentType.includes("application/json")) {
   throw new Error(`Audio Worker health returned ${response.status} ${contentType}`);
 }
-const body = await response.json() as { status?: unknown; ready?: unknown };
-if (body.status !== "ok" && body.ready !== true) {
-  throw new Error("Audio Worker health did not report ready");
+const body = await response.json() as {
+  status?: unknown;
+  service?: unknown;
+  detectorsReady?: unknown;
+};
+if (
+  body.service !== "murmur-audio-engine"
+  || body.status !== "ok"
+  || body.detectorsReady !== true
+) {
+  throw new Error("Audio Worker health identity or detector readiness mismatch");
 }
 console.log("Audio Worker health preflight passed.");
