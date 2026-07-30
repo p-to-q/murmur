@@ -127,11 +127,15 @@ The production workflow is deliberately one serial chain:
    environment, then the release gate repeats the SHA/CI check;
 4. production migrations run through the direct connection;
 5. the same migration command runs again as a convergence check;
-6. the exact checkout is uploaded for a remote Vercel Production build, where
-   Sensitive environment variables remain inside Vercel;
-7. Vercel promotes that completed build to Production;
-8. HTTP smoke runs against the public Production alias at
-   `https://murmur.ptoq.io`.
+6. the exact checkout is uploaded for a remote Vercel Production build with
+   domain promotion disabled, where Sensitive environment variables remain
+   inside Vercel;
+7. the workflow waits for that immutable deployment to finish and checks its
+   public `/api/release` identity plus the HTTP smoke surface against the full
+   approved SHA;
+8. Vercel explicitly promotes that verified deployment to Production;
+9. the same identity-aware HTTP smoke runs against the public Production alias
+   at `https://murmur.ptoq.io` and fails if the alias still serves an older SHA.
 
 Any failed stage stops later stages. The workflow uses a non-canceling
 production concurrency group so two merges cannot overlap migrations or
@@ -147,6 +151,7 @@ Required GitHub configuration:
 | Variable | `VERCEL_PROJECT_NAME` | Vercel project; defaults to `murmur` |
 | Variable | `VERCEL_SCOPE` | Vercel team/account; defaults to `moapachas-projects` |
 | Variable | `VERCEL_NATIVE_PRODUCTION_DISABLED` | Owner acknowledgement that native `main` Production deploy is disabled; release fails closed unless exactly `true` |
+| Secret (optional) | `VERCEL_AUTOMATION_BYPASS_SECRET` | Bypass header for protected deployment smoke; omit when deployment URLs are public |
 
 The GitHub `Production` environment accepts only protected branches, prevents
 self-review and administrator bypass, and requires approval from an authorized
@@ -168,11 +173,12 @@ origins, or worker URLs. The canonical `bun run build` still runs `env:audit`;
 with a remote build it validates the real values inside Vercel before the
 deployment is promoted.
 
-The Vercel deployment URL may be protected by team SSO and is therefore not a
-public health target. Exact-SHA identity is established before upload and
-attached as deployment metadata; post-deploy HTTP probes use the public alias
-that users actually reach. Smoke requests do not follow redirects, so an auth
-or error-page redirect cannot be mistaken for a healthy application response.
+The immutable Vercel deployment is checked before any user-facing domain moves.
+When deployment protection is enabled, configure the dedicated automation
+bypass secret so the same HTTP checks can reach it. `/api/release` exposes only
+version, build, and full commit SHA, never configuration or credentials. Smoke
+requests do not follow redirects, so an auth or error-page redirect cannot be
+mistaken for a healthy application response.
 
 ### Branch protection (issue #308)
 

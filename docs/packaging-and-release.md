@@ -300,6 +300,8 @@ This release reflects milestones since the earlier `v0.2.0` hackathon label:
 Implementation:
 
 - formatter: `src/lib/app-version.ts`
+- public deployment identity: `GET /api/release` (version, build, full SHA;
+  `Cache-Control: no-store`)
 - Me UI: `src/components/screens/MeScreen.tsx`
 - logs already use commit SHA as `release` in `src/lib/observability/log.ts`
 
@@ -327,6 +329,13 @@ release note):
 | new user-visible capability | MINOR, reset PATCH to 0 | yes |
 | export or saved-song incompatibility | MINOR + migration note | yes |
 | declared production-stable product | MAJOR to `1.0.0` | yes |
+
+Pre-release identifiers follow SemVer ordering: increment `rc.N` for each new
+candidate, and remove the suffix only for the final stable release. Git tags use
+the `vX.Y.Z[-rc.N]` spelling, are immutable once pushed, and must point to the
+exact released `main` SHA. GitHub Releases for `rc.N` tags must be marked as
+pre-releases; the leading `v` belongs to the tag and is not part of the
+`package.json` version.
 
 Between releases, production deploys may advance the git SHA without changing
 SemVer or build.
