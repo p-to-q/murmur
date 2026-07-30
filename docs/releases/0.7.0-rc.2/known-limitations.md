@@ -21,6 +21,12 @@
   for the environment-gate and release PRs. The detailed Vercel build log is
   private to the project scope; an owner must correct the real Preview resource
   configuration and produce a green final-stack deployment before release.
+- Protected credential migration, real production database/provider evidence,
+  the final human listen, merge order, and exact-SHA Pre-release are tracked in
+  release-blocker issue #445. Do not replace those receipts with placeholders.
+- The pinned 8-case HumTrans `auto` run passes quality acceptance, but its one
+  local p95 latency observation is 1303.45 ms. Repeated CI measurement and
+  performance work are tracked in non-blocking issue #446.
 - The service worker handles Push only. Offline creation, Gallery playback, and
   an offline application shell are not supported in this candidate.
 - Billing/refund rows retained after account cleanup remain pseudonymous, not

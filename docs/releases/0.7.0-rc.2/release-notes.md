@@ -53,12 +53,14 @@ production release control.
   Production storage or database failures return typed errors and leave retry
   evidence.
 - Preview builds require production-like durable adapters. The release workflow
-  independently pulls both Vercel environments and proves their DB, bucket,
-  Worker resources, and broad credentials differ; both use Postgres rate limits.
+  verifies Vercel environment metadata without decrypting Sensitive values,
+  proves Preview/Production resources and credential records differ, and binds
+  the final READY Preview to the exact PR head and release Git tree.
 
 ## Release and security
 
-- Production release requires a reviewed, CI-green exact `main` SHA and
+- Production release requires a reviewed, CI-green exact `main` SHA, protected
+  Release Evidence approval for read-only/provider proof, and a separate
   protected Production approval before migrations run.
 - Migrations, convergence verification, exact-SHA deploy, immutable/alias smoke,
   tag, and GitHub Pre-release all refer to the same commit.
