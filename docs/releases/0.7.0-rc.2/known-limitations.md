@@ -1,0 +1,25 @@
+# 0.7.0-rc.2 Known Limitations
+
+- The signal-quality Gate catches technical failure, not subjective musicality.
+  Frozen-dataset scores and human pairwise preference remain required before
+  tuning or claiming stronger musical output.
+- Durable music jobs require a minute-cadence trusted scheduler. Vercel Hobby
+  only supports daily cron, so the client flag remains off without an external
+  scheduler and real RunPod canary.
+- Song-audio cleanup requires an external 15-minute scheduler for the stated
+  recovery SLA. The daily Vercel cron is only a safety net.
+- S3-compatible adapters do not implement TTL deletion. The bucket must enforce
+  a tested 24-hour lifecycle for `tmp/`; release stays NO-GO without evidence.
+- Private song-master writes require bucket/CDN enforcement in addition to the
+  application flag; adapter `scope` metadata is not an ACL.
+- Object-store delivery currently materializes one structurally validated,
+  8 MiB-bounded master in the Function. Native ranged storage reads or signed
+  URLs remain a later scaling optimization.
+- Production smoke requires durable owner/share audio fixtures and remains read-
+  only. Final release evidence still requires one human browser flow.
+- The service worker handles Push only. Offline creation, Gallery playback, and
+  an offline application shell are not supported in this candidate.
+- Billing/refund rows retained after account cleanup remain pseudonymous, not
+  anonymous. Release requires an approved purpose, least-privilege access,
+  retention schedule, and final deletion/anonymization policy; these rows are
+  excluded from training exports.

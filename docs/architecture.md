@@ -2,7 +2,7 @@
 
 Status: current-state reference<br>
 Owner: product engineering<br>
-Last verified: 2026-07-18
+Last verified: 2026-07-30
 
 Murmur is a single-product Next.js app with a small local platform layer. The
 goal of this document is not to freeze the design forever; it is to make the
@@ -29,6 +29,8 @@ edit and preview them, then saves and exports the result.
 3. Prefer guest-safe and demo-safe behavior over hard failure in the UI.
 4. Keep the path from hum -> arrangement -> save -> export observable and easy
    to test.
+5. Keep production canonical state durable and server-owned; browser fallbacks
+   must be explicit, bounded, and unable to shadow a service failure.
 
 ## Primary boundaries
 

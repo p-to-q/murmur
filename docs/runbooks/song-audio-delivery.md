@@ -60,15 +60,18 @@ returns `5xx`, a `207` persists for two runs, or the oldest due row is more than
 
 | Surface | Device/browser | Murmur service | Fallback policy |
 | --- | --- | --- | --- |
-| Recording and draft editing | Temporary media, draft state, IndexedDB recovery | No canonical copy until upload/save | Device recovery may resume an interrupted UI flow |
+| Recording and draft editing | Last recording/clip bytes expire after 24 hours; unsaved draft after 7 days | No canonical copy until upload/save | Device recovery may resume an interrupted UI flow |
 | Saved song metadata | Cached response/UI state only | Postgres is canonical | Local/demo song store only when DB fallback is explicitly enabled |
 | Saved song master | Blob used during current render/export | Object storage is canonical; Postgres stores its key and lifecycle | Data URLs are legacy/local-demo compatibility only and are rejected as a production persistence fallback |
 | Playback/download/share | Same-origin authenticated or capability URL | API re-authorizes and streams validated bytes | Historical data URLs and recognized legacy URLs remain readable; a missing durable key is `410`, never silently replaced |
-| Static UI/WASM/artwork | App bundle, service-worker/browser caches | Versioned deployment/CDN origin | Cached assets may keep the shell usable; they do not become canonical user data |
+| Static UI/WASM/artwork | App bundle and ordinary browser caches | Versioned deployment/CDN origin | This release does not promise a service-worker offline shell |
 
 Production must configure Postgres, `CRON_SECRET`, and an S3-compatible storage
 adapter. Local development defaults to local filesystem storage and may opt
 into explicit demo/auth fallbacks; those modes are not production failover.
+The Production bucket must expire `tmp/` objects within 24 hours; verify the
+provider rule and one canary object before setting
+`MURMUR_STORAGE_TMP_LIFECYCLE_CONFIRMED=true`.
 
 Do not claim lifecycle closure from the daily Vercel safety net alone. Before
 release, record the external scheduler identity and verify one authenticated
