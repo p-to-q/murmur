@@ -21,6 +21,8 @@ import {
   shouldUseGuestSongFallback,
 } from "@/app/api/songs/db-fallback";
 import { log } from "@/lib/observability/log";
+import { getObjectStore } from "@/lib/storage";
+import { serializeOwnerSong } from "@/lib/storage/song-audio-delivery";
 import {
   songTagsSchema,
   sourceMelodyKindSchema,
@@ -47,9 +49,6 @@ const updateSongSchema = z.object({
   sourceMelodyKind: sourceMelodyKindSchema.optional(),
   editCount: z.number().int().nonnegative().optional(),
   editDepth: z.enum(["fresh", "shaped", "reworked"]).optional(),
-  mp3DataUrl: z.string().nullable().optional(),
-  mp3Url: z.string().max(2048).nullable().optional(),
-  mp3StorageKey: z.string().max(1024).nullable().optional(),
   visualConfig: strictVisualConfigSchema.optional(),
   arrangementState: strictArrangementStateSchema.optional(),
   tags: songTagsSchema.optional(),
@@ -103,7 +102,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!song) {
       return errorResponse("not_found", 404, requestId);
     }
-    return NextResponse.json(song, {
+    return NextResponse.json(serializeOwnerSong(song), {
       headers: { "X-Request-Id": requestId },
     });
   } catch (err) {
@@ -112,7 +111,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       if (!fallbackSong) {
         return errorResponse("not_found", 404, requestId);
       }
-      return NextResponse.json(fallbackSong, {
+      return NextResponse.json(serializeOwnerSong(fallbackSong), {
         headers: {
           "X-Murmur-Fallback": "local-guest-song",
           "X-Request-Id": requestId,
@@ -195,7 +194,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!updated) {
       return errorResponse("not_found", 404, requestId);
     }
-    return NextResponse.json(updated, {
+    return NextResponse.json(serializeOwnerSong(updated), {
       headers: { "X-Request-Id": requestId },
     });
   } catch (err) {
@@ -204,7 +203,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (!updated) {
         return errorResponse("not_found", 404, requestId);
       }
-      return NextResponse.json(updated, {
+      return NextResponse.json(serializeOwnerSong(updated), {
         headers: {
           "X-Murmur-Fallback": "local-guest-song",
           "X-Request-Id": requestId,
@@ -253,6 +252,22 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const deleted = await deleteSongForUser(id, userId);
     if (!deleted) {
       return errorResponse("not_found", 404, requestId);
+    }
+    if (deleted.mp3StorageKey) {
+      try {
+        await getObjectStore().delete(deleted.mp3StorageKey);
+      } catch (error) {
+        log("song.audio_cleanup_failed", {
+          songId: id,
+          reason: error instanceof Error ? error.message : String(error),
+        }, {
+          route: ROUTE,
+          requestId,
+          userId,
+          sessionId: auth.sessionId,
+          level: "error",
+        });
+      }
     }
     return NextResponse.json(
       { success: true },
@@ -313,4 +328,3 @@ function requestedView(req: NextRequest): string | null {
     return null;
   }
 }
-

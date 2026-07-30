@@ -732,7 +732,7 @@ describe("POST /api/songs", () => {
     expect(body.requestId).toBe("req_registered_db_down");
   });
 
-  it("uploads rendered audio to object storage and persists an object URL, not base64 (#292)", async () => {
+  it("uploads rendered audio privately and persists its controlled route, not base64 (#292)", async () => {
     const { store, puts } = makeRecordingStore();
     __setObjectStoreForTesting(store);
 
@@ -768,10 +768,14 @@ describe("POST /api/songs", () => {
     expect(puts[0]?.key).toContain("songs/master/usr_song/song_audio_object");
     expect(createdSongs).toHaveLength(1);
     // The persisted row references object storage and carries NO embedded base64.
-    expect(createdSongs[0]?.mp3Url).toBe(`https://cdn.test/${puts[0]!.key}`);
+    expect(createdSongs[0]?.mp3Url).toBe("/api/songs/song_audio_object/audio");
     expect(createdSongs[0]?.mp3StorageKey).toBe(puts[0]!.key);
     expect(createdSongs[0]?.mp3DataUrl).toBeNull();
     expect(response.headers.get("X-Murmur-Audio-Storage")).toBeNull();
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.audioUrl).toBe("/api/songs/song_audio_object/audio");
+    expect(body).not.toHaveProperty("mp3StorageKey");
+    expect(body).not.toHaveProperty("mp3DataUrl");
   });
 
   it("deletes an uploaded master when account deletion wins the save race", async () => {
@@ -948,6 +952,28 @@ describe("POST /api/songs", () => {
     expect(response.headers.get("X-Murmur-Audio-Storage")).toBe("fallback-data-url");
     expect(createdSongs[0]?.mp3Url).toBeNull();
     expect(createdSongs[0]?.mp3DataUrl).toBe(SAMPLE_MP3_DATA_URL);
+  });
+
+  it("rejects mislabeled audio bytes instead of persisting a broken artifact", async () => {
+    __setObjectStoreForTesting(makeRecordingStore().store);
+    const response = await POST(buildRequest({
+      id: "song_invalid_audio",
+      title: "Broken Master",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      mp3DataUrl: `data:audio/mpeg;base64,${Buffer.from("upstream error").toString("base64")}`,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(422);
+    expect((await response.json() as { error: string }).error).toBe("invalid_audio");
+    expect(createdSongs).toHaveLength(0);
   });
 
   it("stamps the artifact version and persists the canonical melody + provenance (#297)", async () => {

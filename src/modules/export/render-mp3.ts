@@ -16,6 +16,7 @@
  */
 
 import { assembleSong } from "@/lib/music/assemble-song";
+import { detectAudioFileType } from "@/lib/audio/file-signature";
 import type { VersionGeneration, VibeVersion } from "@/modules/shared/types";
 import { audioBufferToWav, blobToDataUrl } from "./render-wav";
 
@@ -85,9 +86,20 @@ async function transcodeGeneratedClip(
   let wavBytes: ArrayBuffer;
   try {
     const res = await fetch(generation.audioUrl);
+    if (!res.ok) {
+      throw new Error(`Generated clip returned HTTP ${res.status}`);
+    }
     wavBytes = await res.arrayBuffer();
+    if (wavBytes.byteLength === 0) {
+      throw new Error("Generated clip was empty");
+    }
   } catch (e) {
     console.warn("[render-mp3] could not read generated clip:", e);
+    return null;
+  }
+
+  if (detectAudioFileType(new Uint8Array(wavBytes)) !== "wav") {
+    console.warn("[render-mp3] decoded clip is not a valid WAV fallback");
     return null;
   }
 

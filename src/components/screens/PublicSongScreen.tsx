@@ -14,6 +14,7 @@ import { copyTextToClipboard } from "@/lib/platform/clipboard";
 import { requestWithTimeout, withTimeout } from "@/lib/api/timeout";
 import { displayVibeLabel } from "@/lib/music/display-vibe";
 import type { VisualConfig } from "@/modules/shared/types";
+import { resolveClientSongAudioUrl } from "@/lib/music/song-audio-client";
 
 type PublicSong = {
   id: string;
@@ -25,6 +26,7 @@ type PublicSong = {
   duration: number;
   visibility: "unlisted" | "public";
   shareCode: string;
+  audioUrl?: string | null;
   mp3DataUrl?: string | null;
   mp3Url?: string | null;
   visualConfig: VisualConfig;
@@ -88,7 +90,7 @@ export function PublicSongScreen({ shareCode }: { shareCode: string }) {
   }, []);
 
   useEffect(() => {
-    const audioSrc = song?.mp3DataUrl || song?.mp3Url || null;
+    const audioSrc = song ? resolveClientSongAudioUrl(song) : null;
     const el = audioRef.current;
     if (!el) return;
     if (!audioSrc || el.src !== new URL(audioSrc, window.location.href).href) {
@@ -97,7 +99,7 @@ export function PublicSongScreen({ shareCode }: { shareCode: string }) {
       setIsPlaying(false);
       setIsStartingAudio(false);
     }
-  }, [song?.mp3DataUrl, song?.mp3Url]);
+  }, [song]);
 
   const gradient = useMemo(() => {
     if (!song) return "linear-gradient(135deg, #FF8A5C, #FF5924)";
@@ -115,7 +117,7 @@ export function PublicSongScreen({ shareCode }: { shareCode: string }) {
 
   const togglePlay = useCallback(async () => {
     if (!song) return;
-    const audioSrc = song.mp3DataUrl || song.mp3Url;
+    const audioSrc = resolveClientSongAudioUrl(song);
     if (!audioSrc) {
       toast(t("public_song.no_audio") || "This song is still missing its audio.");
       return;
@@ -199,7 +201,7 @@ export function PublicSongScreen({ shareCode }: { shareCode: string }) {
     );
   }
 
-  const audioReady = Boolean(song.mp3DataUrl || song.mp3Url);
+  const audioReady = Boolean(resolveClientSongAudioUrl(song));
   const titleClassName = titleFontClass(song.title);
 
   return (

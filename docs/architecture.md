@@ -107,6 +107,21 @@ flowchart TB
 - Songs are stored through Next.js API routes and the DB query layer.
 - Playback and export reuse the same underlying arrangement model so preview and
   saved artifacts stay aligned.
+- `mp3StorageKey` is the durable server-side audio coordinate. Owner playback,
+  download, and export use `/api/songs/[id]/audio`; public listeners use the
+  independently authorized `/api/public/songs/[shareCode]/audio` capability.
+  Both routes support `HEAD`, a single byte `Range`, and same-origin streaming.
+  Raw object URLs and embedded data URLs remain compatibility inputs, not the
+  client contract.
+- Song masters move to private storage through the
+  `MURMUR_PRIVATE_SONG_AUDIO_DELIVERY` expand/contract switch. The first release
+  ships controlled reads while retaining public writes for rollback; private
+  writes are enabled only after that release is the verified rollback baseline.
+  Because S3-compatible `scope` is intent rather than an ACL, the cutover also
+  requires bucket/CDN policy that denies anonymous `songs/master/*` reads.
+- Publishing a share verifies that the referenced artifact can be read. A
+  missing durable object returns `410 audio_missing`; revocation is effective on
+  the next uncached metadata or audio request.
 
 ### 4. Platform concerns
 
@@ -206,6 +221,10 @@ flowchart TB
   through Next.js headers configuration for production hardening.
 - Some UI files are still larger than the final target shape and can be split as
   the product stabilizes.
+- Current object-store reads materialize the selected object in the Function
+  before sending a streamed response. This avoids the Function response-body
+  limit, but large masters should later use adapter-native ranged reads or
+  short-lived presigned delivery to reduce memory and transfer cost.
 
 ## What changes deserve an explicit design note
 

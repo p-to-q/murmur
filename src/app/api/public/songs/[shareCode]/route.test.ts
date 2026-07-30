@@ -70,7 +70,7 @@ beforeEach(async () => {
     editDepth: "fresh",
     visibility: "unlisted",
     shareCode: "abc234defg",
-    mp3DataUrl: "data:audio/mpeg;base64,abc",
+    mp3DataUrl: "data:audio/mpeg;base64,SUQzYXVkaW8=",
     visualConfig: {
       preset: "warm_particles",
       gradient: "linear-gradient(135deg, #FF8A5C, #FF5924)",
@@ -113,16 +113,14 @@ describe("GET /api/public/songs/[shareCode]", () => {
     expect(body).not.toHaveProperty("arrangementState");
   });
 
-  it("allows public songs to use shared cache without noindex", async () => {
+  it("keeps public share capabilities revocable without noindex", async () => {
     nextSong = { ...nextSong, visibility: "public" };
 
     const response = await GET(request(), ctx());
 
     expect(response.status).toBe(200);
     expect(response.headers.get("X-Robots-Tag")).toBeNull();
-    expect(response.headers.get("Cache-Control")).toBe(
-      "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
-    );
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
   });
 
   it("returns 404 with noindex for historical shares without audio", async () => {
@@ -185,7 +183,8 @@ describe("GET /api/public/songs/[shareCode]", () => {
     expect(getPublicSongByShareCodeMock).not.toHaveBeenCalled();
     const body = await response.json() as Record<string, unknown>;
     expect(body.shareCode).toBe("demo-1");
-    expect(body.mp3Url).toBe("/demo/weightless-dnb.mp3");
+    expect(body.audioUrl).toBe("/demo/weightless-dnb.mp3");
+    expect(body).not.toHaveProperty("mp3Url");
   });
 
   it("does not fail demo playback when redis rate limits are misconfigured", async () => {

@@ -6,6 +6,8 @@ import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { log } from "@/lib/observability/log";
 import { hasSongShareAudio, normalizeSongShareCode } from "@/lib/share/song-share";
 import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
+import { publicSongAudioUrl } from "@/lib/storage/song-audio";
+import { hasSongAudioReference } from "@/lib/storage/song-audio-delivery";
 
 const ROUTE = "/api/public/songs/[shareCode]";
 const PUBLIC_SONG_RATE_LIMIT = { capacity: 120, refillWindowMs: 60_000 };
@@ -82,12 +84,9 @@ function publicSongResponse(
 ) {
   const headers: Record<string, string> = {
     "X-Request-Id": requestId,
-    // s-maxage stays short so unsharing a song propagates within ~5 minutes;
-    // stale-while-revalidate only papers over the refresh itself.
-    "Cache-Control":
-      song.visibility === "public"
-        ? "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
-        : "private, no-store",
+    // Share codes are revocable capabilities; metadata must not outlive a
+    // revoke in a CDN stale cache.
+    "Cache-Control": "private, no-store",
     ...extraHeaders,
   };
   if (song.visibility !== "public") {
@@ -124,6 +123,7 @@ function toPublicSong(song: {
   shareCode: string | null;
   mp3DataUrl?: string | null;
   mp3Url?: string | null;
+  mp3StorageKey?: string | null;
   visualConfig: unknown;
   tags: string[];
   createdAt: Date;
@@ -139,8 +139,11 @@ function toPublicSong(song: {
     duration: song.duration,
     visibility: song.visibility,
     shareCode: song.shareCode,
-    mp3DataUrl: song.mp3DataUrl ?? null,
-    mp3Url: song.mp3Url ?? null,
+    audioUrl: isDemoSongId(song.id)
+      ? song.mp3Url ?? null
+      : hasSongAudioReference(song)
+        ? publicSongAudioUrl(song.shareCode!)
+        : song.mp3Url ?? null,
     visualConfig: song.visualConfig,
     tags: song.tags,
     createdAt: song.createdAt,

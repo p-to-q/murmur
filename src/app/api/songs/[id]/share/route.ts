@@ -31,6 +31,7 @@ import {
   normalizeSongShareVisibility,
 } from "@/lib/share/song-share";
 import { isDemoSongId } from "@/presets/demo-songs";
+import { songAudioArtifactIsAvailable } from "@/lib/storage/song-audio-delivery";
 
 const ROUTE = "/api/songs/[id]/share";
 const SHARE_CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
@@ -86,7 +87,7 @@ export async function POST(
     if (!existing) {
       return errorResponse("not_found", 404, requestId);
     }
-    if (!hasSongShareAudio(existing)) {
+    if (!hasSongShareAudio(existing) || !(await songAudioArtifactIsAvailable(existing))) {
       await revokeExistingShareIfNeeded(id, userId, existing);
       return errorResponse("audio_required", 400, requestId);
     }
@@ -114,7 +115,7 @@ export async function POST(
       if (!existing) {
         return errorResponse("not_found", 404, requestId);
       }
-      if (!hasSongShareAudio(existing)) {
+      if (!hasSongShareAudio(existing) || !(await songAudioArtifactIsAvailable(existing))) {
         revokeLocalShareIfNeeded(id, userId, existing);
         return errorResponse("audio_required", 400, requestId);
       }
@@ -361,4 +362,3 @@ function isSongShareSchemaUnavailable(error: unknown): boolean {
 
   return false;
 }
-

@@ -103,7 +103,7 @@ describe("generateMetadata for public song share pages", () => {
       duration: 20,
       visibility: "public",
       shareCode: "abc234defg",
-      mp3DataUrl: "data:audio/mpeg;base64,abc",
+      mp3DataUrl: "data:audio/mpeg;base64,SUQzYXVkaW8=",
       visualConfig: {
         preset: "soft_gradient",
         gradient: "linear-gradient(135deg, #f6d365, #fda085)",

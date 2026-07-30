@@ -176,4 +176,8 @@ jobs:
           bun-version: 1.3.9
 
       - name: Smoke production alias
-        run: bun scripts/release-production-smoke.ts https://murmur.ptoq.io
+        env:
+          MURMUR_SMOKE_SHARE_CODE: ${{ vars.MURMUR_SMOKE_SHARE_CODE }}
+          MURMUR_SMOKE_SONG_ID: ${{ vars.MURMUR_SMOKE_SONG_ID }}
+          MURMUR_SMOKE_SESSION_TOKEN: ${{ secrets.MURMUR_SMOKE_SESSION_TOKEN }}
+        run: bun scripts/release-production-smoke.ts https://murmur.ptoq.io --require-audio

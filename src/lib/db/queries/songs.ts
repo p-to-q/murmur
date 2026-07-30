@@ -36,7 +36,7 @@ const songSummaryColumns = {
   tags: songs.tags,
   // Cheap boolean so the gallery can flag an incomplete/draft song (#291)
   // without pulling the audio payload into the list response.
-  hasAudio: sql<boolean>`((${songs.mp3Url} is not null and ${songs.mp3Url} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> ''))`,
+  hasAudio: sql<boolean>`((${songs.mp3StorageKey} is not null and ${songs.mp3StorageKey} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> '') or (${songs.mp3Url} is not null and ${songs.mp3Url} <> ''))`,
   createdAt: songs.createdAt,
   updatedAt: songs.updatedAt,
 } as const;
@@ -74,7 +74,7 @@ export async function getSongShareMetaByShareCode(shareCode: string) {
     .select({
       visibility: songs.visibility,
       title: songs.title,
-      hasAudio: sql<boolean>`((${songs.mp3Url} is not null and ${songs.mp3Url} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> ''))`,
+      hasAudio: sql<boolean>`((${songs.mp3StorageKey} is not null and ${songs.mp3StorageKey} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> '') or (${songs.mp3Url} is not null and ${songs.mp3Url} <> ''))`,
     })
     .from(songs)
     .where(and(
@@ -106,6 +106,7 @@ export async function getPublicSongByShareCode(shareCode: string) {
       shareCode: songs.shareCode,
       mp3DataUrl: songs.mp3DataUrl,
       mp3Url: songs.mp3Url,
+      mp3StorageKey: songs.mp3StorageKey,
       visualConfig: songs.visualConfig,
       tags: songs.tags,
       createdAt: songs.createdAt,
@@ -309,6 +310,6 @@ export async function deleteSongForUser(songId: string, userId: string) {
   const rows = await db
     .delete(songs)
     .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
-    .returning({ id: songs.id });
-  return rows.length > 0;
+    .returning({ id: songs.id, mp3StorageKey: songs.mp3StorageKey });
+  return rows[0] ?? null;
 }
