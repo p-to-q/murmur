@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { completeAccountExit } from "@/lib/platform/account-exit";
 import type { AppUser, DevicePlatform } from "./types";
 
 const STORAGE_KEY = "murmur.local-user";
@@ -152,7 +153,7 @@ export const authClient = {
     return currentUser;
   },
   async logout() {
-    await revokeMurmurSession();
+    await completeAccountExit(revokeMurmurSession);
     saveUser(DEFAULT_USER);
   },
   setUser(partial: Partial<AppUser>) {

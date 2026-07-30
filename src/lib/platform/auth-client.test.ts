@@ -18,6 +18,10 @@ class MemoryStorage {
   setItem(key: string, value: string): void {
     this.values.set(key, value);
   }
+
+  removeItem(key: string): void {
+    this.values.delete(key);
+  }
 }
 
 describe("authClient.logout", () => {
@@ -34,6 +38,7 @@ describe("authClient.logout", () => {
       email: "logout@example.com",
       name: "Logout Test",
     });
+    localStorage.setItem("murmur.memory-events", JSON.stringify([{ action: "hum" }]));
   });
 
   afterEach(() => {
@@ -61,6 +66,7 @@ describe("authClient.logout", () => {
       credentials: "same-origin",
     });
     expect(authClient.user.id).toBe("guest");
+    expect(localStorage.getItem("murmur.memory-events")).toBeNull();
   });
 
   it("treats HTTP 503 as a failed logout and preserves local identity", async () => {
@@ -81,6 +87,7 @@ describe("authClient.logout", () => {
     expect(caught).toMatchObject({ code: "http_error", status: 503 });
     expect(authClient.user.id).toBe("user-321");
     expect(localStorage.getItem("murmur.local-user")).toContain("user-321");
+    expect(localStorage.getItem("murmur.memory-events")).not.toBeNull();
   });
 
   it("surfaces a network error and preserves local identity", async () => {
@@ -99,5 +106,6 @@ describe("authClient.logout", () => {
     expect(caught).toMatchObject({ code: "network_error", status: 0 });
     expect(authClient.user.id).toBe("user-321");
     expect(localStorage.getItem("murmur.local-user")).toContain("user-321");
+    expect(localStorage.getItem("murmur.memory-events")).not.toBeNull();
   });
 });

@@ -58,7 +58,7 @@ interface MurmurStore {
   setAuditioning: (versionId: string | null) => void;
 
   // Reset the recording flow (keeps gallery)
-  resetFlow: () => void;
+  resetFlow: () => Promise<void>;
 }
 
 export type CreationRouteState = Pick<
@@ -224,7 +224,7 @@ export const useMurmurStore = create<MurmurStore>((set, get) => {
     auditioningVersionId: null,
     setAuditioning: (versionId) => set({ auditioningVersionId: versionId }),
 
-    resetFlow: () => {
+    resetFlow: async () => {
       set({
         recordingState: "idle",
         vibeVersions: [],
@@ -240,7 +240,7 @@ export const useMurmurStore = create<MurmurStore>((set, get) => {
       });
       writeDraftSnapshot(get());
       // The flow's clips are no longer reachable — release their durable bytes.
-      void clearAllClipArtifacts();
+      await clearAllClipArtifacts();
     },
   };
 });
