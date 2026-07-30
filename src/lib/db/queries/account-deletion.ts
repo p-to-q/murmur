@@ -447,8 +447,11 @@ export async function finalizeAccountDeletionPurge(input: {
     if ([...currentKeys].some((storageKey) => !deletedKeys.has(storageKey))) return false;
 
     await tx.delete(compositionEvents).where(eq(compositionEvents.userId, input.userId));
-    await tx.delete(songAudioObjects).where(eq(songAudioObjects.userId, input.userId));
+    // Delete songs first so the rollout compatibility trigger can record their
+    // keys; the following lifecycle delete then removes those receipts in the
+    // same final purge transaction.
     await tx.delete(songs).where(eq(songs.userId, input.userId));
+    await tx.delete(songAudioObjects).where(eq(songAudioObjects.userId, input.userId));
     await tx.delete(musicJobs).where(eq(musicJobs.userId, input.userId));
     await tx.delete(sessions).where(eq(sessions.userId, input.userId));
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, input.userId));
