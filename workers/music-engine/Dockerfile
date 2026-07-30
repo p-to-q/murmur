@@ -26,7 +26,7 @@ RUN apt-get update \
 
 # runpod → serverless handler · fastapi/uvicorn/python-multipart → "server" role.
 RUN pip install --upgrade pip \
-  && pip install "magenta-rt[jax]" "jax[cuda12]" runpod \
+  && pip install "numpy>=1.26,<3" "magenta-rt[jax]" "jax[cuda12]" runpod \
      fastapi "uvicorn[standard]" python-multipart
 
 WORKDIR /app
