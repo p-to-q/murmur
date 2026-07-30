@@ -99,11 +99,15 @@ export function serializeOwnerSong<
   delete (rest as Partial<SongAudioReference>).mp3DataUrl;
   delete (rest as Partial<SongAudioReference>).mp3Url;
   const legacyUrl = legacyExternalSongAudioUrl(mp3Url);
+  const audioUrl = hasSongAudioReference(song)
+    ? ownerSongAudioUrl(song.id)
+    : legacyUrl;
   return {
     ...rest,
-    audioUrl: hasSongAudioReference(song)
-      ? ownerSongAudioUrl(song.id)
-      : legacyUrl,
+    audioUrl,
+    // Keep one N-1 response alias while already-open clients still read mp3Url.
+    // It points at the same server-owned URL and never exposes storage coordinates.
+    mp3Url: audioUrl,
   };
 }
 

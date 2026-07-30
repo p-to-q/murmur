@@ -1,7 +1,6 @@
 import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import {
-  check,
   foreignKey,
   index,
   jsonb,
@@ -64,10 +63,6 @@ export const pushSubscriptions = pgTable(
       foreignColumns: [sessions.id, sessions.userId],
       name: "push_subscriptions_session_owner_fk",
     }).onDelete("cascade"),
-    activeSessionRequired: check(
-      "push_subscriptions_active_session_required_check",
-      sql`${table.disabledAt} IS NOT NULL OR ${table.sessionId} IS NOT NULL`,
-    ),
   }),
 );
 

@@ -168,9 +168,10 @@ Important fields:
 
 - `user_id → users.id` — subscriptions are account-scoped and cascade on hard
   delete.
-- `session_id` — required for an active subscription and bound by composite
-  foreign key to the owning persistent web session. Disabled historical rows
-  may retain null.
+- `session_id` — required for new subscriptions and bound by composite foreign
+  key to the owning persistent web session. Legacy OAuth subscriptions may
+  temporarily retain null until that browser adopts and rebinds a Murmur
+  session.
 - `endpoint` — unique push service endpoint; upserts move a browser
   subscription to the latest signed-in user.
 - `p256dh`, `auth` — Web Push encryption keys.
@@ -189,11 +190,15 @@ Indexes:
 - `sessions_id_user_idx ON (id, user_id)` — supports the composite session-owner
   foreign key used by active Push rows
 
-Active subscriptions must reference the owning, unrevoked, unexpired persistent
+New subscriptions must reference the owning, unrevoked, unexpired persistent
 session. Subscription writes lock that session row, logout revokes and disables
 under the same boundary, delivery queries join the active session, and endpoint
-`expiration_time` is enforced. Migration `0032` disables legacy null-session,
-expired, revoked, and orphan active rows before adding the constraints.
+`expiration_time` is enforced. Migration `0032` disables expired, revoked, and
+orphan bound rows and adds session ownership without disabling legacy
+null-session rows. Those legacy rows are not deliverable; OAuth adoption asks
+the current browser to rebind its endpoint, and release preflight reports the
+remaining count. A later migration may enforce non-null active sessions only
+after production evidence shows the legacy count has converged to zero.
 
 ### 3.5 `notes_ledger` (NEW)
 

@@ -105,6 +105,8 @@ describe("GET /api/public/songs/[shareCode]", () => {
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     const body = await response.json() as Record<string, unknown>;
     expect(body.title).toBe("Shared Song");
+    expect(body.audioUrl).toBe("/api/public/songs/abc234defg/audio");
+    expect(body.mp3Url).toBe(body.audioUrl);
     expect(body).not.toHaveProperty("userId");
     expect(body).not.toHaveProperty("scaleType");
     expect(body).not.toHaveProperty("sourceMelodyKind");
@@ -189,7 +191,7 @@ describe("GET /api/public/songs/[shareCode]", () => {
     const body = await response.json() as Record<string, unknown>;
     expect(body.shareCode).toBe("demo-1");
     expect(body.audioUrl).toBe("/demo/weightless-dnb.mp3");
-    expect(body).not.toHaveProperty("mp3Url");
+    expect(body.mp3Url).toBe(body.audioUrl);
   });
 
   it("does not fail demo playback when redis rate limits are misconfigured", async () => {

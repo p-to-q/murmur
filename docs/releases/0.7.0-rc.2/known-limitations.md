@@ -29,6 +29,10 @@
   performance work are tracked in non-blocking issue #446.
 - The service worker handles Push only. Offline creation, Gallery playback, and
   an offline application shell are not supported in this candidate.
+- Legacy OAuth Push rows without a Murmur session remain non-deliverable until
+  that browser signs in and automatically rebinds its endpoint. Release schema
+  verification reports the remaining count; rc.2 deliberately does not disable
+  those rows or add a rollback-incompatible non-null constraint.
 - Billing/refund rows retained after account cleanup remain pseudonymous, not
   anonymous. Release requires an approved purpose, least-privilege access,
   retention schedule, and final deletion/anonymization policy; these rows are

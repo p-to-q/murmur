@@ -67,7 +67,8 @@ export interface ReleaseSchemaSnapshot {
     activeMusicJobsWithoutNextRun: ObservedCount;
     deletedUsersWithoutDeletionJob: ObservedCount;
     songsWithoutCommittedAudioReceipt: ObservedCount;
-    activePushWithoutValidSession: ObservedCount;
+    activeBoundPushWithoutValidSession: ObservedCount;
+    legacyActivePushWithoutSession: ObservedCount;
   };
 }
 
@@ -297,13 +298,6 @@ const REQUIRED_CONSTRAINTS: ConstraintExpectation[] = [
     referencedColumns: ["id", "user_id"],
     deleteAction: "cascade",
   },
-  {
-    tableName: "push_subscriptions",
-    name: "push_subscriptions_active_session_required_check",
-    type: "check",
-    canonicalDefinition:
-      "check disabled_at is not null or session_id is not null",
-  },
 ];
 
 export const RELEASE_SCHEMA_EXPECTATIONS = {
@@ -367,18 +361,27 @@ function defaultMatches(kind: DefaultKind, expression: string | null): boolean {
 }
 
 function countIssue(label: string, value: ObservedCount): string | null {
-  let parsed: bigint;
-  try {
-    if (typeof value === "bigint") parsed = value;
-    else if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
-      parsed = BigInt(value);
-    } else if (typeof value === "string" && /^\d+$/.test(value)) parsed = BigInt(value);
-    else return `${label} returned an invalid count: ${String(value)}`;
-  } catch {
-    return `${label} returned an invalid count: ${String(value)}`;
-  }
-
+  const parsed = parseObservedCount(value);
+  if (parsed === null) return `${label} returned an invalid count: ${String(value)}`;
   return parsed === 0n ? null : `${label}: ${parsed.toString()}`;
+}
+
+function observationCountIssue(label: string, value: ObservedCount): string | null {
+  return parseObservedCount(value) === null
+    ? `${label} returned an invalid count: ${String(value)}`
+    : null;
+}
+
+function parseObservedCount(value: ObservedCount): bigint | null {
+  try {
+    if (typeof value === "bigint" && value >= 0n) return value;
+    else if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+      return BigInt(value);
+    } else if (typeof value === "string" && /^\d+$/.test(value)) return BigInt(value);
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function collectReleaseSchemaIssues(snapshot: ReleaseSchemaSnapshot): string[] {
@@ -393,6 +396,11 @@ export function collectReleaseSchemaIssues(snapshot: ReleaseSchemaSnapshot): str
   const constraints = new Map(
     snapshot.constraints.map((entry) => [`${entry.tableName}.${entry.name}`, entry]),
   );
+  if (constraints.has("push_subscriptions.push_subscriptions_active_session_required_check")) {
+    issues.push(
+      "push_subscriptions.push_subscriptions_active_session_required_check must be removed before rc.2 cutover",
+    );
+  }
 
   for (const tableName of REQUIRED_TABLES) {
     if (!tables.has(tableName)) issues.push(`missing table public.${tableName}`);
@@ -562,14 +570,19 @@ export function collectReleaseSchemaIssues(snapshot: ReleaseSchemaSnapshot): str
       snapshot.invariants.songsWithoutCommittedAudioReceipt,
     ],
     [
-      "active Push rows without a valid owned session or with an expired endpoint",
-      snapshot.invariants.activePushWithoutValidSession,
+      "active Push rows with an invalid owned session or expired endpoint",
+      snapshot.invariants.activeBoundPushWithoutValidSession,
     ],
   ];
   for (const [label, value] of invariantChecks) {
     const issue = countIssue(label, value);
     if (issue) issues.push(issue);
   }
+  const legacyPushCountIssue = observationCountIssue(
+    "legacy active Push rows awaiting device-session rebind",
+    snapshot.invariants.legacyActivePushWithoutSession,
+  );
+  if (legacyPushCountIssue) issues.push(legacyPushCountIssue);
 
   return issues;
 }
@@ -628,7 +641,8 @@ interface InvariantRow {
   active_music_jobs_without_next_run: string;
   deleted_users_without_deletion_job: string;
   songs_without_committed_audio_receipt: string;
-  active_push_without_valid_session: string;
+  active_bound_push_without_valid_session: string;
+  legacy_active_push_without_session: string;
 }
 
 export async function loadReleaseSchemaSnapshot(
@@ -782,13 +796,23 @@ export async function loadReleaseSchemaSnapshot(
          AND session.user_id = p.user_id
         WHERE p.disabled_at IS NULL
           AND (
-            p.session_id IS NULL
-            OR session.id IS NULL
-            OR session.revoked_at IS NOT NULL
-            OR session.expires_at <= now()
-            OR (p.expiration_time IS NOT NULL AND p.expiration_time <= now())
+            (p.expiration_time IS NOT NULL AND p.expiration_time <= now())
+            OR (
+              p.session_id IS NOT NULL
+              AND (
+                session.id IS NULL
+                OR session.revoked_at IS NOT NULL
+                OR session.expires_at <= now()
+              )
+            )
           )
-      ) AS active_push_without_valid_session
+      ) AS active_bound_push_without_valid_session
+      ,(
+        SELECT count(*)
+        FROM public.push_subscriptions p
+        WHERE p.disabled_at IS NULL
+          AND p.session_id IS NULL
+      ) AS legacy_active_push_without_session
   `;
   if (!invariants) throw new Error("Release schema invariant query returned no row");
 
@@ -840,7 +864,9 @@ export async function loadReleaseSchemaSnapshot(
       deletedUsersWithoutDeletionJob: invariants.deleted_users_without_deletion_job,
       songsWithoutCommittedAudioReceipt:
         invariants.songs_without_committed_audio_receipt,
-      activePushWithoutValidSession: invariants.active_push_without_valid_session,
+      activeBoundPushWithoutValidSession:
+        invariants.active_bound_push_without_valid_session,
+      legacyActivePushWithoutSession: invariants.legacy_active_push_without_session,
     },
   };
 }
@@ -866,6 +892,9 @@ async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
+    console.log(
+      `Legacy active Push rows awaiting device-session rebind: ${String(snapshot.invariants.legacyActivePushWithoutSession)}`,
+    );
     console.log("Release schema verification passed for migrations 0027-0032.");
   } finally {
     await sql.end({ timeout: 5 });

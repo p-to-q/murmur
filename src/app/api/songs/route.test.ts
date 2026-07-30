@@ -78,6 +78,8 @@ const createSongWithSpendMock = mock(async (data: Record<string, unknown>) => {
   };
 });
 let existingConflictSong: Record<string, unknown> | null = null;
+let songSummaries: Array<Record<string, unknown>> = [];
+let getSongSummariesError: unknown = null;
 const getSongByIdMock = mock(async (songId: string) =>
   existingConflictSong?.id === songId ? existingConflictSong : null,
 );
@@ -98,7 +100,10 @@ mock.module("@/lib/db/queries/songs", () => ({
   getSongByIdForUser: mock(async () => null),
   getSongByShareCode: mock(async () => null),
   getSongShareMetaByShareCode: mock(async () => null),
-  getSongSummariesByUser: mock(async () => []),
+  getSongSummariesByUser: mock(async () => {
+    if (getSongSummariesError) throw getSongSummariesError;
+    return songSummaries;
+  }),
   getSongSummaryByIdForUser: mock(async () => null),
   publishSongShareForUser: mock(async () => null),
   revokeSongShareForUser: mock(async () => null),
@@ -119,8 +124,11 @@ mock.module("@/lib/db/queries/song-audio-objects", () => ({
   songAudioObjectRetryAt: (_attempts: number, now: Date) => now,
 }));
 
-const { POST } = await import("./route");
-const { resetLocalSongFallbackForTests } = await import("@/lib/db/queries/local-song-fallback");
+const { GET, POST } = await import("./route");
+const {
+  createLocalSongFallback,
+  resetLocalSongFallbackForTests,
+} = await import("@/lib/db/queries/local-song-fallback");
 
 function buildRequest(
   body: Record<string, unknown>,
@@ -157,8 +165,61 @@ beforeEach(async () => {
   createSongError = null;
   createSongWithSpendError = null;
   existingConflictSong = null;
+  songSummaries = [];
+  getSongSummariesError = null;
   resetLocalSongFallbackForTests();
   __resetObjectStoreForTesting();
+});
+
+describe("GET /api/songs", () => {
+  it("keeps the N-1 mp3Url alias on audio-bearing summaries", async () => {
+    songSummaries = [{
+      id: "song_summary",
+      title: "Summary Song",
+      hasAudio: true,
+      legacyAudioUrl: null,
+    }];
+
+    const response = await GET(new Request("http://test.local/api/songs", {
+      headers: { "x-request-id": "req_song_list" },
+    }) as unknown as NextRequest);
+    const [song] = await response.json() as Array<Record<string, unknown>>;
+
+    expect(response.status).toBe(200);
+    expect(song?.audioUrl).toBe("/api/songs/song_summary/audio");
+    expect(song?.mp3Url).toBe(song?.audioUrl);
+    expect(song).not.toHaveProperty("legacyAudioUrl");
+  });
+
+  it("keeps the N-1 alias in the demo-safe local-store fallback", async () => {
+    getSongSummariesError = Object.assign(new Error("connect ECONNREFUSED"), {
+      code: "ECONNREFUSED",
+    });
+    createLocalSongFallback({
+      id: "song_local_summary",
+      userId: "usr_song",
+      title: "Local Summary",
+      vibe: "soft",
+      vibeEn: "soft",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 12,
+      mp3DataUrl: SAMPLE_MP3_DATA_URL,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    });
+
+    const response = await GET(new Request("http://localhost:3000/api/songs", {
+      headers: { "x-request-id": "req_local_song_list" },
+    }) as unknown as NextRequest);
+    const [song] = await response.json() as Array<Record<string, unknown>>;
+
+    expect(response.status).toBe(200);
+    expect(song?.audioUrl).toBe("/api/songs/song_local_summary/audio");
+    expect(song?.mp3Url).toBe(song?.audioUrl);
+  });
 });
 
 afterEach(() => {
@@ -783,6 +844,7 @@ describe("POST /api/songs", () => {
     expect(response.headers.get("X-Murmur-Audio-Storage")).toBeNull();
     const body = await response.json() as Record<string, unknown>;
     expect(body.audioUrl).toBe("/api/songs/song_audio_object/audio");
+    expect(body.mp3Url).toBe(body.audioUrl);
     expect(body).not.toHaveProperty("mp3StorageKey");
     expect(body).not.toHaveProperty("mp3DataUrl");
   });

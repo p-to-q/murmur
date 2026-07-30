@@ -133,6 +133,11 @@ function toPublicSong(song: {
   createdAt: Date;
   updatedAt: Date;
 }) {
+  const audioUrl = isDemoSongId(song.id)
+    ? song.mp3Url ?? null
+    : hasSongAudioReference(song)
+      ? publicSongAudioUrl(song.shareCode!)
+      : song.mp3Url ?? null;
   return {
     id: song.id,
     title: song.title,
@@ -143,11 +148,8 @@ function toPublicSong(song: {
     duration: song.duration,
     visibility: song.visibility,
     shareCode: song.shareCode,
-    audioUrl: isDemoSongId(song.id)
-      ? song.mp3Url ?? null
-      : hasSongAudioReference(song)
-        ? publicSongAudioUrl(song.shareCode!)
-        : song.mp3Url ?? null,
+    audioUrl,
+    mp3Url: audioUrl,
     visualConfig: song.visualConfig,
     tags: song.tags,
     createdAt: song.createdAt,

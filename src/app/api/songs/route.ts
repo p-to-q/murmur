@@ -125,13 +125,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const rows = await getSongSummariesByUser(userId);
-    return NextResponse.json(rows.map((song) => ({
-      ...song,
-      legacyAudioUrl: undefined,
-      audioUrl: song.hasAudio
-        ? legacyExternalSongAudioUrl(song.legacyAudioUrl) ?? ownerSongAudioUrl(song.id)
-        : null,
-    })));
+    return NextResponse.json(rows.map(serializeSongSummary));
   } catch (err) {
     if (shouldUseLocalSongFallback(auth, requestHost) && isDatabaseUnavailable(err)) {
       const rows = getLocalSongSummariesByUserFallback(userId);
@@ -145,7 +139,7 @@ export async function GET(req: NextRequest) {
         sessionId: auth.sessionId,
         level: "warn",
       });
-      return NextResponse.json(rows);
+      return NextResponse.json(rows.map(serializeSongSummary));
     }
 
     log("song.list_failed", {
@@ -167,6 +161,19 @@ export async function GET(req: NextRequest) {
       { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
+}
+
+function serializeSongSummary<T extends {
+  id: string;
+  hasAudio: boolean;
+  legacyAudioUrl?: string | null;
+}>(song: T) {
+  const audioUrl = song.hasAudio
+    ? legacyExternalSongAudioUrl(song.legacyAudioUrl) ?? ownerSongAudioUrl(song.id)
+    : null;
+  const rest = { ...song };
+  delete rest.legacyAudioUrl;
+  return { ...rest, audioUrl, mp3Url: audioUrl };
 }
 
 export async function POST(req: NextRequest) {

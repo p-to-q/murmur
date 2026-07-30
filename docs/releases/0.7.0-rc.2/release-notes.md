@@ -15,6 +15,9 @@ production release control.
 - Share publication verifies readable audio, public links remain revocable,
   and legacy saved songs keep compatible playback where their source remains
   valid.
+- Audio responses retain a one-release `mp3Url` alias to the same controlled
+  API route so already-open N-1 clients keep playback, download, and sharing
+  during cutover without exposing object-storage keys.
 - Account deletion immediately revokes sessions and shares, blocks concurrent
   song writes, then removes creative data and stored artifacts after 30 days.
 - Successful logout or deletion removes account-scoped browser recovery data
@@ -70,8 +73,9 @@ production release control.
 ## Compatibility and rollout
 
 - Migrations through `0032_push_subscription_session_lifecycle` use
-  expand-compatible defaults/triggers/indexes; existing songs and the
-  synchronous generation route remain supported.
+  expand-compatible defaults/triggers/indexes; existing songs, legacy
+  null-session Push rows, and the synchronous generation route remain
+  supported. New Push writes still require an owned persistent session.
 - Keep `NEXT_PUBLIC_MURMUR_DURABLE_MUSIC_JOBS` off until a minute-cadence
   external scheduler, real provider canary, and terminal/refund metrics pass.
 - Keep music v2 evidence requirements off until the versioned Worker SHA passes

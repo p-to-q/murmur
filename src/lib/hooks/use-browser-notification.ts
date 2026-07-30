@@ -12,6 +12,10 @@ import {
   useNotificationStore,
   type MurmurNotificationKind,
 } from "@/lib/store/notification-store";
+import {
+  hasObservedMurmurSessionReady,
+  MURMUR_SESSION_READY_EVENT,
+} from "@/lib/auth/session-events";
 
 type Permission = NotificationPermission | "unsupported";
 
@@ -76,6 +80,18 @@ export function useBrowserNotification() {
     if (permission !== "granted" || !browserAlertsEnabled) return;
     void ensurePushSubscription();
   }, [browserAlertsEnabled, permission]);
+
+  useEffect(() => {
+    const resubscribeAfterSessionAdoption = () => {
+      if (getPermission() !== "granted" || !isBrowserAlertPreferenceEnabled()) return;
+      void ensurePushSubscriptionAfterSessionAdoption();
+    };
+    window.addEventListener(MURMUR_SESSION_READY_EVENT, resubscribeAfterSessionAdoption);
+    if (hasObservedMurmurSessionReady()) resubscribeAfterSessionAdoption();
+    return () => {
+      window.removeEventListener(MURMUR_SESSION_READY_EVENT, resubscribeAfterSessionAdoption);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
@@ -168,6 +184,14 @@ async function ensurePushSubscription(): Promise<boolean> {
       activeSubscriptionSync = null;
     });
   return activeSubscriptionSync;
+}
+
+async function ensurePushSubscriptionAfterSessionAdoption(): Promise<boolean> {
+  const pendingBeforeAdoption = activeSubscriptionSync;
+  if (pendingBeforeAdoption) await pendingBeforeAdoption;
+  // Always upsert once after adoption. During a rolling deploy, a pre-adoption
+  // request can succeed against an N-1 server without binding a Murmur session.
+  return ensurePushSubscription();
 }
 
 async function subscribeForPush(): Promise<boolean> {

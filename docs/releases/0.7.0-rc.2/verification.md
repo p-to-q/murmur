@@ -11,7 +11,7 @@ same merged `main` SHA.
 
 ## Repository evidence
 
-- Bun tests: 1,216 pass, 0 fail, 4,252 assertions across 184 files after final
+- Bun tests: 1,221 pass, 0 fail, 4,268 assertions across 184 files after final
   release hardening;
 - release evidence/database/Vercel/music focused tests: 40 pass, 0 fail;
 - audio Worker suite: 47 pass, 0 fail; music Worker mock suite: 43 pass, 0 fail;
@@ -70,7 +70,9 @@ credentials. Never copy credential values into a PR or release note.
 3. Confirm the final `main` SHA has green `verify`, CodeQL, dependency review,
    Bun/Python audits, bundle budget, and Vercel Preview.
 4. Apply migrations through `0032`; re-run journal convergence and the explicit
-   catalog/data-invariant verifier on the same SHA.
+   catalog/data-invariant verifier on the same SHA. Record the informational
+   legacy null-session Push count, and fail if the superseded
+   `push_subscriptions_active_session_required_check` exists.
 5. On a production clone, prove old-app/new-schema compatibility, migration
    counts, lock duration, and application rollback with the expanded schema.
 6. Verify external music (minute) and song-audio (15-minute) schedulers send

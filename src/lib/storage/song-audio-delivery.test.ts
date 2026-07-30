@@ -7,6 +7,7 @@ import {
   buildSongAudioResponse,
   parseByteRange,
   resolveSongAudioArtifact,
+  serializeOwnerSong,
 } from "./song-audio-delivery";
 
 describe("song audio delivery", () => {
@@ -40,6 +41,21 @@ describe("song audio delivery", () => {
       mp3DataUrl: "data:audio/mpeg;base64,CQ==",
     });
     expect(result.status).toBe("missing");
+  });
+
+  it("keeps an N-1 mp3Url alias without exposing storage coordinates", () => {
+    const serialized = serializeOwnerSong({
+      id: "song_compat",
+      title: "Compatible Song",
+      mp3StorageKey: "song-master/usr/song/audio.mp3",
+      mp3DataUrl: "data:audio/mpeg;base64,CQ==",
+      mp3Url: "https://private-storage.example/audio.mp3",
+    });
+
+    expect(serialized.audioUrl).toBe("/api/songs/song_compat/audio");
+    expect(serialized.mp3Url).toBe(serialized.audioUrl);
+    expect(serialized).not.toHaveProperty("mp3StorageKey");
+    expect(serialized).not.toHaveProperty("mp3DataUrl");
   });
 
   it("serves byte ranges and download metadata", async () => {

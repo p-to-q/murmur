@@ -68,7 +68,8 @@ function passingSnapshot(): ReleaseSchemaSnapshot {
       activeMusicJobsWithoutNextRun: 0,
       deletedUsersWithoutDeletionJob: 0n,
       songsWithoutCommittedAudioReceipt: "0",
-      activePushWithoutValidSession: 0,
+      activeBoundPushWithoutValidSession: 0,
+      legacyActivePushWithoutSession: 3,
     },
   };
 }
@@ -156,7 +157,7 @@ describe("release schema verifier", () => {
     );
   });
 
-  test("rejects drift in the 0032 session index and Push constraints", () => {
+  test("rejects drift in the 0032 session index and owner constraint", () => {
     const snapshot = passingSnapshot();
     const sessionIndex = snapshot.indexes.find(
       (entry) => entry.name === "sessions_id_user_idx",
@@ -179,17 +180,6 @@ describe("release schema verifier", () => {
     ownerFk.referencedColumns = ["user_id", "id"];
     ownerFk.deleteAction = "no action";
 
-    const activeSessionCheck = snapshot.constraints.find(
-      (entry) =>
-        entry.name === "push_subscriptions_active_session_required_check",
-    );
-    if (!activeSessionCheck) {
-      throw new Error("test fixture is missing active-session check");
-    }
-    activeSessionCheck.validated = false;
-    activeSessionCheck.definition =
-      "CHECK ((disabled_at IS NOT NULL AND session_id IS NOT NULL))";
-
     const issues = collectReleaseSchemaIssues(snapshot);
     expect(issues).toEqual(
       expect.arrayContaining([
@@ -201,9 +191,27 @@ describe("release schema verifier", () => {
         "push_subscriptions.push_subscriptions_session_owner_fk references table other_sessions; expected sessions",
         "push_subscriptions.push_subscriptions_session_owner_fk references (user_id, id); expected (id, user_id)",
         "push_subscriptions.push_subscriptions_session_owner_fk uses ON DELETE no action; expected cascade",
-        "push_subscriptions.push_subscriptions_active_session_required_check is not validated",
-        "push_subscriptions.push_subscriptions_active_session_required_check has unexpected definition: check disabled_at is not null and session_id is not null",
       ]),
+    );
+  });
+
+  test("rejects the rollback-incompatible pre-rc.2 Push check if it remains", () => {
+    const snapshot = passingSnapshot();
+    snapshot.constraints.push({
+      tableName: "push_subscriptions",
+      name: "push_subscriptions_active_session_required_check",
+      type: "check",
+      validated: true,
+      columns: ["disabled_at", "session_id"],
+      referencedSchema: null,
+      referencedTable: null,
+      referencedColumns: [],
+      deleteAction: null,
+      definition: "CHECK (((disabled_at IS NOT NULL) OR (session_id IS NOT NULL)))",
+    });
+
+    expect(collectReleaseSchemaIssues(snapshot)).toContain(
+      "push_subscriptions.push_subscriptions_active_session_required_check must be removed before rc.2 cutover",
     );
   });
 
@@ -214,7 +222,8 @@ describe("release schema verifier", () => {
       activeMusicJobsWithoutNextRun: 3,
       deletedUsersWithoutDeletionJob: 1n,
       songsWithoutCommittedAudioReceipt: undefined,
-      activePushWithoutValidSession: 4,
+      activeBoundPushWithoutValidSession: 4,
+      legacyActivePushWithoutSession: 8,
     };
 
     expect(collectReleaseSchemaIssues(snapshot)).toEqual(
@@ -223,8 +232,19 @@ describe("release schema verifier", () => {
         "active music_jobs rows with NULL next_run_at: 3",
         "deleted users without account_deletion_jobs: 1",
         "songs with mp3_storage_key without matching committed song_audio_objects receipt returned an invalid count: undefined",
-        "active Push rows without a valid owned session or with an expired endpoint: 4",
+        "active Push rows with an invalid owned session or expired endpoint: 4",
       ]),
+    );
+  });
+
+  test("accepts a nonzero legacy Push observation but rejects malformed evidence", () => {
+    const snapshot = passingSnapshot();
+    snapshot.invariants.legacyActivePushWithoutSession = "27";
+    expect(collectReleaseSchemaIssues(snapshot)).toEqual([]);
+
+    snapshot.invariants.legacyActivePushWithoutSession = undefined;
+    expect(collectReleaseSchemaIssues(snapshot)).toContain(
+      "legacy active Push rows awaiting device-session rebind returned an invalid count: undefined",
     );
   });
 });

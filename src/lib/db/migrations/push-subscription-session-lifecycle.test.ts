@@ -16,24 +16,23 @@ const journal = readFileSync(
 );
 
 describe("push subscription session lifecycle migration", () => {
-  test("disables legacy, expired, revoked, and orphan active subscriptions", () => {
-    expect(up).toContain('"push"."session_id" IS NULL');
+  test("preserves legacy null-session rows while disabling invalid bound rows", () => {
+    expect(up).toContain('"push"."session_id" IS NOT NULL');
+    expect(up).not.toContain('OR ("push"."session_id" IS NULL');
     expect(up).toContain('"push"."expiration_time" <= NOW()');
     expect(up).toContain('"session"."revoked_at" IS NULL');
     expect(up).toContain('"session"."expires_at" > NOW()');
     expect(up).toContain('"disabled_at" = COALESCE("push"."disabled_at", NOW())');
   });
 
-  test("enforces persistent session ownership for future active rows", () => {
+  test("enforces ownership for rows that already reference a session", () => {
     expect(up).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "sessions_id_user_idx"');
     expect(up).toContain('CONSTRAINT "push_subscriptions_session_owner_fk"');
     expect(up).toContain('FOREIGN KEY ("session_id", "user_id")');
-    expect(up).toContain('CONSTRAINT "push_subscriptions_active_session_required_check"');
-    expect(up).toContain('CHECK ("disabled_at" IS NOT NULL OR "session_id" IS NOT NULL)');
+    expect(up).not.toContain('CONSTRAINT "push_subscriptions_active_session_required_check"');
   });
 
   test("rolls back constraints and the supporting index without deleting data", () => {
-    expect(down).toContain('DROP CONSTRAINT IF EXISTS "push_subscriptions_active_session_required_check"');
     expect(down).toContain('DROP CONSTRAINT IF EXISTS "push_subscriptions_session_owner_fk"');
     expect(down).toContain('DROP INDEX IF EXISTS "sessions_id_user_idx"');
     expect(down.toLowerCase()).not.toContain("delete from");

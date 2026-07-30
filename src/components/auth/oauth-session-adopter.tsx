@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 
 import { refreshCurrentAccount } from "@/lib/hooks/use-current-account";
 import { fetchUserBalance } from "@/lib/hooks/use-user-balance";
+import { notifyMurmurSessionReady } from "@/lib/auth/session-events";
 
 export function OAuthSessionAdopter() {
   const { data: session, status } = useSession();
@@ -26,6 +27,7 @@ export function OAuthSessionAdopter() {
         adoptedUserRef.current = null;
         return;
       }
+      notifyMurmurSessionReady();
       await refreshCurrentAccount();
       await fetchUserBalance({ force: true });
     })();
