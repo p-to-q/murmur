@@ -1,9 +1,12 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, mock } from "bun:test";
 
 import {
+  deleteSubmittedHum,
   musicJobFailureDisposition,
   shouldReleaseMusicJobLease,
 } from "./music-job-runner";
+import { __setObjectStoreForTesting, type ObjectStore } from "@/lib/storage";
+import { createMemoryStore } from "@/lib/storage/adapters/memory";
 
 describe("music job terminal safety", () => {
   it("never refunds after provider output was observed", () => {
@@ -54,5 +57,26 @@ describe("music job polling lease", () => {
     expect(shouldReleaseMusicJobLease("failed")).toBe(false);
     expect(shouldReleaseMusicJobLease("canceled")).toBe(false);
     expect(shouldReleaseMusicJobLease("expired")).toBe(false);
+  });
+});
+
+describe("music job hum retention", () => {
+  afterEach(() => __setObjectStoreForTesting(null));
+
+  it("eagerly deletes a submitted hum once its digest is durable", async () => {
+    const backing = createMemoryStore();
+    const remove = mock(async (key: string) => backing.delete(key));
+    const store: ObjectStore = { ...backing, delete: remove };
+    __setObjectStoreForTesting(store);
+    await deleteSubmittedHum({ humStorageKey: "tmp/usr/_/hum.wav", humDigest: "a".repeat(64) });
+    expect(remove).toHaveBeenCalledWith("tmp/usr/_/hum.wav");
+  });
+
+  it("does not delete legacy hums that lack a persisted verification digest", async () => {
+    const backing = createMemoryStore();
+    const remove = mock(async (key: string) => backing.delete(key));
+    __setObjectStoreForTesting({ ...backing, delete: remove });
+    await deleteSubmittedHum({ humStorageKey: "tmp/usr/_/hum.wav", humDigest: null });
+    expect(remove).not.toHaveBeenCalled();
   });
 });

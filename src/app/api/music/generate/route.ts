@@ -15,6 +15,7 @@ import {
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { safeHostnameFromUrl } from "@/lib/http/safe-hostname";
 import { classifyError } from "@/lib/errors/transient";
+import { analyzePcm16Wav } from "@/lib/music/music-output-quality";
 import { log } from "@/lib/observability/log";
 import { reportBudget } from "@/lib/observability/latency-budgets";
 import {
@@ -29,7 +30,10 @@ import {
 } from "@/lib/notifications/notification-copy";
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { RunpodError, runJob, getQueueDepth } from "@/lib/platform/runpod-serverless";
-import { verifyMusicWorkerOutput } from "@/lib/platform/music-worker-output";
+import {
+  verifyMusicWorkerOutput,
+} from "@/lib/platform/music-worker-output";
+import { verifyHttpConditioningHeaders } from "@/lib/platform/music-http-output";
 import { COST } from "@murmur/core";
 import { createHash } from "node:crypto";
 
@@ -842,7 +846,6 @@ async function generateViaServerless(
     humBytes = new Uint8Array(await params.hum.arrayBuffer());
     input.hum_b64 = Buffer.from(humBytes).toString("base64");
   }
-
   let output: Record<string, unknown>;
   try {
     output = await runJob(config, input, { budgetMs: WORKER_TIMEOUT_MS, signal });
@@ -864,7 +867,7 @@ async function generateViaServerless(
             ? "RunPod rejected our API key (RUNPOD_API_KEY out of sync?)"
             : error.message,
         status: 502,
-        ext: { runpodKind: error.kind, runpodDetail: error.detail },
+        ext: { runpodKind: error.kind, providerDetailPresent: error.detail != null },
       };
     }
     return {
@@ -882,7 +885,7 @@ async function generateViaServerless(
       error: "worker_http_error",
       message: "RunPod job returned no audio",
       status: 502,
-      ext: { output },
+      ext: { outputKeys: Object.keys(output).slice(0, 16) },
     };
   }
 
@@ -953,6 +956,9 @@ async function generateViaHttp(
     workerForm.append("style_mix", String(params.styleMix));
     workerForm.append("hum", params.hum, params.hum.name || "hum.webm");
   }
+  // New workers return the same v2 JSON envelope as RunPod. Older FastAPI
+  // workers ignore this extra form field and keep returning WAV bytes.
+  workerForm.append("response_mode", "json_v2");
 
   const headers = new Headers({ "X-Request-Id": requestId });
   const token = process.env.MUSIC_WORKER_TOKEN?.trim();
@@ -987,9 +993,10 @@ async function generateViaHttp(
   if (!workerRes.ok) {
     // Surface the worker's own error payload — without it, "HTTP 500" hides
     // whether generation failed, auth drifted, or the worker was mid-load.
-    let workerDetail: unknown = null;
+    let workerErrorCode: string | null = null;
     try {
-      workerDetail = (await workerRes.json()) as unknown;
+      const body = (await workerRes.json()) as unknown;
+      workerErrorCode = safeWorkerErrorCode(body);
     } catch (parseError) {
       log(
         "music.worker_error_parse_failed",
@@ -1008,18 +1015,174 @@ async function generateViaHttp(
         ? "Music worker rejected our token (MUSIC_WORKER_TOKEN out of sync?)"
         : `Music worker returned HTTP ${workerRes.status}`,
       status: 502,
-      ext: { workerStatus: workerRes.status, workerDetail },
+      ext: { workerStatus: workerRes.status, workerErrorCode },
+    };
+  }
+
+  const workerContentType = workerRes.headers.get("content-type") ?? "";
+  if (workerContentType.includes("application/json")) {
+    let output: Record<string, unknown>;
+    try {
+      const parsed = await workerRes.json() as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("worker_json_invalid");
+      }
+      output = parsed as Record<string, unknown>;
+    } catch {
+      return {
+        ok: false,
+        error: "worker_http_error",
+        message: "Music worker returned an invalid evidence envelope",
+        status: 502,
+      };
+    }
+    const audioB64 = output.audio_b64;
+    if (typeof audioB64 !== "string" || !audioB64) {
+      return {
+        ok: false,
+        error: "worker_http_error",
+        message: "Music worker returned no audio",
+        status: 502,
+      };
+    }
+    const decoded = Buffer.from(audioB64, "base64");
+    const humBytes = params.hum?.size && params.styleMix > 0
+      ? new Uint8Array(await params.hum.arrayBuffer())
+      : null;
+    let verified: ReturnType<typeof verifyMusicWorkerOutput>;
+    try {
+      verified = verifyMusicWorkerOutput({
+        output,
+        bytes: new Uint8Array(decoded.buffer, decoded.byteOffset, decoded.byteLength),
+        expected: {
+          requestId,
+          prompt: params.prompt,
+          duration: params.duration,
+          styleMix: humBytes ? params.styleMix : 0,
+          melody: params.melody,
+          humSha256: humBytes
+            ? createHash("sha256").update(humBytes).digest("hex")
+            : null,
+        },
+        requireEvidence: true,
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: "worker_http_error",
+        message: "Generated audio did not pass delivery verification",
+        status: 502,
+        ext: {
+          qualityGateRejected: true,
+          reason: error instanceof Error ? error.message : String(error),
+        },
+      };
+    }
+    return {
+      ok: true,
+      audio: decoded.buffer.slice(
+        decoded.byteOffset,
+        decoded.byteOffset + decoded.byteLength,
+      ) as ArrayBuffer,
+      contentType: "audio/wav",
+      model: typeof output.model === "string" ? output.model : "",
+      generationMs: output.generation_ms != null ? String(output.generation_ms) : "",
+      styleMix: typeof output.style_mix === "string" ? output.style_mix : "",
+      quality: verified,
+    };
+  }
+
+  const audio = await workerRes.arrayBuffer();
+  if (audio.byteLength > Math.ceil(params.duration * 96_000 * 2 * 2) + 64 * 1024) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "Generated audio exceeded the delivery size limit",
+      status: 502,
+      ext: { qualityGateRejected: true, reason: "payload_too_large" },
+    };
+  }
+  const quality = analyzePcm16Wav(new Uint8Array(audio), params.duration);
+  if (!quality.passed) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "Generated audio did not pass delivery verification",
+      status: 502,
+      ext: { qualityGateRejected: true, reason: quality.failures.join(",") },
+    };
+  }
+  const workerGateVersion = workerRes.headers.get("x-quality-gate-version");
+  const workerDigest = workerRes.headers.get("x-audio-sha256");
+  const deliveredDigest = createHash("sha256").update(new Uint8Array(audio)).digest("hex");
+  if (workerDigest && workerDigest !== deliveredDigest) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "Generated audio failed delivery integrity verification",
+      status: 502,
+      ext: { qualityGateRejected: true, reason: "worker_digest_mismatch" },
+    };
+  }
+  if (workerGateVersion && !["music-technical-v1", quality.version].includes(workerGateVersion)) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "Music worker quality protocol is out of sync",
+      status: 502,
+      ext: { qualityGateRejected: true, reason: "worker_gate_version_mismatch" },
+    };
+  }
+  const conditioningFailure = verifyHttpConditioningHeaders(workerRes.headers, {
+    humPresent: Boolean(params.hum?.size),
+    styleMix: params.styleMix,
+    melody: params.melody,
+  }, workerGateVersion === quality.version);
+  if (conditioningFailure) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "Music worker did not apply the requested conditioning",
+      status: 502,
+      ext: { qualityGateRejected: true, reason: conditioningFailure },
     };
   }
 
   return {
     ok: true,
-    audio: await workerRes.arrayBuffer(),
+    audio,
     contentType: workerRes.headers.get("content-type") ?? "audio/wav",
     model: workerRes.headers.get("x-model") ?? "",
     generationMs: workerRes.headers.get("x-generation-ms") ?? "",
     styleMix: workerRes.headers.get("x-style-mix") ?? "",
+    quality: {
+      quality,
+      diagnostics: {
+        version: 1,
+        gateVersion: quality.version,
+        evidence: "legacy_missing",
+        candidateCount: finitePositiveHeader(workerRes.headers.get("x-candidate-count")) ?? 1,
+        totalGenerationMs: null,
+        workerWallMs: null,
+        estimatedCostUsd: null,
+        runtime: {},
+        inputReceipt: null,
+        candidates: [],
+      },
+    },
   };
+}
+
+function finitePositiveHeader(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 3 ? parsed : null;
+}
+
+function safeWorkerErrorCode(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const code = (value as Record<string, unknown>).error;
+  return typeof code === "string" && /^[a-z0-9_:-]{1,64}$/i.test(code) ? code : null;
 }
 
 function fail(

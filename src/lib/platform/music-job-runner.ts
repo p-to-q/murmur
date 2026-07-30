@@ -105,8 +105,15 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
         await cancelSubmittedJob(config, providerJobId).catch(() => false);
         throw new Error("music_job_provider_attach_failed");
       }
+      await deleteSubmittedHum(claimed.input).catch((error) => {
+        log("music.hum_cleanup_failed", {
+          jobId,
+          reason: error instanceof Error ? error.message : String(error),
+        }, { userId, level: "warn" });
+      });
       log("music.job_provider_attached", {
         jobId,
+        originRequestId: claimed.input.originRequestId ?? null,
         provider: "runpod",
         providerJobId,
         generationBatchId: claimed.input.generationBatchId,
@@ -162,6 +169,7 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
     const state = await getJobStatus(config, providerJobId);
     log("music.job_provider_status", {
       jobId,
+      originRequestId: claimed.input.originRequestId ?? null,
       providerJobId,
       providerStatus: state.status,
       generationBatchId: claimed.input.generationBatchId,
@@ -279,11 +287,16 @@ async function completeFromProviderOutput(
   const bytes = new Uint8Array(Buffer.from(audioB64, "base64"));
   const job = await getMusicJobForUser(userId, jobId);
   if (!job) throw new Error("music_job_missing_during_completion");
-  const hum = job.input.humStorageKey
+  const persistedHumDigest = typeof job.input.humDigest === "string"
+    ? job.input.humDigest
+    : null;
+  const legacyHum = !persistedHumDigest && job.input.humStorageKey
     ? await getObjectStore().get(job.input.humStorageKey)
     : null;
-  if (job.input.humStorageKey && !hum) throw new Error("hum_artifact_missing_during_verification");
-  const humWasSent = Boolean(hum && job.input.styleMix > 0);
+  if (job.input.humStorageKey && !persistedHumDigest && !legacyHum) {
+    throw new Error("hum_artifact_missing_during_verification");
+  }
+  const humWasSent = Boolean((persistedHumDigest || legacyHum) && job.input.styleMix > 0);
   let verified: ReturnType<typeof verifyMusicWorkerOutput>;
   try {
     verified = verifyMusicWorkerOutput({
@@ -293,10 +306,10 @@ async function completeFromProviderOutput(
         requestId: jobId,
         prompt: job.input.prompt,
         duration: job.input.duration,
-        styleMix: job.input.humStorageKey ? job.input.styleMix : 0,
+        styleMix: humWasSent ? job.input.styleMix : 0,
         melody: job.input.melody,
-        humSha256: humWasSent && hum
-          ? createHash("sha256").update(hum.body).digest("hex")
+        humSha256: humWasSent
+          ? persistedHumDigest ?? createHash("sha256").update(legacyHum!.body).digest("hex")
           : null,
       },
     });
@@ -311,6 +324,7 @@ async function completeFromProviderOutput(
   }
   log("music.quality_gate_passed", {
     jobId,
+    originRequestId: job.input.originRequestId ?? null,
     generationBatchId: job.input.generationBatchId,
     gateVersion: verified.quality.version,
     qualityEvidence: verified.diagnostics.evidence,
@@ -338,6 +352,16 @@ async function completeFromProviderOutput(
   });
   if (!recorded) throw new Error("music_job_result_record_failed");
   await settleRecordedResult(recorded);
+}
+
+export async function deleteSubmittedHum(input: {
+  humStorageKey: string | null;
+  humDigest?: string | null;
+}): Promise<void> {
+  // Only new jobs persist a digest that supports receipt verification after
+  // deletion. Legacy rows keep their source artifact until normal lifecycle.
+  if (!input.humStorageKey || !input.humDigest) return;
+  await getObjectStore().delete(input.humStorageKey);
 }
 
 function summarizeProviderFailure(error: unknown): Record<string, unknown> | null {

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 
 import { createMemoryStore } from "@/lib/storage/adapters/memory";
 import { __setObjectStoreForTesting, type ObjectStore } from "@/lib/storage";
-import { storeMusicJobOutput } from "./music-job-artifacts";
+import { storeMusicJobHum, storeMusicJobOutput } from "./music-job-artifacts";
 
 describe("storeMusicJobOutput", () => {
   afterEach(() => __setObjectStoreForTesting(null));
@@ -37,5 +37,28 @@ describe("storeMusicJobOutput", () => {
     expect(putOptions).toMatchObject({ scope: "private", contentType: "audio/wav" });
     expect(putOptions).not.toHaveProperty("ttlSeconds");
     expect(await store.get(first.storageKey)).not.toBeNull();
+  });
+});
+
+describe("storeMusicJobHum", () => {
+  afterEach(() => __setObjectStoreForTesting(null));
+
+  it("isolates temporary hums by operation while keeping a content digest", async () => {
+    const store = createMemoryStore();
+    __setObjectStoreForTesting(store);
+    const first = await storeMusicJobHum({
+      userId: "usr_owner",
+      operationId: "clip_one",
+      bytes: new Uint8Array([1, 2, 3]),
+      contentType: "audio/webm",
+    });
+    const second = await storeMusicJobHum({
+      userId: "usr_owner",
+      operationId: "clip_two",
+      bytes: new Uint8Array([1, 2, 3]),
+      contentType: "audio/webm",
+    });
+    expect(first.digest).toBe(second.digest);
+    expect(first.key).not.toBe(second.key);
   });
 });

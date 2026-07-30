@@ -25,7 +25,12 @@ class HandlerTest(unittest.TestCase):
         self.assertEqual(out["sample_rate"], 48_000)  # engine.SAMPLE_RATE
         self.assertTrue(out["quality"]["passed"])
         self.assertEqual(out["quality"]["version"], "music-technical-v1")
+        self.assertEqual(out["quality_v2"]["version"], "music-technical-v2")
+        self.assertEqual(out["input_receipt"]["version"], 1)
+        self.assertEqual(out["input_receipt_v2"]["version"], 2)
         self.assertEqual(out["diagnostics"]["candidate_count"], 1)
+        self.assertEqual(len(out["diagnostics"]["candidates"][0]["audio_sha256"]), 64)
+        self.assertIn("sampling", out["diagnostics"]["candidates"][0])
 
         blob = base64.b64decode(out["audio_b64"])
         with wave.open(io.BytesIO(blob)) as reader:
@@ -54,13 +59,33 @@ class HandlerTest(unittest.TestCase):
             "prompt": "private prompt",
             "duration": 2,
             "request_id": "mjob_test",
-            "melody": {"notes": [{"pitch": 60}]},
+            "melody": {"notes": [{"pitch": 60, "start": 0, "duration": 1}]},
         }})
-        receipt = out["input_receipt"]
+        receipt = out["input_receipt_v2"]
         self.assertEqual(receipt["request_id"], "mjob_test")
         self.assertNotIn("private prompt", str(receipt))
         self.assertEqual(len(receipt["prompt_sha256"]), 64)
         self.assertTrue(receipt["melody_accepted"])
+        self.assertEqual(receipt["melody_valid_note_count"], 1)
+        self.assertEqual(out["melody_conditioned"], "1")
+
+    def test_rejects_a_melody_without_usable_notes(self):
+        out = handler.handler({"input": {
+            "prompt": "warm piano",
+            "duration": 2,
+            "melody": {"notes": [{"pitch": 999, "start": 0, "duration": 1}]},
+        }})
+        self.assertEqual(out["error"], "conditioning_failed")
+        self.assertEqual(out["input_receipt"]["melody_valid_note_count"], 0)
+
+    def test_retry_sampling_is_deliberately_diverse(self):
+        first = handler._retry_sampling(1)
+        second = handler._retry_sampling(2)
+        third = handler._retry_sampling(3)
+        self.assertGreaterEqual(first[0], second[0])
+        self.assertGreaterEqual(second[0], third[0])
+        self.assertGreaterEqual(first[1], second[1])
+        self.assertGreaterEqual(second[1], third[1])
 
 
 if __name__ == "__main__":

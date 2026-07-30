@@ -59,6 +59,48 @@ function evidencedOutput() {
   };
 }
 
+function v2EvidencedOutput(bytes: Uint8Array) {
+  const output = evidencedOutput();
+  return {
+    ...output,
+    input_receipt_v2: {
+      ...output.input_receipt,
+      version: 2,
+      melody_valid_note_count: 0,
+      hum_accepted: false,
+    },
+    quality_v2: { version: "music-technical-v2", passed: true, failures: [], metrics: {} },
+    diagnostics: {
+      ...output.diagnostics,
+      version: 2,
+      gate_version: "music-technical-v2",
+      candidates: [{
+        candidate_id: createHash("sha256")
+          .update(`${expected.requestId}:1:${createHash("sha256").update(bytes).digest("hex")}`)
+          .digest("hex")
+          .slice(0, 24),
+        attempt: 1,
+        audio_sha256: createHash("sha256").update(bytes).digest("hex"),
+        duplicate_of_attempt: null,
+        generation_ms: 100,
+        sampling: { temperature: 1.3, top_k: 40, seed_control: "library_managed" },
+        conditioning: {
+          style_mix: 0,
+          melody_conditioned: false,
+          melody_segments: 0,
+          melody_onsets: 0,
+          melody_coverage: 0,
+          cfg_notes: 0,
+          pre_normalization_peak: 0.3,
+          pre_normalization_rms: 0.1,
+          normalization_gain_db: 10,
+        },
+        quality: { version: "music-technical-v2", passed: true, failures: [], metrics: {} },
+      }],
+    },
+  };
+}
+
 describe("music worker output protocol", () => {
   it("allows rolling legacy workers while keeping the Web WAV gate", () => {
     const verified = verifyMusicWorkerOutput({
@@ -112,6 +154,69 @@ describe("music worker output protocol", () => {
     expect(estimateWorkerCostUsd(2_500)).toBeNull();
   });
 
+  it("persists bounded v2 receipt and candidate evidence", () => {
+    const bytes = toneWav();
+    const verified = verifyMusicWorkerOutput({
+      output: v2EvidencedOutput(bytes),
+      bytes,
+      expected,
+      requireEvidence: true,
+    });
+    expect(verified.quality.version).toBe("music-technical-v2");
+    expect(verified.diagnostics.inputReceipt?.version).toBe(2);
+    expect(verified.diagnostics.candidates[0].audioSha256).toHaveLength(64);
+    expect(verified.diagnostics.candidates[0].sampling.topK).toBe(40);
+  });
+
+  it("rejects v2 evidence when the delivered candidate digest drifts", () => {
+    const bytes = toneWav();
+    const output = v2EvidencedOutput(bytes);
+    output.diagnostics.candidates[0].audio_sha256 = "0".repeat(64);
+    expect(() => verifyMusicWorkerOutput({
+      output,
+      bytes,
+      expected,
+      requireEvidence: true,
+    })).toThrow("music_worker_candidate_digest_mismatch");
+  });
+
+  it("rejects inconsistent v2 candidate counts and gate versions", () => {
+    const bytes = toneWav();
+    const countDrift = v2EvidencedOutput(bytes);
+    countDrift.diagnostics.candidate_count = 2;
+    expect(() => verifyMusicWorkerOutput({
+      output: countDrift,
+      bytes,
+      expected,
+      requireEvidence: true,
+    })).toThrow("music_worker_candidate_evidence_inconsistent");
+
+    const gateDrift = v2EvidencedOutput(bytes);
+    gateDrift.diagnostics.gate_version = "music-technical-v1";
+    expect(() => verifyMusicWorkerOutput({
+      output: gateDrift,
+      bytes,
+      expected,
+      requireEvidence: true,
+    })).toThrow("music_worker_candidate_evidence_inconsistent");
+  });
+
+  it("rejects requested conditioning that silently fell back", () => {
+    const bytes = toneWav();
+    const output = v2EvidencedOutput(bytes);
+    Object.assign(output.input_receipt_v2, {
+      style_mix: 0.35,
+      hum_sha256: "a".repeat(64),
+      hum_accepted: true,
+    });
+    expect(() => verifyMusicWorkerOutput({
+      output,
+      bytes,
+      expected: { ...expected, styleMix: 0.35, humSha256: "a".repeat(64) },
+      requireEvidence: true,
+    })).toThrow("music_conditioning_hum_not_applied");
+  });
+
   it("rejects a mismatched receipt", () => {
     expect(() => verifyMusicWorkerOutput({
       output: evidencedOutput(),
@@ -123,13 +228,35 @@ describe("music worker output protocol", () => {
 
   it("rejects unsupported receipt versions", () => {
     const output = evidencedOutput();
-    output.input_receipt.version = 2;
+    output.input_receipt.version = 3;
     expect(() => verifyMusicWorkerOutput({
       output,
       bytes: toneWav(),
       expected,
       requireEvidence: true,
     })).toThrow("music_input_receipt_version_unsupported");
+  });
+
+  it("rejects an incomplete v2 rolling-compatibility envelope", () => {
+    const bytes = toneWav();
+    const output = v2EvidencedOutput(bytes);
+    delete (output as Partial<typeof output>).quality;
+    expect(() => verifyMusicWorkerOutput({
+      output,
+      bytes,
+      expected,
+      requireEvidence: true,
+    })).toThrow("music_worker_v2_compatibility_evidence_missing");
+  });
+
+  it("requires explicit v2 evidence only after the v2 cutover", () => {
+    expect(() => verifyMusicWorkerOutput({
+      output: evidencedOutput(),
+      bytes: toneWav(),
+      expected,
+      requireEvidence: true,
+      requireV2Evidence: true,
+    })).toThrow("music_worker_v2_evidence_missing");
   });
 
   it("rejects negative cost telemetry", () => {

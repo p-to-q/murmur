@@ -27,11 +27,15 @@ export type MusicJobStatus =
   | "expired";
 
 export interface MusicJobInput {
+  /** Missing on jobs created before receipt v2 was introduced. */
+  originRequestId?: string;
   prompt: string;
   duration: number;
   styleMix: number;
   melody: string;
   humStorageKey: string | null;
+  /** Missing on jobs created before durable hum digests were introduced. */
+  humDigest?: string | null;
   humContentType: string | null;
   generationBatchId: string | null;
 }
@@ -59,7 +63,47 @@ export interface MusicJobOutput {
     workerWallMs: number | null;
     estimatedCostUsd: number | null;
     runtime: Record<string, string>;
-    candidates: unknown[];
+    inputReceipt: {
+      version: number;
+      requestId: string;
+      promptSha256: string;
+      duration: number;
+      styleMix: number;
+      melodySha256: string | null;
+      melodyAccepted: boolean;
+      melodyValidNoteCount: number | null;
+      humSha256: string | null;
+      humAccepted: boolean | null;
+    } | null;
+    candidates: Array<{
+      candidateId: string | null;
+      attempt: number;
+      audioSha256: string | null;
+      duplicateOfAttempt: number | null;
+      generationMs: number | null;
+      sampling: {
+        temperature: number | null;
+        topK: number | null;
+        seedControl: string;
+      };
+      conditioning: {
+        styleMix: number | null;
+        melodyConditioned: boolean | null;
+        melodySegments: number | null;
+        melodyOnsets: number | null;
+        melodyCoverage: number | null;
+        cfgNotes: number | null;
+        preNormalizationPeak: number | null;
+        preNormalizationRms: number | null;
+        normalizationGainDb: number | null;
+      };
+      quality: {
+        version: string;
+        passed: boolean;
+        failures: string[];
+        metrics: Record<string, number>;
+      } | null;
+    }>;
   };
 }
 

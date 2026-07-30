@@ -46,13 +46,16 @@ jobs use the existing idempotent refund/pending-refund path. A recorded
 another attempt.
 
 Before `result_ready`, the RunPod handler generates up to two candidates and
-applies the versioned `music-technical-v1` signal-level Gate. It returns hashed
-input receipts and candidate diagnostics. The Web runner independently verifies
-the receipt and WAV; only then does it store and settle the artifact. See
+applies the versioned `music-technical-v2` signal-level Gate. It returns hashed
+input receipts plus bounded candidate, conditioning, sampling, runtime, and
+normalization diagnostics. Requested hum/melody conditioning must be proven as
+applied. The Web runner independently verifies the receipt, final candidate
+digest, conditioning evidence, and WAV; only then does it store and settle the artifact. See
 [music-quality-operations.md](runbooks/music-quality-operations.md).
-During rolling deployment, the Web WAV Gate stays active while missing legacy
-Worker receipts are observed but tolerated. The deployment script enables
-strict evidence only after a versioned warm-up proves the new Worker protocol.
+During rolling deployment, the Worker exposes v1 compatibility and complete v2
+envelopes together. New Web prefers v2, old Web can still consume v1, and the
+Web WAV Gate always remains active. The deployment script enables the separate
+v2 requirement only after a SHA-specific endpoint passes full warm-up.
 
 ## Phase-one limit
 

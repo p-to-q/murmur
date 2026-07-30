@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import numpy as np
 
 import main
+import engine
 
 
 class BlendStyleEmbeddingsTest(unittest.TestCase):
@@ -94,6 +95,21 @@ class WavEncodingTest(unittest.TestCase):
     def test_mock_clip_deterministic_per_prompt(self):
         self.assertEqual(main.mock_clip("a", 2.0), main.mock_clip("a", 2.0))
         self.assertNotEqual(main.mock_clip("a", 2.0), main.mock_clip("b", 2.0))
+
+
+class MelodyConditioningTest(unittest.TestCase):
+    def test_segments_tile_the_clip_and_ignore_invalid_notes(self):
+        segments = engine.melody_to_segments({"notes": [
+            {"pitch": 60, "start": 0.2, "duration": 0.5},
+            {"pitch": 999, "start": 0, "duration": 1},
+        ]}, 2.0)
+        self.assertEqual(sum(frames for _notes, frames in segments), 50)
+        self.assertEqual(sum(1 for notes, _frames in segments if notes is not None), 1)
+
+    def test_no_valid_notes_produces_no_conditioning(self):
+        self.assertEqual(engine.melody_to_segments({"notes": [
+            {"pitch": 999, "start": 0, "duration": 1},
+        ]}, 2.0), [])
 
 
 if __name__ == "__main__":

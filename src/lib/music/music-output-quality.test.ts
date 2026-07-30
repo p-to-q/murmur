@@ -26,6 +26,12 @@ function tone(seconds = 1): Uint8Array {
   ));
 }
 
+function sineSamples(seconds: number, amplitude = 0.3): number[] {
+  return Array.from({ length: Math.round(16_000 * seconds) }, (_, index) =>
+    Math.round(Math.sin(2 * Math.PI * 440 * index / 16_000) * amplitude * 32767),
+  );
+}
+
 describe("music delivery quality gate", () => {
   it("accepts valid active PCM audio", () => {
     expect(analyzePcm16Wav(tone(), 1).passed).toBe(true);
@@ -34,6 +40,29 @@ describe("music delivery quality gate", () => {
   it("rejects silence and corrupt payloads", () => {
     expect(analyzePcm16Wav(wav(new Array(16_000).fill(0)), 1).failures).toContain("near_silence");
     expect(analyzePcm16Wav(new Uint8Array([1, 2, 3]), 1).failures).toContain("invalid_wav");
+  });
+
+  it("rejects low average level and peak-dominated audio", () => {
+    const low = analyzePcm16Wav(wav(sineSamples(2, 0.012)), 2);
+    expect(low.failures).toContain("low_average_level");
+
+    const spiky = sineSamples(2, 0.05);
+    spiky[Math.floor(spiky.length / 2)] = Math.round(0.95 * 32767);
+    const spikeResult = analyzePcm16Wav(wav(spiky), 2);
+    expect(spikeResult.failures).toContain("excessive_crest_factor");
+  });
+
+  it("rejects opening fragments but permits a short musical pause", () => {
+    const fragment = [...sineSamples(0.3), ...new Array(Math.round(1.7 * 16_000)).fill(0)];
+    const fragmentResult = analyzePcm16Wav(wav(fragment), 2);
+    expect(fragmentResult.failures).toContain("excessive_quiet_windows");
+    expect(fragmentResult.failures).toContain("prolonged_silence");
+
+    const pause = sineSamples(2);
+    pause.fill(0, Math.round(0.8 * 16_000), Math.round(1.1 * 16_000));
+    const pauseResult = analyzePcm16Wav(wav(pause), 2);
+    expect(pauseResult.passed).toBe(true);
+    expect(pauseResult.metrics.longestQuietRunSeconds).toBe(0.3);
   });
 
 });

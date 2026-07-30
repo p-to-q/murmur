@@ -28,7 +28,7 @@ Explicit quality feedback uses `song.feedback` with a bounded payload:
   "audioArtifacts": "none | minor | major",
   "reasonCodes": ["melody_drift"],
   "model": "mrt2_base",
-  "qualityGateVersion": "music-technical-v1"
+  "qualityGateVersion": "music-technical-v2"
 }
 ```
 
@@ -51,6 +51,11 @@ text out of training exports unless separately consented and reviewed.
    adjudication when dimensions differ by more than two points.
 5. Build versioned exports excluding deleted users and honoring consent and
    retention policy.
+
+`listCompositionTrainingExamples` requires an explicit `consentedUserIds`
+allowlist from a separately reviewed consent source and rechecks deletion before
+returning. An empty allowlist exports nothing. Do not derive this allowlist from
+save, play, share, export, billing, or account activity.
 
 ## Dataset release receipt
 

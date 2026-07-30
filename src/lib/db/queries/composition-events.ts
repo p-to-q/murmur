@@ -1,9 +1,10 @@
-import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { ulid } from "ulid";
 
 import { db } from "../client";
 import { compositionEvents } from "../schema/composition-events";
 import { songs } from "../schema/songs";
+import { users } from "../schema/users";
 import type {
   CompositionEventKind,
   CompositionEventPayload,
@@ -43,6 +44,8 @@ export async function createCompositionEvent(input: CreateCompositionEventInput)
 }
 
 export type CompositionTrainingExportFilter = {
+  /** Explicit, separately consented users. Saving or sharing is not consent. */
+  consentedUserIds: string[];
   userId?: string;
   songId?: string;
   draftId?: string;
@@ -97,10 +100,14 @@ export type CompositionTrainingExample = {
 };
 
 export async function listCompositionTrainingExamples(
-  filter: CompositionTrainingExportFilter = {},
+  filter: CompositionTrainingExportFilter,
 ): Promise<CompositionTrainingExample[]> {
+  const consentedUserIds = [...new Set(filter.consentedUserIds)].slice(0, 500);
+  if (consentedUserIds.length === 0) return [];
+  if (filter.userId && !consentedUserIds.includes(filter.userId)) return [];
   const limit = Math.max(1, Math.min(filter.limit ?? 100, 500));
   const where = [
+    inArray(songs.userId, consentedUserIds),
     filter.userId ? eq(songs.userId, filter.userId) : undefined,
     filter.songId ? eq(songs.id, filter.songId) : undefined,
     filter.draftId
@@ -111,32 +118,46 @@ export async function listCompositionTrainingExamples(
       : undefined,
     filter.from ? gte(songs.createdAt, filter.from) : undefined,
     filter.to ? lte(songs.createdAt, filter.to) : undefined,
+    isNull(users.deletedAt),
   ].filter(Boolean);
 
-  const rows = await db
-    .select()
+  const joinedRows = await db
+    .select({ song: songs })
     .from(songs)
+    .innerJoin(users, eq(songs.userId, users.id))
     .where(where.length > 0 ? and(...where) : undefined)
     .orderBy(desc(songs.createdAt))
     .limit(limit);
+  const rows = joinedRows.map((row) => row.song);
 
   if (rows.length === 0) return [];
 
   const eventRows = await db
-    .select()
+    .select({ event: compositionEvents })
     .from(compositionEvents)
-    .where(inArray(compositionEvents.songId, rows.map((row) => row.id)))
+    .innerJoin(users, eq(compositionEvents.userId, users.id))
+    .where(and(
+      inArray(compositionEvents.songId, rows.map((row) => row.id)),
+      inArray(compositionEvents.userId, consentedUserIds),
+      isNull(users.deletedAt),
+    ))
     .orderBy(compositionEvents.occurredAt);
 
-  const eventsBySong = new Map<string, typeof eventRows>();
-  for (const event of eventRows) {
+  const eventsBySong = new Map<string, typeof compositionEvents.$inferSelect[]>();
+  for (const { event } of eventRows) {
     if (!event.songId) continue;
     const list = eventsBySong.get(event.songId) ?? [];
     list.push(event);
     eventsBySong.set(event.songId, list);
   }
 
-  return rows.map((song) => {
+  const stillActiveUserIds = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(inArray(users.id, consentedUserIds), isNull(users.deletedAt)));
+  const active = new Set(stillActiveUserIds.map((user) => user.id));
+
+  return rows.filter((song) => active.has(song.userId)).map((song) => {
     const provenance = song.provenance ?? {};
     const draftId = stringValue(provenance.draftId);
     const flowId = stringValue(provenance.flow);
