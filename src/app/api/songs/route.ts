@@ -22,6 +22,9 @@ import {
 } from "@/lib/db/queries/local-song-fallback";
 import { isDatabaseUnavailable, objectFieldAsString } from "@/app/api/songs/db-fallback";
 import {
+  getObjectStore,
+} from "@/lib/storage";
+import {
   parseAudioDataUrl,
   storedSongAudioDigest,
   uploadSongMasterFromDataUrl,
@@ -419,6 +422,26 @@ export async function POST(req: NextRequest) {
           "X-Murmur-Fallback": "local-guest-song",
         },
       });
+    }
+    if (
+      resolvedAudio.input.mp3StorageKey
+      && err instanceof Error
+      && err.message === "account_deleted_or_missing"
+    ) {
+      await getObjectStore()
+        .delete(resolvedAudio.input.mp3StorageKey)
+        .catch((cleanupError) => {
+          log("song.audio_cleanup_failed", {
+            songId: songInput.id,
+            reason: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          }, {
+            route: ROUTE,
+            requestId,
+            userId,
+            sessionId: auth.sessionId,
+            level: "error",
+          });
+        });
     }
 
     const cause = err instanceof Error && "cause" in err ? err.cause : undefined;

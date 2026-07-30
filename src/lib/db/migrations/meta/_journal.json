@@ -197,6 +197,13 @@
       "when": 1786000000004,
       "tag": "0028_durable_music_dispatcher",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1786000000005,
+      "tag": "0029_account_deletion_cleanup",
+      "breakpoints": true
     }
   ]
 }

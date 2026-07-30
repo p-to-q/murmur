@@ -1,11 +1,10 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { ulid } from "ulid";
 import { db } from "../client";
 import { users, type User } from "../schema/users";
-import { songs } from "../schema/songs";
-import { sessions } from "../schema/sessions";
 import { externalIdentities } from "../schema/external-identities";
 import { notesLedger } from "../schema/notes-ledger";
+import { requestAccountDeletionCleanup } from "./account-deletion";
 import { DAILY_REFILL, GRANTS, LOCAL_CREATOR_FREE_NOTES } from "@murmur/core";
 import { currentNotesRefillWindowStart, notesRefillWindowKey } from "@/lib/billing/notes-clock";
 import type { UserRegistrationKind } from "@/lib/auth/registration-kind";
@@ -66,6 +65,8 @@ export type AccountDeletionResult =
       deletedAt: Date;
       revokedSongs: number;
       revokedSessions: number;
+      disabledPushSubscriptions: number;
+      purgeAfter: Date;
       alreadyDeleted: boolean;
     }
   | {
@@ -77,53 +78,7 @@ export async function requestAccountDeletion(
   userId: string,
   now = new Date(),
 ): Promise<AccountDeletionResult> {
-  return db.transaction(async (tx) => {
-    const [user] = await tx
-      .select({
-        id: users.id,
-        deletedAt: users.deletedAt,
-      })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1)
-      .for("update");
-
-    if (!user) {
-      return { ok: false, reason: "user_not_found" };
-    }
-
-    const deletedAt = user.deletedAt ?? now;
-    if (!user.deletedAt) {
-      await tx
-        .update(users)
-        .set({ deletedAt, updatedAt: now })
-        .where(eq(users.id, userId));
-    }
-
-    const revokedSongs = await tx
-      .update(songs)
-      .set({
-        shareCode: null,
-        visibility: "private",
-        updatedAt: now,
-      })
-      .where(eq(songs.userId, userId))
-      .returning({ id: songs.id });
-
-    const revokedSessions = await tx
-      .update(sessions)
-      .set({ revokedAt: now })
-      .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
-      .returning({ id: sessions.id });
-
-    return {
-      ok: true,
-      deletedAt,
-      revokedSongs: revokedSongs.length,
-      revokedSessions: revokedSessions.length,
-      alreadyDeleted: Boolean(user.deletedAt),
-    };
-  });
+  return db.transaction((tx) => requestAccountDeletionCleanup(tx, { userId, now }));
 }
 
 /** Trim + lowercase. OIDC emails are ASCII, so toLowerCase is safe here. */

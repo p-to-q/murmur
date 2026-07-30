@@ -159,8 +159,10 @@ afterEach(() => {
 function makeRecordingStore(): {
   store: ObjectStore;
   puts: Array<{ key: string; body: Uint8Array }>;
+  deletes: string[];
 } {
   const puts: Array<{ key: string; body: Uint8Array }> = [];
+  const deletes: string[] = [];
   const objects = new Map<string, {
     body: Uint8Array;
     contentType: string;
@@ -196,12 +198,15 @@ function makeRecordingStore(): {
           }
         : null;
     },
-    async delete() {},
+    async delete(key) {
+      deletes.push(key);
+      objects.delete(key);
+    },
     url(key) {
       return `https://cdn.test/${key}`;
     },
   };
-  return { store, puts };
+  return { store, puts, deletes };
 }
 
 describe("POST /api/songs", () => {
@@ -767,6 +772,32 @@ describe("POST /api/songs", () => {
     expect(createdSongs[0]?.mp3StorageKey).toBe(puts[0]!.key);
     expect(createdSongs[0]?.mp3DataUrl).toBeNull();
     expect(response.headers.get("X-Murmur-Audio-Storage")).toBeNull();
+  });
+
+  it("deletes an uploaded master when account deletion wins the save race", async () => {
+    const { store, puts, deletes } = makeRecordingStore();
+    __setObjectStoreForTesting(store);
+    createSongError = new Error("account_deleted_or_missing");
+
+    const response = await POST(buildRequest({
+      id: "song_deleted_account_race",
+      title: "Closing Draft",
+      vibe: "quiet",
+      vibeEn: "quiet",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      mp3DataUrl: SAMPLE_MP3_DATA_URL,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(500);
+    expect(puts).toHaveLength(1);
+    expect(deletes).toEqual([puts[0]!.key]);
+    expect(createdSongs).toHaveLength(0);
   });
 
   it("does not overwrite stored audio when the same song id conflicts", async () => {

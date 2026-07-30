@@ -13,6 +13,7 @@ import {
 import { spendNotesInTransaction, type SpendNotesResult } from "./notes-ledger";
 import { recordPendingRefundInTransaction } from "./notes-ledger";
 import { musicJobDeadlineFrom } from "@/lib/music/music-job-policy";
+import { users } from "../schema/users";
 
 const TERMINAL_STATUSES: MusicJobStatus[] = [
   "succeeded", "failed", "canceled", "expired", "submission_unknown",
@@ -50,6 +51,16 @@ export async function createMusicJob(
   input: CreateMusicJobInput,
 ): Promise<CreateMusicJobResult> {
   return db.transaction(async (tx) => {
+    const [activeUser] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, input.userId), sql`${users.deletedAt} IS NULL`))
+      .limit(1)
+      .for("update");
+    if (!activeUser) {
+      return { ok: false as const, reason: "user_not_found" as const, currentBalance: 0 };
+    }
+
     const existing = await findByOperation(tx, input.userId, input.operationId);
     if (existing) return classifyReplay(existing, input.requestHash);
 

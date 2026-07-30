@@ -1,0 +1,24 @@
+import { describe, expect, it } from "bun:test";
+
+import {
+  accountDeletionRetryAt,
+  isAccountDeletionMusicJobTerminal,
+} from "./account-deletion";
+
+describe("account deletion lifecycle decisions", () => {
+  it("treats only settled music jobs as purgeable", () => {
+    for (const status of ["succeeded", "failed", "canceled", "expired", "submission_unknown"]) {
+      expect(isAccountDeletionMusicJobTerminal(status)).toBe(true);
+    }
+    for (const status of ["accepted", "submitting", "queued", "running", "result_ready", "cancel_requested"]) {
+      expect(isAccountDeletionMusicJobTerminal(status)).toBe(false);
+    }
+  });
+
+  it("backs retries off from five minutes and caps them at one day", () => {
+    const now = new Date("2026-07-30T00:00:00.000Z");
+    expect(accountDeletionRetryAt(1, now).toISOString()).toBe("2026-07-30T00:05:00.000Z");
+    expect(accountDeletionRetryAt(3, now).toISOString()).toBe("2026-07-30T00:20:00.000Z");
+    expect(accountDeletionRetryAt(100, now).toISOString()).toBe("2026-07-31T00:00:00.000Z");
+  });
+});
