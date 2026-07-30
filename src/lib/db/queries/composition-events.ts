@@ -5,6 +5,7 @@ import { db } from "../client";
 import { compositionEvents } from "../schema/composition-events";
 import { songs } from "../schema/songs";
 import { users } from "../schema/users";
+import { normalizeConsentedUserIds } from "./composition-training-scope";
 import type {
   CompositionEventKind,
   CompositionEventPayload,
@@ -102,7 +103,7 @@ export type CompositionTrainingExample = {
 export async function listCompositionTrainingExamples(
   filter: CompositionTrainingExportFilter,
 ): Promise<CompositionTrainingExample[]> {
-  const consentedUserIds = [...new Set(filter.consentedUserIds)].slice(0, 500);
+  const consentedUserIds = normalizeConsentedUserIds(filter.consentedUserIds);
   if (consentedUserIds.length === 0) return [];
   if (filter.userId && !consentedUserIds.includes(filter.userId)) return [];
   const limit = Math.max(1, Math.min(filter.limit ?? 100, 500));

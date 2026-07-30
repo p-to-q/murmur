@@ -96,6 +96,8 @@ curl -sS https://murmur.ptoq.io/api/music/health
 | `MAGENTA_CFG_NOTES` | `1.5` | 当前实验收敛值；更高会让旋律过度受控，容易 robotic / dissonant |
 | `MAGENTA_TEMPERATURE` | `1.3` | 第一候选采样温度；技术失败重试会使用更保守值 |
 | `MAGENTA_TOP_K` | `40` | 第一候选 top-k；技术失败重试会使用更保守值 |
+| `MUSIC_QUALITY_MAX_ATTEMPTS` | `2` | 同一付费作业最多生成 1–3 个技术候选 |
+| `MUSIC_QUALITY_MAX_TOTAL_SECONDS` | `165` | 同一作业的候选生成总预算；上限 175 秒，低于 RunPod 180 秒执行上限 |
 | `WARMUP` | `1` | `0` 跳过部署后的预热作业 |
 
 > **想要始终热（无冷启动）？** 在 RunPod 控制台把该端点的 *Active (min) workers* 设为 1，

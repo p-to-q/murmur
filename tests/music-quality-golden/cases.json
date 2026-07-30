@@ -20,7 +20,7 @@
     "sampleRate": 16000,
     "channels": 2,
     "expectedDuration": 2,
-    "segments": [{ "kind": "sine", "seconds": 2, "amplitudePcm": 393 }],
+    "segments": [{ "kind": "sine", "seconds": 2, "amplitudePcm": 500 }],
     "expectedFailures": ["low_average_level"]
   },
   {
@@ -72,6 +72,24 @@
     "segments": [{ "kind": "sine", "seconds": 1, "amplitudePcm": 9000 }],
     "mutation": "riff_size",
     "expectedFailures": ["invalid_wav_structure"]
+  },
+  {
+    "id": "structure.invalid-riff-size-oversized",
+    "sampleRate": 16000,
+    "channels": 1,
+    "expectedDuration": 1,
+    "segments": [{ "kind": "sine", "seconds": 1, "amplitudePcm": 9000 }],
+    "mutation": "riff_size_oversized",
+    "expectedFailures": ["invalid_wav_structure"]
+  },
+  {
+    "id": "structure.trailing-bytes",
+    "sampleRate": 16000,
+    "channels": 1,
+    "expectedDuration": 1,
+    "segments": [{ "kind": "sine", "seconds": 1, "amplitudePcm": 9000 }],
+    "mutation": "trailing_bytes",
+    "expectedFailures": []
   },
   {
     "id": "structure.invalid-byte-rate",

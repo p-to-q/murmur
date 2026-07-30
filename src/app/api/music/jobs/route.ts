@@ -19,6 +19,7 @@ import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { advanceMusicJob } from "@/lib/platform/music-job-runner";
 import { getMusicEngineMode } from "@/lib/platform/music-worker";
 import { storeMusicJobHum } from "@/lib/storage/music-job-artifacts";
+import { shouldDeleteDuplicateHum } from "@/lib/storage/music-job-hum-lifecycle";
 import { getObjectStore } from "@/lib/storage";
 import { COST } from "@murmur/core";
 
@@ -139,11 +140,11 @@ export async function POST(request: NextRequest) {
       }, { status, headers: responseHeaders(requestId) });
     }
 
-    if (
-      storedHum
-      && created.duplicate
-      && (created.job.providerJobId || isTerminal(created.job.status))
-    ) {
+    if (storedHum && shouldDeleteDuplicateHum({
+      storedHumKey: storedHum.key,
+      duplicate: created.duplicate,
+      jobHumStorageKey: created.job.input.humStorageKey,
+    })) {
       await getObjectStore().delete(storedHum.key).catch(() => undefined);
     }
 

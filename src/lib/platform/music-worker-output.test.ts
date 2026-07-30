@@ -3,6 +3,9 @@ import { describe, expect, it } from "bun:test";
 
 import {
   estimateWorkerCostUsd,
+  isMusicDeliveryBase64WithinLimit,
+  maxMusicDeliveryBytes,
+  MUSIC_QUALITY_GATE_COMPAT_VERSION,
   verifyMusicWorkerOutput,
 } from "./music-worker-output";
 
@@ -49,10 +52,10 @@ function evidencedOutput() {
       melody_accepted: false,
       hum_sha256: null,
     },
-    quality: { version: "music-technical-v1", passed: true, failures: [], metrics: {} },
+    quality: { version: MUSIC_QUALITY_GATE_COMPAT_VERSION, passed: true, failures: [], metrics: {} },
     diagnostics: {
       version: 1,
-      gate_version: "music-technical-v1",
+      gate_version: MUSIC_QUALITY_GATE_COMPAT_VERSION,
       candidate_count: 1,
       worker_wall_ms: 2_500,
     },
@@ -122,13 +125,35 @@ describe("music worker output protocol", () => {
     })).toThrow("music_worker_quality_evidence_missing");
   });
 
+  it("treats the v2 cutover as evidence-required when all evidence is missing", () => {
+    expect(() => verifyMusicWorkerOutput({
+      output: {},
+      bytes: toneWav(),
+      expected,
+      requireEvidence: false,
+      requireV2Evidence: true,
+    })).toThrow("music_worker_v2_evidence_missing");
+  });
+
   it("bounds payload size before scanning samples", () => {
     expect(() => verifyMusicWorkerOutput({
       output: {},
-      bytes: new Uint8Array(96_000 * 2 * 2 + 64 * 1024 + 1),
+      bytes: new Uint8Array(maxMusicDeliveryBytes(expected.duration) + 1),
       expected,
       requireEvidence: false,
     })).toThrow("payload_too_large");
+  });
+
+  it("derives the JSON base64 boundary from the shared delivery limit", () => {
+    const maxBytes = maxMusicDeliveryBytes(expected.duration);
+    expect(isMusicDeliveryBase64WithinLimit(
+      Buffer.alloc(maxBytes).toString("base64"),
+      expected.duration,
+    )).toBe(true);
+    expect(isMusicDeliveryBase64WithinLimit(
+      Buffer.alloc(maxBytes + 1).toString("base64"),
+      expected.duration,
+    )).toBe(false);
   });
 
   it("rejects partial evidence even during rolling deployment", () => {
@@ -192,7 +217,7 @@ describe("music worker output protocol", () => {
     })).toThrow("music_worker_candidate_evidence_inconsistent");
 
     const gateDrift = v2EvidencedOutput(bytes);
-    gateDrift.diagnostics.gate_version = "music-technical-v1";
+    gateDrift.diagnostics.gate_version = MUSIC_QUALITY_GATE_COMPAT_VERSION;
     expect(() => verifyMusicWorkerOutput({
       output: gateDrift,
       bytes,

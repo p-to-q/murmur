@@ -92,25 +92,25 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
         }
         throw error;
       }
-      providerJobId = submitted.providerJobId;
-      const attached = await attachMusicJobProvider({
-        userId,
+      const submittedProviderJobId = submitted.providerJobId;
+      providerJobId = submittedProviderJobId;
+      const attached = await attachProviderAfterSubmission({
+        input: claimed.input,
         jobId,
-        attempt: claimed.attempt,
-        provider: "runpod",
-        providerJobId,
-        leaseMs: LEASE_MS,
+        userId,
+        attach: () => attachMusicJobProvider({
+          userId,
+          jobId,
+          attempt: claimed.attempt,
+          provider: "runpod",
+          providerJobId: submittedProviderJobId,
+          leaseMs: LEASE_MS,
+        }),
       });
       if (!attached) {
         await cancelSubmittedJob(config, providerJobId).catch(() => false);
         throw new Error("music_job_provider_attach_failed");
       }
-      await deleteSubmittedHum(claimed.input).catch((error) => {
-        log("music.hum_cleanup_failed", {
-          jobId,
-          reason: error instanceof Error ? error.message : String(error),
-        }, { userId, level: "warn" });
-      });
       log("music.job_provider_attached", {
         jobId,
         originRequestId: claimed.input.originRequestId ?? null,
@@ -362,6 +362,25 @@ export async function deleteSubmittedHum(input: {
   // deletion. Legacy rows keep their source artifact until normal lifecycle.
   if (!input.humStorageKey || !input.humDigest) return;
   await getObjectStore().delete(input.humStorageKey);
+}
+
+export async function attachProviderAfterSubmission<T>(input: {
+  input: { humStorageKey: string | null; humDigest?: string | null };
+  jobId: string;
+  userId: string;
+  attach: () => Promise<T>;
+}): Promise<T> {
+  const cleanup = deleteSubmittedHum(input.input).catch((error) => {
+    log("music.hum_cleanup_failed", {
+      jobId: input.jobId,
+      reason: error instanceof Error ? error.message : String(error),
+    }, { userId: input.userId, level: "warn" });
+  });
+  try {
+    return await input.attach();
+  } finally {
+    await cleanup;
+  }
 }
 
 function summarizeProviderFailure(error: unknown): Record<string, unknown> | null {

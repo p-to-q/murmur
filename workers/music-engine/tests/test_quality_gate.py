@@ -52,11 +52,32 @@ class QualityGateTest(unittest.TestCase):
         self.assertGreater(result["metrics"]["active_ratio"], 0.12)
 
     def test_rejects_a_low_level_tone(self):
-        result = analyze_wav(_wav_from_samples(_tone(2, amplitude=0.012)), 2)
+        result = analyze_wav(_wav_from_samples(_tone(2, amplitude=500 / 32767)), 2)
 
         self.assertFalse(result["passed"])
-        self.assertIn("low_average_level", result["failures"])
+        self.assertEqual(result["failures"], ["low_average_level"])
         self.assertLess(result["metrics"]["rms_dbfs"], -34)
+
+    def test_accepts_bytes_after_the_declared_riff_payload(self):
+        blob = _wav_from_samples(_tone(1)) + b"trailer"
+        result = analyze_wav(blob, 1)
+
+        self.assertTrue(result["passed"])
+
+    def test_rejects_riff_sizes_outside_the_file_or_data_payload(self):
+        beyond_file = bytearray(_wav_from_samples(_tone(1)))
+        struct.pack_into("<I", beyond_file, 4, len(beyond_file))
+        self.assertIn(
+            "invalid_wav_structure",
+            analyze_wav(bytes(beyond_file), 1)["failures"],
+        )
+
+        before_data_end = bytearray(_wav_from_samples(_tone(1)))
+        struct.pack_into("<I", before_data_end, 4, len(before_data_end) - 9)
+        self.assertIn(
+            "invalid_wav_structure",
+            analyze_wav(bytes(before_data_end), 1)["failures"],
+        )
 
     def test_rejects_audio_with_only_an_opening_fragment(self):
         samples = _tone(0.3) + [0] * round(1.7 * 48_000)

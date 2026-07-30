@@ -12,8 +12,9 @@ export const MUSIC_V2_EVIDENCE_REQUIRED_ENV =
   "MURMUR_MUSIC_V2_EVIDENCE_REQUIRED";
 const MAX_PCM_BYTES_PER_SECOND = 96_000 * 2 * 2;
 const MAX_WAV_CONTAINER_OVERHEAD_BYTES = 64 * 1024;
+export const MUSIC_QUALITY_GATE_COMPAT_VERSION = "music-technical-v1";
 const SUPPORTED_WORKER_GATE_VERSIONS = new Set([
-  "music-technical-v1",
+  MUSIC_QUALITY_GATE_COMPAT_VERSION,
   MUSIC_QUALITY_GATE_VERSION,
 ]);
 
@@ -73,6 +74,24 @@ export interface VerifiedMusicOutput {
   diagnostics: MusicWorkerDiagnostics;
 }
 
+export function maxMusicDeliveryBytes(duration: number): number {
+  return Math.ceil(duration * MAX_PCM_BYTES_PER_SECOND)
+    + MAX_WAV_CONTAINER_OVERHEAD_BYTES;
+}
+
+/** Bound a JSON delivery before Buffer.from allocates the decoded payload. */
+export function isMusicDeliveryBase64WithinLimit(
+  value: string,
+  duration: number,
+): boolean {
+  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
+  const decodedBytesFromEncoding = Math.max(
+    0,
+    Math.floor((value.length * 3) / 4) - padding,
+  );
+  return decodedBytesFromEncoding <= maxMusicDeliveryBytes(duration);
+}
+
 /**
  * Verify the RunPod protocol receipt plus the delivered PCM bytes.
  *
@@ -94,8 +113,7 @@ export function verifyMusicWorkerOutput(input: {
   requireEvidence?: boolean;
   requireV2Evidence?: boolean;
 }): VerifiedMusicOutput {
-  const maxBytes = Math.ceil(input.expected.duration * MAX_PCM_BYTES_PER_SECOND)
-    + MAX_WAV_CONTAINER_OVERHEAD_BYTES;
+  const maxBytes = maxMusicDeliveryBytes(input.expected.duration);
   if (input.bytes.byteLength > maxBytes) {
     throw new Error("music_delivery_quality_gate_failed:payload_too_large");
   }
@@ -112,10 +130,12 @@ export function verifyMusicWorkerOutput(input: {
   const workerQualityRaw = qualityV2 ?? qualityCompat;
   const evidencePresent = Boolean(receipt && workerQualityRaw);
   const partialEvidence = Boolean(receipt) !== Boolean(workerQualityRaw);
-  const requireEvidence = input.requireEvidence ?? isMusicQualityEvidenceRequired();
   const requireV2Evidence = input.requireV2Evidence ?? isMusicV2EvidenceRequired();
+  const requireEvidence = requireV2Evidence
+    || (input.requireEvidence ?? isMusicQualityEvidenceRequired());
   if (partialEvidence) throw new Error("music_worker_quality_evidence_invalid");
   if (!evidencePresent) {
+    if (requireV2Evidence) throw new Error("music_worker_v2_evidence_missing");
     if (requireEvidence) throw new Error("music_worker_quality_evidence_missing");
     return {
       quality,
@@ -431,7 +451,7 @@ function verifyV2CompatibilityEnvelopes(input: {
     || input.receiptCompat.version !== 1
     || input.receiptV2.request_id !== input.receiptCompat.request_id
     || input.qualityV2.version !== MUSIC_QUALITY_GATE_VERSION
-    || compatibleQuality.version !== "music-technical-v1"
+    || compatibleQuality.version !== MUSIC_QUALITY_GATE_COMPAT_VERSION
     || compatibleQuality.passed !== input.workerQuality.passed
   ) {
     throw new Error("music_worker_v2_compatibility_evidence_invalid");
