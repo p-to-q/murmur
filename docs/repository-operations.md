@@ -192,6 +192,13 @@ changed to daily. Cron entries in `vercel.json` must therefore stay **daily**
 until the project is confirmed on a plan that permits sub-daily crons. Do not add
 sub-daily crons on the current plan.
 
+Durable music dispatch and song-audio cleanup therefore expose authenticated,
+idempotent cron routes but are not allowed to depend on a sub-daily Vercel
+schedule. `vercel.json` may include a daily song-audio safety net; Production
+still requires an external minute-cadence music dispatcher before enabling
+durable jobs and a 15-minute song-audio scheduler before claiming object
+lifecycle closure. Both callers use `Authorization: Bearer $CRON_SECRET`.
+
 ### Object storage for saved audio
 
 New-save audio is written to object storage **only** when the production storage

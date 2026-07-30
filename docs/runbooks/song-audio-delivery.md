@@ -45,9 +45,11 @@ a `pending` receipt for the cron to reclaim. A failed object deletion leaves a
 `delete_pending` receipt and does not report lifecycle completion.
 
 The production scheduler must send `Authorization: Bearer $CRON_SECRET` every
-15 minutes. Alert when the route returns `5xx`, when a `207` persists for two
-runs, or when the oldest due row is more than 30 minutes old. Never delete
-`committed` rows from an operator script.
+15 minutes. Vercel Hobby cannot provide sub-daily cron, so `vercel.json` keeps
+one daily safety-net invocation while an external scheduler owns the required
+cadence. Alert when the external schedule misses two invocations, the route
+returns `5xx`, a `207` persists for two runs, or the oldest due row is more than
+30 minutes old. Never delete `committed` rows from an operator script.
 
 ## Runtime Ownership And Fallbacks
 
@@ -62,6 +64,11 @@ runs, or when the oldest due row is more than 30 minutes old. Never delete
 Production must configure Postgres, `CRON_SECRET`, and an S3-compatible storage
 adapter. Local development defaults to local filesystem storage and may opt
 into explicit demo/auth fallbacks; those modes are not production failover.
+
+Do not claim lifecycle closure from the daily Vercel safety net alone. Before
+release, record the external scheduler identity and verify one authenticated
+invocation against the exact Preview/Production SHA. If no sub-daily scheduler
+is available, the release is a no-go for new object-backed saves.
 
 ## Two-Phase Rollout
 
