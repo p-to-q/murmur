@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 
-import { collectUrlEnvAuditIssues } from "./env-audit";
+import {
+  collectDurableRuntimeEnvAuditIssues,
+  collectPreviewIsolationEnvAuditIssues,
+  collectProductionFallbackEnvAuditIssues,
+  collectUrlEnvAuditIssues,
+} from "./env-audit";
 
 describe("production URL env audit", () => {
   it("accepts supported absolute URLs", () => {
@@ -29,6 +34,104 @@ describe("production URL env audit", () => {
     })).toEqual([
       "DATABASE_URL must use postgres: or postgresql:",
       "AUTH_URL must use http: or https:",
+    ]);
+  });
+});
+
+describe("durable runtime env audit", () => {
+  it("accepts a Postgres-backed production deployment with verified tmp lifecycle", () => {
+    expect(collectDurableRuntimeEnvAuditIssues({
+      MURMUR_DEPLOYMENT_ENV: "production",
+      MURMUR_RATE_LIMIT_DRIVER: "postgres",
+      MURMUR_STORAGE_TMP_LIFECYCLE_CONFIRMED: "true",
+    }, "production")).toEqual([]);
+  });
+
+  it("rejects process-local production limits and unverified object expiry", () => {
+    expect(collectDurableRuntimeEnvAuditIssues({
+      MURMUR_DEPLOYMENT_ENV: "preview",
+      MURMUR_RATE_LIMIT_DRIVER: "memory",
+    }, "production")).toEqual([
+      "MURMUR_DEPLOYMENT_ENV must be production on Vercel production",
+      "MURMUR_RATE_LIMIT_DRIVER must be unset or postgres on Vercel production",
+      "MURMUR_STORAGE_TMP_LIFECYCLE_CONFIRMED must be true after verifying a 24-hour tmp/ bucket lifecycle",
+    ]);
+  });
+});
+
+describe("Preview isolation env audit", () => {
+  const isolated = {
+    MURMUR_DEPLOYMENT_ENV: "preview",
+    NODE_ENV: "production",
+    MURMUR_RATE_LIMIT_DRIVER: "postgres",
+    MURMUR_AUTH_MODE: "production",
+    NEXT_PUBLIC_MURMUR_AUTH_MODE: "production",
+    DATABASE_URL: "postgresql://user:pass@preview-pooler.neon.tech/app",
+    MURMUR_STORAGE_DRIVER: "s3-compatible",
+    MURMUR_STORAGE_S3_BUCKET: "murmur-preview",
+    MURMUR_STORAGE_S3_REGION: "auto",
+    MURMUR_STORAGE_S3_ACCESS_KEY_ID: "preview-key-id",
+    MURMUR_STORAGE_S3_SECRET_ACCESS_KEY: "preview-secret",
+    MURMUR_STORAGE_S3_PUBLIC_URL_BASE: "https://preview-cdn.example.test",
+    AUDIO_WORKER_URL: "https://audio-preview.example.test",
+    AUDIO_WORKER_TOKEN: "preview-audio-token",
+    RUNPOD_SERVERLESS_ENDPOINT_ID: "preview-endpoint",
+    RUNPOD_API_KEY: "preview-runpod-key",
+  };
+
+  it("accepts an explicitly isolated resource set", () => {
+    expect(collectPreviewIsolationEnvAuditIssues(isolated)).toEqual([]);
+  });
+
+  it("rejects an isolated label without production-like durable adapters", () => {
+    const issues = collectPreviewIsolationEnvAuditIssues({
+      ...isolated,
+      MURMUR_STORAGE_DRIVER: "memory",
+      MURMUR_RATE_LIMIT_DRIVER: "memory",
+      AUDIO_WORKER_TOKEN: "",
+      RUNPOD_API_KEY: "",
+    });
+
+    expect(issues).toContain(
+      "MURMUR_STORAGE_DRIVER must be s3-compatible on Vercel preview",
+    );
+    expect(issues).toContain(
+      "MURMUR_RATE_LIMIT_DRIVER must be unset or postgres on Vercel preview",
+    );
+    expect(issues).toContain("AUDIO_WORKER_TOKEN is required on Vercel preview");
+    expect(issues).toContain("RUNPOD_API_KEY is required on Vercel preview");
+  });
+
+  it("requires a public audio base until private delivery is enabled", () => {
+    const issues = collectPreviewIsolationEnvAuditIssues({
+      ...isolated,
+      MURMUR_STORAGE_S3_PUBLIC_URL_BASE: "",
+    });
+    expect(issues).toContain(
+      "MURMUR_STORAGE_S3_PUBLIC_URL_BASE is required on Vercel preview until private song audio delivery is enabled",
+    );
+  });
+});
+
+describe("production fallback env audit", () => {
+  it("accepts strict production auth with every local fallback disabled", () => {
+    expect(collectProductionFallbackEnvAuditIssues({
+      MURMUR_AUTH_MODE: "production",
+      NEXT_PUBLIC_MURMUR_AUTH_MODE: "prod",
+    })).toEqual([]);
+  });
+
+  it("rejects server, client, and preview fallback switches", () => {
+    expect(collectProductionFallbackEnvAuditIssues({
+      MURMUR_AUTH_MODE: "demo",
+      NEXT_PUBLIC_MURMUR_AUTH_MODE: "local",
+      MURMUR_ALLOW_DEV_BILLING_FALLBACK: "true",
+      MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW: "1",
+    })).toEqual([
+      "MURMUR_ALLOW_DEV_BILLING_FALLBACK must be unset/false in production",
+      "MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW must be unset/false in production",
+      "MURMUR_AUTH_MODE must be production/prod in production",
+      "NEXT_PUBLIC_MURMUR_AUTH_MODE must be unset or production/prod in production",
     ]);
   });
 });

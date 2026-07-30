@@ -1,14 +1,20 @@
 import { APP_BUILD, APP_VERSION } from "./release-metadata";
 
+export function getReleaseIdentity() {
+  return {
+    version: process.env.NEXT_PUBLIC_APP_VERSION ?? APP_VERSION,
+    build: process.env.NEXT_PUBLIC_APP_BUILD ?? APP_BUILD,
+    sha: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? "local",
+  };
+}
+
 export function getAppVersionParts() {
-  const gitSha = (
-    process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? "local"
-  ).slice(0, 7);
+  const identity = getReleaseIdentity();
 
   return {
-    semver: process.env.NEXT_PUBLIC_APP_VERSION ?? APP_VERSION,
-    build: process.env.NEXT_PUBLIC_APP_BUILD ?? APP_BUILD,
-    gitSha,
+    semver: identity.version,
+    build: identity.build,
+    gitSha: identity.sha.slice(0, 7),
   };
 }
 

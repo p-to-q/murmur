@@ -2,14 +2,12 @@ name: Release (production)
 
 # This is the only production release path. Vercel's native Git integration
 # must keep Preview deployments enabled and Production auto-deploys disabled.
-# A successful main-branch CI run releases that exact SHA in this order:
-# migrate -> verify schema convergence -> deploy -> production smoke.
+# A maintainer dispatches an exact, CI-green main SHA. The protected Production
+# environment approves that SHA before any migration runs, then releases it in
+# this order: validate -> approve -> migrate -> verify -> deploy -> immutable
+# smoke -> promote -> alias smoke.
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       release_sha:
@@ -26,22 +24,20 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_SHA: ${{ github.event.workflow_run.head_sha || inputs.release_sha }}
+  RELEASE_SHA: ${{ inputs.release_sha }}
   VERCEL_PROJECT_NAME: ${{ vars.VERCEL_PROJECT_NAME || 'murmur' }}
   VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE || 'moapachas-projects' }}
+  PRODUCTION_URL: https://murmur.ptoq.io
 
 jobs:
-  migrate:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 5
     steps:
-      - name: Checkout release SHA
+      - name: Checkout protected release gate
         uses: actions/checkout@v7
         with:
-          ref: ${{ env.RELEASE_SHA }}
+          ref: main
           fetch-depth: 0
 
       - name: Setup Bun
@@ -52,16 +48,77 @@ jobs:
       - name: Verify exact main SHA and successful CI
         env:
           GH_TOKEN: ${{ github.token }}
-          CI_RUN_ID: ${{ github.event.workflow_run.id }}
         run: bun scripts/release-verify-main.ts
+
+      - name: Prove Preview and Production resource isolation
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "::error title=Vercel release is not configured::Set VERCEL_TOKEN before releasing."
+            exit 1
+          fi
+          preview_env="$RUNNER_TEMP/vercel-preview.env"
+          production_env="$RUNNER_TEMP/vercel-production.env"
+          trap 'rm -f "$preview_env" "$production_env"' EXIT
+          bunx vercel@56.3.1 env pull "$preview_env" \
+            --yes \
+            --environment preview \
+            --project "$VERCEL_PROJECT_NAME" \
+            --scope "$VERCEL_SCOPE" \
+            --token "$VERCEL_TOKEN"
+          bunx vercel@56.3.1 env pull "$production_env" \
+            --yes \
+            --environment production \
+            --project "$VERCEL_PROJECT_NAME" \
+            --scope "$VERCEL_SCOPE" \
+            --token "$VERCEL_TOKEN"
+          bun scripts/release-env-isolation.ts "$preview_env" "$production_env"
+
+  approve:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: Production
+    steps:
+      - name: Record approved release SHA
+        run: echo "Approved production release for $RELEASE_SHA"
+
+  migrate:
+    needs: approve
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout protected release gate
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+
+      - name: Verify exact main SHA and successful CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bun scripts/release-verify-main.ts
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
 
       - name: Validate migration configuration
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
           VERCEL_NATIVE_PRODUCTION_DISABLED: ${{ vars.VERCEL_NATIVE_PRODUCTION_DISABLED }}
+          VERCEL_ROLLING_RELEASES_DISABLED: ${{ vars.VERCEL_ROLLING_RELEASES_DISABLED }}
         run: |
           if [ "${VERCEL_NATIVE_PRODUCTION_DISABLED:-}" != "true" ]; then
             echo "::error title=Production release cutover is not acknowledged::Disable Vercel native Production auto-deploy for main, retain Preview, then set VERCEL_NATIVE_PRODUCTION_DISABLED=true."
+            exit 1
+          fi
+          if [ "${VERCEL_ROLLING_RELEASES_DISABLED:-}" != "true" ]; then
+            echo "::error title=Rolling release cutover is not acknowledged::Disable Vercel Rolling Releases for Murmur, then set VERCEL_ROLLING_RELEASES_DISABLED=true."
             exit 1
           fi
           if [ -z "${DATABASE_URL:-}" ]; then
@@ -96,16 +153,20 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Verify schema convergence
+      - name: Verify migration journal convergence
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
         run: bun run db:migrate
+
+      - name: Verify schema catalog and data invariants
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: bun scripts/release-schema-verify.ts
 
   deploy:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    environment: Production
     outputs:
       deployment_url: ${{ steps.deploy.outputs.deployment_url }}
     steps:
@@ -143,14 +204,17 @@ jobs:
             --scope "$VERCEL_SCOPE" \
             --token "$VERCEL_TOKEN"
 
-      - name: Deploy exact release SHA
+      - name: Deploy exact release SHA without promoting domains
         id: deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          set -o pipefail
           deployment_url="$(bunx vercel@56.3.1 deploy --prod --yes \
+            --skip-domain \
             --scope "$VERCEL_SCOPE" \
             --token "$VERCEL_TOKEN" \
+            --build-env NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA="$RELEASE_SHA" \
             --meta githubCommitSha="$RELEASE_SHA" \
             --meta githubCommitRef=main | tail -n 1)"
           case "$deployment_url" in
@@ -158,7 +222,69 @@ jobs:
             *) echo "::error title=Vercel deployment failed::Unexpected deployment URL: ${deployment_url}"; exit 1 ;;
           esac
           echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
-          echo "Released $RELEASE_SHA to $deployment_url"
+          echo "Built $RELEASE_SHA at $deployment_url"
+
+      - name: Require immutable deployment readiness
+        id: immutable
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          inspect_json="$RUNNER_TEMP/vercel-immutable-inspect.json"
+          bunx vercel@56.3.1 inspect "${{ steps.deploy.outputs.deployment_url }}" \
+            --wait \
+            --timeout 10m \
+            --format=json \
+            --scope "$VERCEL_SCOPE" \
+            --token "$VERCEL_TOKEN" > "$inspect_json"
+          deployment_id="$(bun scripts/release-vercel-deployment.ts "$inspect_json")"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "Immutable deployment $deployment_id is READY with target=production"
+
+      - name: Smoke immutable deployment identity
+        env:
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: >-
+          bun scripts/release-production-smoke.ts
+          "${{ steps.deploy.outputs.deployment_url }}"
+          "$RELEASE_SHA"
+
+      - name: Promote verified deployment to Production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          promotion_output="$(bunx vercel@56.3.1 promote "${{ steps.deploy.outputs.deployment_url }}" \
+            --yes \
+            --timeout 5m \
+            --scope "$VERCEL_SCOPE" \
+            --token "$VERCEL_TOKEN" 2>&1)"
+          printf '%s\n' "$promotion_output"
+          case "$promotion_output" in
+            *"queued"*|*"Rolling Releases enabled"*|*"initial percentage"*)
+              echo "::error title=Partial production promotion detected::Disable Rolling Releases and rerun the release from a new approved SHA."
+              exit 1
+              ;;
+          esac
+
+          promoted=false
+          for attempt in $(seq 1 20); do
+            inspect_json="$RUNNER_TEMP/vercel-production-inspect.json"
+            if bunx vercel@56.3.1 inspect "$PRODUCTION_URL" \
+              --format=json \
+              --scope "$VERCEL_SCOPE" \
+              --token "$VERCEL_TOKEN" > "$inspect_json" \
+              && bun scripts/release-vercel-deployment.ts \
+                "$inspect_json" \
+                "${{ steps.immutable.outputs.deployment_id }}" > /dev/null; then
+              promoted=true
+              break
+            fi
+            sleep 3
+          done
+          if [ "$promoted" != "true" ]; then
+            echo "::error title=Production promotion did not converge::The production alias does not resolve to the verified deployment."
+            exit 1
+          fi
+          echo "Promoted $RELEASE_SHA from ${{ steps.deploy.outputs.deployment_url }}"
 
   smoke:
     needs: deploy
@@ -180,4 +306,9 @@ jobs:
           MURMUR_SMOKE_SHARE_CODE: ${{ vars.MURMUR_SMOKE_SHARE_CODE }}
           MURMUR_SMOKE_SONG_ID: ${{ vars.MURMUR_SMOKE_SONG_ID }}
           MURMUR_SMOKE_SESSION_TOKEN: ${{ secrets.MURMUR_SMOKE_SESSION_TOKEN }}
-        run: bun scripts/release-production-smoke.ts https://murmur.ptoq.io --require-audio
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: >-
+          bun scripts/release-production-smoke.ts
+          "$PRODUCTION_URL"
+          "$RELEASE_SHA"
+          --require-audio
