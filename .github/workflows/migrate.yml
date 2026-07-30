@@ -2,14 +2,11 @@ name: Release (production)
 
 # This is the only production release path. Vercel's native Git integration
 # must keep Preview deployments enabled and Production auto-deploys disabled.
-# A successful main-branch CI run releases that exact SHA in this order:
-# migrate -> verify schema convergence -> deploy -> production smoke.
+# A maintainer dispatches an exact, CI-green main SHA. The protected Production
+# environment approves that SHA before any migration runs, then releases it in
+# this order: validate -> approve -> migrate -> verify -> deploy -> smoke.
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       release_sha:
@@ -26,22 +23,19 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_SHA: ${{ github.event.workflow_run.head_sha || inputs.release_sha }}
+  RELEASE_SHA: ${{ inputs.release_sha }}
   VERCEL_PROJECT_NAME: ${{ vars.VERCEL_PROJECT_NAME || 'murmur' }}
   VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE || 'moapachas-projects' }}
 
 jobs:
-  migrate:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 5
     steps:
-      - name: Checkout release SHA
+      - name: Checkout protected release gate
         uses: actions/checkout@v7
         with:
-          ref: ${{ env.RELEASE_SHA }}
+          ref: main
           fetch-depth: 0
 
       - name: Setup Bun
@@ -52,8 +46,39 @@ jobs:
       - name: Verify exact main SHA and successful CI
         env:
           GH_TOKEN: ${{ github.token }}
-          CI_RUN_ID: ${{ github.event.workflow_run.id }}
         run: bun scripts/release-verify-main.ts
+
+  approve:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: Production
+    steps:
+      - name: Record approved release SHA
+        run: echo "Approved production release for $RELEASE_SHA"
+
+  migrate:
+    needs: approve
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout protected release gate
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+
+      - name: Verify exact main SHA and successful CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bun scripts/release-verify-main.ts
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
 
       - name: Validate migration configuration
         env:
@@ -105,7 +130,6 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    environment: Production
     outputs:
       deployment_url: ${{ steps.deploy.outputs.deployment_url }}
     steps:
