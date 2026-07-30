@@ -56,7 +56,7 @@ export interface NotificationLocalizedBroadcastInput {
 
 export interface NotificationSubscribeDeviceInput {
   userId: string;
-  sessionId?: string | null;
+  sessionId: string;
   subscription: WebPushSubscriptionJSON;
   userAgent?: string | null;
   locale?: string | null;
