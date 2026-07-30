@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { readFileSync } from "node:fs";
 
 import {
@@ -7,10 +8,15 @@ import {
 } from "./push-subscription-delivery-query";
 
 const NOW = new Date("2026-07-30T12:00:00.000Z");
+const queryDb = drizzle.mock();
 
 describe("active push delivery queries", () => {
   test("user delivery requires an owned, unrevoked, unexpired session and live endpoint", () => {
-    const query = activePushSubscriptionsForUserQuery("usr_push", NOW).toSQL();
+    const query = activePushSubscriptionsForUserQuery(
+      queryDb,
+      "usr_push",
+      NOW,
+    ).toSQL();
 
     expect(query.sql).toContain('inner join "sessions"');
     expect(query.sql).toContain('"sessions"."id" = "push_subscriptions"."session_id"');
@@ -23,7 +29,7 @@ describe("active push delivery queries", () => {
   });
 
   test("broadcast pages use the same lifecycle filters and retain keyset pagination", () => {
-    const query = activePushSubscriptionsPageQuery({
+    const query = activePushSubscriptionsPageQuery(queryDb, {
       after: "push_cursor",
       limit: 50,
       now: NOW,
