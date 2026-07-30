@@ -168,8 +168,9 @@ Important fields:
 
 - `user_id → users.id` — subscriptions are account-scoped and cascade on hard
   delete.
-- `session_id` — best-effort link to the web session that registered the
-  device. Auth.js-only sessions may leave this null.
+- `session_id` — required for an active subscription and bound by composite
+  foreign key to the owning persistent web session. Disabled historical rows
+  may retain null.
 - `endpoint` — unique push service endpoint; upserts move a browser
   subscription to the latest signed-in user.
 - `p256dh`, `auth` — Web Push encryption keys.
@@ -184,6 +185,15 @@ Indexes:
 - `push_subscriptions_user_idx ON (user_id)`
 - `push_subscriptions_active_user_idx ON (user_id, disabled_at)`
 - `push_subscriptions_endpoint_idx ON (endpoint)` — unique
+- `push_subscriptions_active_session_idx ON (session_id) WHERE disabled_at IS NULL`
+- `sessions_id_user_idx ON (id, user_id)` — supports the composite session-owner
+  foreign key used by active Push rows
+
+Active subscriptions must reference the owning, unrevoked, unexpired persistent
+session. Subscription writes lock that session row, logout revokes and disables
+under the same boundary, delivery queries join the active session, and endpoint
+`expiration_time` is enforced. Migration `0032` disables legacy null-session,
+expired, revoked, and orphan active rows before adding the constraints.
 
 ### 3.5 `notes_ledger` (NEW)
 
@@ -541,15 +551,17 @@ Privacy and training-use notes:
   Murmur systems without a documented purpose and access control.
 - Do not store raw hum audio in `composition_events.payload`. Raw or rendered
   audio belongs in object storage, referenced by `songs.mp3_storage_key`.
-- Rendered song masters use a content-addressed object key derived from their
-  SHA-256 digest. Exact save retries reuse the same object; a conflicting save
-  with the same song id cannot overwrite the audio already referenced by the
-  persisted row.
+- Rendered song masters use unique incarnation keys containing song id, digest,
+  and a fresh object id. Exact request retries converge through the song save
+  transaction, while later saves never overwrite or silently reuse an older
+  object's lifecycle identity.
 - For training/model work, prefer an internal export job that joins these rows
   and replaces user ids with run-local pseudonyms before producing files.
-- Honor account deletion: hard user delete cascades composition events and
-  songs; soft-delete retention rules must be resolved before using deleted-user
-  rows for model training.
+- Honor account deletion: the 30-day purge removes composition events, songs,
+  Worker jobs, identities, sessions, and creative objects. The user tombstone,
+  purchases, and Notes ledger remain as restricted pseudonymous records for
+  billing/refund audit. Stable user and provider references mean these records
+  are not anonymous; they must not be exported as training data.
 - `payload` must not contain payment provider payloads, email addresses,
   access tokens, IP addresses, or full user-agent strings.
 
@@ -682,30 +694,35 @@ it does not write Drizzle directly. Reason: testability + reuse.
 
 | When | What cascades |
 |---|---|
-| `users.deletedAt = now()` (soft) | nothing immediately; a 30-day job hard-deletes. Sessions are revoked synchronously. |
-| `DELETE FROM users` (hard) | `external_identities` (cascade), `sessions` (cascade), `songs` (cascade), `notes_ledger` (cascade), `purchases` (cascade) |
-| `DELETE FROM songs` | nothing — songs are leaves |
+| `users.deletedAt = now()` (soft) | sessions and shares are revoked, Push is disabled, and a 30-day cleanup job is queued |
+| account cleanup finalization | creative/identity rows and referenced objects are removed; a restricted pseudonymous user tombstone, purchases, and Notes ledger remain for billing/refund audit |
+| `DELETE FROM users` (operator-only hard delete) | DB foreign-key cascades apply, including billing rows; this is not the user-facing deletion path |
+| `DELETE FROM songs` | the audio-lifecycle trigger marks the referenced incarnation `delete_pending` |
 | `DELETE FROM sessions` | nothing |
 | `DELETE FROM purchases` | nothing (refund logic adjusts the ledger; no row mutation) |
 
-The user-driven account-delete pathway uses soft-delete, then the job
-runs the hard delete. This satisfies App Store + WeChat + PIPL retention
-norms.
+The user-driven account-delete pathway uses immediate soft-delete/revocation,
+then a leased cleanup job removes creative and identity data after 30 days.
+There is no cancel/restore API in this release.
 
 ---
 
 ## 8. Object storage (not a table, but in scope)
 
-- Bucket `murmur-songs` for `mp3Url`, `posterUrl`, `shareHtmlUrl`.
-- Path: `songs/{userId}/{songId}.mp3`.
-- Signed PUT URLs expire in 10 minutes.
-- Public read via signed-URL CDN; no anonymous public read.
-- Lifecycle: when `songs` row is hard-deleted, a Cloud Function /
-  background job deletes the object. The DB does not own the object's
-  lifetime directly.
-
-Provider: R2 (intl) + 腾讯云 COS (cn). Region routed by
-`users.regionId`.
+- Production uses the configured S3-compatible bucket through
+  `src/lib/storage/`; storage credentials never reach clients.
+- Saved masters use
+  `songs/master/{userId}/{songId}/{digest}_{incarnationId}.{ext}`. Postgres
+  `song_audio_objects` receipts own pending, committed, delete-pending, retry,
+  and deleted lifecycle state.
+- Owner and public-capability API routes re-authorize and stream validated
+  bytes with HEAD/Range/ETag support. Direct anonymous access is disabled only
+  after the documented private-write rollout becomes the rollback baseline.
+- Raw hums for durable jobs live under `tmp/` with a 24-hour TTL. Production
+  release requires verified bucket lifecycle enforcement because adapter TTL
+  metadata alone does not delete S3 objects.
+- Durable music-job output lives under `music/jobs/` until song/account
+  lifecycle cleanup removes it.
 
 ---
 

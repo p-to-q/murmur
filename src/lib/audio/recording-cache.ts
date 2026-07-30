@@ -40,6 +40,9 @@ interface StoredRecord {
   operationId?: string;
 }
 
+type StoredRecordRead =
+  { ok: true; value: unknown } | { ok: false; value?: never };
+
 /**
  * Resolve the IndexedDB factory, tolerating environments where the global is
  * absent (SSR) or throws on access (sandboxed iframes, disabled storage).
@@ -128,39 +131,10 @@ export async function loadRecordingBlob(): Promise<CachedRecording | null> {
   const db = await openDatabase();
   if (!db) return null;
   try {
-    const recording = await new Promise<CachedRecording | null>((resolve) => {
-      let tx: IDBTransaction;
-      try {
-        tx = db.transaction(STORE_NAME, "readonly");
-      } catch {
-        resolve(null);
-        return;
-      }
-      let req: IDBRequest<unknown>;
-      try {
-        req = tx.objectStore(STORE_NAME).get(RECORD_KEY);
-      } catch {
-        resolve(null);
-        return;
-      }
-      req.onsuccess = () => {
-        const value = req.result as Partial<StoredRecord> | undefined;
-        if (!value || !(value.blob instanceof Blob)) {
-          resolve(null);
-          return;
-        }
-        resolve({
-          blob: value.blob,
-          mimeType:
-            value.mimeType || value.blob.type || "application/octet-stream",
-          savedAt: typeof value.savedAt === "number" ? value.savedAt : 0,
-          operationId:
-            typeof value.operationId === "string" ? value.operationId : null,
-        });
-      };
-      req.onerror = () => resolve(null);
-    });
-    if (recording && isRecordingExpired(recording.savedAt)) {
+    const stored = await readRecording(db);
+    if (!stored.ok || stored.value === undefined) return null;
+    const recording = parseCachedRecording(stored.value);
+    if (!recording || isRecordingExpired(recording.savedAt)) {
       await deleteRecording(db);
       return null;
     }
@@ -171,41 +145,104 @@ export async function loadRecordingBlob(): Promise<CachedRecording | null> {
 }
 
 /**
- * Drop the cached recording once its upload has been committed. Never rejects —
- * a failed delete just leaves a stale blob that the next successful save
- * overwrites.
+ * Drop the cached recording once its upload has been committed. Never rejects;
+ * the return value makes an unavailable or failed browser store observable to
+ * callers that need cleanup evidence.
  */
-export async function clearRecordingBlob(): Promise<void> {
+export async function clearRecordingBlob(): Promise<boolean> {
   const db = await openDatabase();
-  if (!db) return;
+  if (!db) return false;
   try {
-    await deleteRecording(db);
+    return await deleteRecording(db);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Best-effort startup/visit sweep. Expired, legacy, or malformed entries are
+ * removed the next time the app can access this store; no background deletion
+ * is implied while the browser is closed.
+ */
+export async function sweepExpiredRecordingBlob(
+  now = Date.now(),
+): Promise<boolean> {
+  const db = await openDatabase();
+  if (!db) return false;
+  try {
+    const stored = await readRecording(db);
+    if (!stored.ok) return false;
+    if (stored.value === undefined) return true;
+    const recording = parseCachedRecording(stored.value);
+    if (!recording || isRecordingExpired(recording.savedAt, now)) {
+      return await deleteRecording(db);
+    }
+    return true;
   } finally {
     db.close();
   }
 }
 
 export function isRecordingExpired(savedAt: number, now = Date.now()): boolean {
-  return !Number.isFinite(savedAt) || savedAt <= 0 || savedAt <= now - RECORDING_CACHE_TTL_MS;
+  return (
+    !Number.isFinite(savedAt) ||
+    savedAt <= 0 ||
+    savedAt <= now - RECORDING_CACHE_TTL_MS
+  );
 }
 
-function deleteRecording(db: IDBDatabase): Promise<void> {
+function parseCachedRecording(value: unknown): CachedRecording | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Partial<StoredRecord>;
+  if (!(record.blob instanceof Blob)) return null;
+  return {
+    blob: record.blob,
+    mimeType:
+      typeof record.mimeType === "string" && record.mimeType
+        ? record.mimeType
+        : record.blob.type || "application/octet-stream",
+    savedAt: typeof record.savedAt === "number" ? record.savedAt : 0,
+    operationId:
+      typeof record.operationId === "string" ? record.operationId : null,
+  };
+}
+
+function readRecording(db: IDBDatabase): Promise<StoredRecordRead> {
+  return new Promise((resolve) => {
+    let tx: IDBTransaction;
+    try {
+      tx = db.transaction(STORE_NAME, "readonly");
+    } catch {
+      resolve({ ok: false });
+      return;
+    }
+    try {
+      const request = tx.objectStore(STORE_NAME).get(RECORD_KEY);
+      request.onsuccess = () => resolve({ ok: true, value: request.result });
+      request.onerror = () => resolve({ ok: false });
+    } catch {
+      resolve({ ok: false });
+    }
+  });
+}
+
+function deleteRecording(db: IDBDatabase): Promise<boolean> {
   return new Promise((resolve) => {
     let tx: IDBTransaction;
     try {
       tx = db.transaction(STORE_NAME, "readwrite");
     } catch {
-      resolve();
+      resolve(false);
       return;
     }
     try {
       tx.objectStore(STORE_NAME).delete(RECORD_KEY);
     } catch {
-      resolve();
+      resolve(false);
       return;
     }
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => resolve();
-    tx.onabort = () => resolve();
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => resolve(false);
+    tx.onabort = () => resolve(false);
   });
 }

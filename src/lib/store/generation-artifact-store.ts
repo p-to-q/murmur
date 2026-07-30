@@ -20,13 +20,25 @@ const STORE_NAME = "clips";
 const DB_VERSION = 1;
 // Clips are cleared on flow reset; this TTL just bounds growth if a user keeps
 // generating without ever saving/resetting.
-const ARTIFACT_TTL_MS = 24 * 60 * 60 * 1000;
+export const ARTIFACT_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface StoredClip {
   operationId: string;
   bytes: ArrayBuffer;
   contentType: string;
   storedAt: number;
+}
+
+function isStoredClip(value: unknown): value is StoredClip {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Partial<StoredClip>;
+  return (
+    typeof record.operationId === "string" &&
+    record.operationId.length > 0 &&
+    record.bytes instanceof ArrayBuffer &&
+    typeof record.contentType === "string" &&
+    typeof record.storedAt === "number"
+  );
 }
 
 function hasIndexedDb(): boolean {
@@ -44,7 +56,9 @@ function openDb(): Promise<IDBDatabase | null> {
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
-          const store = db.createObjectStore(STORE_NAME, { keyPath: "operationId" });
+          const store = db.createObjectStore(STORE_NAME, {
+            keyPath: "operationId",
+          });
           store.createIndex("storedAt", "storedAt");
         }
       };
@@ -98,80 +112,123 @@ export async function persistClipArtifact(
 }
 
 /** Load a previously persisted clip as a fresh Blob, or null if absent. */
-export async function loadClipArtifact(operationId: string): Promise<Blob | null> {
+export async function loadClipArtifact(
+  operationId: string,
+): Promise<Blob | null> {
   if (!operationId) return null;
   const db = await openDb();
   if (!db) return null;
-  return new Promise<Blob | null>((resolve) => {
+  const record = await new Promise<StoredClip | null>((resolve) => {
     try {
       const request = txStore(db, "readonly").get(operationId);
       request.onsuccess = () => {
-        const record = request.result as StoredClip | undefined;
-        if (!record || !record.bytes) {
+        const record = request.result;
+        if (!isStoredClip(record)) {
           resolve(null);
           return;
         }
-        resolve(new Blob([record.bytes], { type: record.contentType || "audio/wav" }));
+        resolve(record);
       };
       request.onerror = () => resolve(null);
     } catch {
       resolve(null);
     }
   });
+  if (!record) return null;
+  if (isClipArtifactExpired(record.storedAt)) {
+    await deleteClipArtifact(operationId);
+    return null;
+  }
+  return new Blob([record.bytes], { type: record.contentType || "audio/wav" });
 }
 
 /** Remove a single clip (e.g. after it has been saved and no longer needs recovery). */
-export async function deleteClipArtifact(operationId: string): Promise<void> {
-  if (!operationId) return;
+export async function deleteClipArtifact(
+  operationId: string,
+): Promise<boolean> {
+  if (!operationId) return true;
   const db = await openDb();
-  if (!db) return;
-  await new Promise<void>((resolve) => {
+  if (!db) return false;
+  return await new Promise<boolean>((resolve) => {
     try {
       const store = txStore(db, "readwrite");
       store.delete(operationId);
-      store.transaction.oncomplete = () => resolve();
-      store.transaction.onerror = () => resolve();
+      store.transaction.oncomplete = () => resolve(true);
+      store.transaction.onerror = () => resolve(false);
+      store.transaction.onabort = () => resolve(false);
     } catch {
-      resolve();
+      resolve(false);
     }
   });
 }
 
 /** Drop every persisted clip — called when a creation flow resets. */
-export async function clearAllClipArtifacts(): Promise<void> {
+export async function clearAllClipArtifacts(): Promise<boolean> {
   const db = await openDb();
-  if (!db) return;
-  await new Promise<void>((resolve) => {
+  if (!db) return false;
+  return await new Promise<boolean>((resolve) => {
     try {
       const store = txStore(db, "readwrite");
       store.clear();
-      store.transaction.oncomplete = () => resolve();
-      store.transaction.onerror = () => resolve();
-      store.transaction.onabort = () => resolve();
+      store.transaction.oncomplete = () => resolve(true);
+      store.transaction.onerror = () => resolve(false);
+      store.transaction.onabort = () => resolve(false);
     } catch {
-      resolve();
+      resolve(false);
     }
   });
 }
 
-async function pruneExpired(db: IDBDatabase): Promise<void> {
-  const cutoff = Date.now() - ARTIFACT_TTL_MS;
-  await new Promise<void>((resolve) => {
+/**
+ * Best-effort startup/visit sweep. Entries past their 24-hour recovery window
+ * are removed the next time this browser store is available.
+ */
+export async function sweepExpiredClipArtifacts(
+  now = Date.now(),
+): Promise<boolean> {
+  const db = await openDb();
+  if (!db) return false;
+  return await pruneExpired(db, now);
+}
+
+async function pruneExpired(
+  db: IDBDatabase,
+  now = Date.now(),
+): Promise<boolean> {
+  return await new Promise<boolean>((resolve) => {
     try {
-      const index = txStore(db, "readwrite").index("storedAt");
-      const request = index.openCursor(IDBKeyRange.upperBound(cutoff));
+      const store = txStore(db, "readwrite");
+      const transaction = store.transaction;
+      const request = store.openCursor();
       request.onsuccess = () => {
         const cursor = request.result;
-        if (!cursor) {
-          resolve();
-          return;
+        if (!cursor) return;
+        const record = cursor.value;
+        if (
+          !isStoredClip(record) ||
+          isClipArtifactExpired(record.storedAt, now)
+        ) {
+          cursor.delete();
         }
-        cursor.delete();
         cursor.continue();
       };
-      request.onerror = () => resolve();
+      request.onerror = () => resolve(false);
+      transaction.oncomplete = () => resolve(true);
+      transaction.onerror = () => resolve(false);
+      transaction.onabort = () => resolve(false);
     } catch {
-      resolve();
+      resolve(false);
     }
   });
+}
+
+export function isClipArtifactExpired(
+  storedAt: number,
+  now = Date.now(),
+): boolean {
+  return (
+    !Number.isFinite(storedAt) ||
+    storedAt <= 0 ||
+    storedAt <= now - ARTIFACT_TTL_MS
+  );
 }
