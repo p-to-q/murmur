@@ -1,11 +1,16 @@
 import { detectAudioFileType } from "@/lib/audio/file-signature";
+import { APP_BUILD, APP_VERSION } from "../src/lib/release-metadata";
 
 const input = process.argv[2]?.trim();
+const expectedSha = process.argv[3]?.trim();
 const requireAudio = process.argv.includes("--require-audio");
-if (!input) {
+if (!input || !expectedSha) {
   throw new Error(
-    "Usage: bun scripts/release-production-smoke.ts <production-url> [--require-audio]",
+    "Usage: bun scripts/release-production-smoke.ts <deployment-url> <expected-full-sha> [--require-audio]",
   );
+}
+if (!/^[0-9a-f]{40}$/i.test(expectedSha)) {
+  throw new Error("Expected release SHA must contain exactly 40 hexadecimal characters");
 }
 
 const origin = new URL(input).origin;
@@ -20,7 +25,7 @@ async function probe(path: string, expectedContentType: string) {
   for (let attempt = 1; attempt <= 8; attempt += 1) {
     try {
       const response = await fetch(`${origin}${path}`, {
-        headers: { "User-Agent": "murmur-production-smoke" },
+        headers: smokeHeaders(),
         redirect: "manual",
         signal: AbortSignal.timeout(12_000),
       });
@@ -39,6 +44,68 @@ async function probe(path: string, expectedContentType: string) {
   throw lastError;
 }
 
+async function verifyReleaseIdentity() {
+  let lastError: unknown;
+  let consecutiveMatches = 0;
+  for (let attempt = 1; attempt <= 12; attempt += 1) {
+    try {
+      const releaseUrl = new URL("/api/release", origin);
+      releaseUrl.searchParams.set("smoke", `${Date.now()}-${attempt}`);
+      const response = await fetch(releaseUrl, {
+        cache: "no-store",
+        headers: {
+          ...smokeHeaders(),
+          "Cache-Control": "no-cache",
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(12_000),
+      });
+      const identity = (await response.json()) as {
+        version?: unknown;
+        build?: unknown;
+        sha?: unknown;
+      };
+      if (!response.ok)
+        throw new Error(`/api/release returned ${response.status}`);
+      if (
+        identity.sha !== expectedSha ||
+        identity.version !== APP_VERSION ||
+        identity.build !== APP_BUILD
+      ) {
+        throw new Error(
+          `release identity mismatch: expected ${APP_VERSION}/${APP_BUILD}/${expectedSha}, got ${String(identity.version)}/${String(identity.build)}/${String(identity.sha)}`,
+        );
+      }
+      consecutiveMatches += 1;
+      if (consecutiveMatches >= 3) {
+        console.log(
+          `ok /api/release x3 (${APP_VERSION} build ${APP_BUILD} ${expectedSha})`,
+        );
+        return;
+      }
+      await Bun.sleep(500);
+    } catch (error) {
+      lastError = error;
+      consecutiveMatches = 0;
+      if (attempt < 12)
+        await Bun.sleep(
+          Math.min(1_000 * 2 ** Math.min(attempt - 1, 3), 10_000),
+        );
+    }
+  }
+  throw lastError;
+}
+
+function smokeHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "User-Agent": "murmur-production-smoke",
+  };
+  const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
+  if (bypass) headers["x-vercel-protection-bypass"] = bypass;
+  return headers;
+}
+
+await verifyReleaseIdentity();
 for (const probeDefinition of probes) {
   await probe(probeDefinition.path, probeDefinition.contentType);
 }
@@ -57,6 +124,11 @@ if (shareCode) {
 
 const ownerSongId = process.env.MURMUR_SMOKE_SONG_ID?.trim();
 const ownerToken = process.env.MURMUR_SMOKE_SESSION_TOKEN?.trim();
+if (requireAudio && (!ownerSongId || !ownerToken)) {
+  throw new Error(
+    "MURMUR_SMOKE_SONG_ID and MURMUR_SMOKE_SESSION_TOKEN are required for release audio smoke",
+  );
+}
 if (Boolean(ownerSongId) !== Boolean(ownerToken)) {
   throw new Error(
     "MURMUR_SMOKE_SONG_ID and MURMUR_SMOKE_SESSION_TOKEN must be set together",
@@ -70,7 +142,7 @@ if (ownerSongId && ownerToken) {
   );
 }
 
-console.log(`Production smoke passed for ${origin}`);
+console.log(`Release smoke passed for ${origin} at ${expectedSha}`);
 
 async function probeAudio(
   path: string,
@@ -78,7 +150,7 @@ async function probeAudio(
   label: string,
 ) {
   const baseHeaders = {
-    "User-Agent": "murmur-production-smoke",
+    ...smokeHeaders(),
     ...authHeaders,
   };
   const head = await fetchWithRetry(`${origin}${path}`, {

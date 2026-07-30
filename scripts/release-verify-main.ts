@@ -28,20 +28,14 @@ if (branchCommit !== releaseSha) {
   throw new Error(`Refusing stale release: main is ${branchCommit}, requested ${releaseSha}`);
 }
 
-const ciRunId = process.env.CI_RUN_ID?.trim();
-if (ciRunId) {
-  const run = await github(`/actions/runs/${ciRunId}`);
-  if (run.conclusion !== "success" || run.head_sha !== releaseSha) {
-    throw new Error(`CI run ${ciRunId} did not succeed for ${releaseSha}`);
-  }
-} else {
-  const runs = await github(`/actions/workflows/ci.yml/runs?branch=main&head_sha=${releaseSha}&per_page=20`);
-  const matching = (runs.workflow_runs as Array<Record<string, unknown>> | undefined)?.find(
-    (run) => run.head_sha === releaseSha && run.conclusion === "success",
-  );
-  if (!matching) {
-    throw new Error(`No successful CI workflow exists for ${releaseSha}`);
-  }
+const runs = await github(
+  `/actions/workflows/ci.yml/runs?branch=main&head_sha=${releaseSha}&per_page=20`,
+);
+const matching = (runs.workflow_runs as Array<Record<string, unknown>> | undefined)?.find(
+  (run) => run.head_sha === releaseSha && run.conclusion === "success",
+);
+if (!matching) {
+  throw new Error(`No successful CI workflow exists for ${releaseSha}`);
 }
 
 console.log(`Release gate passed for main at ${releaseSha}`);

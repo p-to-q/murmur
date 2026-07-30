@@ -67,6 +67,33 @@ function isTruthyEnv(key: string): boolean {
   return value === "1" || value === "true" || value === "yes";
 }
 
+function isTruthyValue(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
+}
+
+export function collectProductionFallbackEnvAuditIssues(
+  env: Readonly<Record<string, string | undefined>>,
+): string[] {
+  const issues: string[] = [];
+  if (isTruthyValue(env.MURMUR_ALLOW_DEV_BILLING_FALLBACK)) {
+    issues.push("MURMUR_ALLOW_DEV_BILLING_FALLBACK must be unset/false in production");
+  }
+  if (isTruthyValue(env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW)) {
+    issues.push("MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW must be unset/false in production");
+  }
+
+  const authMode = env.MURMUR_AUTH_MODE?.trim().toLowerCase();
+  if (authMode && authMode !== "production" && authMode !== "prod") {
+    issues.push("MURMUR_AUTH_MODE must be production/prod in production");
+  }
+  const publicAuthMode = env.NEXT_PUBLIC_MURMUR_AUTH_MODE?.trim().toLowerCase();
+  if (publicAuthMode && publicAuthMode !== "production" && publicAuthMode !== "prod") {
+    issues.push("NEXT_PUBLIC_MURMUR_AUTH_MODE must be unset or production/prod in production");
+  }
+  return issues;
+}
+
 function isPlaceholderSecret(key: string): boolean {
   const value = process.env[key]?.trim().toLowerCase();
   return !value || value === "replace_with_a_long_random_string";
@@ -105,6 +132,58 @@ export function collectUrlEnvAuditIssues(
   return issues;
 }
 
+export function collectDurableRuntimeEnvAuditIssues(
+  env: Readonly<Record<string, string | undefined>>,
+  environment: "preview" | "production",
+): string[] {
+  const issues: string[] = [];
+  const declaredEnvironment = env.MURMUR_DEPLOYMENT_ENV?.trim().toLowerCase();
+  if (declaredEnvironment !== environment) {
+    issues.push(`MURMUR_DEPLOYMENT_ENV must be ${environment} on Vercel ${environment}`);
+  }
+
+  const rateLimitDriver = env.MURMUR_RATE_LIMIT_DRIVER?.trim().toLowerCase();
+  if (rateLimitDriver && rateLimitDriver !== "postgres") {
+    issues.push(`MURMUR_RATE_LIMIT_DRIVER must be unset or postgres on Vercel ${environment}`);
+  }
+
+  if (environment === "production" && !isTruthyValue(env.MURMUR_STORAGE_TMP_LIFECYCLE_CONFIRMED)) {
+    issues.push(
+      "MURMUR_STORAGE_TMP_LIFECYCLE_CONFIRMED must be true after verifying a 24-hour tmp/ bucket lifecycle",
+    );
+  }
+  return issues;
+}
+
+export function collectPreviewIsolationEnvAuditIssues(
+  env: Readonly<Record<string, string | undefined>>,
+): string[] {
+  const issues = [
+    ...collectDurableRuntimeEnvAuditIssues(env, "preview"),
+    ...collectDatabaseEnvAuditIssues(env),
+    ...collectUrlEnvAuditIssues(env),
+    ...collectProductionFallbackEnvAuditIssues(env),
+  ];
+  if (env.MURMUR_STORAGE_DRIVER?.trim() !== "s3-compatible") {
+    issues.push("MURMUR_STORAGE_DRIVER must be s3-compatible on Vercel preview");
+  }
+  for (const key of REQUIRED_S3_ENV) {
+    if (!env[key]?.trim()) issues.push(`${key} is required on Vercel preview`);
+  }
+  for (const key of ["AUDIO_WORKER_TOKEN", "RUNPOD_API_KEY"] as const) {
+    if (!env[key]?.trim()) issues.push(`${key} is required on Vercel preview`);
+  }
+  if (
+    !privateSongAudioDeliveryEnabled(env)
+    && !env.MURMUR_STORAGE_S3_PUBLIC_URL_BASE?.trim()
+  ) {
+    issues.push(
+      "MURMUR_STORAGE_S3_PUBLIC_URL_BASE is required on Vercel preview until private song audio delivery is enabled",
+    );
+  }
+  return issues;
+}
+
 function main() {
   const onVercel = process.env.VERCEL === "1";
   const inCi = process.env.CI === "true";
@@ -112,6 +191,19 @@ function main() {
   const productionDeployment =
     vercelEnv === "production" ||
     (!onVercel && process.env.NODE_ENV === "production");
+
+  const previewDeployment = onVercel && vercelEnv === "preview";
+  if (previewDeployment) {
+    const previewIssues = collectPreviewIsolationEnvAuditIssues(process.env);
+    if (previewIssues.length > 0) {
+      console.error("Preview env audit failed:");
+      for (const item of previewIssues) console.error(`  - ${item}`);
+      process.exitCode = 1;
+      return;
+    }
+    console.log("Preview env audit passed.");
+    return;
+  }
 
   if (!productionDeployment || (!onVercel && !inCi)) {
     console.log("env audit skipped (not production deployment CI/Vercel).");
@@ -130,6 +222,9 @@ function main() {
 
   missing.push(...collectDatabaseEnvAuditIssues(process.env));
   missing.push(...collectUrlEnvAuditIssues(process.env));
+  if (onVercel) {
+    missing.push(...collectDurableRuntimeEnvAuditIssues(process.env, "production"));
+  }
 
   const googleConfigured =
     Boolean(process.env.GOOGLE_CLIENT_ID?.trim()) &&
@@ -155,9 +250,7 @@ function main() {
     missing.push("AUTH_SECRET (required when GitHub OAuth is configured)");
   }
 
-  if (isTruthyEnv("MURMUR_ALLOW_DEV_BILLING_FALLBACK")) {
-    missing.push("MURMUR_ALLOW_DEV_BILLING_FALLBACK must be unset/false in production");
-  }
+  missing.push(...collectProductionFallbackEnvAuditIssues(process.env));
 
   const zpayHasPid = Boolean(process.env.ZPAY_PID?.trim());
   const zpayHasKey = Boolean(process.env.ZPAY_KEY?.trim());
@@ -182,11 +275,6 @@ function main() {
   const storageDriver = process.env.MURMUR_STORAGE_DRIVER?.trim();
   if (onVercel && storageDriver !== "s3-compatible") {
     missing.push("MURMUR_STORAGE_DRIVER must be s3-compatible on Vercel production");
-  }
-
-  const rateLimitDriver = process.env.MURMUR_RATE_LIMIT_DRIVER?.trim();
-  if (rateLimitDriver === "redis") {
-    missing.push("MURMUR_RATE_LIMIT_DRIVER must not be redis until that adapter ships");
   }
 
   if (storageDriver === "s3-compatible") {

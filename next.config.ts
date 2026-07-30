@@ -9,6 +9,9 @@ const packageJson = JSON.parse(
 ) as { version: string };
 
 function resolveGitCommitSha(): string {
+  if (process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA) {
+    return process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA;
+  }
   if (process.env.VERCEL_GIT_COMMIT_SHA) {
     return process.env.VERCEL_GIT_COMMIT_SHA;
   }
