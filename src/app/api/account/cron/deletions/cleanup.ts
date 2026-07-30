@@ -8,6 +8,7 @@ import {
   markAccountDeletionJobRetry,
   markAccountDeletionObjectDeleted,
   markAccountDeletionObjectRetry,
+  reconcileMissingAccountDeletionJobs,
   snapshotAccountDeletionObjects,
 } from "@/lib/db/queries/account-deletion";
 import { log } from "@/lib/observability/log";
@@ -17,6 +18,7 @@ import { advanceMusicJob } from "@/lib/platform/music-job-runner";
 const LEASE_MS = 5 * 60 * 1_000;
 
 export interface AccountDeletionCleanupSummary {
+  reconciled: number;
   candidates: number;
   completed: number;
   deferred: number;
@@ -25,6 +27,7 @@ export interface AccountDeletionCleanupSummary {
 }
 
 export interface AccountDeletionCleanupDependencies {
+  reconcileMissing: typeof reconcileMissingAccountDeletionJobs;
   claimDue: typeof claimDueAccountDeletionJobs;
   snapshotObjects: typeof snapshotAccountDeletionObjects;
   listUnsettledMusicJobs: typeof listUnsettledAccountDeletionMusicJobs;
@@ -40,6 +43,7 @@ export interface AccountDeletionCleanupDependencies {
 }
 
 const DEFAULT_DEPENDENCIES: AccountDeletionCleanupDependencies = {
+  reconcileMissing: reconcileMissingAccountDeletionJobs,
   claimDue: claimDueAccountDeletionJobs,
   snapshotObjects: snapshotAccountDeletionObjects,
   listUnsettledMusicJobs: listUnsettledAccountDeletionMusicJobs,
@@ -64,8 +68,10 @@ export async function runAccountDeletionCleanup(
 ): Promise<AccountDeletionCleanupSummary> {
   const limit = clamp(options.limit ?? 10, 1, 50);
   const concurrency = clamp(options.concurrency ?? 2, 1, 5);
+  const reconciled = await dependencies.reconcileMissing();
   const jobs = await dependencies.claimDue({ limit, leaseMs: LEASE_MS });
   const summary: AccountDeletionCleanupSummary = {
+    reconciled,
     candidates: jobs.length,
     completed: 0,
     deferred: 0,

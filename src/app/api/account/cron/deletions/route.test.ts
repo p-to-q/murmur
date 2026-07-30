@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 const inputs: Array<{ limit?: number; concurrency?: number }> = [];
 let throws = false;
-let summary = { candidates: 0, completed: 0, deferred: 0, failed: 0, objectsDeleted: 0 };
+let summary = { reconciled: 0, candidates: 0, completed: 0, deferred: 0, failed: 0, objectsDeleted: 0 };
 
 const runCleanup = mock(async (input: { limit?: number; concurrency?: number } = {}) => {
   inputs.push(input);
@@ -18,7 +18,7 @@ beforeEach(() => {
   inputs.length = 0;
   throws = false;
   runCleanup.mockClear();
-  summary = { candidates: 0, completed: 0, deferred: 0, failed: 0, objectsDeleted: 0 };
+  summary = { reconciled: 0, candidates: 0, completed: 0, deferred: 0, failed: 0, objectsDeleted: 0 };
 });
 
 function request(headers: Record<string, string> = {}, query = ""): NextRequest {
@@ -49,7 +49,7 @@ describe("GET /api/account/cron/deletions", () => {
   });
 
   it("returns partial success while cleanup is deferred", async () => {
-    summary = { candidates: 1, completed: 0, deferred: 1, failed: 0, objectsDeleted: 0 };
+    summary = { reconciled: 0, candidates: 1, completed: 0, deferred: 1, failed: 0, objectsDeleted: 0 };
     const response = await GET(request({ authorization: "Bearer cron_test" }));
     expect(response.status).toBe(207);
   });

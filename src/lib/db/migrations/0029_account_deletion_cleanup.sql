@@ -54,3 +54,35 @@ SELECT
 FROM "users"
 WHERE "deleted_at" IS NOT NULL
 ON CONFLICT ("user_id") DO NOTHING;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION "murmur_ensure_account_deletion_job"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW."deleted_at" IS NOT NULL AND OLD."deleted_at" IS NULL THEN
+    INSERT INTO "account_deletion_jobs" (
+      "user_id",
+      "status",
+      "requested_at",
+      "purge_after",
+      "next_attempt_at"
+    ) VALUES (
+      NEW."id",
+      'pending',
+      NEW."deleted_at",
+      NEW."deleted_at" + interval '30 days',
+      NEW."deleted_at" + interval '30 days'
+    )
+    ON CONFLICT ("user_id") DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+DROP TRIGGER IF EXISTS "users_account_deletion_job_trg" ON "users";
+--> statement-breakpoint
+CREATE TRIGGER "users_account_deletion_job_trg"
+AFTER UPDATE OF "deleted_at" ON "users"
+FOR EACH ROW
+EXECUTE FUNCTION "murmur_ensure_account_deletion_job"();

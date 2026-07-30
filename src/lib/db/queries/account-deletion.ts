@@ -191,6 +191,40 @@ export async function claimDueAccountDeletionJobs(input: {
     .returning();
 }
 
+/** Repair jobs omitted by an older app during a migrate-before-deploy window. */
+export async function reconcileMissingAccountDeletionJobs(
+  now = new Date(),
+): Promise<number> {
+  const inserted = await db
+    .insert(accountDeletionJobs)
+    .select(
+      db
+        .select({
+          userId: users.id,
+          status: sql<"pending">`'pending'`.as("status"),
+          requestedAt: sql<Date>`${users.deletedAt}`.as("requested_at"),
+          purgeAfter: sql<Date>`${users.deletedAt} + interval '30 days'`.as("purge_after"),
+          nextAttemptAt: sql<Date>`${users.deletedAt} + interval '30 days'`.as("next_attempt_at"),
+          leaseUntil: sql<Date | null>`null`.as("lease_until"),
+          attempts: sql<number>`0`.as("attempts"),
+          objectsDeleted: sql<number>`0`.as("objects_deleted"),
+          lastError: sql<string | null>`null`.as("last_error"),
+          completedAt: sql<Date | null>`null`.as("completed_at"),
+          createdAt: sql<Date>`${now}`.as("created_at"),
+          updatedAt: sql<Date>`${now}`.as("updated_at"),
+        })
+        .from(users)
+        .leftJoin(accountDeletionJobs, eq(accountDeletionJobs.userId, users.id))
+        .where(and(
+          sql`${users.deletedAt} IS NOT NULL`,
+          isNull(accountDeletionJobs.userId),
+        )),
+    )
+    .onConflictDoNothing({ target: accountDeletionJobs.userId })
+    .returning({ userId: accountDeletionJobs.userId });
+  return inserted.length;
+}
+
 export async function snapshotAccountDeletionObjects(
   userId: string,
   now = new Date(),
