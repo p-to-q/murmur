@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   clearRecordingBlob,
+  isRecordingExpired,
   loadRecordingBlob,
+  RECORDING_CACHE_TTL_MS,
   saveRecordingBlob,
 } from "./recording-cache";
 
@@ -25,5 +27,14 @@ describe("recording-cache graceful degradation", () => {
 
   test("clearRecordingBlob resolves without throwing", async () => {
     await expect(clearRecordingBlob()).resolves.toBeUndefined();
+  });
+
+  test("expires recordings after 24 hours and rejects legacy timestamps", () => {
+    const now = Date.parse("2026-07-30T00:00:00.000Z");
+
+    expect(isRecordingExpired(now - RECORDING_CACHE_TTL_MS + 1, now)).toBe(false);
+    expect(isRecordingExpired(now - RECORDING_CACHE_TTL_MS, now)).toBe(true);
+    expect(isRecordingExpired(0, now)).toBe(true);
+    expect(isRecordingExpired(Number.NaN, now)).toBe(true);
   });
 });

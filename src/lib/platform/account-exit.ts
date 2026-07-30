@@ -1,6 +1,7 @@
 "use client";
 
 import { clearRecordingBlob } from "@/lib/audio/recording-cache";
+import { unsubscribeBrowserPushLocally } from "@/lib/platform/browser-push";
 import { memory } from "@/lib/platform/memory";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import { useNotificationStore } from "@/lib/store/notification-store";
@@ -11,6 +12,7 @@ type AccountExitCleanup = {
   clearNotificationItems: () => void | Promise<void>;
   clearMemoryEvents: () => void | Promise<void>;
   clearAccountStorage: () => void | Promise<void>;
+  unsubscribeBrowserPush: () => void | Promise<void>;
 };
 
 const ACCOUNT_LOCAL_STORAGE_KEYS = ["murmur.local-user"] as const;
@@ -39,6 +41,7 @@ const defaultCleanup: AccountExitCleanup = {
   clearNotificationItems: () => useNotificationStore.getState().clearAll(),
   clearMemoryEvents: () => memory.clearLocalEvents(),
   clearAccountStorage,
+  unsubscribeBrowserPush: unsubscribeBrowserPushLocally,
 };
 
 /**
@@ -55,6 +58,7 @@ export async function clearAccountScopedDeviceData(
     cleanup.clearNotificationItems,
     cleanup.clearMemoryEvents,
     cleanup.clearAccountStorage,
+    cleanup.unsubscribeBrowserPush,
   ];
 
   await Promise.allSettled(tasks.map((task) => Promise.resolve().then(task)));
