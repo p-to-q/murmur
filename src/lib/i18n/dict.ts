@@ -861,7 +861,7 @@ export const DICT = {
   "delete.intro":        { zh: "你可以随时请求删除 Murmur 账号。删除后，个人资料将被标记为不可用，歌曲会在保留期后从服务器移除。", en: "You can request deletion of your Murmur account at any time. Your profile will be deactivated and songs removed from our servers after a retention period." },
   "delete.sign_in":      { zh: "请先登录后再申请删除账号。", en: "Sign in first to request account deletion." },
   "delete.steps.title":  { zh: "删除流程", en: "What happens" },
-  "delete.steps.1":      { zh: "账号进入 30 天冷静期，期间可以取消删除。", en: "Your account enters a 30-day grace period during which you can cancel." },
+  "delete.steps.1":      { zh: "提交后会立即退出登录，并撤销会话与公开分享链接。", en: "Submitting signs you out immediately and revokes sessions and public share links." },
   "delete.steps.2":      { zh: "冷静期结束后，个人资料与关联数据会被永久删除。", en: "After the grace period, your profile and linked data are permanently deleted." },
   "delete.steps.3":      { zh: "已购买的音磅余额不可退款；删除前请先用完或联系支持。", en: "Purchased note balances are non-refundable — use them or contact support before deleting." },
   "delete.cta":          { zh: "删除我的账号", en: "Delete my account" },
@@ -871,7 +871,7 @@ export const DICT = {
   "delete.toast.failed": { zh: "删除请求暂时失败，请稍后再试。", en: "Couldn't request deletion right now. Try again shortly." },
   "delete.back":         { zh: "返回我的", en: "Back to Me" },
   "delete.confirm.title":   { zh: "确认提交删除账号请求？", en: "Request account deletion?" },
-  "delete.confirm.body":    { zh: "账号会进入 30 天冷静期，期间可以取消；冷静期结束后才会永久删除。", en: "Your account enters a 30-day grace period. You can cancel during it; deletion becomes permanent afterward." },
+  "delete.confirm.body":    { zh: "提交后会立即退出并撤销访问；个人资料、歌曲与关联创作数据会在 30 天保留期后永久清理。", en: "Submitting immediately signs you out and revokes access. Your profile, songs, and related creative data are permanently purged after the 30-day retention period." },
   "delete.confirm.confirm": { zh: "提交删除请求", en: "Request deletion" },
 
   // ── Topup extras ───────────────────────────────────────────────────

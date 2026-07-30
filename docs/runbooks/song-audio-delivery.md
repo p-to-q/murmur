@@ -28,6 +28,8 @@ The resolver is deliberately strict:
 The `song_audio_objects` table is the object-store outbox and ownership record:
 
 - save reserves `pending` before uploading bytes;
+- each upload receives a unique incarnation key even when song id and bytes
+  match, so an expired cleanup lease cannot delete a later save;
 - the song insert and transition to `committed` share one DB transaction;
 - song deletion removes the row and transitions the object to
   `delete_pending` in one DB transaction;
