@@ -133,7 +133,12 @@ export const musicJobs = pgTable(
     leaseEpoch: integer("attempt").notNull().default(0),
     leaseUntil: timestamp("lease_until"),
     providerSubmittedAt: timestamp("provider_submitted_at"),
-    deadlineAt: timestamp("deadline_at").notNull(),
+    // Keep a DB default during the expand/contract window. The pre-dispatcher
+    // app omits this column, so migrate-before-deploy and app-only rollback
+    // remain write-compatible while new code still supplies an exact deadline.
+    deadlineAt: timestamp("deadline_at")
+      .notNull()
+      .default(sql`now() + interval '15 minutes'`),
     nextRunAt: timestamp("next_run_at"),
     cancelRequestedAt: timestamp("cancel_requested_at"),
     errorCode: varchar("error_code", { length: 64 }),
