@@ -44,33 +44,51 @@ async function probe(path: string, expectedContentType: string) {
 
 async function verifyReleaseIdentity() {
   let lastError: unknown;
-  for (let attempt = 1; attempt <= 8; attempt += 1) {
+  let consecutiveMatches = 0;
+  for (let attempt = 1; attempt <= 12; attempt += 1) {
     try {
-      const response = await fetch(`${origin}/api/release`, {
-        headers: smokeHeaders(),
+      const releaseUrl = new URL("/api/release", origin);
+      releaseUrl.searchParams.set("smoke", `${Date.now()}-${attempt}`);
+      const response = await fetch(releaseUrl, {
+        cache: "no-store",
+        headers: {
+          ...smokeHeaders(),
+          "Cache-Control": "no-cache",
+        },
         redirect: "manual",
         signal: AbortSignal.timeout(12_000),
       });
-      const identity = await response.json() as {
+      const identity = (await response.json()) as {
         version?: unknown;
         build?: unknown;
         sha?: unknown;
       };
-      if (!response.ok) throw new Error(`/api/release returned ${response.status}`);
+      if (!response.ok)
+        throw new Error(`/api/release returned ${response.status}`);
       if (
-        identity.sha !== expectedSha
-        || identity.version !== APP_VERSION
-        || identity.build !== APP_BUILD
+        identity.sha !== expectedSha ||
+        identity.version !== APP_VERSION ||
+        identity.build !== APP_BUILD
       ) {
         throw new Error(
           `release identity mismatch: expected ${APP_VERSION}/${APP_BUILD}/${expectedSha}, got ${String(identity.version)}/${String(identity.build)}/${String(identity.sha)}`,
         );
       }
-      console.log(`ok /api/release (${APP_VERSION} build ${APP_BUILD} ${expectedSha})`);
-      return;
+      consecutiveMatches += 1;
+      if (consecutiveMatches >= 3) {
+        console.log(
+          `ok /api/release x3 (${APP_VERSION} build ${APP_BUILD} ${expectedSha})`,
+        );
+        return;
+      }
+      await Bun.sleep(500);
     } catch (error) {
       lastError = error;
-      if (attempt < 8) await Bun.sleep(Math.min(1_000 * 2 ** (attempt - 1), 10_000));
+      consecutiveMatches = 0;
+      if (attempt < 12)
+        await Bun.sleep(
+          Math.min(1_000 * 2 ** Math.min(attempt - 1, 3), 10_000),
+        );
     }
   }
   throw lastError;
