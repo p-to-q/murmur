@@ -218,6 +218,13 @@
       "when": 1786000000007,
       "tag": "0031_push_subscriptions_active_session_index",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1786000000008,
+      "tag": "0032_push_subscription_session_lifecycle",
+      "breakpoints": true
     }
   ]
 }

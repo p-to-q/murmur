@@ -1,6 +1,8 @@
 import type { InferSelectModel } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import {
+  check,
+  foreignKey,
   index,
   jsonb,
   pgTable,
@@ -11,6 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { users } from "./users";
+import { sessions } from "./sessions";
 
 export type PushSubscriptionKeys = {
   p256dh: string;
@@ -56,6 +59,15 @@ export const pushSubscriptions = pgTable(
       .on(table.sessionId)
       .where(sql`${table.disabledAt} IS NULL`),
     byEndpoint: uniqueIndex("push_subscriptions_endpoint_idx").on(table.endpoint),
+    sessionOwner: foreignKey({
+      columns: [table.sessionId, table.userId],
+      foreignColumns: [sessions.id, sessions.userId],
+      name: "push_subscriptions_session_owner_fk",
+    }).onDelete("cascade"),
+    activeSessionRequired: check(
+      "push_subscriptions_active_session_required_check",
+      sql`${table.disabledAt} IS NOT NULL OR ${table.sessionId} IS NOT NULL`,
+    ),
   }),
 );
 
