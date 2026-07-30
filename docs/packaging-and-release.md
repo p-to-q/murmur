@@ -288,12 +288,14 @@ This release reflects milestones since the earlier `v0.2.0` hackathon label:
 - `0.6.0` — browser-side transcription fallback, latency budgets, stage tracking, ISR caching, security hardening, and RTE-Dev infrastructure
 - `0.7.0-rc.1` — recoverable generation jobs, creation-journey hardening,
   browser golden-path coverage, and ordered exact-SHA release automation
-- `0.7.0-rc.2` — end-to-end music evidence, durable job/audio lifecycle,
-  Gallery playback/share/download repair, device exit cleanup, and protected
-  exact-SHA release governance
 - `0.7.0-rc.2` — music-quality evidence and Gates, fenced job dispatch,
-  durable Gallery audio delivery, account/device lifecycle closure, and
-  release dependency remediation
+  durable Gallery audio delivery, account/device lifecycle closure, release
+  dependency remediation, and protected exact-SHA release governance
+
+These are product-version calibration milestones, not a claim that every entry
+was tagged or published. Repository and GitHub release truth currently contain
+only `v0.5.0`; do not backfill `v0.6.0` or `v0.7.0-rc.1` tags during the rc.2
+release. The next tag is created only for the exact approved rc.2 `main` SHA.
 
 ### Source of truth
 
