@@ -35,6 +35,9 @@ The `song_audio_objects` table is the object-store outbox and ownership record:
   `delete_pending` objects with leases, then retries deletion with bounded
   exponential backoff;
 - `deleted` is written only after the storage adapter confirms deletion.
+- account deletion snapshots both live song references and lifecycle receipts;
+  after all referenced bytes are gone, its final transaction removes the
+  user's lifecycle rows with the rest of the creative data.
 
 This ordering deliberately prefers a reclaimable object over a song row that
 points at missing bytes. A process crash or failed DB write after upload leaves

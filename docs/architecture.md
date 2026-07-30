@@ -139,6 +139,10 @@ flowchart TB
   completed and the cookie was cleared (`revoked: false` is valid when no
   active token existed). The client preserves its local identity and offers a
   retry unless it receives that successful response.
+- Account deletion and owner song writes serialize on the active user row.
+  Saves, edits, and share publication that were authenticated before deletion
+  cannot commit after the deletion transaction has revoked public links and
+  sessions.
 - Local Creator is a lightweight account with a real `users.id`, a Murmur
   session cookie, and 5 notes once for the current browser. Live hums spend
   that finite server ledger when the Local Creator session exists; pure guest

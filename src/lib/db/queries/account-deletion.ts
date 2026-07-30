@@ -25,6 +25,7 @@ import { pushSubscriptions } from "../schema/push-subscriptions";
 import { rateLimits } from "../schema/rate-limits";
 import { sessions } from "../schema/sessions";
 import { shareReferrals } from "../schema/share-referrals";
+import { songAudioObjects } from "../schema/song-audio-objects";
 import { songs } from "../schema/songs";
 import { users } from "../schema/users";
 import { recordPendingRefundInTransaction } from "./notes-ledger";
@@ -234,6 +235,13 @@ export async function snapshotAccountDeletionObjects(
       .select({ storageKey: songs.mp3StorageKey })
       .from(songs)
       .where(and(eq(songs.userId, userId), sql`${songs.mp3StorageKey} IS NOT NULL`));
+    const trackedSongObjects = await tx
+      .select({ storageKey: songAudioObjects.storageKey })
+      .from(songAudioObjects)
+      .where(and(
+        eq(songAudioObjects.userId, userId),
+        not(eq(songAudioObjects.state, "deleted")),
+      ));
     const jobArtifacts = await tx
       .select({ input: musicJobs.input, output: musicJobs.output })
       .from(musicJobs)
@@ -241,6 +249,7 @@ export async function snapshotAccountDeletionObjects(
 
     const keys = new Set<string>();
     for (const row of songKeys) addStorageKey(keys, row.storageKey);
+    for (const row of trackedSongObjects) addStorageKey(keys, row.storageKey);
     for (const row of jobArtifacts) {
       addStorageKey(keys, row.input.humStorageKey);
       addStorageKey(keys, row.output?.storageKey);
@@ -406,6 +415,13 @@ export async function finalizeAccountDeletionPurge(input: {
       .select({ storageKey: songs.mp3StorageKey })
       .from(songs)
       .where(and(eq(songs.userId, input.userId), sql`${songs.mp3StorageKey} IS NOT NULL`));
+    const currentTrackedSongObjects = await tx
+      .select({ storageKey: songAudioObjects.storageKey })
+      .from(songAudioObjects)
+      .where(and(
+        eq(songAudioObjects.userId, input.userId),
+        not(eq(songAudioObjects.state, "deleted")),
+      ));
     const currentJobArtifacts = await tx
       .select({ status: musicJobs.status, input: musicJobs.input, output: musicJobs.output })
       .from(musicJobs)
@@ -423,6 +439,7 @@ export async function finalizeAccountDeletionPurge(input: {
     const deletedKeys = new Set(deletedObjectRows.map((row) => row.storageKey));
     const currentKeys = new Set<string>();
     for (const row of currentSongKeys) addStorageKey(currentKeys, row.storageKey);
+    for (const row of currentTrackedSongObjects) addStorageKey(currentKeys, row.storageKey);
     for (const row of currentJobArtifacts) {
       addStorageKey(currentKeys, row.input.humStorageKey);
       addStorageKey(currentKeys, row.output?.storageKey);
@@ -430,6 +447,7 @@ export async function finalizeAccountDeletionPurge(input: {
     if ([...currentKeys].some((storageKey) => !deletedKeys.has(storageKey))) return false;
 
     await tx.delete(compositionEvents).where(eq(compositionEvents.userId, input.userId));
+    await tx.delete(songAudioObjects).where(eq(songAudioObjects.userId, input.userId));
     await tx.delete(songs).where(eq(songs.userId, input.userId));
     await tx.delete(musicJobs).where(eq(musicJobs.userId, input.userId));
     await tx.delete(sessions).where(eq(sessions.userId, input.userId));
