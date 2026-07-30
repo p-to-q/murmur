@@ -102,6 +102,9 @@ describe("account-exit device cleanup", () => {
         clearAccountStorage: () => {
           calls.push("account-storage");
         },
+        unsubscribeBrowserPush: () => {
+          calls.push("push");
+        },
       }),
     ).resolves.toBeUndefined();
 
@@ -111,6 +114,7 @@ describe("account-exit device cleanup", () => {
       "notifications",
       "memory",
       "account-storage",
+      "push",
     ]);
   });
 

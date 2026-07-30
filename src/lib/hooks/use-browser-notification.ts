@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { request } from "@/lib/api/request";
 import {
+  getBrowserPushSubscription,
+  unsubscribeBrowserPushLocally,
+} from "@/lib/platform/browser-push";
+import {
   addMurmurNotification,
   isBrowserAlertPreferenceEnabled,
   useNotificationStore,
@@ -211,8 +215,7 @@ async function disablePushSubscription(): Promise<void> {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
 
   try {
-    const registration = await navigator.serviceWorker.getRegistration("/");
-    const subscription = await registration?.pushManager.getSubscription();
+    const subscription = await getBrowserPushSubscription();
     if (!subscription) return;
 
     await request("/api/notifications/push/subscribe", {
@@ -223,7 +226,7 @@ async function disablePushSubscription(): Promise<void> {
       },
       body: JSON.stringify({ endpoint: subscription.endpoint }),
     }).catch(() => {});
-    await subscription.unsubscribe().catch(() => false);
+    await unsubscribeBrowserPushLocally();
   } catch {
     // Browser push cleanup is best-effort when a user turns alerts off.
   }

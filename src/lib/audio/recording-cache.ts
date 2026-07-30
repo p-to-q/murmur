@@ -24,6 +24,7 @@ const DB_NAME = "murmur-recordings";
 const DB_VERSION = 1;
 const STORE_NAME = "last-recording";
 const RECORD_KEY = "current";
+export const RECORDING_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export interface CachedRecording {
   blob: Blob;
@@ -127,7 +128,7 @@ export async function loadRecordingBlob(): Promise<CachedRecording | null> {
   const db = await openDatabase();
   if (!db) return null;
   try {
-    return await new Promise<CachedRecording | null>((resolve) => {
+    const recording = await new Promise<CachedRecording | null>((resolve) => {
       let tx: IDBTransaction;
       try {
         tx = db.transaction(STORE_NAME, "readonly");
@@ -159,6 +160,11 @@ export async function loadRecordingBlob(): Promise<CachedRecording | null> {
       };
       req.onerror = () => resolve(null);
     });
+    if (recording && isRecordingExpired(recording.savedAt)) {
+      await deleteRecording(db);
+      return null;
+    }
+    return recording;
   } finally {
     db.close();
   }
@@ -173,25 +179,33 @@ export async function clearRecordingBlob(): Promise<void> {
   const db = await openDatabase();
   if (!db) return;
   try {
-    await new Promise<void>((resolve) => {
-      let tx: IDBTransaction;
-      try {
-        tx = db.transaction(STORE_NAME, "readwrite");
-      } catch {
-        resolve();
-        return;
-      }
-      try {
-        tx.objectStore(STORE_NAME).delete(RECORD_KEY);
-      } catch {
-        resolve();
-        return;
-      }
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => resolve();
-      tx.onabort = () => resolve();
-    });
+    await deleteRecording(db);
   } finally {
     db.close();
   }
+}
+
+export function isRecordingExpired(savedAt: number, now = Date.now()): boolean {
+  return !Number.isFinite(savedAt) || savedAt <= 0 || savedAt <= now - RECORDING_CACHE_TTL_MS;
+}
+
+function deleteRecording(db: IDBDatabase): Promise<void> {
+  return new Promise((resolve) => {
+    let tx: IDBTransaction;
+    try {
+      tx = db.transaction(STORE_NAME, "readwrite");
+    } catch {
+      resolve();
+      return;
+    }
+    try {
+      tx.objectStore(STORE_NAME).delete(RECORD_KEY);
+    } catch {
+      resolve();
+      return;
+    }
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => resolve();
+    tx.onabort = () => resolve();
+  });
 }
