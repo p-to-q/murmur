@@ -8,8 +8,9 @@ import {
   type GetResult,
   type ObjectStore,
 } from "@/lib/storage";
+import { validMp3Bytes } from "@/lib/test/audio-fixtures";
 
-const AUDIO_BYTES = new Uint8Array([0x49, 0x44, 0x33, 1, 2, 3, 4, 5]);
+const AUDIO_BYTES = validMp3Bytes();
 const STORAGE_KEY = "songs/opaque/audio-master.mp3";
 
 let nextAuth: ResolvedRequestAuth = ownerAuth();
@@ -85,7 +86,7 @@ describe("/api/songs/[id]/audio", () => {
     expect(response.headers.get("Content-Length")).toBe(String(AUDIO_BYTES.byteLength));
     expect(response.headers.get("Accept-Ranges")).toBe("bytes");
     expect(response.headers.get("X-Murmur-Audio-Source")).toBe("object");
-    expect(new Uint8Array(await response.arrayBuffer())).toEqual(AUDIO_BYTES);
+    expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([...AUDIO_BYTES]);
   });
 
   it("does not query or read storage when authentication fails", async () => {
@@ -124,7 +125,7 @@ describe("/api/songs/[id]/audio", () => {
     const response = await GET(request("GET", { range: "bytes=2-5" }), context());
 
     expect(response.status).toBe(206);
-    expect(response.headers.get("Content-Range")).toBe("bytes 2-5/8");
+    expect(response.headers.get("Content-Range")).toBe(`bytes 2-5/${AUDIO_BYTES.byteLength}`);
     expect(response.headers.get("Content-Length")).toBe("4");
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(AUDIO_BYTES.slice(2, 6));
   });

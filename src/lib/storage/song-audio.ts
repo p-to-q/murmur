@@ -1,6 +1,9 @@
 import { getObjectStore, objectKey, StorageError } from "@/lib/storage";
 import { createHash } from "node:crypto";
-import { detectAudioFileType } from "@/lib/audio/file-signature";
+import {
+  detectAudioFileType,
+  MAX_SONG_AUDIO_BYTES,
+} from "@/lib/audio/file-signature";
 
 /**
  * Server-side helper that moves a freshly rendered song master from the
@@ -43,6 +46,10 @@ export function parseAudioDataUrl(dataUrl: string): ParsedAudioDataUrl | null {
   const payload = match[3] ?? "";
   try {
     const compactPayload = payload.replace(/\s+/g, "");
+    const estimatedBytes = isBase64
+      ? Math.floor((compactPayload.length * 3) / 4)
+      : payload.length;
+    if (estimatedBytes > MAX_SONG_AUDIO_BYTES) return null;
     if (
       isBase64
       && (
@@ -74,6 +81,21 @@ export interface UploadedSongAudio {
   created: boolean;
 }
 
+export function songMasterStorageKey(input: {
+  userId: string;
+  songId: string;
+  digest: string;
+  ext: string;
+}): string {
+  return objectKey({
+    kind: "song-master",
+    userId: input.userId,
+    songId: input.songId,
+    id: input.digest,
+    ext: input.ext,
+  });
+}
+
 export async function storedSongAudioDigest(
   storageKey: string | null | undefined,
 ): Promise<string | null> {
@@ -99,11 +121,10 @@ export async function uploadSongMasterFromDataUrl(input: {
   const parsed = parseAudioDataUrl(input.dataUrl);
   if (!parsed) return null;
 
-  const key = objectKey({
-    kind: "song-master",
+  const key = songMasterStorageKey({
     userId: input.userId,
     songId: input.songId,
-    id: parsed.digest,
+    digest: parsed.digest,
     ext: parsed.ext,
   });
 

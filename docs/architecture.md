@@ -122,6 +122,12 @@ flowchart TB
 - Publishing a share verifies that the referenced artifact can be read. A
   missing durable object returns `410 audio_missing`; revocation is effective on
   the next uncached metadata or audio request.
+- `song_audio_objects` is the durable bridge between Postgres and object
+  storage. Save reserves an object before upload and commits the receipt in the
+  same transaction as the song row. Delete marks the object `delete_pending`
+  in the same transaction that removes the song. A leased cron reclaims stale
+  uploads and retries failed deletion, so storage side effects are not hidden
+  behind best-effort route cleanup.
 
 ### 4. Platform concerns
 
@@ -179,6 +185,11 @@ flowchart TB
 
 - The platform layer is local-first, but production identity is now
   session-backed rather than header-backed.
+- Device persistence is intentionally non-canonical: localStorage/IndexedDB may
+  preserve drafts, preferences, and interrupted-operation recovery, while
+  Postgres owns account/song/job state and object storage owns saved masters.
+  Data-URL song persistence is restricted to explicit local/demo fallback and
+  is never production failover.
 - Client-side pitch fallback requires Essentia.js WASM (`essentia.js` npm package),
   which is lazy-loaded on first use and never inflates the initial bundle.
 - Web Push requires `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, HTTPS

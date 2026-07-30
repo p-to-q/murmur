@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 
+import {
+  detectAudioFileType,
+  MAX_SONG_AUDIO_BYTES,
+  type SupportedAudioFileType,
+} from "@/lib/audio/file-signature";
 import { getObjectStore } from "@/lib/storage";
 import { assertValidKey } from "@/lib/storage/key";
 import {
@@ -57,7 +62,8 @@ export async function resolveSongAudioArtifact(
 export async function songAudioArtifactIsAvailable(
   song: SongAudioReference,
 ): Promise<boolean> {
-  return (await resolveSongAudioArtifact(song)).status === "ready";
+  const result = await resolveSongAudioArtifact(song);
+  return result.status === "ready" || Boolean(legacyExternalSongAudioUrl(song.mp3Url));
 }
 
 export function hasSongAudioReference(song: SongAudioReference): boolean {
@@ -66,6 +72,17 @@ export function hasSongAudioReference(song: SongAudioReference): boolean {
     || nonEmpty(song.mp3DataUrl)
     || storageKeyFromLegacyUrl(song.mp3Url),
   );
+}
+
+export function legacyExternalSongAudioUrl(value: unknown): string | null {
+  const raw = nonEmpty(value);
+  if (!raw || storageKeyFromLegacyUrl(raw)) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -81,7 +98,7 @@ export function serializeOwnerSong<
   delete (rest as Partial<SongAudioReference>).mp3StorageKey;
   delete (rest as Partial<SongAudioReference>).mp3DataUrl;
   delete (rest as Partial<SongAudioReference>).mp3Url;
-  const legacyUrl = nonEmpty(mp3Url);
+  const legacyUrl = legacyExternalSongAudioUrl(mp3Url);
   return {
     ...rest,
     audioUrl: hasSongAudioReference(song)
@@ -100,7 +117,6 @@ export function buildSongAudioResponse(input: {
   const { request, artifact } = input;
   const etag = `"sha256-${artifact.digest}"`;
   const isHead = request.method.toUpperCase() === "HEAD";
-  const range = parseByteRange(request.headers.get("range"), artifact.size);
   const download = new URL(request.url).searchParams.get("download") === "1";
   const headers = new Headers({
     "Accept-Ranges": "bytes",
@@ -112,9 +128,13 @@ export function buildSongAudioResponse(input: {
     "X-Request-Id": input.requestId,
   });
 
-  if (!range && request.headers.get("if-none-match") === etag) {
+  if (ifNoneMatchMatches(request.headers.get("if-none-match"), etag)) {
     return new Response(null, { status: 304, headers });
   }
+
+  const range = !isHead && ifRangeAllowsRange(request.headers.get("if-range"), etag)
+    ? parseByteRange(request.headers.get("range"), artifact.size)
+    : null;
   if (range?.status === "unsatisfiable") {
     headers.set("Content-Range", `bytes */${artifact.size}`);
     headers.set("Content-Length", "0");
@@ -139,15 +159,18 @@ export function parseByteRange(
   | { status: "partial"; start: number; end: number }
   | { status: "unsatisfiable" } {
   if (!header) return null;
-  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
-  if (!match || size <= 0) return { status: "unsatisfiable" };
+  const normalized = header.trim();
+  if (!normalized.startsWith("bytes=") || normalized.includes(",")) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(normalized);
+  if (!match) return null;
+  if (size <= 0) return { status: "unsatisfiable" };
   const startText = match[1] ?? "";
   const endText = match[2] ?? "";
-  if (!startText && !endText) return { status: "unsatisfiable" };
+  if (!startText && !endText) return null;
 
   if (!startText) {
     const suffix = Number(endText);
-    if (!Number.isSafeInteger(suffix) || suffix <= 0) return { status: "unsatisfiable" };
+    if (!Number.isSafeInteger(suffix) || suffix <= 0) return null;
     return {
       status: "partial",
       start: Math.max(0, size - suffix),
@@ -162,10 +185,10 @@ export function parseByteRange(
     || !Number.isSafeInteger(requestedEnd)
     || start < 0
     || requestedEnd < start
-    || start >= size
   ) {
-    return { status: "unsatisfiable" };
+    return null;
   }
+  if (start >= size) return { status: "unsatisfiable" };
   return { status: "partial", start, end: Math.min(requestedEnd, size - 1) };
 }
 
@@ -175,16 +198,62 @@ async function readStoredArtifact(
 ): Promise<SongAudioArtifactResult> {
   const stored = await getObjectStore().get(storageKey);
   if (!stored) return { status: "missing", storageKey };
+  const detectedType = validStoredAudioType(stored);
+  if (!detectedType) return { status: "missing", storageKey };
   return {
     status: "ready",
     artifact: {
       body: stored.body,
-      contentType: stored.contentType,
-      size: stored.size,
+      contentType: canonicalContentType(detectedType),
+      size: stored.body.byteLength,
       digest: createHash("sha256").update(stored.body).digest("hex"),
       source,
     },
   };
+}
+
+function validStoredAudioType(input: {
+  body: Uint8Array;
+  contentType: string;
+  size: number;
+}): SupportedAudioFileType | null {
+  if (
+    input.body.byteLength === 0
+    || input.body.byteLength > MAX_SONG_AUDIO_BYTES
+    || !Number.isSafeInteger(input.size)
+    || input.size !== input.body.byteLength
+  ) {
+    return null;
+  }
+  const detectedType = detectAudioFileType(input.body);
+  return detectedType && contentTypeMatches(input.contentType, detectedType)
+    ? detectedType
+    : null;
+}
+
+function contentTypeMatches(value: string, type: SupportedAudioFileType): boolean {
+  const normalized = value.split(";", 1)[0]?.trim().toLowerCase();
+  return type === "mp3"
+    ? normalized === "audio/mpeg" || normalized === "audio/mp3"
+    : normalized === "audio/wav" || normalized === "audio/x-wav" || normalized === "audio/wave";
+}
+
+function canonicalContentType(type: SupportedAudioFileType): string {
+  return type === "mp3" ? "audio/mpeg" : "audio/wav";
+}
+
+function ifNoneMatchMatches(value: string | null, etag: string): boolean {
+  if (!value) return false;
+  return value.split(",").some((candidate) => {
+    const normalized = candidate.trim();
+    return normalized === "*" || normalized.replace(/^W\//, "") === etag;
+  });
+}
+
+function ifRangeAllowsRange(value: string | null, etag: string): boolean {
+  if (!value) return true;
+  const normalized = value.trim();
+  return normalized !== "" && !normalized.startsWith("W/") && normalized === etag;
 }
 
 function storageKeyFromLegacyUrl(value: unknown): string | null {

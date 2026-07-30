@@ -8,6 +8,8 @@ import { hasSongShareAudio, normalizeSongShareCode } from "@/lib/share/song-shar
 import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
 import { publicSongAudioUrl } from "@/lib/storage/song-audio";
 import { hasSongAudioReference } from "@/lib/storage/song-audio-delivery";
+import { isDatabaseUnavailable } from "@/app/api/songs/db-fallback";
+import { shouldAllowLocalPreviewFallback } from "@/lib/auth/local-preview";
 
 const ROUTE = "/api/public/songs/[shareCode]";
 const PUBLIC_SONG_RATE_LIMIT = { capacity: 120, refillWindowMs: 60_000 };
@@ -52,8 +54,10 @@ export async function GET(
     }
     return publicSongResponse(toPublicSong(song), requestId);
   } catch (err) {
-    const { getLocalSongByShareCodeFallback } = await import("@/lib/db/queries/local-song-fallback");
-    const fallbackSong = getLocalSongByShareCodeFallback(shareCode!);
+    const fallbackSong = shouldAllowLocalPreviewFallback(req) && isDatabaseUnavailable(err)
+      ? (await import("@/lib/db/queries/local-song-fallback"))
+          .getLocalSongByShareCodeFallback(shareCode!)
+      : null;
     if (fallbackSong && !hasSongShareAudio(fallbackSong)) {
       return errorResponse("not_found", 404, requestId);
     }
