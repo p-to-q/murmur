@@ -11,7 +11,8 @@ same merged `main` SHA.
 
 ## Repository evidence
 
-- Bun tests: 1,215 pass, 0 fail after final release hardening;
+- Bun tests: 1,216 pass, 0 fail, 4,252 assertions across 184 files after final
+  release hardening;
 - release evidence/database/Vercel/music focused tests: 40 pass, 0 fail;
 - audio Worker suite: 47 pass, 0 fail; music Worker mock suite: 43 pass, 0 fail;
 - pinned HumTrans valid-split evidence passes 8/8 `auto` cases with zero

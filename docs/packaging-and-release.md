@@ -252,10 +252,13 @@ Sequence, once the release change (version bump + `CHANGELOG.md` +
 1. update local `main`: `git checkout main && git pull`
 2. confirm CI is green, dispatch `Release (production)` for the full merged SHA,
    and wait for migration, deploy, and production smoke to succeed
-3. tag the deployed commit: `git tag vX.Y.Z && git push origin vX.Y.Z`
-4. create the GitHub Release for `vX.Y.Z`, using
+3. create an annotated tag on the deployed commit, matching the real `v0.5.0`
+   repository precedent:
+   `git tag -a vX.Y.Z <release-sha> -m "Murmur vX.Y.Z" && git push origin vX.Y.Z`
+4. confirm `git rev-parse vX.Y.Z^{}` equals the exact deployed, green `main` SHA
+5. create the GitHub Release for `vX.Y.Z` with `--verify-tag`, using
    `docs/releases/X.Y.Z/release-notes.md`
-   as the body
+   as the body; add `--prerelease` for every `rc.N` version
 
 There is intentionally no tag-triggered release workflow yet (see the "optional
 hardening" list in [repository-operations.md](./repository-operations.md)); the
