@@ -66,6 +66,8 @@ Important subgroups:
 - `src/lib/errors/` — shared error classification for retry/observability decisions
 - `src/lib/observability/` — latency budgets, stage tracking, logging
 - `src/lib/store/` — client application state
+- `src/lib/storage/` — object-store adapters, validated song-audio delivery,
+  and retryable object lifecycle helpers
 
 ### Worker/runtime-adjacent services
 
@@ -76,6 +78,22 @@ Important subgroups:
 Current example:
 
 - `workers/audio-engine/main.py`
+
+## 1.1 Runtime ownership matrix
+
+| Data or capability | Installed/cached on device | Canonical service owner | Local/demo behavior |
+| --- | --- | --- | --- |
+| Web UI, icons, artwork, WASM pitch code | Browser/app bundle and normal HTTP caches | Versioned Web deployment | Runs from the local Next.js dev server |
+| Recording and unsaved draft | Browser memory plus bounded local recovery | Device until explicit upload/save | Remains device-local when server features are unavailable |
+| Account, notes, saved-song metadata, jobs, quality evidence | Response/UI cache only | Postgres through `src/lib/db/` | Explicit local/demo adapters may substitute; production does not |
+| Final saved audio | Temporary render/download blob only | Object storage through `src/lib/storage/` | Local filesystem adapter; legacy data URLs are compatibility input |
+| Playback/share/download authorization | Session cookie or share capability | Next.js API routes | Same routes run locally; raw storage credentials never reach clients |
+| Audio and music inference | Optional lazy browser pitch fallback only | Audio/music Workers behind server adapters | Loopback Workers or fixture actions must be explicitly selected |
+
+Fallbacks keep a local demo usable but do not change production ownership.
+Production failures return typed errors and preserve retry evidence instead of
+silently promoting browser storage, embedded audio, or an in-memory adapter to
+canonical state.
 
 ## 2. Build and validation support
 

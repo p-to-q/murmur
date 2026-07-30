@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import { getRateLimitStore, resetCachedRateLimitStore } from "@/lib/rate-limit";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+import { validMp3DataUrl } from "@/lib/test/audio-fixtures";
 
 let nextAuth: ResolvedRequestAuth = {
   ok: true,
@@ -107,7 +108,7 @@ beforeEach(async () => {
     title: "Share Me",
     shareCode: null,
     visibility: "private",
-    mp3DataUrl: "data:audio/mpeg;base64,SUQzYXVkaW8=",
+    mp3DataUrl: validMp3DataUrl(),
   };
   getSongError = null;
   publishError = null;
@@ -199,7 +200,7 @@ describe("POST /api/songs/[id]/share", () => {
       title: "Share Me",
       shareCode: "abc234defg",
       visibility: "unlisted",
-      mp3DataUrl: "data:audio/mpeg;base64,SUQzYXVkaW8=",
+      mp3DataUrl: validMp3DataUrl(),
     };
 
     const response = await POST(request({ visibility: "public" }), ctx());
@@ -289,7 +290,7 @@ describe("POST /api/songs/[id]/share", () => {
       keySignature: "C",
       scaleType: "major",
       duration: 20,
-      mp3DataUrl: "data:audio/mpeg;base64,SUQzYXVkaW8=",
+      mp3DataUrl: validMp3DataUrl(),
       visualConfig: {
         preset: "soft_gradient",
         gradient: "linear-gradient(135deg, #f6d365, #fda085)",
@@ -348,7 +349,7 @@ describe("POST /api/songs/[id]/share", () => {
       keySignature: "C",
       scaleType: "major",
       duration: 20,
-      mp3DataUrl: "data:audio/mpeg;base64,SUQzYXVkaW8=",
+      mp3DataUrl: validMp3DataUrl(),
       visualConfig: {
         preset: "soft_gradient",
         gradient: "linear-gradient(135deg, #f6d365, #fda085)",

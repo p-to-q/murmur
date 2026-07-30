@@ -37,8 +37,8 @@ mock.module("@/lib/db/queries/local-song-fallback", () => ({
 
 const { GET } = await import("./route");
 
-function request(): NextRequest {
-  return new Request("https://murmur.example/api/public/songs/abc234defg", {
+function request(url = "https://murmur.example/api/public/songs/abc234defg"): NextRequest {
+  return new Request(url, {
     headers: {
       "x-request-id": "req_public_song",
       "x-real-ip": "203.0.113.9",
@@ -140,7 +140,9 @@ describe("GET /api/public/songs/[shareCode]", () => {
   });
 
   it("returns 404 with noindex for no-audio local fallback shares", async () => {
-    getSongError = new Error("db unavailable");
+    getSongError = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:5432"), {
+      code: "ECONNREFUSED",
+    });
     nextFallbackSong = {
       ...nextSong,
       visibility: "public",
@@ -148,7 +150,10 @@ describe("GET /api/public/songs/[shareCode]", () => {
       mp3Url: null,
     };
 
-    const response = await GET(request(), ctx());
+    const response = await GET(
+      request("http://localhost:3000/api/public/songs/abc234defg"),
+      ctx(),
+    );
 
     expect(response.status).toBe(404);
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");

@@ -23,6 +23,43 @@ The resolver is deliberately strict:
 - share publication checks that the artifact is currently readable;
 - share metadata and media are `no-store`, so revocation is immediate.
 
+## Durable Object Lifecycle
+
+The `song_audio_objects` table is the object-store outbox and ownership record:
+
+- save reserves `pending` before uploading bytes;
+- the song insert and transition to `committed` share one DB transaction;
+- song deletion removes the row and transitions the object to
+  `delete_pending` in one DB transaction;
+- `/api/storage/cron/song-audio` claims stale `pending` uploads and
+  `delete_pending` objects with leases, then retries deletion with bounded
+  exponential backoff;
+- `deleted` is written only after the storage adapter confirms deletion.
+
+This ordering deliberately prefers a reclaimable object over a song row that
+points at missing bytes. A process crash or failed DB write after upload leaves
+a `pending` receipt for the cron to reclaim. A failed object deletion leaves a
+`delete_pending` receipt and does not report lifecycle completion.
+
+The production scheduler must send `Authorization: Bearer $CRON_SECRET` every
+15 minutes. Alert when the route returns `5xx`, when a `207` persists for two
+runs, or when the oldest due row is more than 30 minutes old. Never delete
+`committed` rows from an operator script.
+
+## Runtime Ownership And Fallbacks
+
+| Surface | Device/browser | Murmur service | Fallback policy |
+| --- | --- | --- | --- |
+| Recording and draft editing | Temporary media, draft state, IndexedDB recovery | No canonical copy until upload/save | Device recovery may resume an interrupted UI flow |
+| Saved song metadata | Cached response/UI state only | Postgres is canonical | Local/demo song store only when DB fallback is explicitly enabled |
+| Saved song master | Blob used during current render/export | Object storage is canonical; Postgres stores its key and lifecycle | Data URLs are legacy/local-demo compatibility only and are rejected as a production persistence fallback |
+| Playback/download/share | Same-origin authenticated or capability URL | API re-authorizes and streams validated bytes | Historical data URLs and recognized legacy URLs remain readable; a missing durable key is `410`, never silently replaced |
+| Static UI/WASM/artwork | App bundle, service-worker/browser caches | Versioned deployment/CDN origin | Cached assets may keep the shell usable; they do not become canonical user data |
+
+Production must configure Postgres, `CRON_SECRET`, and an S3-compatible storage
+adapter. Local development defaults to local filesystem storage and may opt
+into explicit demo/auth fallbacks; those modes are not production failover.
+
 ## Two-Phase Rollout
 
 1. Deploy the controlled audio routes, response contract, and compatible UI
@@ -57,9 +94,12 @@ not private until an anonymous request to the old direct object URL returns
    public route without cookies. Revoked links must be `404`, not stale `200`.
 5. If save accepted no audio, inspect `song.audio_payload_rejected` and
    `song.audio_upload_failed`. Mislabeled or corrupt MP3/WAV bytes are rejected.
-6. If deletion logs `song.audio_cleanup_failed`, reconcile the key manually.
-   Cleanup is best effort after DB deletion today; a retryable storage-cleanup
-   outbox remains follow-up work before claiming automatic lifecycle closure.
+6. If deletion logs `song.audio_cleanup_failed`, inspect the corresponding
+   `song_audio_objects` row. Leave it in `delete_pending`, correct the storage
+   dependency, and let the cron retry. Manual deletion is safe only when the
+   same row is subsequently marked `deleted` through the normal helper.
+7. For cleanup lag, compare `next_attempt_at`, `lease_until`, and `attempts`.
+   An expired lease is claimable; a future retry time is intentional backoff.
 
 ## Release Evidence
 
@@ -71,3 +111,5 @@ not private until an anonymous request to the old direct object URL returns
 - confirmation that the object-store lifecycle and bucket access match the
   current rollout phase.
 - after private cutover, evidence that direct `songs/master/*` access is denied.
+- evidence that one forced deletion failure remains `delete_pending` and a
+  later cron run reaches `deleted` without a dangling song row.

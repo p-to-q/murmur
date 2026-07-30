@@ -7,6 +7,10 @@ import {
   type SpendNotesResult,
 } from "./notes-ledger";
 import { users } from "../schema/users";
+import {
+  commitSongAudioObjectInTransaction,
+  markSongAudioDeletePendingInTransaction,
+} from "./song-audio-objects";
 
 // Gallery / shelf / profile-count listings never touch the audio or the
 // arrangement editor — they only render cover metadata. `mp3DataUrl` is a
@@ -37,6 +41,12 @@ const songSummaryColumns = {
   // Cheap boolean so the gallery can flag an incomplete/draft song (#291)
   // without pulling the audio payload into the list response.
   hasAudio: sql<boolean>`((${songs.mp3StorageKey} is not null and ${songs.mp3StorageKey} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> '') or (${songs.mp3Url} is not null and ${songs.mp3Url} <> ''))`,
+  legacyAudioUrl: sql<string | null>`case
+    when (${songs.mp3StorageKey} is null or ${songs.mp3StorageKey} = '')
+      and (${songs.mp3DataUrl} is null or ${songs.mp3DataUrl} = '')
+      then ${songs.mp3Url}
+    else null
+  end`,
   createdAt: songs.createdAt,
   updatedAt: songs.updatedAt,
 } as const;
@@ -194,8 +204,15 @@ export async function createSong(data: typeof songs.$inferInsert) {
       .limit(1)
       .for("update");
     if (!activeUser) throw new Error("account_deleted_or_missing");
-    const rows = await tx.insert(songs).values(data).returning();
-    return rows[0];
+    const [song] = await tx.insert(songs).values(data).returning();
+    if (data.mp3StorageKey) {
+      await commitSongAudioObjectInTransaction(tx, {
+        storageKey: data.mp3StorageKey,
+        userId: data.userId,
+        songId: data.id!,
+      });
+    }
+    return song;
   });
 }
 
@@ -235,6 +252,13 @@ export async function createSongWithSpend(
     }
 
     const [song] = await tx.insert(songs).values(data).returning();
+    if (data.mp3StorageKey) {
+      await commitSongAudioObjectInTransaction(tx, {
+        storageKey: data.mp3StorageKey,
+        userId: data.userId,
+        songId: data.id!,
+      });
+    }
     return {
       ok: true,
       song,
@@ -307,9 +331,23 @@ export async function deleteSong(songId: string) {
 }
 
 export async function deleteSongForUser(songId: string, userId: string) {
-  const rows = await db
-    .delete(songs)
-    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
-    .returning({ id: songs.id, mp3StorageKey: songs.mp3StorageKey });
-  return rows[0] ?? null;
+  return db.transaction(async (tx) => {
+    const [deleted] = await tx
+      .delete(songs)
+      .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+      .returning({
+        id: songs.id,
+        userId: songs.userId,
+        mp3StorageKey: songs.mp3StorageKey,
+      });
+    if (!deleted) return null;
+    if (deleted.mp3StorageKey) {
+      await markSongAudioDeletePendingInTransaction(tx, {
+        storageKey: deleted.mp3StorageKey,
+        userId: deleted.userId,
+        songId: deleted.id,
+      });
+    }
+    return deleted;
+  });
 }

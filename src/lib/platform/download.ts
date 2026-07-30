@@ -1,5 +1,8 @@
+const DOWNLOAD_TIMEOUT_MS = 15_000;
+const MAX_BUFFERED_DOWNLOAD_BYTES = 64 * 1024 * 1024;
+
 export async function downloadUrlAsFile(url: string, filename: string): Promise<void> {
-  if (!url || typeof document === "undefined") {
+  if (!url || typeof document === "undefined" || typeof window === "undefined") {
     throw new Error("download unavailable");
   }
 
@@ -8,19 +11,16 @@ export async function downloadUrlAsFile(url: string, filename: string): Promise<
     return;
   }
 
-  // Controlled song-audio routes already authorize the request and provide a
-  // Content-Disposition filename. Let the browser stream them directly rather
-  // than buffering the whole master into a second Blob in page memory.
-  if (url.startsWith("/") && new URL(url, window.location.href).searchParams.get("download") === "1") {
-    triggerDownload(url);
-    return;
-  }
+  const resolvedUrl = resolveDownloadUrl(url);
+  const isSameOriginApi = resolvedUrl.origin === window.location.origin
+    && resolvedUrl.pathname.startsWith("/api/");
 
   let response: Response;
   try {
     response = await fetch(url, {
       cache: "no-store",
-      signal: AbortSignal.timeout(15_000),
+      credentials: isSameOriginApi ? "include" : "omit",
+      signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
     });
   } catch (cause) {
     throw new Error("remote download failed", { cause });
@@ -28,7 +28,21 @@ export async function downloadUrlAsFile(url: string, filename: string): Promise<
   if (!response.ok || response.type === "opaque") {
     throw new Error(`remote download returned ${response.status || "an opaque response"}`);
   }
-  const blob = await response.blob();
+
+  const contentType = response.headers.get("content-type")
+    ?.split(";", 1)[0]
+    ?.trim()
+    .toLowerCase();
+  if (!contentType || (!contentType.startsWith("audio/") && contentType !== "application/octet-stream")) {
+    throw new Error(`remote download returned unsupported content type ${contentType || "unknown"}`);
+  }
+
+  const declaredSize = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredSize) && declaredSize > MAX_BUFFERED_DOWNLOAD_BYTES) {
+    throw new Error("remote download is too large");
+  }
+
+  const blob = await readBoundedBlob(response, contentType);
   downloadBlob(blob, filename);
 }
 
@@ -52,4 +66,43 @@ function triggerDownload(url: string, filename?: string): void {
   requestAnimationFrame(() => {
     anchor.remove();
   });
+}
+
+function resolveDownloadUrl(url: string): URL {
+  try {
+    return new URL(url, window.location.href);
+  } catch (cause) {
+    throw new Error("download URL is invalid", { cause });
+  }
+}
+
+async function readBoundedBlob(response: Response, contentType: string): Promise<Blob> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("remote download returned an empty response");
+  }
+
+  const chunks: ArrayBuffer[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_BUFFERED_DOWNLOAD_BYTES) {
+        await reader.cancel("download exceeded memory limit");
+        throw new Error("remote download is too large");
+      }
+      const chunk = new ArrayBuffer(value.byteLength);
+      new Uint8Array(chunk).set(value);
+      chunks.push(chunk);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (size === 0) {
+    throw new Error("remote download returned an empty response");
+  }
+  return new Blob(chunks, { type: contentType });
 }

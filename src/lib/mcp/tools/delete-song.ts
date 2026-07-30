@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { deleteSongForUser, getSongByIdForUser } from "@/lib/db/queries/songs";
-import { getObjectStore } from "@/lib/storage";
+import { deleteTrackedSongAudioObjectByKey } from "@/lib/storage/song-audio-cleanup";
 
 export function registerDeleteSong(server: McpServer, userId: string) {
   server.registerTool(
@@ -28,7 +28,7 @@ export function registerDeleteSong(server: McpServer, userId: string) {
         };
       }
       if (deleted.mp3StorageKey) {
-        await getObjectStore().delete(deleted.mp3StorageKey).catch(() => undefined);
+        await deleteTrackedSongAudioObjectByKey(deleted.mp3StorageKey).catch(() => undefined);
       }
       return {
         content: [{ type: "text", text: `Song "${song.title}" deleted.` }],

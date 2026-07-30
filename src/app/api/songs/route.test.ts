@@ -8,6 +8,7 @@ import {
 } from "@/lib/storage";
 import { computeSaveFingerprint } from "@/modules/music/song-artifact";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+import { validMp3DataUrl } from "@/lib/test/audio-fixtures";
 
 const BASE_VISUAL_CONFIG = {
   preset: "soft_gradient",
@@ -26,9 +27,7 @@ const BASE_ARRANGEMENT = {
 };
 
 // 1x1 silent-ish MP3 payload stand-in — the route only needs decodable bytes.
-const SAMPLE_MP3_DATA_URL = `data:audio/mpeg;base64,${Buffer.from(
-  "ID3-fake-mp3-master-bytes",
-).toString("base64")}`;
+const SAMPLE_MP3_DATA_URL = validMp3DataUrl();
 
 let nextAuth: ResolvedRequestAuth = {
   ok: true,
@@ -82,6 +81,7 @@ let existingConflictSong: Record<string, unknown> | null = null;
 const getSongByIdMock = mock(async (songId: string) =>
   existingConflictSong?.id === songId ? existingConflictSong : null,
 );
+const reserveSongAudioObjectMock = mock(async () => undefined);
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
@@ -109,6 +109,14 @@ mock.module("@/lib/db/queries/songs", () => ({
 mock.module("@/lib/db/queries/composition-events", () => ({
   createCompositionEvent: createCompositionEventMock,
   listCompositionTrainingExamples: mock(async () => []),
+}));
+
+mock.module("@/lib/db/queries/song-audio-objects", () => ({
+  reserveSongAudioObject: reserveSongAudioObjectMock,
+  claimDueSongAudioObjects: mock(async () => []),
+  markSongAudioObjectDeleted: mock(async () => undefined),
+  markSongAudioObjectRetry: mock(async () => undefined),
+  songAudioObjectRetryAt: (_attempts: number, now: Date) => now,
 }));
 
 const { POST } = await import("./route");
@@ -145,6 +153,7 @@ beforeEach(async () => {
   createSongWithSpendMock.mockClear();
   createCompositionEventMock.mockClear();
   getSongByIdMock.mockClear();
+  reserveSongAudioObjectMock.mockClear();
   createSongError = null;
   createSongWithSpendError = null;
   existingConflictSong = null;
@@ -826,9 +835,7 @@ describe("POST /api/songs", () => {
     existingConflictSong = { ...createdSongs[0] };
     const originalKey = String(createdSongs[0]?.mp3StorageKey);
     const originalBytes = new Uint8Array(puts[0]!.body);
-    const differentAudio = `data:audio/mpeg;base64,${Buffer.from(
-      "ID3-different-master-bytes",
-    ).toString("base64")}`;
+    const differentAudio = validMp3DataUrl(1);
 
     const response = await POST(buildRequest({
       ...payload,

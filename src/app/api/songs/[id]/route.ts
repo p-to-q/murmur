@@ -21,8 +21,8 @@ import {
   shouldUseGuestSongFallback,
 } from "@/app/api/songs/db-fallback";
 import { log } from "@/lib/observability/log";
-import { getObjectStore } from "@/lib/storage";
 import { serializeOwnerSong } from "@/lib/storage/song-audio-delivery";
+import { deleteTrackedSongAudioObjectByKey } from "@/lib/storage/song-audio-cleanup";
 import {
   songTagsSchema,
   sourceMelodyKindSchema,
@@ -255,10 +255,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
     if (deleted.mp3StorageKey) {
       try {
-        await getObjectStore().delete(deleted.mp3StorageKey);
+        await deleteTrackedSongAudioObjectByKey(deleted.mp3StorageKey);
       } catch (error) {
         log("song.audio_cleanup_failed", {
           songId: id,
+          retryScheduled: true,
           reason: error instanceof Error ? error.message : String(error),
         }, {
           route: ROUTE,

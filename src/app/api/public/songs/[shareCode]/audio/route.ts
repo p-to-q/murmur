@@ -13,6 +13,7 @@ import {
 } from "@/lib/storage/song-audio-delivery";
 import { log } from "@/lib/observability/log";
 import { shouldAllowLocalPreviewFallback } from "@/lib/auth/local-preview";
+import { isDatabaseUnavailable } from "@/app/api/songs/db-fallback";
 
 export const runtime = "nodejs";
 const ROUTE = "/api/public/songs/[shareCode]/audio";
@@ -55,7 +56,7 @@ async function servePublicSongAudio(request: NextRequest, context: Context) {
     if (!song) return failure("not_found", 404, requestId);
     return deliver(request, song, requestId);
   } catch (error) {
-    const fallback = shouldAllowLocalPreviewFallback(request)
+    const fallback = shouldAllowLocalPreviewFallback(request) && isDatabaseUnavailable(error)
       ? getLocalSongByShareCodeFallback(shareCode)
       : null;
     if (fallback) return deliver(request, fallback, requestId);

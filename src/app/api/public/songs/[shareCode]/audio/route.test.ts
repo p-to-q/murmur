@@ -7,8 +7,9 @@ import {
   type GetResult,
   type ObjectStore,
 } from "@/lib/storage";
+import { validMp3Bytes } from "@/lib/test/audio-fixtures";
 
-const AUDIO_BYTES = new Uint8Array([0x49, 0x44, 0x33, 9, 8, 7, 6, 5]);
+const AUDIO_BYTES = validMp3Bytes(9);
 const STORAGE_KEY = "songs/opaque/shared-audio-master.mp3";
 
 let nextSong: Record<string, unknown> | null = activeSharedSong();
@@ -77,7 +78,7 @@ describe("/api/public/songs/[shareCode]/audio", () => {
     expect(response.headers.get("Content-Type")).toBe("audio/mpeg");
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
-    expect(new Uint8Array(await response.arrayBuffer())).toEqual(AUDIO_BYTES);
+    expect([...new Uint8Array(await response.arrayBuffer())]).toEqual([...AUDIO_BYTES]);
   });
 
   it("supports HEAD for an active share without returning the body", async () => {
@@ -96,7 +97,9 @@ describe("/api/public/songs/[shareCode]/audio", () => {
     );
 
     expect(rangeResponse.status).toBe(206);
-    expect(rangeResponse.headers.get("Content-Range")).toBe("bytes 1-3/8");
+    expect(rangeResponse.headers.get("Content-Range")).toBe(
+      `bytes 1-3/${AUDIO_BYTES.byteLength}`,
+    );
     expect(new Uint8Array(await rangeResponse.arrayBuffer())).toEqual(AUDIO_BYTES.slice(1, 4));
 
     const downloadResponse = await GET(
