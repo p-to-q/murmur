@@ -14,6 +14,10 @@ on:
         description: Full main-branch commit SHA to release
         required: true
         type: string
+      preview_branch:
+        description: Final reviewed PR branch whose Vercel Preview configuration was proven
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -50,30 +54,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bun scripts/release-verify-main.ts
 
-      - name: Prove Preview and Production resource isolation
+      - name: Prove Vercel project and environment isolation
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PREVIEW_BRANCH: ${{ inputs.preview_branch }}
         run: |
           if [ -z "${VERCEL_TOKEN:-}" ]; then
             echo "::error title=Vercel release is not configured::Set VERCEL_TOKEN before releasing."
             exit 1
           fi
-          preview_env="$RUNNER_TEMP/vercel-preview.env"
-          production_env="$RUNNER_TEMP/vercel-production.env"
-          trap 'rm -f "$preview_env" "$production_env"' EXIT
-          bunx vercel@56.3.1 env pull "$preview_env" \
-            --yes \
-            --environment preview \
-            --project "$VERCEL_PROJECT_NAME" \
-            --scope "$VERCEL_SCOPE" \
-            --token "$VERCEL_TOKEN"
-          bunx vercel@56.3.1 env pull "$production_env" \
-            --yes \
-            --environment production \
-            --project "$VERCEL_PROJECT_NAME" \
-            --scope "$VERCEL_SCOPE" \
-            --token "$VERCEL_TOKEN"
-          bun scripts/release-env-isolation.ts "$preview_env" "$production_env"
+          bun scripts/release-vercel-project.ts
 
   approve:
     needs: validate
@@ -111,14 +101,9 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
           VERCEL_NATIVE_PRODUCTION_DISABLED: ${{ vars.VERCEL_NATIVE_PRODUCTION_DISABLED }}
-          VERCEL_ROLLING_RELEASES_DISABLED: ${{ vars.VERCEL_ROLLING_RELEASES_DISABLED }}
         run: |
           if [ "${VERCEL_NATIVE_PRODUCTION_DISABLED:-}" != "true" ]; then
             echo "::error title=Production release cutover is not acknowledged::Disable Vercel native Production auto-deploy for main, retain Preview, then set VERCEL_NATIVE_PRODUCTION_DISABLED=true."
-            exit 1
-          fi
-          if [ "${VERCEL_ROLLING_RELEASES_DISABLED:-}" != "true" ]; then
-            echo "::error title=Rolling release cutover is not acknowledged::Disable Vercel Rolling Releases for Murmur, then set VERCEL_ROLLING_RELEASES_DISABLED=true."
             exit 1
           fi
           if [ -z "${DATABASE_URL:-}" ]; then
