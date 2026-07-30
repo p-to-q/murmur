@@ -121,4 +121,23 @@ describe("/api/notifications/push/subscribe request ids", () => {
     expect(deleteResponse.status).toBe(401);
     expect(deleteResponse.headers.get("X-Request-Id")).toBe("req_push_subscribe");
   });
+
+  it("fails closed when the identity has no persistent device session", async () => {
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_authjs", email: null, name: "Auth.js User", avatarUrl: null },
+      source: "session",
+      sessionId: null,
+    };
+
+    const response = await POST(request("POST", { subscription: validSubscription }));
+
+    expect(response.status).toBe(409);
+    expect(response.headers.get("X-Request-Id")).toBe("req_push_subscribe");
+    expect(await response.json()).toEqual({
+      error: "persistent_session_required",
+      message: "Push notifications require an active device session.",
+    });
+    expect(subscribeDeviceMock).not.toHaveBeenCalled();
+  });
 });
