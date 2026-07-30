@@ -8,10 +8,12 @@ import {
   isNull,
   or,
 } from "drizzle-orm";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 
-import { db } from "../client";
 import { pushSubscriptions } from "../schema/push-subscriptions";
 import { sessions } from "../schema/sessions";
+
+type QueryDatabase = Pick<PostgresJsDatabase, "select">;
 
 function activeDeliveryPredicate(now: Date) {
   return and(
@@ -32,8 +34,12 @@ function activeSessionJoin() {
   );
 }
 
-export function activePushSubscriptionsForUserQuery(userId: string, now = new Date()) {
-  return db
+export function activePushSubscriptionsForUserQuery(
+  queryDb: QueryDatabase,
+  userId: string,
+  now = new Date(),
+) {
+  return queryDb
     .select(getTableColumns(pushSubscriptions))
     .from(pushSubscriptions)
     .innerJoin(sessions, activeSessionJoin())
@@ -41,7 +47,7 @@ export function activePushSubscriptionsForUserQuery(userId: string, now = new Da
     .orderBy(desc(pushSubscriptions.lastSeenAt));
 }
 
-export function activePushSubscriptionsPageQuery(options: {
+export function activePushSubscriptionsPageQuery(queryDb: QueryDatabase, options: {
   after: string | null;
   limit: number;
   now?: Date;
@@ -50,7 +56,7 @@ export function activePushSubscriptionsPageQuery(options: {
     activeDeliveryPredicate(options.now ?? new Date()),
     options.after == null ? undefined : gt(pushSubscriptions.id, options.after),
   );
-  return db
+  return queryDb
     .select(getTableColumns(pushSubscriptions))
     .from(pushSubscriptions)
     .innerJoin(sessions, activeSessionJoin())

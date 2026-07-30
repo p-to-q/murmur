@@ -127,7 +127,7 @@ export async function disablePushSubscriptionForUser(
 }
 
 export async function getActivePushSubscriptionsForUser(userId: string) {
-  return activePushSubscriptionsForUserQuery(userId);
+  return activePushSubscriptionsForUserQuery(db, userId);
 }
 
 /**
@@ -153,7 +153,7 @@ export async function getActivePushSubscriptionsPage(options?: {
 }): Promise<PushSubscriptionRecord[]> {
   const after = options?.after ?? null;
   const limit = options?.limit ?? ACTIVE_PUSH_SUBSCRIPTIONS_PAGE_SIZE;
-  return activePushSubscriptionsPageQuery({ after, limit });
+  return activePushSubscriptionsPageQuery(db, { after, limit });
 }
 
 function createPushSubscriptionId(): string {
