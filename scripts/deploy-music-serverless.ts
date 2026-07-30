@@ -33,7 +33,10 @@ import { spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
-import { verifyMusicWorkerOutput } from "../src/lib/platform/music-worker-output";
+import {
+  isMusicDeliveryBase64WithinLimit,
+  verifyMusicWorkerOutput,
+} from "../src/lib/platform/music-worker-output";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 loadEnv({ path: resolve(ROOT, ".env.local") });
@@ -59,6 +62,18 @@ const ENDPOINT_NAME = `murmur-music-${RELEASE_SUFFIX}`;
 const WORKERS_MAX = clampInt(process.env.RUNPOD_WORKERS_MAX, 2, 1, 10);
 const IDLE_TIMEOUT = clampInt(process.env.RUNPOD_IDLE_TIMEOUT, 120, 5, 3600);
 const EXECUTION_TIMEOUT_MS = 180_000;
+const QUALITY_MAX_ATTEMPTS = clampInt(
+  process.env.MUSIC_QUALITY_MAX_ATTEMPTS,
+  2,
+  1,
+  3,
+);
+const QUALITY_TOTAL_SECONDS = clampInt(
+  process.env.MUSIC_QUALITY_MAX_TOTAL_SECONDS,
+  165,
+  1,
+  175,
+);
 
 const GPU_CANDIDATES = [
   process.env.RUNPOD_GPU_TYPE_ID?.trim(),
@@ -278,6 +293,8 @@ function templateBody(registryAuthId?: string) {
     MAGENTA_BACKEND: "jax",
     MAGENTA_MODEL: MODEL,
     MUSIC_ENGINE_PRELOAD: "1",
+    MUSIC_QUALITY_MAX_ATTEMPTS: String(QUALITY_MAX_ATTEMPTS),
+    MUSIC_QUALITY_MAX_TOTAL_SECONDS: String(QUALITY_TOTAL_SECONDS),
   };
   const cfgNotes = process.env.MAGENTA_CFG_NOTES?.trim();
   if (cfgNotes) env.MAGENTA_CFG_NOTES = cfgNotes;
@@ -444,7 +461,9 @@ function hasExpectedQualityProtocol(
   if (!output || typeof output !== "object" || Array.isArray(output)) return false;
   const value = output as Record<string, unknown>;
   const audioB64 = typeof value.audio_b64 === "string" ? value.audio_b64 : "";
-  if (!audioB64) return false;
+  if (!audioB64 || !isMusicDeliveryBase64WithinLimit(audioB64, expected.duration)) {
+    return false;
+  }
   try {
     const bytes = new Uint8Array(Buffer.from(audioB64, "base64"));
     const verified = verifyMusicWorkerOutput({
@@ -459,6 +478,7 @@ function hasExpectedQualityProtocol(
         humSha256: createHash("sha256").update(expected.hum).digest("hex"),
       },
       requireEvidence: true,
+      requireV2Evidence: true,
     });
     if (verified.diagnostics.runtime.engine_revision !== RELEASE_REVISION) {
       console.warn(

@@ -60,9 +60,11 @@ export function analyzePcm16Wav(
     failures.push("unsupported_pcm_format");
   }
   const declaredRiffBytes = view.getUint32(4, true) + 8;
+  const dataEnd = dataOffset >= 0 ? dataOffset + dataSize : 0;
   const expectedBlockAlign = channels * 2;
   if (
-    declaredRiffBytes !== bytes.byteLength
+    declaredRiffBytes > bytes.byteLength
+    || (dataEnd > 0 && declaredRiffBytes < dataEnd)
     || blockAlign !== expectedBlockAlign
     || byteRate !== sampleRate * expectedBlockAlign
     || (blockAlign > 0 && dataSize % blockAlign !== 0)

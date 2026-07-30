@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import os
 import time
 
@@ -19,11 +20,25 @@ except ValueError:
 
 MAX_QUALITY_ATTEMPTS = max(1, min(3, _configured_quality_attempts))
 
+try:
+    _configured_generation_budget = float(
+        os.getenv("MUSIC_QUALITY_MAX_TOTAL_SECONDS", "165")
+    )
+except ValueError:
+    _configured_generation_budget = 165.0
+
+if not math.isfinite(_configured_generation_budget):
+    _configured_generation_budget = 165.0
+
+MAX_TOTAL_GENERATION_SECONDS = max(
+    1.0, min(175.0, _configured_generation_budget)
+)
+
 
 class PipelineError(RuntimeError):
     """Stable transport-neutral failure with bounded diagnostics."""
 
-    def __init__(self, code: str, reason: str, diagnostics: dict):
+    def __init__(self, code: str, reason: str, diagnostics: dict) -> None:
         super().__init__(reason)
         self.code = code
         self.reason = reason
@@ -67,6 +82,33 @@ def generate_candidates(
     quality = None
 
     for attempt in range(1, MAX_QUALITY_ATTEMPTS + 1):
+        if attempt > 1:
+            elapsed_seconds = time.monotonic() - started
+            remaining_seconds = MAX_TOTAL_GENERATION_SECONDS - elapsed_seconds
+            if remaining_seconds <= 0:
+                logger.warning(
+                    "quality_retry_budget_exhausted request_id=%s attempt=%d "
+                    "elapsed_ms=%d budget_ms=%d",
+                    request_id,
+                    attempt,
+                    int(elapsed_seconds * 1000),
+                    int(MAX_TOTAL_GENERATION_SECONDS * 1000),
+                )
+                retry_diagnostics = diagnostics(
+                    candidates, total_generation_ms, started
+                )
+                retry_diagnostics["generation_budget"] = {
+                    "exhausted": True,
+                    "budget_ms": int(MAX_TOTAL_GENERATION_SECONDS * 1000),
+                    "elapsed_ms": int(elapsed_seconds * 1000),
+                    "remaining_ms": 0,
+                    "next_attempt": attempt,
+                }
+                raise PipelineError(
+                    "quality_gate_failed",
+                    "quality_retry_budget_exhausted",
+                    retry_diagnostics,
+                )
         temperature, top_k = retry_sampling(attempt)
         try:
             wav_bytes, meta = engine.generate_clip(
@@ -109,7 +151,7 @@ def generate_candidates(
         candidates.append(
             {
                 "candidate_id": hashlib.sha256(
-                    f"{request_id}:{attempt}:{digest}".encode("utf-8")
+                    f"{request_id}:{attempt}:{digest}".encode()
                 ).hexdigest()[:24],
                 "attempt": attempt,
                 "audio_sha256": digest,

@@ -31,6 +31,9 @@ import {
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { RunpodError, runJob, getQueueDepth } from "@/lib/platform/runpod-serverless";
 import {
+  isMusicDeliveryBase64WithinLimit,
+  maxMusicDeliveryBytes,
+  MUSIC_QUALITY_GATE_COMPAT_VERSION,
   verifyMusicWorkerOutput,
 } from "@/lib/platform/music-worker-output";
 import { verifyHttpConditioningHeaders } from "@/lib/platform/music-http-output";
@@ -888,6 +891,9 @@ async function generateViaServerless(
       ext: { outputKeys: Object.keys(output).slice(0, 16) },
     };
   }
+  if (!isMusicDeliveryBase64WithinLimit(audioB64, params.duration)) {
+    return musicDeliverySizeFailure();
+  }
 
   // Slice out exactly this clip's bytes into a standalone ArrayBuffer: Node
   // pools small Buffer allocations into a shared backing store, and NextResponse
@@ -1045,6 +1051,9 @@ async function generateViaHttp(
         status: 502,
       };
     }
+    if (!isMusicDeliveryBase64WithinLimit(audioB64, params.duration)) {
+      return musicDeliverySizeFailure();
+    }
     const decoded = Buffer.from(audioB64, "base64");
     const humBytes = params.hum?.size && params.styleMix > 0
       ? new Uint8Array(await params.hum.arrayBuffer())
@@ -1092,15 +1101,14 @@ async function generateViaHttp(
     };
   }
 
+  const maxDeliveryBytes = maxMusicDeliveryBytes(params.duration);
+  const contentLength = Number(workerRes.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxDeliveryBytes) {
+    return musicDeliverySizeFailure();
+  }
   const audio = await workerRes.arrayBuffer();
-  if (audio.byteLength > Math.ceil(params.duration * 96_000 * 2 * 2) + 64 * 1024) {
-    return {
-      ok: false,
-      error: "worker_http_error",
-      message: "Generated audio exceeded the delivery size limit",
-      status: 502,
-      ext: { qualityGateRejected: true, reason: "payload_too_large" },
-    };
+  if (audio.byteLength > maxDeliveryBytes) {
+    return musicDeliverySizeFailure();
   }
   const quality = analyzePcm16Wav(new Uint8Array(audio), params.duration);
   if (!quality.passed) {
@@ -1124,7 +1132,10 @@ async function generateViaHttp(
       ext: { qualityGateRejected: true, reason: "worker_digest_mismatch" },
     };
   }
-  if (workerGateVersion && !["music-technical-v1", quality.version].includes(workerGateVersion)) {
+  if (
+    workerGateVersion
+    && ![MUSIC_QUALITY_GATE_COMPAT_VERSION, quality.version].includes(workerGateVersion)
+  ) {
     return {
       ok: false,
       error: "worker_http_error",
@@ -1170,6 +1181,16 @@ async function generateViaHttp(
         candidates: [],
       },
     },
+  };
+}
+
+function musicDeliverySizeFailure(): GenerateResult {
+  return {
+    ok: false,
+    error: "worker_http_error",
+    message: "Generated audio exceeded the delivery size limit",
+    status: 502,
+    ext: { qualityGateRejected: true, reason: "payload_too_large" },
   };
 }
 

@@ -54,6 +54,7 @@ WebM/Opus blob directly, the worker transcodes it through ffmpeg to a temporary
 | `MUSIC_ENGINE_MOCK` | _(unset)_ | `1` → sine-chord placeholder clips, no model |
 | `MUSIC_ENGINE_PRELOAD` | `1` | `0` → lazy-load on first request |
 | `MUSIC_QUALITY_MAX_ATTEMPTS` | `2` | generate at most 1–3 candidates until the technical Gate passes |
+| `MUSIC_QUALITY_MAX_TOTAL_SECONDS` | `165` | cumulative candidate budget; clamped to 175 s so RunPod's 180 s execution limit remains authoritative |
 
 The serverless handler returns a hashed input receipt and `music-technical-v2`
 quality evidence. It rejects requested hum/melody conditioning that cannot be

@@ -49,13 +49,34 @@ MAX_PROMPT_CHARS = 300
 NOTES_DIM = 128                 # one slot per MIDI pitch (0–127)
 # Notes CFG scale. The library default is 1.0; 3.0 over-forces the melody and
 # strips its musicality (robotic, dissonant). 1.5 keeps a clear melodic link
-# while letting the model actually voice it. Retune without a redeploy via
-# the MAGENTA_CFG_NOTES env var; the model's valid range is [-1.0, 7.0].
-CFG_NOTES_MELODY = max(-1.0, min(7.0, float(os.getenv("MAGENTA_CFG_NOTES", "1.5"))))
-SAMPLING_TEMPERATURE = max(
-    0.1, min(2.0, float(os.getenv("MAGENTA_TEMPERATURE", "1.3")))
+def _bounded_env_float(
+    name: str, default: float, minimum: float, maximum: float
+) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        logger.warning("Invalid %s; falling back to %.3f", name, default)
+        return default
+    if not math.isfinite(value):
+        logger.warning("Invalid %s; falling back to %.3f", name, default)
+        return default
+    return max(minimum, min(maximum, value))
+
+
+def _bounded_env_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        logger.warning("Invalid %s; falling back to %d", name, default)
+        return default
+    return max(minimum, min(maximum, value))
+
+
+CFG_NOTES_MELODY = _bounded_env_float("MAGENTA_CFG_NOTES", 1.5, -1.0, 7.0)
+SAMPLING_TEMPERATURE = _bounded_env_float(
+    "MAGENTA_TEMPERATURE", 1.3, 0.1, 2.0
 )
-SAMPLING_TOP_K = max(1, min(512, int(os.getenv("MAGENTA_TOP_K", "40"))))
+SAMPLING_TOP_K = _bounded_env_int("MAGENTA_TOP_K", 40, 1, 512)
 # Sub-perceptual runs (transcription jitter) fold into the prior note so the
 # model isn't machine-gunned with re-onsets. 3 frames ≈ 0.12 s.
 MIN_RUN_FRAMES = 3
@@ -80,7 +101,7 @@ _load_error: str | None = None
 class ConditioningError(RuntimeError):
     """A requested conditioning signal could not be applied safely."""
 
-    def __init__(self, code: str):
+    def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
 
@@ -504,7 +525,7 @@ def generate_clip(
     }
     logger.info(
         "Generated %.1fs clip in %dms (prompt_sha256=%s, style_mix=%.2f, cfg_notes=%.1f, melody=%s)",
-        duration, elapsed_ms, hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:12], mixed, CFG_NOTES_MELODY,
+        duration, elapsed_ms, hashlib.sha256(prompt.encode()).hexdigest()[:12], mixed, CFG_NOTES_MELODY,
         f"{len(segments)} segments" if has_melody else "none",
     )
     return pcm16_wav_bytes(samples, full.sample_rate), meta

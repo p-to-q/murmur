@@ -12,7 +12,7 @@ interface GoldenCase {
   channels: number;
   expectedDuration: number;
   segments: Array<{ kind: "sine" | "silence"; seconds: number; amplitudePcm?: number }>;
-  mutation?: "riff_size" | "byte_rate";
+  mutation?: "riff_size" | "riff_size_oversized" | "byte_rate" | "trailing_bytes";
   expectedFailures: string[];
 }
 
@@ -55,9 +55,15 @@ describe("music quality Gate cross-language contract", () => {
       expect(worker.version, fixture.fixture.id).toBe(web.version);
       expect(worker.passed, fixture.fixture.id).toBe(web.passed);
       expect([...worker.failures].sort(), fixture.fixture.id).toEqual([...web.failures].sort());
+      const mappedWorkerMetrics = Object.fromEntries(
+        Object.entries(worker.metrics).map(([name, value]) => [metricNames[name] ?? name, value]),
+      );
+      expect(
+        Object.keys(mappedWorkerMetrics).sort(),
+        `${fixture.fixture.id}: metric keys`,
+      ).toEqual(Object.keys(web.metrics).sort());
       for (const [pythonName, value] of Object.entries(worker.metrics)) {
         const webName = metricNames[pythonName] ?? pythonName;
-        expect(web.metrics[webName], `${fixture.fixture.id}:${pythonName}`).toBeDefined();
         const tolerance = Number.isInteger(value) ? 0 : pythonName.includes("dbfs")
           || pythonName.includes("seconds") || pythonName.includes("factor") ? 0.001 : 0.000001;
         expect(Math.abs(web.metrics[webName] - value), `${fixture.fixture.id}:${pythonName}`)
@@ -78,13 +84,15 @@ function buildWav(fixture: GoldenCase): Uint8Array {
       for (let channel = 0; channel < fixture.channels; channel += 1) samples.push(sample);
     }
   }
-  const bytes = new Uint8Array(44 + samples.length * 2);
+  const payloadBytes = 44 + samples.length * 2;
+  const trailingBytes = fixture.mutation === "trailing_bytes" ? 5 : 0;
+  const bytes = new Uint8Array(payloadBytes + trailingBytes);
   const view = new DataView(bytes.buffer);
   for (const [offset, value] of [[0, "RIFF"], [8, "WAVE"], [12, "fmt "], [36, "data"]] as const) {
     for (let index = 0; index < value.length; index += 1) bytes[offset + index] = value.charCodeAt(index);
   }
   const blockAlign = fixture.channels * 2;
-  view.setUint32(4, bytes.length - 8, true);
+  view.setUint32(4, payloadBytes - 8, true);
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
   view.setUint16(22, fixture.channels, true);
@@ -94,7 +102,9 @@ function buildWav(fixture: GoldenCase): Uint8Array {
   view.setUint16(34, 16, true);
   view.setUint32(40, samples.length * 2, true);
   samples.forEach((sample, index) => view.setInt16(44 + index * 2, sample, true));
+  if (trailingBytes > 0) bytes.set([1, 2, 3, 4, 5], payloadBytes);
   if (fixture.mutation === "riff_size") view.setUint32(4, 7, true);
+  if (fixture.mutation === "riff_size_oversized") view.setUint32(4, bytes.length, true);
   if (fixture.mutation === "byte_rate") view.setUint32(28, 1, true);
   return bytes;
 }
@@ -109,6 +119,10 @@ function runPythonGate(input: Array<{ expectedDuration: number; audioBase64: str
     input: JSON.stringify(input),
     encoding: "utf8",
   });
-  if (result.status !== 0) throw new Error(result.stderr || "Python quality Gate runner failed");
+  if (result.status !== 0) {
+    const processError = result.error?.message;
+    const details = [processError, result.stderr].filter(Boolean).join("\n");
+    throw new Error(details || "Python quality Gate runner failed");
+  }
   return JSON.parse(result.stdout) as MusicQualityGateResult[];
 }

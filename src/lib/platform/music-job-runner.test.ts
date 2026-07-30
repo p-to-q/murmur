@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 
 import {
+  attachProviderAfterSubmission,
   deleteSubmittedHum,
   musicJobFailureDisposition,
   shouldReleaseMusicJobLease,
@@ -78,5 +79,37 @@ describe("music job hum retention", () => {
     __setObjectStoreForTesting({ ...backing, delete: remove });
     await deleteSubmittedHum({ humStorageKey: "tmp/usr/_/hum.wav", humDigest: null });
     expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("deletes the submitted hum when provider attachment returns false", async () => {
+    const backing = createMemoryStore();
+    const remove = mock(async (key: string) => backing.delete(key));
+    __setObjectStoreForTesting({ ...backing, delete: remove });
+
+    const attached = await attachProviderAfterSubmission({
+      input: { humStorageKey: "tmp/usr/_/hum.wav", humDigest: "a".repeat(64) },
+      jobId: "mjob_attach_false",
+      userId: "usr_attach_false",
+      attach: async () => false,
+    });
+
+    expect(attached).toBe(false);
+    expect(remove).toHaveBeenCalledWith("tmp/usr/_/hum.wav");
+  });
+
+  it("deletes the submitted hum when provider attachment throws", async () => {
+    const backing = createMemoryStore();
+    const remove = mock(async (key: string) => backing.delete(key));
+    __setObjectStoreForTesting({ ...backing, delete: remove });
+
+    await expect(attachProviderAfterSubmission({
+      input: { humStorageKey: "tmp/usr/_/hum.wav", humDigest: "b".repeat(64) },
+      jobId: "mjob_attach_error",
+      userId: "usr_attach_error",
+      attach: async () => {
+        throw new Error("attach failed");
+      },
+    })).rejects.toThrow("attach failed");
+    expect(remove).toHaveBeenCalledWith("tmp/usr/_/hum.wav");
   });
 });
