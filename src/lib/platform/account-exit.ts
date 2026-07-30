@@ -10,13 +10,35 @@ type AccountExitCleanup = {
   clearLastRecording: () => void | Promise<void>;
   clearNotificationItems: () => void | Promise<void>;
   clearMemoryEvents: () => void | Promise<void>;
+  clearAccountStorage: () => void | Promise<void>;
 };
+
+const ACCOUNT_LOCAL_STORAGE_KEYS = ["murmur.local-user"] as const;
+const ACCOUNT_SESSION_STORAGE_KEYS = [
+  "murmur.checkout.baseline.v1",
+  "murmur.local-creator.bootstrapped",
+] as const;
+
+function clearAccountStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    for (const key of ACCOUNT_LOCAL_STORAGE_KEYS) window.localStorage.removeItem(key);
+  } catch {
+    // Continue with session storage when local storage is unavailable.
+  }
+  try {
+    for (const key of ACCOUNT_SESSION_STORAGE_KEYS) window.sessionStorage.removeItem(key);
+  } catch {
+    // Private browsing can deny session storage; the remaining cleanup still ran.
+  }
+}
 
 const defaultCleanup: AccountExitCleanup = {
   clearCreationData: () => useMurmurStore.getState().resetFlow(),
   clearLastRecording: clearRecordingBlob,
   clearNotificationItems: () => useNotificationStore.getState().clearAll(),
   clearMemoryEvents: () => memory.clearLocalEvents(),
+  clearAccountStorage,
 };
 
 /**
@@ -32,6 +54,7 @@ export async function clearAccountScopedDeviceData(
     cleanup.clearLastRecording,
     cleanup.clearNotificationItems,
     cleanup.clearMemoryEvents,
+    cleanup.clearAccountStorage,
   ];
 
   await Promise.allSettled(tasks.map((task) => Promise.resolve().then(task)));

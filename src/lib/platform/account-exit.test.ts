@@ -27,12 +27,14 @@ class MemoryStorage {
 
 describe("account-exit device cleanup", () => {
   let localStorage: MemoryStorage;
+  let sessionStorage: MemoryStorage;
 
   beforeEach(() => {
     localStorage = new MemoryStorage();
+    sessionStorage = new MemoryStorage();
     Object.defineProperty(globalThis, "window", {
       configurable: true,
-      value: { localStorage },
+      value: { localStorage, sessionStorage },
     });
     useNotificationStore.setState({
       items: [
@@ -49,6 +51,9 @@ describe("account-exit device cleanup", () => {
     useMurmurStore.getState().setCurrentFlowId("flow-account-1");
     localStorage.setItem("murmur-creation-draft-v1", "sensitive draft");
     localStorage.setItem("murmur.memory-events", JSON.stringify([{ action: "hum" }]));
+    localStorage.setItem("murmur.local-user", JSON.stringify({ id: "user-1" }));
+    sessionStorage.setItem("murmur.checkout.baseline.v1", "account balance");
+    sessionStorage.setItem("murmur.local-creator.bootstrapped", "1");
   });
 
   afterEach(() => {
@@ -68,6 +73,9 @@ describe("account-exit device cleanup", () => {
 
     expect(localStorage.getItem("murmur-creation-draft-v1")).toBeNull();
     expect(localStorage.getItem("murmur.memory-events")).toBeNull();
+    expect(localStorage.getItem("murmur.local-user")).toBeNull();
+    expect(sessionStorage.getItem("murmur.checkout.baseline.v1")).toBeNull();
+    expect(sessionStorage.getItem("murmur.local-creator.bootstrapped")).toBeNull();
     expect(useMurmurStore.getState().currentFlowId).toBeNull();
     expect(useNotificationStore.getState().items).toEqual([]);
     expect(useNotificationStore.getState().browserAlertsEnabled).toBe(true);
@@ -91,10 +99,19 @@ describe("account-exit device cleanup", () => {
         clearMemoryEvents: () => {
           calls.push("memory");
         },
+        clearAccountStorage: () => {
+          calls.push("account-storage");
+        },
       }),
     ).resolves.toBeUndefined();
 
-    expect(calls).toEqual(["creation", "recording", "notifications", "memory"]);
+    expect(calls).toEqual([
+      "creation",
+      "recording",
+      "notifications",
+      "memory",
+      "account-storage",
+    ]);
   });
 
   it("never clears device data when the account exit fails", async () => {
