@@ -19,6 +19,13 @@ function envs(): VercelEnvRecord[] {
       { id: `env_preview_${key}`, key, value: `preview-${key}`, type: "plain", target: ["preview"] as const },
       { id: `env_production_${key}`, key, value: `production-${key}`, type: "plain", target: ["production"] as const },
     ]),
+    {
+      id: "env_production_music_revision",
+      key: "MURMUR_MUSIC_RELEASE_SHA",
+      value: "a".repeat(40),
+      type: "plain",
+      target: ["production"] as const,
+    },
     ...credentials.flatMap((key) => [
       { id: `env_preview_${key}`, key, type: "sensitive", target: ["preview"] as const },
       { id: `env_production_${key}`, key, type: "sensitive", target: ["production"] as const },
@@ -82,5 +89,42 @@ describe("Vercel release project preflight", () => {
       gitBranch: "codex/release",
     });
     expect(collect(records, { previewBranch: "codex/release" })).toEqual([]);
+  });
+
+  test("rejects a missing or mutable production Worker revision", () => {
+    const records = envs();
+    const revision = records.find((record) => record.id === "env_production_music_revision")!;
+    revision.value = "latest";
+    expect(collect(records)).toContain(
+      "Production MURMUR_MUSIC_RELEASE_SHA must be one plain immutable Worker SHA",
+    );
+  });
+
+  test("binds Vercel music markers to the protected canary identity", () => {
+    expect(collect(envs(), {
+      expectedMusicWorkerResourceId: "wrong-endpoint",
+      expectedMusicWorkerSha: "b".repeat(40),
+    })).toEqual(expect.arrayContaining([
+      "Production music resource marker must equal the canary endpoint id",
+      "Production Worker revision marker must equal the canary Worker SHA",
+    ]));
+  });
+
+  test("binds database and Audio Worker markers to observed production resources", () => {
+    expect(collect(envs(), {
+      expectedDatabaseResourceId: "wrong-database",
+      expectedAudioWorkerResourceId: "https://other-audio.example",
+    })).toEqual([
+      "Production database resource marker must equal the verified database identity",
+      "Production Audio Worker resource marker must equal the health-checked origin",
+    ]);
+  });
+
+  test("rejects readable credentials", () => {
+    const records = envs();
+    records.find((record) => record.id === "env_production_RUNPOD_API_KEY")!.type = "plain";
+    expect(collect(records)).toContain(
+      "Production RUNPOD_API_KEY must have one sensitive environment-scoped Vercel record",
+    );
   });
 });
