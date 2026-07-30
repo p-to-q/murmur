@@ -129,13 +129,17 @@ The production workflow is deliberately one serial chain:
 5. the same migration command runs again as a convergence check;
 6. the exact checkout is uploaded for a remote Vercel Production build with
    domain promotion disabled, where Sensitive environment variables remain
-   inside Vercel;
+   inside Vercel; the approved SHA is injected as explicit non-secret build
+   metadata instead of relying on remote `.git` availability;
 7. the workflow waits for that immutable deployment to finish and checks its
    public `/api/release` identity plus the HTTP smoke surface against the full
    approved SHA;
-8. Vercel explicitly promotes that verified deployment to Production;
-9. the same identity-aware HTTP smoke runs against the public Production alias
-   at `https://murmur.ptoq.io` and fails if the alias still serves an older SHA.
+8. Vercel explicitly promotes that verified deployment to Production; the
+   release path requires Rolling Releases to be disabled and proves the public
+   alias resolves to the same immutable deployment ID;
+9. the identity-aware HTTP smoke requires three cache-bypassed matches against
+   the public Production alias at `https://murmur.ptoq.io` and fails if any
+   release identity remains stale.
 
 Any failed stage stops later stages. The workflow uses a non-canceling
 production concurrency group so two merges cannot overlap migrations or
@@ -144,14 +148,15 @@ requested SHA no longer matches the tip of `main`.
 
 Required GitHub configuration:
 
-| Kind | Name | Purpose |
-|------|------|---------|
-| Secret | `DATABASE_URL_UNPOOLED` | Direct production migration DSN |
-| Secret | `VERCEL_TOKEN` | Vercel CLI authentication |
-| Variable | `VERCEL_PROJECT_NAME` | Vercel project; defaults to `murmur` |
-| Variable | `VERCEL_SCOPE` | Vercel team/account; defaults to `moapachas-projects` |
-| Variable | `VERCEL_NATIVE_PRODUCTION_DISABLED` | Owner acknowledgement that native `main` Production deploy is disabled; release fails closed unless exactly `true` |
-| Secret (optional) | `VERCEL_AUTOMATION_BYPASS_SECRET` | Bypass header for protected deployment smoke; omit when deployment URLs are public |
+| Kind              | Name                                | Purpose                                                                                                            |
+| ----------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Secret            | `DATABASE_URL_UNPOOLED`             | Direct production migration DSN                                                                                    |
+| Secret            | `VERCEL_TOKEN`                      | Vercel CLI authentication                                                                                          |
+| Variable          | `VERCEL_PROJECT_NAME`               | Vercel project; defaults to `murmur`                                                                               |
+| Variable          | `VERCEL_SCOPE`                      | Vercel team/account; defaults to `moapachas-projects`                                                              |
+| Variable          | `VERCEL_NATIVE_PRODUCTION_DISABLED` | Owner acknowledgement that native `main` Production deploy is disabled; release fails closed unless exactly `true` |
+| Variable          | `VERCEL_ROLLING_RELEASES_DISABLED`  | Owner acknowledgement that Vercel Rolling Releases are disabled; release fails closed unless exactly `true`        |
+| Secret (optional) | `VERCEL_AUTOMATION_BYPASS_SECRET`   | Bypass header for protected deployment smoke; omit when deployment URLs are public                                 |
 
 The GitHub `Production` environment accepts only protected branches, prevents
 self-review and administrator bypass, and requires approval from an authorized
@@ -160,11 +165,12 @@ migration would be too late to stop a database cutover.
 
 Required Vercel cutover: open the Murmur project Git settings and disable
 Production deployment for pushes to `main` while retaining Preview deployments.
-After verifying the setting, set repository variable
-`VERCEL_NATIVE_PRODUCTION_DISABLED=true`. The workflow cannot query the
-dashboard setting directly, but it fails closed without this auditable owner
-acknowledgement. Leaving native Production enabled still recreates the pre-CI
-race even though the Actions release itself is correctly ordered.
+Also disable Rolling Releases for this project. After verifying both settings,
+set repository variables `VERCEL_NATIVE_PRODUCTION_DISABLED=true` and
+`VERCEL_ROLLING_RELEASES_DISABLED=true`. The workflow cannot query those
+dashboard settings directly, but it fails closed without both auditable owner
+acknowledgements. Leaving either mechanism enabled would create an uncontrolled
+cutover path even though the Actions release itself is correctly ordered.
 
 Do not reintroduce `vercel pull` followed by a runner-local `vercel build` for
 Production. Vercel exports Sensitive variables as redacted placeholders outside
@@ -174,6 +180,10 @@ with a remote build it validates the real values inside Vercel before the
 deployment is promoted.
 
 The immutable Vercel deployment is checked before any user-facing domain moves.
+The workflow parses Vercel's structured inspect output and explicitly requires
+`READY` plus `target=production`; a CLI wait timeout alone is never considered
+success. After promotion, the canonical alias must resolve to that exact
+deployment ID before public smoke begins.
 When deployment protection is enabled, configure the dedicated automation
 bypass secret so the same HTTP checks can reach it. `/api/release` exposes only
 version, build, and full commit SHA, never configuration or credentials. Smoke
@@ -231,7 +241,7 @@ rather than trusting this summary to stay complete:
 
 | Purpose | Variables |
 |---------|-----------|
-| Production release | `DATABASE_URL_UNPOOLED`, `VERCEL_TOKEN`; repository variables `VERCEL_PROJECT_NAME`, `VERCEL_SCOPE` |
+| Production release | `DATABASE_URL_UNPOOLED`, `VERCEL_TOKEN`; repository variables `VERCEL_PROJECT_NAME`, `VERCEL_SCOPE`, `VERCEL_NATIVE_PRODUCTION_DISABLED`, `VERCEL_ROLLING_RELEASES_DISABLED` |
 | Runtime DB (pooled) | `DATABASE_URL` or `POSTGRES_URL` — must be a Neon pooler host in production |
 | Cron routes | `CRON_SECRET` (non-placeholder) |
 | Web push notifications | `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY`, `WEB_PUSH_SUBJECT` |

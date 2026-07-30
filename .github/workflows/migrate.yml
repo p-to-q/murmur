@@ -27,6 +27,7 @@ env:
   RELEASE_SHA: ${{ inputs.release_sha }}
   VERCEL_PROJECT_NAME: ${{ vars.VERCEL_PROJECT_NAME || 'murmur' }}
   VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE || 'moapachas-projects' }}
+  PRODUCTION_URL: https://murmur.ptoq.io
 
 jobs:
   validate:
@@ -85,9 +86,14 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
           VERCEL_NATIVE_PRODUCTION_DISABLED: ${{ vars.VERCEL_NATIVE_PRODUCTION_DISABLED }}
+          VERCEL_ROLLING_RELEASES_DISABLED: ${{ vars.VERCEL_ROLLING_RELEASES_DISABLED }}
         run: |
           if [ "${VERCEL_NATIVE_PRODUCTION_DISABLED:-}" != "true" ]; then
             echo "::error title=Production release cutover is not acknowledged::Disable Vercel native Production auto-deploy for main, retain Preview, then set VERCEL_NATIVE_PRODUCTION_DISABLED=true."
+            exit 1
+          fi
+          if [ "${VERCEL_ROLLING_RELEASES_DISABLED:-}" != "true" ]; then
+            echo "::error title=Rolling release cutover is not acknowledged::Disable Vercel Rolling Releases for Murmur, then set VERCEL_ROLLING_RELEASES_DISABLED=true."
             exit 1
           fi
           if [ -z "${DATABASE_URL:-}" ]; then
@@ -173,10 +179,12 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          set -o pipefail
           deployment_url="$(bunx vercel@56.3.1 deploy --prod --yes \
             --skip-domain \
             --scope "$VERCEL_SCOPE" \
             --token "$VERCEL_TOKEN" \
+            --build-env NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA="$RELEASE_SHA" \
             --meta githubCommitSha="$RELEASE_SHA" \
             --meta githubCommitRef=main | tail -n 1)"
           case "$deployment_url" in
@@ -186,15 +194,21 @@ jobs:
           echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "Built $RELEASE_SHA at $deployment_url"
 
-      - name: Wait for immutable deployment
+      - name: Require immutable deployment readiness
+        id: immutable
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          inspect_json="$RUNNER_TEMP/vercel-immutable-inspect.json"
           bunx vercel@56.3.1 inspect "${{ steps.deploy.outputs.deployment_url }}" \
             --wait \
             --timeout 10m \
+            --format=json \
             --scope "$VERCEL_SCOPE" \
-            --token "$VERCEL_TOKEN"
+            --token "$VERCEL_TOKEN" > "$inspect_json"
+          deployment_id="$(bun scripts/release-vercel-deployment.ts "$inspect_json")"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "Immutable deployment $deployment_id is READY with target=production"
 
       - name: Smoke immutable deployment identity
         env:
@@ -208,11 +222,38 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          bunx vercel@56.3.1 promote "${{ steps.deploy.outputs.deployment_url }}" \
+          promotion_output="$(bunx vercel@56.3.1 promote "${{ steps.deploy.outputs.deployment_url }}" \
             --yes \
             --timeout 5m \
             --scope "$VERCEL_SCOPE" \
-            --token "$VERCEL_TOKEN"
+            --token "$VERCEL_TOKEN" 2>&1)"
+          printf '%s\n' "$promotion_output"
+          case "$promotion_output" in
+            *"queued"*|*"Rolling Releases enabled"*|*"initial percentage"*)
+              echo "::error title=Partial production promotion detected::Disable Rolling Releases and rerun the release from a new approved SHA."
+              exit 1
+              ;;
+          esac
+
+          promoted=false
+          for attempt in $(seq 1 20); do
+            inspect_json="$RUNNER_TEMP/vercel-production-inspect.json"
+            if bunx vercel@56.3.1 inspect "$PRODUCTION_URL" \
+              --format=json \
+              --scope "$VERCEL_SCOPE" \
+              --token "$VERCEL_TOKEN" > "$inspect_json" \
+              && bun scripts/release-vercel-deployment.ts \
+                "$inspect_json" \
+                "${{ steps.immutable.outputs.deployment_id }}" > /dev/null; then
+              promoted=true
+              break
+            fi
+            sleep 3
+          done
+          if [ "$promoted" != "true" ]; then
+            echo "::error title=Production promotion did not converge::The production alias does not resolve to the verified deployment."
+            exit 1
+          fi
           echo "Promoted $RELEASE_SHA from ${{ steps.deploy.outputs.deployment_url }}"
 
   smoke:
@@ -233,4 +274,4 @@ jobs:
       - name: Smoke production alias
         env:
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: bun scripts/release-production-smoke.ts https://murmur.ptoq.io "$RELEASE_SHA"
+        run: bun scripts/release-production-smoke.ts "$PRODUCTION_URL" "$RELEASE_SHA"
