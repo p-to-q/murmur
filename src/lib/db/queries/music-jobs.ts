@@ -14,6 +14,7 @@ import { spendNotesInTransaction, type SpendNotesResult } from "./notes-ledger";
 import { recordPendingRefundInTransaction } from "./notes-ledger";
 import { musicJobDeadlineFrom } from "@/lib/music/music-job-policy";
 import { users } from "../schema/users";
+import { notesLedger } from "../schema/notes-ledger";
 
 const TERMINAL_STATUSES: MusicJobStatus[] = [
   "succeeded", "failed", "canceled", "expired", "submission_unknown",
@@ -26,7 +27,7 @@ type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type CreateMusicJobResult =
   | { ok: true; job: MusicJob; duplicate: boolean; spend: SpendNotesResult | null }
-  | { ok: false; reason: "idempotency_conflict"; job: MusicJob }
+  | { ok: false; reason: "idempotency_conflict"; job: MusicJob | null }
   | {
       ok: false;
       reason: "insufficient_notes" | "user_not_found";
@@ -63,6 +64,22 @@ export async function createMusicJob(
 
     const existing = await findByOperation(tx, input.userId, input.operationId);
     if (existing) return classifyReplay(existing, input.requestHash);
+
+    const [orphanSpend] = await tx
+      .select({ id: notesLedger.id })
+      .from(notesLedger)
+      .where(and(
+        eq(notesLedger.userId, input.userId),
+        eq(notesLedger.reason, "spend:music_generate"),
+        eq(notesLedger.externalRef, `music_generate:${input.operationId}`),
+      ))
+      .limit(1);
+    // A job and its spend are now atomic. A spend without a job came from the
+    // legacy direct route and carries no trustworthy request receipt, so it
+    // cannot be adopted by arbitrary new input under the same operation id.
+    if (orphanSpend) {
+      return { ok: false as const, reason: "idempotency_conflict" as const, job: null };
+    }
 
     const spend = input.bill
       ? await spendNotesInTransaction(tx, {
@@ -246,7 +263,7 @@ export async function releaseMusicJobLease(input: {
         eq(musicJobs.id, input.jobId),
         eq(musicJobs.userId, input.userId),
         eq(musicJobs.leaseEpoch, input.leaseEpoch),
-        inArray(musicJobs.status, ["queued", "running", "cancel_requested"]),
+        inArray(musicJobs.status, ["submitting", "queued", "running", "cancel_requested"]),
       ),
     );
 }

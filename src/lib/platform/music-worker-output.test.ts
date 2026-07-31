@@ -58,8 +58,8 @@ function evidencedOutput() {
       gate_version: MUSIC_QUALITY_GATE_COMPAT_VERSION,
       candidate_count: 1,
       worker_wall_ms: 2_500,
-    },
-  };
+    } as Record<string, unknown>,
+  } satisfies Record<string, unknown>;
 }
 
 function v2EvidencedOutput(bytes: Uint8Array) {
@@ -77,6 +77,7 @@ function v2EvidencedOutput(bytes: Uint8Array) {
       ...output.diagnostics,
       version: 2,
       gate_version: "music-technical-v2",
+      candidate_count: 1,
       candidates: [{
         candidate_id: createHash("sha256")
           .update(`${expected.requestId}:1:${createHash("sha256").update(bytes).digest("hex")}`)
@@ -98,7 +99,12 @@ function v2EvidencedOutput(bytes: Uint8Array) {
           pre_normalization_rms: 0.1,
           normalization_gain_db: 10,
         },
-        quality: { version: "music-technical-v2", passed: true, failures: [], metrics: {} },
+        quality: {
+          version: "music-technical-v2",
+          passed: true,
+          failures: [] as string[],
+          metrics: {} as Record<string, number>,
+        },
       }],
     },
   };
@@ -191,6 +197,64 @@ describe("music worker output protocol", () => {
     expect(verified.diagnostics.inputReceipt?.version).toBe(2);
     expect(verified.diagnostics.candidates[0].audioSha256).toHaveLength(64);
     expect(verified.diagnostics.candidates[0].sampling.topK).toBe(40);
+  });
+
+  it("fails closed when the runtime Worker revision drifts", () => {
+    const bytes = toneWav();
+    const output = v2EvidencedOutput(bytes);
+    (output.diagnostics as Record<string, unknown>).runtime = {
+      engine_revision: "b".repeat(40),
+    };
+    process.env.MURMUR_MUSIC_RELEASE_SHA = "a".repeat(40);
+    try {
+      expect(() => verifyMusicWorkerOutput({
+        output,
+        bytes,
+        expected,
+        requireEvidence: true,
+      })).toThrow("music_worker_revision_mismatch");
+    } finally {
+      delete process.env.MURMUR_MUSIC_RELEASE_SHA;
+    }
+  });
+
+  it("bounds provider failure strings before persisting diagnostics", () => {
+    const bytes = toneWav();
+    const output = v2EvidencedOutput(bytes);
+    output.diagnostics.candidates[0].quality.failures = ["f".repeat(512)];
+    output.diagnostics.candidates[0].quality.metrics = Object.fromEntries(
+      Array.from({ length: 40 }, (_, index) => [`metric-${index}-${"k".repeat(80)}`, index]),
+    );
+    const verified = verifyMusicWorkerOutput({
+      output,
+      bytes,
+      expected,
+      requireEvidence: true,
+    });
+    expect(verified.diagnostics.candidates[0].quality?.failures)
+      .toEqual(["f".repeat(128)]);
+    const metrics = verified.diagnostics.candidates[0].quality?.metrics ?? {};
+    expect(Object.keys(metrics)).toHaveLength(32);
+    expect(Object.keys(metrics).every((key) => key.length <= 64)).toBe(true);
+  });
+
+  it("bounds provider runtime labels before durable persistence", () => {
+    const output = evidencedOutput();
+    output.diagnostics.runtime = Object.fromEntries(
+      Array.from({ length: 40 }, (_, index) => [
+        `runtime-${index}-${"k".repeat(80)}`,
+        "v".repeat(256),
+      ]),
+    );
+    const verified = verifyMusicWorkerOutput({
+      output,
+      bytes: toneWav(),
+      expected,
+      requireEvidence: true,
+    });
+    expect(Object.keys(verified.diagnostics.runtime)).toHaveLength(32);
+    expect(Object.keys(verified.diagnostics.runtime).every((key) => key.length <= 64)).toBe(true);
+    expect(Object.values(verified.diagnostics.runtime).every((value) => value.length <= 128)).toBe(true);
   });
 
   it("rejects v2 evidence when the delivered candidate digest drifts", () => {

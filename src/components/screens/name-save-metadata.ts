@@ -25,6 +25,7 @@ export function buildSaveProvenance(version: SaveProvenanceSource): SongProvenan
     provenance.generationBatchIndex = generation.batchIndex;
     if (generation.batchOperationId) provenance.generationBatchId = generation.batchOperationId;
     if (generation.operationId) provenance.generationClipId = generation.operationId;
+    if (generation.audioSha256) provenance.generationAudioSha256 = generation.audioSha256;
   }
   if (version.sourceType) provenance.sourceType = version.sourceType;
   if (version.captureQuality) provenance.captureQuality = version.captureQuality;

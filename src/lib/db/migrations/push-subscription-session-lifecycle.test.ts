@@ -43,8 +43,9 @@ describe("push subscription session lifecycle migration", () => {
       entries: Array<{ idx: number; tag: string }>;
     };
 
-    expect(parsed.entries.at(-1)).toEqual({
-      ...parsed.entries.at(-1),
+    const migration = parsed.entries.find((entry) => entry.idx === 32);
+    expect(migration).toEqual({
+      ...migration,
       idx: 32,
       tag: "0032_push_subscription_session_lifecycle",
     });

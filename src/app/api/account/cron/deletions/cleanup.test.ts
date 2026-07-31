@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
   runAccountDeletionCleanup,
+  storageKeyFingerprint,
   type AccountDeletionCleanupDependencies,
 } from "./cleanup";
 
@@ -78,6 +79,14 @@ describe("account deletion cleanup orchestration", () => {
     ]);
     expect(summary.deferred).toBe(1);
     expect(summary.failed).toBe(0);
+  });
+
+  it("derives an opaque, stable fingerprint for object-deletion logs", () => {
+    const storageKey = "songs/master/usr_delete/song_1/private-audio.mp3";
+    const fingerprint = storageKeyFingerprint(storageKey);
+
+    expect(fingerprint).toBe("3807ce38a9e9c430");
+    expect(fingerprint).not.toContain(storageKey);
   });
 
   it("advances unsettled music jobs before taking the object snapshot", async () => {

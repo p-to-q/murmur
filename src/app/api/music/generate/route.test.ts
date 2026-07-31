@@ -4,7 +4,6 @@ import type { NextRequest } from "next/server";
 import { setTestNodeEnv } from "@/test-utils/env";
 
 import type {
-  BalanceResult,
   RefundNotesInput,
   RefundNotesResult,
   SettleOperationDeliveryInput,
@@ -20,15 +19,6 @@ let nextAuth: ResolvedRequestAuth = {
   user: { id: "guest", email: null, name: "Guest", avatarUrl: null },
   source: "guest",
   sessionId: null,
-};
-let nextBalance: BalanceResult = {
-  ok: true,
-  userId: "guest",
-  notes: 10,
-  accountNotes: 5,
-  dailyFreeNotes: 5,
-  planTier: "free",
-  freeNotesGrantedAt: new Date(),
 };
 let nextSpendResult: SpendNotesResult = {
   ok: true,
@@ -60,14 +50,25 @@ const lastSpendInputs: SpendNotesInput[] = [];
 const lastRefundInputs: RefundNotesInput[] = [];
 const lastPendingRefundInputs: Array<{ userId: string; originalLedgerId: string }> = [];
 const lastSettleInputs: SettleOperationDeliveryInput[] = [];
+const compositionEvents: Array<Record<string, unknown>> = [];
+let nextCompositionEventThrows = false;
 let runJobCallCount = 0;
+const durableGenerationInputs: Array<{
+  operationId: string;
+  prompt: string;
+  bill: boolean;
+}> = [];
+let nextDurableGenerationError: {
+  error: "idempotency_conflict" | "worker_http_error";
+  message: string;
+  status: number;
+} | null = null;
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
 }));
 
 mock.module("@/lib/db/queries/notes-ledger", () => ({
-  getNotesBalance: async () => nextBalance,
   spendNotes: async (input: SpendNotesInput) => {
     lastSpendInputs.push(input);
     return nextSpendResult;
@@ -136,6 +137,14 @@ mock.module("@/lib/db/queries/notes-ledger", () => ({
   refundReferenceFor: (id: string) => `refund:${id}`,
 }));
 
+mock.module("@/lib/db/queries/composition-events", () => ({
+  createCompositionEvent: async (input: Record<string, unknown>) => {
+    if (nextCompositionEventThrows) throw new Error("composition event unavailable");
+    compositionEvents.push(input);
+    return input;
+  },
+}));
+
 mock.module("@/lib/platform/music-worker", () => ({
   getMusicEngineMode: () => nextEngineMode,
   getMusicServerlessConfig: () =>
@@ -145,6 +154,32 @@ mock.module("@/lib/platform/music-worker", () => ({
   getMusicWorkerUrl: () => null,
   getRequestedMusicEngineMode: () =>
     nextEngineMode === "http" ? "http" : "auto",
+}));
+
+mock.module("@/lib/platform/music-sync-generation", () => ({
+  generateDurableMusicSynchronously: async (input: {
+    operationId: string;
+    prompt: string;
+    duration: number;
+    bill: boolean;
+  }) => {
+    durableGenerationInputs.push(input);
+    if (nextDurableGenerationError) {
+      return { ok: false as const, ...nextDurableGenerationError, jobId: "mjob_test" };
+    }
+    const audio = Buffer.from(validWavBase64(input.duration), "base64");
+    return {
+      ok: true as const,
+      audio: audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength),
+      contentType: "audio/wav",
+      model: "test-model",
+      generationMs: "123",
+      styleMix: "0",
+      outputSha256: createHash("sha256").update(audio).digest("hex"),
+      duplicate: durableGenerationInputs.filter((item) => item.operationId === input.operationId).length > 1,
+      jobId: "mjob_test",
+    };
+  },
 }));
 
 class TestRunpodError extends Error {
@@ -279,15 +314,6 @@ beforeEach(async () => {
     source: "guest",
     sessionId: null,
   };
-  nextBalance = {
-    ok: true,
-    userId: "guest",
-    notes: 10,
-    accountNotes: 5,
-    dailyFreeNotes: 5,
-    planTier: "free",
-    freeNotesGrantedAt: new Date(),
-  };
   nextSpendResult = {
     ok: true,
     ledgerId: "nle_music_generate",
@@ -314,7 +340,11 @@ beforeEach(async () => {
   lastPendingRefundInputs.length = 0;
   lastSettleInputs.length = 0;
   runJobCallCount = 0;
+  durableGenerationInputs.length = 0;
+  nextDurableGenerationError = null;
   publishedNotifications.length = 0;
+  compositionEvents.length = 0;
+  nextCompositionEventThrows = false;
 });
 
 describe("POST /api/music/generate", () => {
@@ -425,7 +455,7 @@ describe("POST /api/music/generate", () => {
     expect(lastRefundInputs).toHaveLength(0);
   });
 
-  it("keys spend idempotency on the clip operation id so a resumed clip reuses the ref (#300)", async () => {
+  it("routes a resumed stable clip through the same durable receipt (#300)", async () => {
     nextEngineMode = "serverless";
     nextAuth = {
       ok: true,
@@ -437,15 +467,15 @@ describe("POST /api/music/generate", () => {
 
     await POST(buildRequest("req_clip_a", { "x-generation-clip-id": clipId }));
     await POST(buildRequest("req_clip_b", { "x-generation-clip-id": clipId }));
+    await flushScheduledPublishes();
 
-    expect(lastSpendInputs).toHaveLength(2);
-    // Same clip id → identical spend idempotency key across requests, so the
-    // ledger dedupes a resumed/retried clip instead of double-charging it.
-    expect(lastSpendInputs[0]?.externalRef).toBe(`music_generate:${clipId}`);
-    expect(lastSpendInputs[1]?.externalRef).toBe(`music_generate:${clipId}`);
+    expect(durableGenerationInputs).toHaveLength(2);
+    expect(durableGenerationInputs.map((input) => input.operationId)).toEqual([clipId, clipId]);
+    expect(lastSpendInputs).toHaveLength(0);
+    expect(publishedNotifications).toHaveLength(1);
   });
 
-  it("settles a successfully delivered stable clip operation", async () => {
+  it("delivers a successfully settled stable clip operation from the durable adapter", async () => {
     nextEngineMode = "serverless";
     nextAuth = {
       ok: true,
@@ -459,16 +489,10 @@ describe("POST /api/music/generate", () => {
     }));
 
     expect(response.status).toBe(200);
-    expect(lastSettleInputs).toHaveLength(1);
-    expect(lastSettleInputs[0]).toMatchObject({
-      userId: "usr_settle",
-      spendLedgerId: "nle_music_generate",
-      metadata: {
-        requestId: "req_settle",
-        operationId: "clip-settle-abcdef",
-        trigger: "music_generate_delivered",
-      },
-    });
+    expect(durableGenerationInputs).toEqual([
+      expect.objectContaining({ operationId: "clip-settle-abcdef", bill: true }),
+    ]);
+    expect(response.headers.get("X-Music-Job-Id")).toBe("mjob_test");
   });
 
   it("settles a successful retry after the stable clip's original spend was refunded", async () => {
@@ -501,8 +525,7 @@ describe("POST /api/music/generate", () => {
     }));
 
     expect(response.status).toBe(200);
-    expect(lastSettleInputs).toHaveLength(1);
-    expect(lastSettleInputs[0]?.spendLedgerId).toBe("nle_refunded_music_generate");
+    expect(durableGenerationInputs).toHaveLength(1);
     expect(lastRefundInputs).toHaveLength(0);
   });
 
@@ -536,9 +559,34 @@ describe("POST /api/music/generate", () => {
     }));
 
     expect(response.status).toBe(200);
-    expect(lastSettleInputs).toHaveLength(1);
-    expect(lastSettleInputs[0]?.spendLedgerId).toBe("nle_delivered_music_generate");
+    expect(durableGenerationInputs).toHaveLength(1);
     expect(lastRefundInputs).toHaveLength(0);
+  });
+
+  it("replays an already-paid clip even when the current balance is zero", async () => {
+    nextEngineMode = "serverless";
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_replay_empty", email: null, name: "Replay", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_replay_empty",
+    };
+    nextSpendResult = {
+      ok: true,
+      ledgerId: "nle_paid_last_note",
+      balanceBefore: 1,
+      balanceAfter: 0,
+      duplicate: true,
+    };
+
+    const response = await POST(buildRequest("req_replay_empty", {
+      "x-generation-clip-id": "clip-replay-empty-abcdef",
+    }));
+
+    expect(response.status).toBe(200);
+    expect(runJobCallCount).toBe(0);
+    expect(lastSpendInputs).toHaveLength(0);
+    expect(durableGenerationInputs[0]?.operationId).toBe("clip-replay-empty-abcdef");
   });
 
   it("ignores a malformed clip id and falls back to a per-request spend ref (#300)", async () => {
@@ -557,16 +605,40 @@ describe("POST /api/music/generate", () => {
     expect(lastSpendInputs[0]?.externalRef).not.toContain("not a valid id");
   });
 
-  it("returns 402 before RunPod when notes are insufficient", async () => {
-    nextEngineMode = "serverless";
-    nextBalance = {
+  it("fails closed before billing a stable clip on the non-durable HTTP production transport", async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    setTestNodeEnv("production");
+    nextEngineMode = "http";
+    nextAuth = {
       ok: true,
-      userId: "usr_empty",
-      notes: 0,
-      accountNotes: 0,
-      dailyFreeNotes: 0,
-      planTier: "free",
-      freeNotesGrantedAt: new Date(),
+      user: { id: "usr_http_prod", email: null, name: "HTTP Prod", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_http_prod",
+    };
+
+    try {
+      const response = await POST(buildRequest("req_http_prod", {
+        "x-generation-clip-id": "clip-http-prod-abcdef",
+      }));
+
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        error: "worker_unconfigured",
+      });
+      expect(lastSpendInputs).toHaveLength(0);
+      expect(durableGenerationInputs).toHaveLength(0);
+      expect(runJobCallCount).toBe(0);
+    } finally {
+      setTestNodeEnv(previousNodeEnv);
+    }
+  });
+
+  it("returns 402 without calling RunPod when the atomic spend is insufficient", async () => {
+    nextEngineMode = "serverless";
+    nextSpendResult = {
+      ok: false,
+      reason: "insufficient_notes",
+      currentBalance: 0,
     };
     nextAuth = {
       ok: true,
@@ -579,7 +651,7 @@ describe("POST /api/music/generate", () => {
 
     expect(response.status).toBe(402);
     expect(runJobCallCount).toBe(0);
-    expect(lastSpendInputs).toHaveLength(0);
+    expect(lastSpendInputs).toHaveLength(1);
     const body = await response.json() as { error: string; currentBalance: number; cost: number };
     expect(body.error).toBe("insufficient_notes");
     expect(body.currentBalance).toBe(0);
@@ -665,12 +737,19 @@ describe("POST /api/music/generate", () => {
     };
     const batchHeaders = { "x-generation-batch-id": "batch_abc-123" };
 
-    const first = await POST(buildRequest("req_batch_clip_1", batchHeaders));
-    const second = await POST(buildRequest("req_batch_clip_2", batchHeaders));
+    const first = await POST(buildRequest("req_batch_clip_1", {
+      ...batchHeaders,
+      "x-generation-clip-id": "clip_abc-001",
+    }));
+    const second = await POST(buildRequest("req_batch_clip_2", {
+      ...batchHeaders,
+      "x-generation-clip-id": "clip_abc-002",
+    }));
     await flushScheduledPublishes();
 
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
+    expect(first.headers.get("X-Audio-SHA256")).toMatch(/^[0-9a-f]{64}$/);
     expect(publishedNotifications).toHaveLength(2);
     for (const published of publishedNotifications) {
       expect(published.userId).toBe("usr_batch");
@@ -681,11 +760,43 @@ describe("POST /api/music/generate", () => {
         notificationId: "song_generated:batch_abc-123",
         batchId: "batch_abc-123",
       });
+      expect(published.data).not.toHaveProperty("prompt");
     }
     expect(publishedNotifications.map((p) => p.data?.requestId)).toEqual([
       "req_batch_clip_1",
       "req_batch_clip_2",
     ]);
+    // Evidence is written inside the durable runner before it marks the job
+    // succeeded; this route only delivers that already-settled artifact.
+    expect(compositionEvents).toHaveLength(0);
+  });
+
+  it("refunds and withholds delivery when generation evidence is not durable", async () => {
+    nextEngineMode = "serverless";
+    nextCompositionEventThrows = true;
+    nextDurableGenerationError = {
+      error: "worker_http_error",
+      message: "Generation evidence could not be persisted",
+      status: 503,
+    };
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_evidence_down", email: null, name: "Evidence", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_evidence_down",
+    };
+
+    const response = await POST(buildRequest("req_evidence_down", {
+      "x-generation-batch-id": "batch-evidence-down",
+      "x-generation-clip-id": "clip-evidence-down",
+    }));
+    await flushScheduledPublishes();
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: "worker_http_error" });
+    expect(lastRefundInputs).toHaveLength(0);
+    expect(lastSettleInputs).toHaveLength(0);
+    expect(publishedNotifications).toHaveLength(0);
   });
 
   it("falls back to per-request push identity without a valid batch header", async () => {

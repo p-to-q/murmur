@@ -18,7 +18,7 @@ import { prepareAuthUrlEnv, resolveAuthSecret } from "@/lib/auth/env";
 import { assertProductionAuthConfig } from "@/lib/auth/assert-config";
 import { upsertOAuthUser } from "@/lib/db/queries/users";
 import { getSessionByToken } from "@/lib/db/queries/sessions";
-import { getSessionToken } from "@/lib/platform/server-auth";
+import { getSessionToken } from "@/lib/auth/session-token";
 import { log } from "@/lib/observability/log";
 import { readShareReferrerFromCookieHeader } from "@/lib/api/share-referral-server";
 import { settleRegistrationShareReferral } from "@/lib/auth/share-referral-settlement";

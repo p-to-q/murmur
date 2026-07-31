@@ -45,6 +45,7 @@ mock.module("@/lib/db/queries/songs", () => ({
   deleteSong: mock(async () => false),
   deleteSongForUser: mock(async () => null),
   getPublicSongByShareCode: mock(async () => null),
+  getPublicSongMetadataByShareCode: mock(async () => null),
   getPublicSongSummaries: mock(async () => []),
   getSongById: mock(async () => null),
   getSongByIdForUser: getSongByIdForUserMock,

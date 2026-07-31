@@ -18,13 +18,17 @@ import {
 } from "@/lib/db/queries/notes-ledger";
 import { log } from "@/lib/observability/log";
 import { getMusicServerlessConfig } from "@/lib/platform/music-worker";
+import { recordMusicGenerationEvidence } from "@/lib/platform/music-generation-evidence";
 import {
   cancelSubmittedJob,
   getJobStatus,
   RunpodError,
   submitJob,
 } from "@/lib/platform/runpod-serverless";
-import { verifyMusicWorkerOutput } from "@/lib/platform/music-worker-output";
+import {
+  isMusicDeliveryBase64WithinLimit,
+  verifyMusicWorkerOutput,
+} from "@/lib/platform/music-worker-output";
 import { getObjectStore } from "@/lib/storage";
 import { storeMusicJobOutput } from "@/lib/storage/music-job-artifacts";
 import {
@@ -33,6 +37,8 @@ import {
   shouldExpireProviderNotFound,
 } from "@/lib/music/music-job-policy";
 import { createHash } from "node:crypto";
+import type { MusicJobOutput } from "@/lib/db/schema/music-jobs";
+import type { MusicGenerationEvidenceInput } from "@/lib/platform/music-generation-evidence";
 
 const LEASE_MS = 45_000;
 
@@ -40,6 +46,16 @@ class MusicOutputRejectedError extends Error {
   constructor(cause: unknown) {
     super(cause instanceof Error ? cause.message : String(cause));
     this.name = "MusicOutputRejectedError";
+  }
+}
+
+export class MusicJobSettlementError extends Error {
+  constructor(
+    readonly reason: "invalid_operation" | "user_not_found" | "insufficient_notes",
+    readonly currentBalance?: number,
+  ) {
+    super(`music_job_settlement_${reason}`);
+    this.name = "MusicJobSettlementError";
   }
 }
 
@@ -309,12 +325,13 @@ export async function advanceMusicJob(userId: string, jobId: string): Promise<vo
         current.providerSubmittedAt,
         current.deadlineAt,
       ));
-    const recoverable = !qualityRejected && !deadlineReached && !providerMissingExpired
+    const recoverable = !deadlineReached && !providerMissingExpired
       && musicJobFailureDisposition({
         hasRecordedOutput: Boolean(current?.output),
         providerOutputObserved,
         hasProviderJobId: Boolean(providerJobId),
         errorKind: error instanceof RunpodError ? error.kind : null,
+        outputRejected: qualityRejected,
       }) === "resume";
     if (!recoverable && current) {
       const errorCode = deadlineReached
@@ -365,7 +382,9 @@ export function musicJobFailureDisposition(input: {
   providerOutputObserved: boolean;
   hasProviderJobId: boolean;
   errorKind: RunpodError["kind"] | null;
+  outputRejected?: boolean;
 }): "resume" | "fail_refund" {
+  if (input.outputRejected) return "fail_refund";
   if (input.hasRecordedOutput || input.providerOutputObserved) return "resume";
   if (
     input.hasProviderJobId
@@ -414,11 +433,20 @@ async function completeFromProviderOutput(
   leaseEpoch: number,
   output: Record<string, unknown>,
 ): Promise<void> {
-  const audioB64 = output.audio_b64;
-  if (typeof audioB64 !== "string" || !audioB64) throw new Error("provider_audio_missing");
-  const bytes = new Uint8Array(Buffer.from(audioB64, "base64"));
   const job = await getMusicJobForUser(userId, jobId);
   if (!job) throw new Error("music_job_missing_during_completion");
+  let bytes: Uint8Array;
+  try {
+    bytes = decodeMusicJobProviderAudio(output, job.input.duration);
+  } catch (error) {
+    log("music.quality_gate_failed", {
+      jobId,
+      generationBatchId: job.input.generationBatchId,
+      reason: error instanceof Error ? error.message : String(error),
+      outputBytes: null,
+    }, { userId, level: "error" });
+    throw error;
+  }
   const persistedHumDigest = typeof job.input.humDigest === "string"
     ? job.input.humDigest
     : null;
@@ -426,7 +454,9 @@ async function completeFromProviderOutput(
     ? await getObjectStore().get(job.input.humStorageKey)
     : null;
   if (job.input.humStorageKey && !persistedHumDigest && !legacyHum) {
-    throw new Error("hum_artifact_missing_during_verification");
+    throw new MusicOutputRejectedError(
+      new Error("hum_artifact_missing_during_verification"),
+    );
   }
   const humWasSent = Boolean((persistedHumDigest || legacyHum) && job.input.styleMix > 0);
   let verified: ReturnType<typeof verifyMusicWorkerOutput>;
@@ -475,7 +505,7 @@ async function completeFromProviderOutput(
     leaseEpoch,
     output: {
       ...artifact,
-      model: typeof output.model === "string" ? output.model : "",
+      model: typeof output.model === "string" ? output.model.slice(0, 128) : "",
       generationMs: typeof output.generation_ms === "number" ? output.generation_ms : null,
       styleMix: output.style_mix == null ? "" : String(output.style_mix),
       quality: verified.quality,
@@ -484,6 +514,23 @@ async function completeFromProviderOutput(
   });
   if (!recorded) throw new Error("music_job_result_record_failed");
   await settleRecordedResult(recorded);
+}
+
+/** Reject terminal provider deliveries before allocating unbounded base64 output. */
+export function decodeMusicJobProviderAudio(
+  output: Record<string, unknown>,
+  expectedDuration: number,
+): Uint8Array {
+  const audioB64 = output.audio_b64;
+  if (typeof audioB64 !== "string" || !audioB64) {
+    throw new MusicOutputRejectedError(new Error("provider_audio_missing"));
+  }
+  if (!isMusicDeliveryBase64WithinLimit(audioB64, expectedDuration)) {
+    throw new MusicOutputRejectedError(
+      new Error("music_delivery_quality_gate_failed:payload_too_large"),
+    );
+  }
+  return new Uint8Array(Buffer.from(audioB64, "base64"));
 }
 
 export async function deleteSubmittedHum(input: {
@@ -533,23 +580,61 @@ function summarizeProviderFailure(error: unknown): Record<string, unknown> | nul
   };
 }
 
-async function settleRecordedResult(
+export async function settleRecordedResult(
   job: Awaited<ReturnType<typeof getMusicJobForUser>> & {},
 ): Promise<void> {
   if (!job?.output) throw new Error("music_job_result_missing");
+  const output = job.output;
+  const evidenceRecorded = await recordMusicGenerationEvidence(
+    buildDurableMusicGenerationEvidence({ ...job, output }),
+  );
+  if (!evidenceRecorded) throw new Error("music_generation_evidence_deferred");
   if (job.spendLedgerId) {
     const settlement = await settleOperationDelivery({
       userId: job.userId,
       spendLedgerId: job.spendLedgerId,
       metadata: { jobId: job.id, operationId: job.operationId, trigger: "music_job_succeeded" },
     });
-    if (!settlement.ok) throw new Error(`music_job_settlement_${settlement.reason}`);
+    if (!settlement.ok) {
+      throw new MusicJobSettlementError(settlement.reason, settlement.currentBalance);
+    }
   }
-  await succeedMusicJob({
+  const succeeded = await succeedMusicJob({
     userId: job.userId,
     jobId: job.id,
-    output: job.output,
+    output,
   });
+  if (!succeeded) {
+    const current = await getMusicJobForUser(job.userId, job.id);
+    if (current?.status !== "succeeded") {
+      throw new Error("music_job_success_transition_deferred");
+    }
+  }
+}
+
+export function buildDurableMusicGenerationEvidence(job: {
+  id: string;
+  userId: string;
+  operationId: string;
+  input: { generationBatchId: string | null; duration: number; styleMix: number };
+  output: MusicJobOutput;
+}): MusicGenerationEvidenceInput {
+  return {
+    eventId: `cmp_generation_${job.id}`,
+    userId: job.userId,
+    requestId: job.id,
+    batchId: job.input.generationBatchId,
+    clipId: job.operationId,
+    mode: "serverless",
+    model: job.output.model,
+    outputSha256: job.output.digest,
+    outputBytes: job.output.sizeBytes,
+    duration: job.input.duration,
+    styleMix: job.input.styleMix,
+    quality: job.output.quality && job.output.diagnostics
+      ? { quality: job.output.quality, diagnostics: job.output.diagnostics }
+      : undefined,
+  };
 }
 
 async function refundJobSpend(

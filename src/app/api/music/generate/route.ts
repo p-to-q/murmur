@@ -6,7 +6,6 @@ import { createSpendReference } from "@/lib/billing/spend-ref";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import {
-  getNotesBalance,
   recordPendingRefund,
   refundNotes,
   settleOperationDelivery,
@@ -29,6 +28,8 @@ import {
   songGeneratedNotificationCopy,
 } from "@/lib/notifications/notification-copy";
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
+import { recordMusicGenerationEvidence } from "@/lib/platform/music-generation-evidence";
+import { generateDurableMusicSynchronously } from "@/lib/platform/music-sync-generation";
 import { RunpodError, runJob, getQueueDepth } from "@/lib/platform/runpod-serverless";
 import {
   isMusicDeliveryBase64WithinLimit,
@@ -73,6 +74,8 @@ type MusicRouteError =
   | "worker_unauthorized"
   | "worker_http_error"
   | "worker_overloaded"
+  | "generation_evidence_unavailable"
+  | "idempotency_conflict"
   | "client_closed_request"
   | "server_error";
 
@@ -195,7 +198,7 @@ export async function POST(request: NextRequest) {
   // Vercel timeout — after the note was spent. Shed BEFORE spending, for every
   // account kind (not just local_creator), so a cold pool never charges a note
   // it can't deliver. `getQueueDepth` fails open (null → allow).
-  if (mode === "serverless") {
+  if (mode === "serverless" && !clipId) {
     const serverlessConfig = getMusicServerlessConfig();
     if (serverlessConfig) {
       const depth = await getQueueDepth(serverlessConfig);
@@ -268,6 +271,92 @@ export async function POST(request: NextRequest) {
     const melody = typeof melodyRaw === "string" ? melodyRaw.trim() : "";
 
     const params: GenerateParams = { prompt, duration, styleMix, hum, melody };
+    if (mode === "http" && clipId && process.env.NODE_ENV === "production") {
+      return fail(
+        "worker_unconfigured",
+        "Stable clip delivery requires the durable serverless music transport",
+        503,
+        {
+          requestId,
+          userId,
+          startedAt,
+          ext: { transport: mode, durableReceiptRequired: true },
+        },
+      );
+    }
+    if (mode === "serverless" && clipId) {
+      const durable = await generateDurableMusicSynchronously({
+        userId,
+        operationId: clipId,
+        requestId,
+        prompt,
+        duration,
+        styleMix,
+        melody,
+        hum,
+        generationBatchId: batchId,
+        bill: !(
+          shouldSkipNotesBilling(auth)
+          || shouldBypassMusicBillingForLocalDemo(request, auth)
+        ),
+        signal: request.signal,
+      });
+      if (!durable.ok) {
+        return fail(durable.error, durable.message, durable.status, {
+          requestId,
+          userId,
+          startedAt,
+          ext: {
+            durableJob: true,
+            jobId: durable.jobId ?? null,
+            currentBalance: durable.currentBalance ?? null,
+          },
+          ...(durable.currentBalance === undefined
+            ? {}
+            : { body: { currentBalance: durable.currentBalance, cost: COST.music_generate } }),
+        });
+      }
+      const durationMs = Math.round(performance.now() - startedAt);
+      log("music.generate_completed", {
+        mode,
+        batchId,
+        clipId,
+        jobId: durable.jobId,
+        durableJob: true,
+        duplicate: durable.duplicate,
+        bytes: durable.audio.byteLength,
+        model: durable.model,
+        outputSha256: durable.outputSha256,
+      }, {
+        route: ROUTE,
+        requestId,
+        userId,
+        sessionId: auth.sessionId,
+        durationMs,
+      });
+      if (!durable.duplicate) {
+        scheduleAfterResponse(() => publishMusicGeneratedNotification({
+          userId,
+          sessionId: auth.sessionId,
+          requestId,
+          batchId,
+          acceptLanguage: request.headers.get("accept-language"),
+        }));
+      }
+      return new NextResponse(durable.audio, {
+        headers: {
+          "Content-Type": durable.contentType,
+          "Cache-Control": "no-store",
+          "X-Request-Id": requestId,
+          "X-Music-Job-Id": durable.jobId,
+          "X-Murmur-Operation-Replayed": String(durable.duplicate),
+          "X-Model": durable.model,
+          "X-Generation-Ms": durable.generationMs,
+          "X-Style-Mix": durable.styleMix,
+          "X-Audio-SHA256": durable.outputSha256,
+        },
+      });
+    }
     const billing = await prepareMusicGenerationBilling({
       request,
       auth,
@@ -333,6 +422,55 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const genDurationMs = Math.round(performance.now() - startedAt);
+    const outputSha256 = createHash("sha256")
+      .update(new Uint8Array(result.audio))
+      .digest("hex");
+    const genBudget = reportBudget("music_generate", genDurationMs, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+    });
+    const evidenceRecorded = await recordMusicGenerationEvidence({
+      eventId: generationEvidenceEventId({ userId, batchId, clipId, outputSha256 }),
+      userId,
+      requestId,
+      batchId,
+      clipId,
+      mode,
+      model: result.model,
+      quality: result.quality,
+      outputSha256,
+      outputBytes: result.audio.byteLength,
+      duration,
+      styleMix,
+    });
+    if (!evidenceRecorded) {
+      const outcome = await refundMusicGenerateSpendIfNeeded({
+        spend: spendForRefund,
+        requestId,
+        userId,
+        sessionId: auth.sessionId,
+        promptLength: prompt.length,
+        duration,
+        trigger: "generation_evidence_unavailable",
+      });
+      spendForRefund = null;
+      if (outcome === "pending") {
+        return fail("refund_pending", REFUND_PENDING_MESSAGE, 500, {
+          requestId, userId, startedAt,
+          ext: { trigger: "generation_evidence_unavailable" },
+        });
+      }
+      return fail(
+        "generation_evidence_unavailable",
+        "Generation evidence could not be persisted. Retry will resume the same purchase.",
+        503,
+        { requestId, userId, startedAt },
+      );
+    }
+
     await settleDeliveredMusicGenerateOperation({
       clipId,
       spend: billing.spend,
@@ -340,14 +478,8 @@ export async function POST(request: NextRequest) {
       requestId,
       sessionId: auth.sessionId,
     });
+    spendForRefund = null;
 
-    const genDurationMs = Math.round(performance.now() - startedAt);
-    const genBudget = reportBudget("music_generate", genDurationMs, {
-      route: ROUTE,
-      requestId,
-      userId,
-      sessionId: auth.sessionId,
-    });
     log("music.generate_completed", {
       mode,
       batchId,
@@ -357,6 +489,7 @@ export async function POST(request: NextRequest) {
       billingMode: billing.billingMode,
       generationMs: Number(result.generationMs) || null,
       model: result.model,
+      outputSha256,
       styleMix: result.styleMix,
       qualityGateVersion: result.quality?.quality.version ?? null,
       qualityEvidence: result.quality?.diagnostics.evidence ?? null,
@@ -375,7 +508,6 @@ export async function POST(request: NextRequest) {
       sessionId: auth.sessionId,
       requestId,
       batchId,
-      prompt,
       acceptLanguage: request.headers.get("accept-language"),
     }));
 
@@ -387,6 +519,7 @@ export async function POST(request: NextRequest) {
         "X-Model": result.model,
         "X-Generation-Ms": result.generationMs,
         "X-Style-Mix": result.styleMix,
+        "X-Audio-SHA256": outputSha256,
       },
     });
   } catch (error) {
@@ -418,6 +551,21 @@ export async function POST(request: NextRequest) {
       },
     });
   }
+}
+
+function generationEvidenceEventId(input: {
+  userId: string;
+  batchId: string | null;
+  clipId: string | null;
+  outputSha256: string;
+}): string {
+  const identity = [
+    input.userId,
+    input.batchId ?? "unbatched",
+    input.clipId ?? "legacy",
+    input.outputSha256,
+  ].join(":");
+  return `cmp_generation_${createHash("sha256").update(identity).digest("hex")}`;
 }
 
 // The browser groups the sibling clip requests of one Studio fan-out under a
@@ -496,7 +644,6 @@ async function publishMusicGeneratedNotification(input: {
   sessionId: string | null;
   requestId: string;
   batchId: string | null;
-  prompt: string;
   acceptLanguage: string | null;
 }) {
   const lang = langFromAcceptLanguage(input.acceptLanguage);
@@ -523,7 +670,6 @@ async function publishMusicGeneratedNotification(input: {
         batchId: input.batchId,
         sourceId: groupId,
         notificationId: `song_generated:${groupId}`,
-        prompt: input.prompt.slice(0, 120),
       },
     })
     .catch((error) => {
@@ -577,45 +723,6 @@ async function prepareMusicGenerationBilling(options: {
       },
       balanceBefore: null,
       billingMode: "dev_fallback",
-    };
-  }
-
-  let balance: Awaited<ReturnType<typeof getNotesBalance>>;
-  try {
-    balance = await getNotesBalance(options.userId);
-  } catch (error) {
-    return {
-      ok: false,
-      response: fail("billing_unavailable", "User balance is unavailable", 503, {
-        requestId: options.requestId,
-        userId: options.userId,
-        startedAt: options.startedAt,
-        ext: { message: error instanceof Error ? error.message : String(error) },
-      }),
-    };
-  }
-
-  if (!balance.ok) {
-    return {
-      ok: false,
-      response: fail("billing_unavailable", "User balance is unavailable", 503, {
-        requestId: options.requestId,
-        userId: options.userId,
-        startedAt: options.startedAt,
-      }),
-    };
-  }
-
-  if (balance.notes < COST.music_generate) {
-    return {
-      ok: false,
-      response: fail("insufficient_notes", "Not enough Murmur Notes", 402, {
-        requestId: options.requestId,
-        userId: options.userId,
-        startedAt: options.startedAt,
-        ext: { currentBalance: balance.notes, cost: COST.music_generate },
-        body: { currentBalance: balance.notes, cost: COST.music_generate },
-      }),
     };
   }
 
@@ -1098,6 +1205,16 @@ async function generateViaHttp(
       generationMs: output.generation_ms != null ? String(output.generation_ms) : "",
       styleMix: typeof output.style_mix === "string" ? output.style_mix : "",
       quality: verified,
+    };
+  }
+
+  if (process.env.MURMUR_MUSIC_RELEASE_SHA?.trim()) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "Music worker did not return revision-verifiable evidence",
+      status: 502,
+      ext: { qualityGateRejected: true, reason: "music_worker_revision_unverifiable" },
     };
   }
 

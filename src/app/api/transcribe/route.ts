@@ -12,17 +12,20 @@ import { resolveRequestAuth, type ResolvedRequestAuth } from "@/lib/auth";
 import {
   createSpendReference,
   isValidOperationId,
-  operationSpendReference,
 } from "@/lib/billing/spend-ref";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import { shouldAllowDeploymentLocalPreview } from "@/lib/deployment/local-preview";
 import {
-  getNotesBalance,
   recordPendingRefund,
   refundNotes,
-  settleOperationDelivery,
   spendNotes,
 } from "@/lib/db/queries/notes-ledger";
+import {
+  prepareTranscriptionOperation,
+  recordTranscriptionResult,
+  releaseTranscriptionAttempt,
+  settleRecordedTranscriptionOperation,
+} from "@/lib/platform/transcription-operation";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { classifyError } from "@/lib/errors/transient";
 import { log } from "@/lib/observability/log";
@@ -54,10 +57,18 @@ type TranscribeRouteError =
   | "no_voiced_frames"
   | "insufficient_notes"
   | "billing_unavailable"
+  | "idempotency_conflict"
+  | "operation_in_progress"
   | "refund_pending"
   | "server_error";
 
 type BillingMode = "ledger" | "dev_fallback";
+
+type TranscriptionReceipt = {
+  operationId: string;
+  requestHash: string;
+  leaseEpoch: number;
+};
 
 /**
  * Distinct client signal (#232): the worker failed AND the automatic refund
@@ -176,12 +187,27 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
           return;
         }
 
-        const billingResult = await resolveBilling(request, auth, userId, requestId, startedAt, spendRef, targetInstrument);
-        if (!billingResult.ok) {
-          emit(controller, { phase: "error", error: billingResult.errorCode, message: billingResult.message, status: billingResult.status, requestId, currentBalance: billingResult.currentBalance });
+        const prepared = await prepareTranscriptionRequest({
+          auth,
+          userId,
+          operationId,
+          requestId,
+          legacySpendRef: spendRef,
+          audio,
+          targetInstrument,
+        });
+        if (!prepared.ok) {
+          emit(controller, { phase: "error", error: prepared.errorCode, message: prepared.message, status: prepared.status, requestId, currentBalance: prepared.currentBalance });
           controller.close();
           return;
         }
+        if (prepared.kind === "complete") {
+          emit(controller, { phase: "billing_ok", balanceBefore: null });
+          emit(controller, { phase: "complete", result: prepared.result });
+          controller.close();
+          return;
+        }
+        const { billing: billingResult, receipt } = prepared;
 
         emit(controller, { phase: "billing_ok", balanceBefore: billingResult.balanceBefore });
 
@@ -242,7 +268,8 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
           // and the worker-error refund can't both fire for one request; the
           // underlying refund is also idempotent by ledger id, so a late
           // `cancel()` after settlement can never double-credit.
-          const outcome = await refundSpendIfNeeded({
+          const outcome = await releaseAndRefundTranscriptionAttempt({
+            receipt,
             spend: billingResult.spend,
             requestId,
             userId,
@@ -267,7 +294,8 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
         }
 
         if (raced.kind === "error") {
-          const outcome = await refundSpendIfNeeded({
+          const outcome = await releaseAndRefundTranscriptionAttempt({
+            receipt,
             spend: billingResult.spend,
             requestId,
             userId,
@@ -292,17 +320,32 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
 
         const result = raced.value;
 
-        // Delivered: settle the operation so charge/refund/retry history
-        // collapses to exactly one net charge (#298). Best-effort — never fails
-        // an already-successful transcription.
-        await settleDeliveredTranscribeOperation({
-          operationId,
+        const delivery = await finalizeTranscriptionDelivery({
+          receipt,
+          result,
           spend: billingResult.spend,
           userId,
           requestId,
           sessionId: auth.sessionId,
           targetInstrument,
         });
+        if (delivery !== "delivered") {
+          emit(controller, {
+            phase: "error",
+            error: delivery === "refund_pending"
+              ? "refund_pending"
+              : delivery === "insufficient_notes" ? "insufficient_notes" : "billing_unavailable",
+            message: delivery === "refund_pending"
+              ? REFUND_PENDING_MESSAGE
+              : delivery === "insufficient_notes"
+                ? "Transcription is ready; add one Murmur Note to receive it"
+                : "Transcription could not be durably delivered; retry this operation",
+            status: delivery === "insufficient_notes" ? 402 : 503,
+            requestId,
+          });
+          controller.close();
+          return;
+        }
 
         const totalDurationMs = Math.round(performance.now() - startedAt);
         const budget = reportBudget("transcribe", totalDurationMs, {
@@ -370,17 +413,19 @@ async function streamingTranscribe(request: NextRequest): Promise<Response> {
   });
 }
 
+type BillingSpend = {
+  ok: true;
+  ledgerId: string | null;
+  balanceBefore: number | null;
+  balanceAfter: number | null;
+  duplicate: boolean;
+};
+
 type BillingOk = {
   ok: true;
   billingMode: BillingMode;
   balanceBefore: number | null;
-  spend: Awaited<ReturnType<typeof spendNotes>> | {
-    ok: true;
-    ledgerId: null;
-    balanceBefore: null;
-    balanceAfter: null;
-    duplicate: false;
-  };
+  spend: BillingSpend;
 };
 
 type BillingFailed = {
@@ -394,92 +439,198 @@ type BillingFailed = {
 type OkAuth = Extract<ResolvedRequestAuth, { ok: true }>;
 
 async function resolveBilling(
-  request: NextRequest,
   auth: OkAuth,
   userId: string,
   requestId: string,
-  startedAt: number,
   spendRef: string,
   targetInstrument: string,
 ): Promise<BillingOk | BillingFailed> {
-  let balance: Awaited<ReturnType<typeof getNotesBalance>>;
-  let billingMode: BillingMode = "ledger";
-
-  if (shouldSkipNotesBilling(auth)) {
-    billingMode = "dev_fallback";
-    balance = devFallbackBalance(userId);
-  } else {
-    try {
-      balance = await getNotesBalance(userId);
-    } catch {
-      if (shouldBypassBillingForLocalDemo()) {
-        billingMode = "dev_fallback";
-        balance = devFallbackBalance(userId);
-      } else {
-        return { ok: false, errorCode: "billing_unavailable", message: "User balance is unavailable", status: 503 };
-      }
-    }
-
-    if (!balance.ok) {
-      if (shouldBypassBillingForLocalDemo()) {
-        billingMode = "dev_fallback";
-        balance = devFallbackBalance(userId);
-      } else {
-        return { ok: false, errorCode: "billing_unavailable", message: "User balance is unavailable", status: 503 };
-      }
-    }
-    if (
-      billingMode === "ledger"
-      && auth.user.accountKind !== "local_creator"
+  if (
+    shouldSkipNotesBilling(auth)
+    || (
+      auth.user.accountKind !== "local_creator"
       && shouldBypassBillingForLocalDemo()
-    ) {
-      billingMode = "dev_fallback";
-      balance = devFallbackBalance(userId);
-    }
-  }
-  if (balance.notes < COST.hum) {
-    return { ok: false, errorCode: "insufficient_notes", message: "Not enough Murmur Notes", status: 402, currentBalance: balance.notes };
-  }
-
-  let spend: BillingOk["spend"];
-  if (billingMode === "dev_fallback") {
-    spend = { ok: true, ledgerId: null, balanceBefore: null, balanceAfter: null, duplicate: false };
-  } else {
-    try {
-      const spendResult = await spendNotes({
-        userId,
-        cost: COST.hum,
-        reason: "spend:hum",
-        externalRef: spendRef,
-        metadata: { requestId, route: ROUTE, phase: "preflight", targetInstrument },
-      });
-      if (!spendResult.ok) {
-        return { ok: false, errorCode: "insufficient_notes", message: "Not enough Murmur Notes", status: 402, currentBalance: spendResult.currentBalance };
-      }
-      spend = spendResult;
-    } catch {
-      return { ok: false, errorCode: "billing_unavailable", message: "Could not spend Murmur Notes", status: 503 };
-    }
+    )
+  ) {
+    return {
+      ok: true,
+      billingMode: "dev_fallback",
+      balanceBefore: null,
+      spend: {
+        ok: true,
+        ledgerId: null,
+        balanceBefore: null,
+        balanceAfter: null,
+        duplicate: false,
+      },
+    };
   }
 
+  let spend: Awaited<ReturnType<typeof spendNotes>>;
+  try {
+    spend = await spendNotes({
+      userId,
+      cost: COST.hum,
+      reason: "spend:hum",
+      externalRef: spendRef,
+      metadata: { requestId, route: ROUTE, phase: "preflight", targetInstrument },
+    });
+  } catch {
+    return { ok: false, errorCode: "billing_unavailable", message: "Could not spend Murmur Notes", status: 503 };
+  }
+
+  if (!spend.ok) {
+    const errorCode = spend.reason === "insufficient_notes"
+      ? "insufficient_notes"
+      : "billing_unavailable";
+    return {
+      ok: false,
+      errorCode,
+      message: errorCode === "insufficient_notes"
+        ? "Not enough Murmur Notes"
+        : "User balance is unavailable",
+      status: errorCode === "insufficient_notes" ? 402 : 503,
+      currentBalance: errorCode === "insufficient_notes"
+        ? spend.currentBalance
+        : undefined,
+    };
+  }
+  if (!spend.duplicate) {
+    log("notes.spent", {
+      reason: "spend:hum",
+      cost: COST.hum,
+      balanceAfter: spend.balanceAfter,
+      ledgerId: spend.ledgerId,
+    }, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+    });
+  }
   return {
     ok: true,
-    billingMode,
-    balanceBefore: Number.isFinite(balance.notes) ? balance.notes : null,
+    billingMode: "ledger",
+    balanceBefore: spend.balanceBefore,
     spend,
   };
 }
 
-function devFallbackBalance(userId: string) {
+type PreparedTranscriptionRequest =
+  | { ok: true; kind: "worker"; billing: BillingOk; receipt: TranscriptionReceipt | null }
+  | { ok: true; kind: "complete"; result: Awaited<ReturnType<typeof transcribeWithAudioWorker>> }
+  | BillingFailed;
+
+async function prepareTranscriptionRequest(input: {
+  auth: OkAuth;
+  userId: string;
+  operationId: string | null;
+  requestId: string;
+  legacySpendRef: string;
+  audio: File;
+  targetInstrument: string;
+}): Promise<PreparedTranscriptionRequest> {
+  if (!input.operationId) {
+    const billing = await resolveBilling(
+      input.auth,
+      input.userId,
+      input.requestId,
+      input.legacySpendRef,
+      input.targetInstrument,
+    );
+    return billing.ok
+      ? { ok: true, kind: "worker", billing, receipt: null }
+      : billing;
+  }
+
+  const bill = !(
+    shouldSkipNotesBilling(input.auth)
+    || (
+      input.auth.user.accountKind !== "local_creator"
+      && shouldBypassBillingForLocalDemo()
+    )
+  );
+  const prepared = await prepareTranscriptionOperation({
+    userId: input.userId,
+    operationId: input.operationId,
+    requestId: input.requestId,
+    audio: input.audio,
+    targetInstrument: input.targetInstrument,
+    bill,
+  });
+  if (!prepared.ok) {
+    return {
+      ok: false,
+      errorCode: prepared.error,
+      message: transcriptionPreparationMessage(prepared.error),
+      status: prepared.status,
+      currentBalance: prepared.currentBalance,
+    };
+  }
+  if (prepared.kind !== "proceed" && prepared.kind !== "legacy") {
+    if (prepared.kind === "replay") {
+      return { ok: true, kind: "complete", result: prepared.result };
+    }
+    const settled = await settleRecordedTranscriptionOperation({
+      userId: input.userId,
+      operationId: input.operationId,
+      requestId: input.requestId,
+      targetInstrument: input.targetInstrument,
+      spendLedgerId: prepared.spendLedgerId,
+    }).catch(() => ({
+      ok: false as const,
+      reason: "billing_unavailable" as const,
+      currentBalance: undefined,
+    }));
+    return settled.ok
+      ? { ok: true, kind: "complete", result: prepared.result }
+      : {
+          ok: false,
+          errorCode: settled.reason,
+          message: settled.reason === "insufficient_notes"
+            ? "Transcription is ready; add one Murmur Note to receive it"
+            : "Transcription is ready but delivery settlement is unavailable",
+          status: settled.reason === "insufficient_notes" ? 402 : 503,
+          currentBalance: settled.currentBalance,
+        };
+  }
+  if (prepared.kind === "legacy") {
+    throw new Error("Stable transcription operation resolved as legacy");
+  }
   return {
-    ok: true as const,
-    userId,
-    notes: Number.POSITIVE_INFINITY,
-    accountNotes: Number.POSITIVE_INFINITY,
-    dailyFreeNotes: 0,
-    planTier: "free" as const,
-    freeNotesGrantedAt: new Date(),
+    ok: true,
+    kind: "worker",
+    billing: {
+      ok: true,
+      billingMode: bill ? "ledger" : "dev_fallback",
+      balanceBefore: prepared.balanceBefore,
+      spend: prepared.spend ?? {
+        ok: true,
+        ledgerId: null,
+        balanceBefore: null,
+        balanceAfter: null,
+        duplicate: false,
+      },
+    },
+    receipt: {
+      operationId: input.operationId,
+      requestHash: prepared.requestHash,
+      leaseEpoch: prepared.leaseEpoch,
+    },
   };
+}
+
+function transcriptionPreparationMessage(error: BillingFailed["errorCode"]): string {
+  switch (error) {
+    case "idempotency_conflict":
+      return "Operation id was already used for different transcription input";
+    case "operation_in_progress":
+      return "This transcription operation is already in progress";
+    case "insufficient_notes":
+      return "Not enough Murmur Notes";
+    default:
+      return "Transcription billing is unavailable";
+  }
 }
 
 async function classicTranscribe(request: NextRequest) {
@@ -550,122 +701,44 @@ async function classicTranscribe(request: NextRequest) {
       );
     }
 
-    let balance: Awaited<ReturnType<typeof getNotesBalance>>;
-    let billingMode: BillingMode = "ledger";
-    if (shouldSkipNotesBilling(auth)) {
-      billingMode = "dev_fallback";
-      balance = {
-        ok: true,
-        userId,
-        notes: Number.POSITIVE_INFINITY,
-        accountNotes: Number.POSITIVE_INFINITY,
-        dailyFreeNotes: 0,
-        planTier: "free",
-        freeNotesGrantedAt: new Date(),
-      };
-    } else {
-      try {
-        balance = await getNotesBalance(userId);
-      } catch (error) {
-        if (shouldBypassBillingForLocalDemo()) {
-          billingMode = "dev_fallback";
-          log("user.balance_failed", {
-            phase: "billing",
-            message: error instanceof Error ? error.message : String(error),
-            fallback: "local_demo_bypass",
-          }, {
-            route: ROUTE,
-            requestId,
-            userId,
-            sessionId: auth.sessionId,
-            level: "warn",
-          });
-          balance = {
-            ok: true,
-            userId,
-            notes: Number.POSITIVE_INFINITY,
-            accountNotes: Number.POSITIVE_INFINITY,
-            dailyFreeNotes: 0,
-            planTier: "free",
-            freeNotesGrantedAt: new Date(),
-          };
-        } else {
-          return fail("billing_unavailable", "User balance is unavailable", 503, {
-            requestId,
-            userId,
-            startedAt,
-            phase: "billing",
-            ext: { message: error instanceof Error ? error.message : String(error) },
-          });
-        }
-      }
-
-      if (!balance.ok) {
-        if (shouldBypassBillingForLocalDemo()) {
-          billingMode = "dev_fallback";
-          log("user.balance_failed", {
-            phase: "billing",
-            reason: balance.reason,
-            fallback: "local_demo_bypass",
-          }, {
-            route: ROUTE,
-            requestId,
-            userId,
-            sessionId: auth.sessionId,
-            level: "warn",
-          });
-          balance = {
-            ok: true,
-            userId,
-            notes: Number.POSITIVE_INFINITY,
-            accountNotes: Number.POSITIVE_INFINITY,
-            dailyFreeNotes: 0,
-            planTier: "free",
-            freeNotesGrantedAt: new Date(),
-          };
-        } else {
-          return fail("billing_unavailable", "User balance is unavailable", 503, {
-            requestId,
-            userId,
-            startedAt,
-            phase: "billing",
-          });
-        }
-      }
-      if (
-        billingMode === "ledger"
-        && auth.user.accountKind !== "local_creator"
-        && shouldBypassBillingForLocalDemo()
-      ) {
-        billingMode = "dev_fallback";
-        balance = {
-          ok: true,
-          userId,
-          notes: Number.POSITIVE_INFINITY,
-          accountNotes: Number.POSITIVE_INFINITY,
-          dailyFreeNotes: 0,
-          planTier: "free",
-          freeNotesGrantedAt: new Date(),
-        };
-      }
-    }
-    if (balance.notes < COST.hum) {
-      return fail("insufficient_notes", "Not enough Murmur Notes", 402, {
+    const prepared = await prepareTranscriptionRequest({
+      auth,
+      userId,
+      operationId,
+      requestId,
+      legacySpendRef: spendRef,
+      audio,
+      targetInstrument,
+    });
+    if (!prepared.ok) {
+      return fail(prepared.errorCode, prepared.message, prepared.status, {
         requestId,
         userId,
         startedAt,
         phase: "billing",
-        ext: { currentBalance: balance.notes, cost: COST.hum },
-        body: { currentBalance: balance.notes, cost: COST.hum },
+        ...(prepared.currentBalance === undefined
+          ? {}
+          : {
+              ext: { currentBalance: prepared.currentBalance, cost: COST.hum },
+              body: { currentBalance: prepared.currentBalance, cost: COST.hum },
+            }),
       });
     }
+    if (prepared.kind === "complete") {
+      return NextResponse.json(prepared.result, {
+        headers: { "X-Request-Id": requestId, "X-Murmur-Operation-Replayed": "true" },
+      });
+    }
+    const billingResult = prepared.billing;
+    const receipt = prepared.receipt;
+    const { spend, billingMode, balanceBefore } = billingResult;
 
     log("transcribe.requested", {
       bytes: audio.size,
       format: audio.type || "unknown",
       targetInstrument,
       cost: COST.hum,
-      balanceBefore: Number.isFinite(balance.notes) ? balance.notes : null,
+      balanceBefore,
       billingMode,
     }, {
       route: ROUTE,
@@ -673,73 +746,6 @@ async function classicTranscribe(request: NextRequest) {
       userId,
       sessionId: auth.sessionId,
     });
-
-    let spend:
-      | Awaited<ReturnType<typeof spendNotes>>
-      | {
-          ok: true;
-          ledgerId: null;
-          balanceBefore: null;
-          balanceAfter: null;
-          duplicate: false;
-        };
-    if (billingMode === "dev_fallback") {
-      spend = {
-        ok: true,
-        ledgerId: null,
-        balanceBefore: null,
-        balanceAfter: null,
-        duplicate: false,
-      };
-    } else {
-      try {
-        spend = await spendNotes({
-          userId,
-          cost: COST.hum,
-          reason: "spend:hum",
-          externalRef: spendRef,
-          metadata: {
-            requestId,
-            route: ROUTE,
-            phase: "preflight",
-            targetInstrument,
-          },
-        });
-      } catch (error) {
-        return fail("billing_unavailable", "Could not spend Murmur Notes", 503, {
-          requestId,
-          userId,
-          startedAt,
-          phase: "billing",
-          ext: { message: error instanceof Error ? error.message : String(error) },
-        });
-      }
-
-      if (!spend.ok) {
-        return fail("insufficient_notes", "Not enough Murmur Notes", 402, {
-          requestId,
-          userId,
-          startedAt,
-          phase: "billing",
-          ext: { currentBalance: spend.currentBalance, cost: COST.hum },
-          body: { currentBalance: spend.currentBalance, cost: COST.hum },
-        });
-      }
-
-      if (!spend.duplicate) {
-        log("notes.spent", {
-          reason: "spend:hum",
-          cost: COST.hum,
-          balanceAfter: spend.balanceAfter,
-          ledgerId: spend.ledgerId,
-        }, {
-          route: ROUTE,
-          requestId,
-          userId,
-          sessionId: auth.sessionId,
-        });
-      }
-    }
 
     let result: Awaited<ReturnType<typeof transcribeWithAudioWorker>>;
     try {
@@ -749,7 +755,8 @@ async function classicTranscribe(request: NextRequest) {
         requestId,
       });
     } catch (error) {
-      const outcome = await refundSpendIfNeeded({
+      const outcome = await releaseAndRefundTranscriptionAttempt({
+        receipt,
         spend,
         requestId,
         userId,
@@ -770,15 +777,29 @@ async function classicTranscribe(request: NextRequest) {
       throw error;
     }
 
-    // Delivered: settle the operation to exactly one net charge (#298).
-    await settleDeliveredTranscribeOperation({
-      operationId,
+    const delivery = await finalizeTranscriptionDelivery({
+      receipt,
+      result,
       spend,
       userId,
       requestId,
       sessionId: auth.sessionId,
       targetInstrument,
     });
+    if (delivery !== "delivered") {
+      return fail(
+        delivery === "refund_pending"
+          ? "refund_pending"
+          : delivery === "insufficient_notes" ? "insufficient_notes" : "billing_unavailable",
+        delivery === "refund_pending"
+          ? REFUND_PENDING_MESSAGE
+          : delivery === "insufficient_notes"
+            ? "Transcription is ready; add one Murmur Note to receive it"
+            : "Transcription could not be durably delivered; retry this operation",
+        delivery === "insufficient_notes" ? 402 : 503,
+        { requestId, userId, startedAt, phase: "billing" },
+      );
+    }
 
     const totalDurationMs = Math.round(performance.now() - startedAt);
     const budget = reportBudget("transcribe", totalDurationMs, {
@@ -849,11 +870,9 @@ function shouldAllowGuestTranscribePreview(): boolean {
 }
 
 /**
- * Derive this request's spend externalRef (#298). A client-supplied stable
- * operation id (header `x-operation-id`) makes retries reuse one spend row so
- * the charge/refund/retry/delivery accounting collapses to exactly one net
- * charge; legacy clients without one keep the per-request random ref and behave
- * exactly as before (no operation settlement).
+ * Parse the stable operation id used by the durable transcription receipt.
+ * Legacy clients retain a per-request spend reference and their original
+ * non-replayable behavior.
  */
 function resolveTranscribeOperation(request: NextRequest): {
   operationId: string | null;
@@ -861,86 +880,87 @@ function resolveTranscribeOperation(request: NextRequest): {
 } {
   const header = request.headers.get("x-operation-id");
   const operationId = isValidOperationId(header) ? header : null;
-  const spendRef = operationId
-    ? operationSpendReference("hum", operationId)
-    : createSpendReference("hum");
+  const spendRef = createSpendReference("hum");
   return { operationId, spendRef };
 }
 
-/**
- * Settle a delivered operation so its net charge is exactly one and no reconcile
- * pass refunds the delivered work (#298). Only ledger-billed operations carrying
- * a stable operation id are settled; dev-fallback/guest/legacy paths are no-ops.
- * Best-effort: a settlement failure is logged for manual review but never fails
- * an already-successful transcription response.
- */
-async function settleDeliveredTranscribeOperation(options: {
-  operationId: string | null;
-  spend: BillingOk["spend"];
+async function finalizeTranscriptionDelivery(options: {
+  receipt: TranscriptionReceipt | null;
+  result: Awaited<ReturnType<typeof transcribeWithAudioWorker>>;
+  spend: BillingSpend;
   userId: string;
   requestId: string;
   sessionId: string | null;
   targetInstrument: string;
-}): Promise<void> {
-  if (!options.operationId) return;
-  if (!options.spend.ok || options.spend.ledgerId === null) return;
-  const ledgerId = options.spend.ledgerId;
-
+}): Promise<"delivered" | "retryable" | "refund_pending" | "insufficient_notes"> {
+  if (!options.receipt) return "delivered";
+  let recorded = false;
   try {
-    const settled = await settleOperationDelivery({
+    recorded = await recordTranscriptionResult({
       userId: options.userId,
-      spendLedgerId: ledgerId,
-      metadata: {
-        requestId: options.requestId,
-        operationId: options.operationId,
-        targetInstrument: options.targetInstrument,
-        trigger: "transcribe_delivered",
-      },
+      operationId: options.receipt.operationId,
+      requestHash: options.receipt.requestHash,
+      leaseEpoch: options.receipt.leaseEpoch,
+      result: options.result,
     });
+  } catch {
+    recorded = false;
+  }
+  if (!recorded) {
+    const refund = await releaseAndRefundTranscriptionAttempt(options);
+    return refund === "pending" ? "refund_pending" : "retryable";
+  }
 
-    if (settled.ok && settled.recharged && !settled.duplicate) {
-      // A prior failed attempt had refunded this operation; delivery re-charged
-      // it, so record the restored spend for the ledger's audit trail.
-      log("notes.spent", {
-        reason: "spend:hum",
-        cost: COST.hum,
-        balanceAfter: settled.balanceAfter,
-        ledgerId: settled.rechargeLedgerId,
-        recharge: true,
-        operationId: options.operationId,
-      }, {
-        route: ROUTE,
+  const settled = await settleRecordedTranscriptionOperation({
+    userId: options.userId,
+    operationId: options.receipt.operationId,
+    requestId: options.requestId,
+    targetInstrument: options.targetInstrument,
+    spendLedgerId: options.spend.ledgerId,
+  }).catch(() => ({ ok: false as const, reason: "billing_unavailable" as const }));
+  return settled.ok
+    ? "delivered"
+    : settled.reason === "insufficient_notes" ? "insufficient_notes" : "retryable";
+}
+
+async function releaseAndRefundTranscriptionAttempt(options: {
+  receipt: TranscriptionReceipt | null;
+  spend: BillingSpend;
+  requestId: string;
+  userId: string;
+  sessionId: string | null;
+  targetInstrument: string;
+}): Promise<TranscribeRefundOutcome> {
+  if (options.receipt) {
+    let released: boolean;
+    try {
+      released = await releaseTranscriptionAttempt({
+        userId: options.userId,
+        operationId: options.receipt.operationId,
+        leaseEpoch: options.receipt.leaseEpoch,
+        requestId: options.requestId,
+        targetInstrument: options.targetInstrument,
+      });
+    } catch (error) {
+      if (!options.spend.ledgerId) return "not_needed";
+      return recordTranscribeRefundPending({
+        ledgerId: options.spend.ledgerId,
+        failureReason: error instanceof Error ? error.message : String(error),
         requestId: options.requestId,
         userId: options.userId,
         sessionId: options.sessionId,
+        targetInstrument: options.targetInstrument,
       });
     }
-  } catch (error) {
-    log("notes.operation_settlement_failed", {
-      requestLedgerId: ledgerId,
-      operationId: options.operationId,
-      reason: error instanceof Error ? error.message : String(error),
-      reconciliation: "MANUAL_REVIEW",
-    }, {
-      route: ROUTE,
-      requestId: options.requestId,
-      userId: options.userId,
-      sessionId: options.sessionId,
-      level: "error",
-    });
+    // Another attempt owns the lease or already persisted the result. This
+    // stale request must not refund the shared operation spend.
+    if (!released) return "not_needed";
   }
+  return refundSpendIfNeeded(options);
 }
 
 async function refundSpendIfNeeded(options: {
-  spend:
-    | Awaited<ReturnType<typeof spendNotes>>
-    | {
-        ok: true;
-        ledgerId: null;
-        balanceBefore: null;
-        balanceAfter: null;
-        duplicate: false;
-      };
+  spend: BillingSpend;
   requestId: string;
   userId: string;
   sessionId: string | null;

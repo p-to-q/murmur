@@ -300,6 +300,17 @@ describe("operation state machine (#298)", () => {
       });
     });
 
+    it("keeps delivery pending when a refunded spend can no longer be re-charged", () => {
+      expect(decideOperationDelivery({
+        spend,
+        hasRefund: true,
+        hasDelivered: false,
+        hasRecharge: false,
+        currentBalance: 0,
+        currentDailyFree: 0,
+      })).toEqual({ kind: "insufficient", currentBalance: 0, required: 1 });
+    });
+
     it("does not re-charge twice when the recharge row already exists", () => {
       const decision = decideOperationDelivery({
         spend,

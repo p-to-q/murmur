@@ -11,9 +11,9 @@ same merged `main` SHA.
 
 ## Repository evidence
 
-- Bun tests: 1,221 pass, 0 fail, 4,268 assertions across 184 files after final
+- Bun tests: 1,281 pass, 0 fail, 4,456 assertions across 191 files after final
   release hardening;
-- release evidence/database/Vercel/music focused tests: 40 pass, 0 fail;
+- release evidence/database/Vercel/music focused suites pass with zero failures;
 - audio Worker suite: 47 pass, 0 fail; music Worker mock suite: 43 pass, 0 fail;
 - pinned HumTrans valid-split evidence passes 8/8 `auto` cases with zero
   warn/fail/error (average pitch 0.887, feel 0.822); the real production RunPod
@@ -24,12 +24,10 @@ same merged `main` SHA.
   Gallery playback -> non-empty audio download -> Share -> public playback in
   Chromium;
 - frozen install succeeds and `bun audit` reports no vulnerabilities;
-- PRs #441 and #442 currently have green machine checks. PRs #443, #444 and #440
-  pass repository CI but their Vercel Preview deployments fail after the strict
-  Preview environment contract is introduced. The Vercel project owner must
-  inspect the private deployment log, correct the real Preview configuration,
-  and obtain a green deployment on the final stack before release;
-- stacked PR machine checks must be re-proven after each rebase.
+- the integrated release PR #440 supersedes the earlier stacked PRs. Its final
+  head must pass repository CI and a real Vercel Preview under the strict
+  Preview environment contract; the Vercel owner must correct any private
+  dashboard configuration failure rather than weakening that contract.
 
 The authoritative repository evidence is the green required checks on the
 final `main` SHA. Local results do not replace review or CI.
@@ -59,17 +57,22 @@ Preview whose Git metadata matches the exact final PR head and whose Git tree
 matches the released merge. It compares opaque database identity, bucket and
 Worker resource markers, and distinct Sensitive record IDs without decrypting
 credentials. Never copy credential values into a PR or release note.
+The preflight also binds Preview and Production runtime Worker URLs/endpoints to
+their resource markers. Production builds expose only a SHA-256 fingerprint of
+the approved non-secret identities; immutable and alias smoke compare it with
+the fingerprint captured before mutation and immediately before deploy.
 
 ## Required release sequence
 
-1. Merge release-governance PR #436 before feature PRs so partial merges cannot
-   auto-deploy to Production.
-2. Merge the reviewed stack #433 -> #434 -> #439 -> #435 -> #437 -> #438 ->
-   #441 -> #442 -> #443 -> #444, then this release PR #440, with required checks green
-   at every boundary.
+1. Review and merge the single integrated release PR #440 to `main`; close the
+   earlier stacked PRs as superseded only after confirming their commits are in
+   #440. Required review and checks remain fail-closed.
+2. Confirm #440's exact final head has a green isolated Vercel Preview and the
+   repository's required `verify` check before merge.
 3. Confirm the final `main` SHA has green `verify`, CodeQL, dependency review,
    Bun/Python audits, bundle budget, and Vercel Preview.
-4. Apply migrations through `0032`; re-run journal convergence and the explicit
+4. Prove the actual migration-writer DSN is the approved runtime database before
+   its first write. Apply migrations through `0034`; re-run journal convergence and the explicit
    catalog/data-invariant verifier on the same SHA. Record the informational
    legacy null-session Push count, and fail if the superseded
    `push_subscriptions_active_session_required_check` exists.
@@ -81,12 +84,20 @@ credentials. Never copy credential values into a PR or release note.
 8. Approve the billing/refund record purpose, access roles, retention schedule,
    and final deletion/anonymization policy; record the owner and review date.
 9. Complete issue #445, including protected credential migration, fresh Vercel
-   dashboard acknowledgement, frozen evidence, real provider canary, and human
-   listening review; do not enable v2/durable-job flags without acceptance.
+   dashboard acknowledgement, frozen evidence, three-profile real provider
+   canary matrix, and human listening review; do not enable v2/durable-job flags
+   without acceptance.
 10. Dispatch `Release (production)` from `main` with the full final SHA, final
     PR number/head/branch, and approve Release Evidence then Production.
+    Production must hold the endpoint-scoped RunPod key used to re-attest one
+    pinned profile before mutation and again immediately before deploy.
 11. Require immutable-deployment and alias smoke with both real share and owner
-   audio fixtures configured.
+    audio fixtures configured. Before promotion, the immutable deployment also
+    runs a real transcription and quality-gated music generation through its
+    own Vercel Worker credentials, verifies evidence persistence, exact Worker
+    revision, and delivered audio SHA-256. The fixed owner must have at least
+    two Notes available; these two successful canary operations settle one Note
+    each and use stable release-derived operation IDs for safe workflow reruns.
 12. In a real browser, verify Save -> Gallery -> Play -> Download -> Share ->
    Public play -> Revoke and one failed object cleanup followed by retry.
 13. Tag that exact SHA as `v0.7.0-rc.2` and publish a GitHub Pre-release using
@@ -97,7 +108,7 @@ credentials. Never copy credential values into a PR or release note.
 - Keep durable jobs, v2 evidence enforcement, and private song-master writes
   independently disabled until each canary is accepted.
 - Application rollback promotes the last known-good exact-SHA deployment.
-- Migrations `0027`-`0032` are expand-compatible. Do not run down migrations while a
+- Migrations `0027`-`0034` are expand-compatible. Do not run down migrations while a
   deployed Web/Worker can still reference jobs or stored audio receipts.
 - A storage-cleanup incident is recovered by fixing the dependency and retrying
   leased outbox rows; never delete committed receipts to make dashboards green.

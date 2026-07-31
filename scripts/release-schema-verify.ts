@@ -6,7 +6,14 @@ import {
   resolveServerDsn,
 } from "../src/lib/db/config";
 
-type DefaultKind = "none" | "accepted" | "pending" | "zero" | "now" | "deadline";
+type DefaultKind =
+  | "none"
+  | "accepted"
+  | "pending"
+  | "processing"
+  | "zero"
+  | "now"
+  | "deadline";
 
 export interface SchemaColumnObservation {
   tableName: string;
@@ -102,7 +109,7 @@ interface FunctionExpectation {
 interface ConstraintExpectation {
   tableName: string;
   name: string;
-  type: "foreign_key" | "check";
+  type: "primary_key" | "foreign_key" | "check";
   columns?: string[];
   referencedSchema?: string;
   referencedTable?: string;
@@ -116,6 +123,7 @@ const REQUIRED_TABLES = [
   "account_deletion_jobs",
   "account_deletion_objects",
   "song_audio_objects",
+  "transcription_operations",
   "sessions",
   "push_subscriptions",
 ] as const;
@@ -135,7 +143,7 @@ const REQUIRED_COLUMNS: ColumnExpectation[] = [
   column("music_jobs", "lease_until", "timestamp", true),
   column("music_jobs", "provider_submitted_at", "timestamp", true),
   column("music_jobs", "deadline_at", "timestamp", false, "deadline"),
-  column("music_jobs", "next_run_at", "timestamp", true),
+  column("music_jobs", "next_run_at", "timestamp", true, "now"),
   column("music_jobs", "cancel_requested_at", "timestamp", true),
   column("music_jobs", "error_code", "varchar", true),
   column("music_jobs", "error_message", "text", true),
@@ -179,6 +187,18 @@ const REQUIRED_COLUMNS: ColumnExpectation[] = [
   column("song_audio_objects", "deleted_at", "timestamp", true),
   column("song_audio_objects", "created_at", "timestamp", false, "now"),
   column("song_audio_objects", "updated_at", "timestamp", false, "now"),
+
+  column("transcription_operations", "user_id", "varchar", false),
+  column("transcription_operations", "operation_id", "varchar", false),
+  column("transcription_operations", "request_hash", "varchar", false),
+  column("transcription_operations", "status", "varchar", false, "processing"),
+  column("transcription_operations", "result", "jsonb", true),
+  column("transcription_operations", "spend_ledger_id", "text", true),
+  column("transcription_operations", "lease_epoch", "int4", false, "zero"),
+  column("transcription_operations", "lease_until", "timestamp", true),
+  column("transcription_operations", "created_at", "timestamp", false, "now"),
+  column("transcription_operations", "updated_at", "timestamp", false, "now"),
+  column("transcription_operations", "finished_at", "timestamp", true),
 
   column("users", "deleted_at", "timestamp", true),
   column("songs", "mp3_storage_key", "text", true),
@@ -231,6 +251,15 @@ const REQUIRED_INDEXES: IndexExpectation[] = [
   index("song_audio_objects", "song_audio_objects_song_idx", false, [
     "using btree (user_id, song_id)",
   ]),
+  index("transcription_operations", "transcription_operations_pkey", true, [
+    "using btree (user_id, operation_id)",
+  ]),
+  index(
+    "transcription_operations",
+    "transcription_operations_status_lease_idx",
+    false,
+    ["using btree (status, lease_until)"],
+  ),
   index("push_subscriptions", "push_subscriptions_active_session_idx", false, [
     "using btree (session_id)",
     "disabled_at is null",
@@ -288,6 +317,32 @@ const REQUIRED_FUNCTIONS: FunctionExpectation[] = [
 ];
 
 const REQUIRED_CONSTRAINTS: ConstraintExpectation[] = [
+  {
+    tableName: "transcription_operations",
+    name: "transcription_operations_pkey",
+    type: "primary_key",
+    columns: ["user_id", "operation_id"],
+  },
+  {
+    tableName: "transcription_operations",
+    name: "transcription_operations_user_id_users_id_fk",
+    type: "foreign_key",
+    columns: ["user_id"],
+    referencedSchema: "public",
+    referencedTable: "users",
+    referencedColumns: ["id"],
+    deleteAction: "cascade",
+  },
+  {
+    tableName: "transcription_operations",
+    name: "transcription_operations_spend_ledger_id_notes_ledger_id_fk",
+    type: "foreign_key",
+    columns: ["spend_ledger_id"],
+    referencedSchema: "public",
+    referencedTable: "notes_ledger",
+    referencedColumns: ["id"],
+    deleteAction: "set null",
+  },
   {
     tableName: "push_subscriptions",
     name: "push_subscriptions_session_owner_fk",
@@ -348,7 +403,7 @@ function defaultMatches(kind: DefaultKind, expression: string | null): boolean {
   if (!expression) return false;
 
   const normalized = normalizeSql(expression).replace(/[()]/g, "");
-  if (kind === "accepted" || kind === "pending") {
+  if (kind === "accepted" || kind === "pending" || kind === "processing") {
     return normalized.includes(`'${kind}'`);
   }
   if (kind === "zero") return normalized === "0";
@@ -709,6 +764,7 @@ export async function loadReleaseSchemaSnapshot(
       source_table.relname AS table_name,
       constraint_state.conname AS constraint_name,
       CASE constraint_state.contype
+        WHEN 'p' THEN 'primary_key'
         WHEN 'f' THEN 'foreign_key'
         WHEN 'c' THEN 'check'
         ELSE constraint_state.contype::text
@@ -754,6 +810,9 @@ export async function loadReleaseSchemaSnapshot(
       ON target_namespace.oid = target_table.relnamespace
     WHERE source_namespace.nspname = 'public'
       AND constraint_state.conname IN (
+        'transcription_operations_pkey',
+        'transcription_operations_user_id_users_id_fk',
+        'transcription_operations_spend_ledger_id_notes_ledger_id_fk',
         'push_subscriptions_session_owner_fk',
         'push_subscriptions_active_session_required_check'
       )
@@ -895,7 +954,7 @@ async function main(): Promise<void> {
     console.log(
       `Legacy active Push rows awaiting device-session rebind: ${String(snapshot.invariants.legacyActivePushWithoutSession)}`,
     );
-    console.log("Release schema verification passed for migrations 0027-0032.");
+    console.log("Release schema verification passed for migrations 0027-0034.");
   } finally {
     await sql.end({ timeout: 5 });
   }

@@ -83,6 +83,10 @@ Constraints:
 - `accountKind IN ("local_creator", "registered")`.
 - `notesBalance` may be negative after a provider refund reverses notes the
   user already spent; the negative value is billing debt, not spendable balance.
+- Operation delivery settlement itself never creates new debt: when a prior
+  failed-work refund needs to be re-charged but the current balance is too low,
+  the verified result remains recoverable and delivery returns
+  `insufficient_notes` until balance is available.
 - `dailyFreeNotesBalance >= 0` and `dailyFreeNotesBalance <= max(notesBalance, 0)`
   (enforced in app).
 
@@ -258,6 +262,23 @@ async function spendNotes(
 Acquires `SELECT ... FOR UPDATE` on the user row, checks balance,
 inserts ledger row, updates balance, commits. Returns the typed
 result.
+
+#### Transcription operation receipts
+
+`transcription_operations` binds a stable `(user_id, operation_id)` to the
+SHA-256 of the uploaded audio plus target instrument, the original Hum spend,
+the final `TranscriptionResult`, and a fenced processing lease. Status moves
+through `processing -> result_ready -> succeeded`; worker failure moves the
+same lease epoch to `retryable` while atomically recording pending-refund
+intent. Exact retries recover `result_ready`/`succeeded` without calling the
+Worker, while an id reused with different input returns `409`.
+
+The receipt and spend are created in one user-row-locked transaction. A legacy
+`hum:op:*` spend without a matching receipt has no verifiable audio hash, so it
+is rejected as an idempotency conflict rather than silently attached to new
+input. Settlement happens after the result is durable. If re-charging a prior
+refund requires unavailable balance, the result remains `result_ready` and no
+delivered marker or negative balance is written.
 
 ### 3.5 `share_referrals` (NEW)
 
@@ -456,6 +477,9 @@ Authoritative schema:
 
 Current event kinds:
 
+- `generation.completed` — bounded Worker receipt, quality, candidate, runtime,
+  timing, and cost evidence written after a successful synchronous or durable
+  generation; raw hum audio and prompt text are excluded.
 - `song.saved` — written by `POST /api/songs` after a successful DB save.
 - `song.shared` — reserved for the share-link route.
 - `song.exported` — reserved for audio/image/video export adapters.
@@ -489,6 +513,15 @@ Indexes:
 
 Current writer:
 
+- `POST /api/music/generate` writes bounded `generation.completed` evidence
+  after the delivery Gate passes and before settlement or audio delivery. A
+  transient event failure refunds the operation and returns a retryable error;
+  retrying the same clip identity cannot double-charge the user.
+- The durable music runner records the same event before changing
+  `result_ready` to `succeeded`. Its stable job-derived event id makes retries
+  idempotent; an event-write failure leaves the job retryable instead of losing
+  evidence after a terminal transition. Concurrent pollers cannot emit
+  duplicates, and `music_jobs.output` remains the durable result source.
 - `POST /api/songs` schedules a best-effort `song.saved` event after successful
   persistence. Event write failures are logged as
   `composition_event.write_failed` and do not block the user's save.
@@ -511,6 +544,8 @@ type CompositionTrainingExample = {
   flowId: string | null;
   generationBatchId: string | null;
   generationClipId: string | null;
+  generationAudioSha256: string | null;
+  generationLinkTrust: "user_asserted_server_verified" | null;
   sourceType: string | null;
   sourceMelodyKind: "intent" | "corrected" | "musical";
   lineage: {

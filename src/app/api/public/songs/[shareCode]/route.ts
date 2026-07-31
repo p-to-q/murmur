@@ -47,9 +47,9 @@ export async function GET(
   }
 
   try {
-    const { getPublicSongByShareCode } = await import("@/lib/db/queries/songs");
-    const song = await getPublicSongByShareCode(shareCode!);
-    if (!song || !hasSongShareAudio(song)) {
+    const { getPublicSongMetadataByShareCode } = await import("@/lib/db/queries/songs");
+    const song = await getPublicSongMetadataByShareCode(shareCode!);
+    if (!song || !song.hasAudio) {
       return errorResponse("not_found", 404, requestId);
     }
     return publicSongResponse(toPublicSong(song), requestId);
@@ -118,26 +118,29 @@ function toPublicSong(song: {
   vibeEn: string;
   bpm: number;
   keySignature: string;
-  scaleType: string;
   duration: number;
-  sourceMelodyKind: string;
-  editCount: number;
-  editDepth: string;
   visibility: string;
   shareCode: string | null;
   mp3DataUrl?: string | null;
   mp3Url?: string | null;
   mp3StorageKey?: string | null;
+  hasAudio?: boolean;
+  hasManagedAudio?: boolean;
+  legacyAudioUrl?: string | null;
   visualConfig: unknown;
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
 }) {
+  const legacyAudioUrl = song.legacyAudioUrl ?? song.mp3Url ?? null;
+  const hasManagedAudio = song.hasManagedAudio === undefined
+    ? hasSongAudioReference(song)
+    : song.hasManagedAudio || hasSongAudioReference({ mp3Url: legacyAudioUrl });
   const audioUrl = isDemoSongId(song.id)
-    ? song.mp3Url ?? null
-    : hasSongAudioReference(song)
+    ? legacyAudioUrl
+    : hasManagedAudio
       ? publicSongAudioUrl(song.shareCode!)
-      : song.mp3Url ?? null;
+      : legacyAudioUrl;
   return {
     id: song.id,
     title: song.title,

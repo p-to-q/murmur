@@ -85,8 +85,11 @@ test("demo recovery completes creation, gallery playback, download, share, and p
   const downloadedPath = await download.path();
   expect(downloadedPath).not.toBeNull();
   expect((await stat(downloadedPath!)).size).toBeGreaterThan(0);
-  await page.getByRole("button", { name: "Share link" }).click();
+  const shareLinkButton = page.getByRole("button", { name: "Share link" });
+  await shareLinkButton.click();
   await expect.poll(() => api.shareCreated).toBe(true);
+  await expect(page.getByText("Share link copied", { exact: true })).toBeVisible();
+  await expect(shareLinkButton).toBeEnabled();
 
   await page.goto(`/s/${SHARE_CODE}`);
   await expect(page.getByTestId("public-song-screen")).toBeVisible();

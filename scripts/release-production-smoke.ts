@@ -1,12 +1,17 @@
 import { detectAudioFileType } from "@/lib/audio/file-signature";
+import { createHash } from "node:crypto";
 import { APP_BUILD, APP_VERSION } from "../src/lib/release-metadata";
+import {
+  buildCanaryMelody,
+  loadCanaryDatasetInputs,
+} from "./release-music-provider-canary";
 
 let origin: string;
 let expectedSha: string;
+let expectedResourceFingerprint: string | undefined;
 const probes = [
   { path: "/", contentType: "text/html" },
   { path: "/gallery", contentType: "text/html" },
-  { path: "/api/music/health", contentType: "application/json" },
 ] as const;
 
 async function probe(path: string, expectedContentType: string) {
@@ -50,15 +55,12 @@ async function verifyReleaseIdentity() {
         signal: AbortSignal.timeout(12_000),
       });
       const identity = await parseReleaseIdentity(response);
-      if (
-        identity.sha !== expectedSha ||
-        identity.version !== APP_VERSION ||
-        identity.build !== APP_BUILD
-      ) {
-        throw new Error(
-          `release identity mismatch: expected ${APP_VERSION}/${APP_BUILD}/${expectedSha}, got ${String(identity.version)}/${String(identity.build)}/${String(identity.sha)}`,
-        );
-      }
+      assertReleaseIdentity(identity, {
+        version: APP_VERSION,
+        build: APP_BUILD,
+        sha: expectedSha,
+        resourceFingerprint: expectedResourceFingerprint,
+      });
       consecutiveMatches += 1;
       if (consecutiveMatches >= 3) {
         console.log(
@@ -87,7 +89,30 @@ export async function parseReleaseIdentity(response: Response) {
     version?: unknown;
     build?: unknown;
     sha?: unknown;
+    resourceFingerprint?: unknown;
   };
+}
+
+export function assertReleaseIdentity(
+  actual: Awaited<ReturnType<typeof parseReleaseIdentity>>,
+  expected: {
+    version: string;
+    build: string;
+    sha: string;
+    resourceFingerprint?: string;
+  },
+) {
+  if (
+    actual.sha !== expected.sha
+    || actual.version !== expected.version
+    || actual.build !== expected.build
+    || (expected.resourceFingerprint
+      && actual.resourceFingerprint !== expected.resourceFingerprint)
+  ) {
+    throw new Error(
+      `release identity mismatch: expected ${expected.version}/${expected.build}/${expected.sha}/${expected.resourceFingerprint ?? "unverified-resource-fingerprint"}, got ${String(actual.version)}/${String(actual.build)}/${String(actual.sha)}/${String(actual.resourceFingerprint)}`,
+    );
+  }
 }
 
 function smokeHeaders(): Record<string, string> {
@@ -102,15 +127,22 @@ function smokeHeaders(): Record<string, string> {
 async function main() {
   const input = process.argv[2]?.trim();
   expectedSha = process.argv[3]?.trim();
+  expectedResourceFingerprint = process.env.EXPECTED_RELEASE_RESOURCE_FINGERPRINT?.trim();
   const requireAudio = process.argv.includes("--require-audio");
+  const requireWorkerCanary = process.argv.includes("--require-worker-canary");
   if (!input || !expectedSha) {
     throw new Error(
-      "Usage: bun scripts/release-production-smoke.ts <deployment-url> <expected-full-sha> [--require-audio]",
+      "Usage: bun scripts/release-production-smoke.ts <deployment-url> <expected-full-sha> [--require-audio] [--require-worker-canary]",
     );
   }
   if (!/^[0-9a-f]{40}$/i.test(expectedSha)) {
     throw new Error(
       "Expected release SHA must contain exactly 40 hexadecimal characters",
+    );
+  }
+  if (expectedResourceFingerprint && !/^[0-9a-f]{64}$/i.test(expectedResourceFingerprint)) {
+    throw new Error(
+      "EXPECTED_RELEASE_RESOURCE_FINGERPRINT must contain exactly 64 hexadecimal characters",
     );
   }
   origin = new URL(input).origin;
@@ -119,6 +151,7 @@ async function main() {
   for (const probeDefinition of probes) {
     await probe(probeDefinition.path, probeDefinition.contentType);
   }
+  await probeMusicHealth();
 
   const shareCode = process.env.MURMUR_SMOKE_SHARE_CODE?.trim();
   if (requireAudio && !shareCode) {
@@ -152,7 +185,159 @@ async function main() {
     );
   }
 
+  if (requireWorkerCanary && !ownerToken) {
+    throw new Error("MURMUR_SMOKE_SESSION_TOKEN is required for app Worker canary");
+  }
+  if (requireWorkerCanary && ownerToken) {
+    await probeDeployedWorkerPaths(ownerToken);
+  }
+
   console.log(`Release smoke passed for ${origin} at ${expectedSha}`);
+}
+
+export function assertMusicHealth(body: unknown): void {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error("music health returned an invalid body");
+  }
+  const health = body as Record<string, unknown>;
+  if (health.available !== true || health.configured !== true) {
+    throw new Error(
+      `music health unavailable: configured=${String(health.configured)} available=${String(health.available)} reason=${String(health.reason)}`,
+    );
+  }
+}
+
+async function probeMusicHealth(): Promise<void> {
+  const response = await fetchWithRetry(`${origin}/api/music/health`, {
+    headers: smokeHeaders(),
+  });
+  if (!response.ok) throw new Error(`music health returned ${response.status}`);
+  assertMusicHealth(await response.json());
+  console.log("ok /api/music/health (available)");
+}
+
+async function probeDeployedWorkerPaths(ownerToken: string): Promise<void> {
+  const manifestPath = process.env.MURMUR_CANARY_DATASET_MANIFEST?.trim();
+  const datasetRoot = process.env.MURMUR_CANARY_DATASET_ROOT?.trim();
+  const datasetRevision = process.env.MURMUR_CANARY_DATASET_REVISION?.trim();
+  if (!manifestPath || !datasetRoot || !datasetRevision) {
+    throw new Error("Pinned canary dataset paths and revision are required for app Worker smoke");
+  }
+  const [input] = await loadCanaryDatasetInputs({
+    manifestPath,
+    datasetRoot,
+    datasetRevision,
+  }, 1);
+  if (!input) throw new Error("Pinned app Worker canary input is missing");
+
+  const baseHeaders = {
+    ...smokeHeaders(),
+    Authorization: `Bearer ${ownerToken}`,
+  };
+  const transcribe = new FormData();
+  transcribe.append("audio", new File([input.hum], "release-canary.wav", {
+    type: "audio/wav",
+  }));
+  transcribe.append("targetInstrument", "piano");
+  const transcribeResponse = await fetchCanaryWithRetry("/api/transcribe", {
+    method: "POST",
+    headers: {
+      ...baseHeaders,
+      "x-operation-id": `release_${expectedSha.slice(0, 20)}_transcribe`,
+    },
+    body: transcribe,
+  }, 90_000);
+  const transcription = await parseJsonResponse(transcribeResponse, "transcription canary");
+  const cleanMelody = objectValue(transcription.cleanMelody);
+  if (!Array.isArray(cleanMelody?.notes) || cleanMelody.notes.length < 1) {
+    throw new Error("transcription canary returned no clean melody notes");
+  }
+  console.log("ok deployed Audio Worker transcription");
+
+  const duration = 8;
+  const melody = buildCanaryMelody(input.expectedPitches, duration);
+  const music = new FormData();
+  music.append(
+    "prompt",
+    "warm piano and soft strings, clear instrumental melody, stable dynamics, clean ending",
+  );
+  music.append("duration", String(duration));
+  music.append("styleMix", "0.35");
+  music.append("melody", melody);
+  music.append("hum", new File([input.hum], "release-canary.wav", {
+    type: "audio/wav",
+  }));
+  const musicResponse = await fetchCanaryWithRetry("/api/music/generate", {
+    method: "POST",
+    headers: {
+      ...baseHeaders,
+      "x-generation-batch-id": `release_${expectedSha.slice(0, 20)}`,
+      "x-generation-clip-id": `release_${expectedSha.slice(0, 20)}_music`,
+    },
+    body: music,
+  }, 310_000);
+  if (!musicResponse.ok) {
+    throw new Error(`music canary returned ${musicResponse.status}: ${await boundedBody(musicResponse)}`);
+  }
+  const bytes = new Uint8Array(await musicResponse.arrayBuffer());
+  const declaredDigest = musicResponse.headers.get("x-audio-sha256")?.toLowerCase();
+  const actualDigest = createHash("sha256").update(bytes).digest("hex");
+  if (
+    musicResponse.headers.get("content-type")?.startsWith("audio/") !== true
+    || !detectAudioFileType(bytes)
+    || declaredDigest !== actualDigest
+  ) {
+    throw new Error("music canary audio identity or digest mismatch");
+  }
+  console.log("ok deployed music generation, evidence, revision, and audio integrity");
+}
+
+async function fetchCanaryWithRetry(
+  path: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const response = await fetch(`${origin}${path}`, {
+        ...init,
+        redirect: "manual",
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (response.status >= 500 && attempt < 2) {
+        await response.arrayBuffer();
+        await Bun.sleep(2_000);
+        continue;
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await Bun.sleep(2_000);
+    }
+  }
+  throw lastError;
+}
+
+async function parseJsonResponse(response: Response, label: string): Promise<Record<string, unknown>> {
+  if (!response.ok) {
+    throw new Error(`${label} returned ${response.status}: ${await boundedBody(response)}`);
+  }
+  const body = await response.json() as unknown;
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error(`${label} returned invalid JSON`);
+  }
+  return body as Record<string, unknown>;
+}
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+async function boundedBody(response: Response): Promise<string> {
+  return (await response.text()).slice(0, 512);
 }
 
 async function probeAudio(

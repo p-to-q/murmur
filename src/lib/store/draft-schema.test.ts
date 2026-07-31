@@ -147,11 +147,13 @@ describe("parseVibeVersion", () => {
           styleMix: 0.35,
           operationId: "op_1",
           batchOperationId: "op_batch",
+          audioSha256: "A".repeat(64),
         },
       }),
     );
     expect(withIdentity?.generation?.operationId).toBe("op_1");
     expect(withIdentity?.generation?.batchOperationId).toBe("op_batch");
+    expect(withIdentity?.generation?.audioSha256).toBe("a".repeat(64));
   });
 });
 

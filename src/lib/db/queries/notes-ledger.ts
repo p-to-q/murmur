@@ -537,7 +537,11 @@ export type SettleOperationDeliveryResult =
       rechargeLedgerId: string | null;
       balanceAfter: number;
     }
-  | { ok: false; reason: "invalid_operation" | "user_not_found" };
+  | {
+      ok: false;
+      reason: "invalid_operation" | "user_not_found" | "insufficient_notes";
+      currentBalance?: number;
+    };
 
 /**
  * Settle a successfully delivered operation so it ends in exactly one net charge
@@ -636,6 +640,13 @@ export async function settleOperationDelivery(
         duplicate: true,
         rechargeLedgerId: existingRecharge?.id ?? null,
         balanceAfter: user.notesBalance,
+      };
+    }
+    if (decision.kind === "insufficient") {
+      return {
+        ok: false,
+        reason: "insufficient_notes",
+        currentBalance: decision.currentBalance,
       };
     }
 

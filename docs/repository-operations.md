@@ -86,8 +86,8 @@ Previews and **must not auto-deploy `main` to Production**.
   only after the `CI / verify` job succeeds for the current `main` SHA and the
   protected Release Evidence and Production approvals are granted.
 - **Exact revision:** the release checks out that 40-character SHA, asks Vercel
-  to build it with `--skip-domain`, smokes the immutable URL, then promotes only
-  that verified deployment.
+  to build it with `--skip-domain`, validates owner/public audio delivery on the
+  immutable URL, then promotes only that verified deployment.
 - **Build command:** `bun run env:audit && bun run build` (see `vercel.json`).
   `env:audit` (`scripts/env-audit.ts`) fails the production build when a required
   environment variable is missing, so a misconfigured production deploy fails
@@ -116,11 +116,14 @@ Database migrations run before the Vercel deploy in
   Preview/Production resource isolation, Audio Worker readiness, production DB
   identity, and that the Drizzle ledger is a non-empty exact prefix of the
   candidate journal. It does not enqueue GPU work or mutate production.
-- **Provider evidence:** `mode=canary` stops after Release Evidence approval and one
-  bounded 10-second hum+melody RunPod job. The workflow requires the immutable
-  Worker revision, JAX backend, full v2 receipts, pre-normalization evidence,
-  zero interior dropouts, and both Worker/Web technical Gates; it retains the
-  non-user canary WAV and sanitized report for 14 days for listening review.
+- **Provider evidence:** `mode=canary` stops after Release Evidence approval and
+  a three-profile bounded hum+melody RunPod matrix. The workflow requires the
+  immutable Worker revision, JAX backend, full v2 receipts,
+  pre-normalization evidence, zero interior dropouts, and both Worker/Web
+  technical Gates; it retains non-user canary WAVs and sanitized reports for 14
+  days for listening review. Full release mode re-runs one profile before the
+  first mutation and immediately before deploy so an unchanged endpoint id
+  cannot conceal a changed provider revision.
 
 ### Authoritative release sequence
 
@@ -133,20 +136,28 @@ The production workflow is deliberately one serial chain:
    Preview is a READY deployment of the identical Git tree and exact PR head,
    Rolling Releases are disabled, resources are isolated, the Audio Worker is
    ready, and the DB ledger is an exact candidate prefix;
-3. protected Release Evidence approval authorizes one bounded provider canary and
-   its evidence artifact;
+3. protected Release Evidence approval authorizes one bounded three-profile
+   provider canary matrix and its evidence artifact;
 4. a second protected approval authorizes production mutation;
-5. production migrations run through the direct connection, then both the
+5. the actual migration-writer DSN is proved read-only against the approved
+   database identity before its first write; production migrations then run
+   through that direct connection, and both the
    migration and read-only catalog connections must see the exact complete
    ledger and identify the same database as the pooled runtime before schema
    catalog/data invariants are checked;
-6. the exact checkout is uploaded for a remote Vercel Production build with
+6. Vercel Production resource/runtime identities are hashed into a bounded,
+   non-secret fingerprint immediately before deploy; the exact checkout is
+   uploaded for a remote Vercel Production build with
    domain promotion disabled, where Sensitive values remain inside Vercel; the
    workflow proves the immutable deployment is READY and its public
-   `/api/release` identity matches the full approved SHA;
-7. Vercel promotes that verified deployment only after Rolling Releases are
+   `/api/release` identity matches both the full approved SHA and the approved
+   resource fingerprint;
+7. before promotion, the currently serving deployment ID is captured as the
+   rollback target and owner/public HEAD, Range, and download probes pass on the
+   immutable deployment;
+8. Vercel promotes that verified deployment only after Rolling Releases are
    proved disabled and the public alias converges to the same deployment ID;
-8. identity-aware HTTP and audio smoke run against
+9. identity-aware HTTP and audio smoke run against
    `https://murmur.ptoq.io` and reject stale release identity.
 
 Any failed stage stops later stages. The workflow uses a non-canceling
@@ -175,6 +186,7 @@ fails before reading an environment value.
 | Production secret | `MURMUR_RELEASE_DATABASE_MIGRATION_URL_UNPOOLED` | Direct migration-capable DSN |
 | Production secret | `MURMUR_RELEASE_DATABASE_RUNTIME_URL` | Pooled runtime DSN for post-migrate identity proof |
 | Production secret | `MURMUR_RELEASE_DATABASE_PREFLIGHT_URL_UNPOOLED` | Direct read-only DSN for post-migrate catalog verification |
+| Production secret | `MURMUR_RELEASE_RUNPOD_API_KEY` | RunPod key restricted to re-attesting the approved endpoint at mutation/deploy boundaries |
 | Production secret | `MURMUR_RELEASE_SMOKE_SESSION_TOKEN` | Owner-session token for the fixed audio smoke fixture |
 | Production secret | `MURMUR_RELEASE_VERCEL_BYPASS_SECRET` | Optional deployment-protection bypass for smoke |
 | Production variable | `MURMUR_RELEASE_SMOKE_SHARE_CODE` | Fixed public audio smoke fixture |
@@ -196,14 +208,24 @@ native Production enabled still recreates the pre-CI race even though the
 Actions release itself is correctly ordered.
 
 Vercel must also hold separate plain Preview/Production resource identity
-markers (`MURMUR_*_RESOURCE_ID`) and an immutable production
+markers (`MURMUR_*_RESOURCE_ID`) plus matching Preview and Production
+`AUDIO_WORKER_URL`, `RUNPOD_SERVERLESS_ENDPOINT_ID`, and `MUSIC_ENGINE_MODE`
+records, and an immutable production
 `MURMUR_MUSIC_RELEASE_SHA`. `scripts/deploy-music-serverless.ts` writes the
 music endpoint identity and Worker SHA only after its deploy warm-up verifies
-the v2 protocol. The database marker is `sha256:<database identity hash>` emitted
+the v2 protocol. For this release, Production `MUSIC_ENGINE_MODE` must be
+`serverless`, and the actual `RUNPOD_SERVERLESS_ENDPOINT_ID` must equal the
+canaried resource marker; an HTTP failover requires its own canary and a later
+release. The database marker is `sha256:<database identity hash>` emitted
 by the read-only ledger preflight, and the Audio Worker marker is its canonical
-health-checked origin. The storage marker must be the real bucket/provider
+health-checked origin and must equal the actual Production `AUDIO_WORKER_URL`.
+The storage marker must be the real bucket/provider
 resource ID verified during owner configuration. Sensitive values are never
-copied into release artifacts.
+copied into release artifacts. The release hashes these non-secret identities,
+the actual runtime database identity, storage driver/bucket/region/optional
+endpoint, the Worker revision, and fail-closed evidence flags; immutable and
+promoted deployment smoke reject any build whose runtime fingerprint differs
+from the approved preflight.
 Vercel Sensitive variables cannot be decrypted after creation and are available
 only inside Vercel build/runtime, so GitHub uses separately scoped
 Production-environment credentials instead of `vercel env pull/run`.
@@ -215,7 +237,14 @@ origins, or worker URLs. The canonical `bun run build` still runs `env:audit`;
 with a remote build it validates the real values inside Vercel before the
 deployment is promoted.
 
-The immutable Vercel deployment is checked before any user-facing domain moves.
+The immutable Vercel deployment, including real owner/public audio delivery, is
+checked before any user-facing domain moves. This smoke also performs one real
+transcription and one quality-gated music generation through the deployment's
+own runtime credentials. Those two successful calls are deliberate controlled
+writes: they settle one Note each, persist normal billing/generation evidence,
+and use stable release-SHA-derived operation IDs so a workflow rerun replays the
+same purchases instead of charging twice. Keep at least two Notes on the fixed
+smoke owner and do not reuse a customer session for this fixture.
 The workflow parses Vercel's structured inspect output and explicitly requires
 `READY` plus `target=production`; a CLI wait timeout alone is never considered
 success. After promotion, the canonical alias must resolve to that exact
@@ -296,10 +325,10 @@ rather than trusting this summary to stay complete:
 ### Rollback and incident ownership
 
 - **Failed deploys do not replace the serving alias:** if the exact-SHA build or
-  deploy fails, the workflow stops and the last successful Production
-  deployment remains serving. If post-deploy alias smoke fails, treat the
-  release as an incident and explicitly promote the last known-good Vercel
-  deployment; schema rollback remains a separate decision.
+  immutable audio smoke fails, the workflow stops before promotion. It captures
+  the previous deployment ID before building; if promotion convergence or alias
+  audio smoke fails, it runs `vercel rollback` against that exact ID and still
+  fails the release. Schema rollback remains a separate decision.
 - **Migrations are not auto-rolled-back:** each migration has a `.down.sql`
   pair, but the workflow only rolls forward. Reversing a migration is a manual,
   owner-run operation against the direct endpoint, and it is only safe when no
@@ -346,9 +375,12 @@ limits are different:
   regressions.
 - Vercel's external Git setting must remain configured to skip native Production
   deploys from `main`; GitHub Actions cannot audit that dashboard-only setting.
-- Production smoke is deliberately read-only. The separately approved provider
-  canary proves one real RunPod generation from a pinned, MIDI-annotated
-  HumTrans validation case, not billing or a user-owned song.
+- Preflight and alias audio smoke are read-only. The separately approved direct
+  provider canary proves three RunPod generations from pinned, MIDI-annotated
+  HumTrans validation cases across melodic, rhythmic, and sparse profiles. The
+  immutable app-canary is the narrow exception described above: it verifies the
+  deployed billing, Audio Worker, music Worker, evidence, and delivery path with
+  a dedicated owner fixture before promotion.
 - Audio acceptance downloads a bounded official HumTrans validation subset with
   MIDI references. The weekday run evaluates eight pinned valid-split cases; a
   manual run may select 1–32. Release evidence hard-gates only the production `auto`

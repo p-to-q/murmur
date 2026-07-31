@@ -12,6 +12,8 @@ import {
   deleteSubmittedHum,
   refundCanceledMusicJob,
 } from "@/lib/platform/music-job-runner";
+import { resolveMusicJobDelivery } from "@/lib/platform/music-job-delivery";
+import { COST } from "@murmur/core";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -25,10 +27,16 @@ export async function GET(request: NextRequest, context: Context) {
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const { jobId } = await context.params;
-  const job = await getMusicJobForUser(auth.user.id, jobId);
+  let job = await getMusicJobForUser(auth.user.id, jobId);
   if (!job) return notFound(requestId);
 
-  if (["accepted", "queued", "running", "result_ready", "cancel_requested"].includes(job.status)) {
+  if (job.status === "result_ready") {
+    const delivery = await resolveMusicJobDelivery(job);
+    if (!delivery.ok) return settlementFailure(delivery, requestId);
+    job = delivery.job;
+  }
+
+  if (["accepted", "queued", "running", "cancel_requested"].includes(job.status)) {
     scheduleAfterResponse(() => advanceMusicJob(auth.user.id, job.id));
   }
   return NextResponse.json(toResponse(job), { headers: headers(requestId) });
@@ -85,4 +93,22 @@ function notFound(requestId: string) {
     status: 404,
     headers: headers(requestId),
   });
+}
+
+function settlementFailure(
+  result: Extract<Awaited<ReturnType<typeof resolveMusicJobDelivery>>, { ok: false }>,
+  requestId: string,
+) {
+  const insufficient = result.reason === "insufficient_notes";
+  return NextResponse.json({
+    error: insufficient ? "insufficient_notes" : "billing_unavailable",
+    message: insufficient
+      ? "Generated audio is ready and waiting for Notes settlement. Retry this operation to recover it."
+      : "Generated audio is ready, but delivery settlement is temporarily unavailable.",
+    jobId: result.job.id,
+    jobStatus: "result_ready",
+    recoverable: true,
+    ...(insufficient ? { currentBalance: result.currentBalance, cost: COST.music_generate } : {}),
+    requestId,
+  }, { status: insufficient ? 402 : 503, headers: headers(requestId) });
 }

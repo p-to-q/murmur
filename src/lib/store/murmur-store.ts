@@ -5,11 +5,14 @@ import {
   clearAllClipArtifacts,
   sweepExpiredClipArtifacts,
 } from "@/lib/store/generation-artifact-store";
-import { parsePersistedDraft } from "@/lib/store/draft-schema";
+import {
+  parsePersistedDraft,
+  type CreationRoute,
+} from "@/lib/store/draft-schema";
 
 export type RecordingState =
   "idle" | "recording" | "processing" | "done" | "error";
-export type CreationRoute = "/vibe" | "/studio" | "/studio/name";
+export type { CreationRoute } from "@/lib/store/draft-schema";
 
 const DRAFT_STORAGE_KEY = "murmur-creation-draft-v1";
 const DRAFT_STORAGE_VERSION = 1;

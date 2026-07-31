@@ -97,9 +97,39 @@ export async function getSongShareMetaByShareCode(shareCode: string) {
   return rows[0] ?? null;
 }
 
-// Public share playback needs the audio but never the arrangement editor
-// state; leaving the fat jsonb in the database roughly halves what this
-// unauthenticated endpoint reads and discards per hit.
+// Public share metadata needs to identify the delivery path, but it must not
+// pull a legacy multi-MB data URL into every anonymous page request.
+export async function getPublicSongMetadataByShareCode(shareCode: string) {
+  const rows = await db
+    .select({
+      id: songs.id,
+      title: songs.title,
+      vibe: songs.vibe,
+      vibeEn: songs.vibeEn,
+      bpm: songs.bpm,
+      keySignature: songs.keySignature,
+      duration: songs.duration,
+      visibility: songs.visibility,
+      shareCode: songs.shareCode,
+      hasAudio: sql<boolean>`((${songs.mp3StorageKey} is not null and ${songs.mp3StorageKey} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> '') or (${songs.mp3Url} is not null and ${songs.mp3Url} <> ''))`,
+      hasManagedAudio: sql<boolean>`((${songs.mp3StorageKey} is not null and ${songs.mp3StorageKey} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> ''))`,
+      legacyAudioUrl: songs.mp3Url,
+      visualConfig: songs.visualConfig,
+      tags: songs.tags,
+      createdAt: songs.createdAt,
+      updatedAt: songs.updatedAt,
+    })
+    .from(songs)
+    .where(and(
+      eq(songs.shareCode, shareCode),
+      inArray(songs.visibility, ["unlisted", "public"]),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+// The audio endpoint keeps the complete legacy reference so it can serve old
+// embedded masters while storage migration is still in progress.
 export async function getPublicSongByShareCode(shareCode: string) {
   const rows = await db
     .select({

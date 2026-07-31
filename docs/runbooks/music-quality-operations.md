@@ -95,12 +95,14 @@ failed/refunded clips.
 The `Release (production)` workflow exposes three explicit modes. Every mode
 requires protected Release Evidence approval before reading any evidence credential.
 `preflight` stops after read-only Vercel, database and Audio Worker evidence.
-`canary` additionally enqueues one 10-second job from a pinned, MIDI-annotated
-HumTrans validation case, verifies the immutable Worker SHA/JAX runtime and v2
-evidence, then retains its WAV plus sanitized report for 14 days so a reviewer
-can listen. `release` requires that same evidence and a second protected
-Production approval before any migration or deploy. A green canary proves execution
-integrity and technical delivery; the human listen remains the musicality check.
+`canary` additionally enqueues three bounded jobs from distinct pinned,
+MIDI-annotated HumTrans validation cases, verifies the immutable Worker SHA/JAX
+runtime and v2 evidence across melodic, rhythmic, and sparse profiles, then
+retains WAVs plus a sanitized report for 14 days so a reviewer can listen.
+`release` requires that same evidence and a second protected Production
+approval, then re-attests one profile before mutation and again immediately
+before deploy. A green canary proves execution integrity and technical
+delivery; the human listen remains the musicality check.
 
 Do not enable v2 evidence manually before the Worker endpoint is verified. Web
 and Worker releases are separate systems and GitHub workflows may run in

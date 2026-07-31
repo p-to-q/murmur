@@ -128,6 +128,9 @@ export function verifyMusicWorkerOutput(input: {
   const qualityCompat = optionalObject(input.output, "quality");
   const receipt = receiptV2 ?? receiptCompat;
   const workerQualityRaw = qualityV2 ?? qualityCompat;
+  const diagnosticsRaw = objectValue(input.output.diagnostics);
+  const runtimeRaw = objectValue(diagnosticsRaw?.runtime);
+  verifyExpectedWorkerRevision(runtimeRaw);
   const evidencePresent = Boolean(receipt && workerQualityRaw);
   const partialEvidence = Boolean(receipt) !== Boolean(workerQualityRaw);
   const requireV2Evidence = input.requireV2Evidence ?? isMusicV2EvidenceRequired();
@@ -173,8 +176,6 @@ export function verifyMusicWorkerOutput(input: {
     throw new Error("music_worker_quality_gate_failed");
   }
 
-  const diagnosticsRaw = objectValue(input.output.diagnostics);
-  const runtimeRaw = objectValue(diagnosticsRaw?.runtime);
   const workerWallMs = finiteNumber(diagnosticsRaw?.worker_wall_ms);
   const diagnosticsVersion = finiteNumber(diagnosticsRaw?.version) ?? 1;
   const candidateCount = finiteNumber(diagnosticsRaw?.candidate_count) ?? 1;
@@ -203,14 +204,26 @@ export function verifyMusicWorkerOutput(input: {
       workerWallMs,
       estimatedCostUsd: estimateWorkerCostUsd(workerWallMs),
       runtime: Object.fromEntries(
-        Object.entries(runtimeRaw ?? {}).flatMap(([key, value]) =>
-          typeof value === "string" ? [[key, value.slice(0, 128)]] : [],
+        Object.entries(runtimeRaw ?? {}).slice(0, 32).flatMap(([key, value]) =>
+          typeof value === "string" ? [[key.slice(0, 64), value.slice(0, 128)]] : [],
         ),
       ),
       inputReceipt,
       candidates,
     },
   };
+}
+
+function verifyExpectedWorkerRevision(runtime: Record<string, unknown> | null): void {
+  const expectedRevision = process.env.MURMUR_MUSIC_RELEASE_SHA?.trim().toLowerCase();
+  if (!expectedRevision) return;
+  if (!/^[0-9a-f]{40}$/.test(expectedRevision)) {
+    throw new Error("music_worker_expected_revision_invalid");
+  }
+  const actualRevision = stringValue(runtime?.engine_revision).toLowerCase();
+  if (actualRevision !== expectedRevision) {
+    throw new Error("music_worker_revision_mismatch");
+  }
 }
 
 export function isMusicQualityEvidenceRequired(): boolean {
@@ -430,11 +443,14 @@ function parseWorkerQuality(value: unknown): MusicQualityGateResult {
     version: quality.version,
     passed: quality.passed,
     failures: Array.isArray(quality.failures)
-      ? quality.failures.filter((item): item is string => typeof item === "string").slice(0, 16)
+      ? quality.failures
+          .filter((item): item is string => typeof item === "string")
+          .slice(0, 16)
+          .map((item) => item.slice(0, 128))
       : [],
     metrics: Object.fromEntries(
-      Object.entries(objectValue(quality.metrics) ?? {}).flatMap(([key, item]) =>
-        typeof item === "number" && Number.isFinite(item) ? [[key, item]] : [],
+      Object.entries(objectValue(quality.metrics) ?? {}).slice(0, 32).flatMap(([key, item]) =>
+        typeof item === "number" && Number.isFinite(item) ? [[key.slice(0, 64), item]] : [],
       ),
     ),
   };

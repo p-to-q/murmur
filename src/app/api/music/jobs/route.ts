@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
@@ -6,21 +5,18 @@ import { getRequestId } from "@/lib/api/request-id";
 import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
-import { createMusicJob } from "@/lib/db/queries/music-jobs";
 import type { MusicJob } from "@/lib/db/schema/music-jobs";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { safeHostnameFromUrl } from "@/lib/http/safe-hostname";
 import {
-  hashMusicJobRequest,
   MUSIC_BATCH_ID_PATTERN,
   MUSIC_OPERATION_ID_PATTERN,
 } from "@/lib/music/music-job-contract";
+import { createMusicJobReceipt } from "@/lib/platform/music-job-service";
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import { advanceMusicJob } from "@/lib/platform/music-job-runner";
+import { resolveMusicJobDelivery } from "@/lib/platform/music-job-delivery";
 import { getMusicEngineMode } from "@/lib/platform/music-worker";
-import { storeMusicJobHum } from "@/lib/storage/music-job-artifacts";
-import { shouldDeleteDuplicateHum } from "@/lib/storage/music-job-hum-lifecycle";
-import { getObjectStore } from "@/lib/storage";
 import { COST } from "@murmur/core";
 
 export const runtime = "nodejs";
@@ -84,49 +80,29 @@ export async function POST(request: NextRequest) {
     return error("validation_error", "hum recording is too large", 413, requestId);
   }
 
-  const humBytes = hum ? new Uint8Array(await hum.arrayBuffer()) : null;
-  const humDigest = humBytes ? createHash("sha256").update(humBytes).digest("hex") : null;
-  const requestHash = hashMusicJobRequest({ prompt, duration, styleMix, melody, humDigest });
-
-  let storedHum: Awaited<ReturnType<typeof storeMusicJobHum>> | null = null;
   try {
-    storedHum = humBytes
-      ? await storeMusicJobHum({
-          userId: auth.user.id,
-          operationId,
-          bytes: humBytes,
-          contentType: hum?.type || "audio/webm",
-        })
-      : null;
     const host = request.nextUrl?.hostname || safeHostnameFromUrl(request.url);
     const bill = !shouldSkipNotesBilling(auth)
       && !(auth.user.accountKind !== "local_creator" && shouldBypassBillingInDevelopment({ host }));
-    const created = await createMusicJob({
+    const created = await createMusicJobReceipt({
       userId: auth.user.id,
       operationId,
-      requestHash,
       requestId,
+      prompt,
+      duration,
+      styleMix,
+      melody,
+      hum,
+      generationBatchId,
       bill,
-      input: {
-        originRequestId: requestId,
-        prompt,
-        duration,
-        styleMix,
-        melody,
-        humStorageKey: storedHum?.key ?? null,
-        humDigest: storedHum?.digest ?? null,
-        humContentType: hum?.type || null,
-        generationBatchId,
-      },
     });
 
     if (!created.ok) {
-      if (storedHum) await getObjectStore().delete(storedHum.key).catch(() => undefined);
       if (created.reason === "idempotency_conflict") {
         return NextResponse.json({
           error: "idempotency_conflict",
           message: "This operationId was already used with different music input",
-          jobId: created.job.id,
+          jobId: created.job?.id,
           requestId,
         }, { status: 409, headers: responseHeaders(requestId) });
       }
@@ -140,23 +116,20 @@ export async function POST(request: NextRequest) {
       }, { status, headers: responseHeaders(requestId) });
     }
 
-    if (storedHum && shouldDeleteDuplicateHum({
-      storedHumKey: storedHum.key,
-      duplicate: created.duplicate,
-      jobHumStorageKey: created.job.input.humStorageKey,
-    })) {
-      await getObjectStore().delete(storedHum.key).catch(() => undefined);
+    let job = created.job;
+    if (job.status === "result_ready") {
+      const delivery = await resolveMusicJobDelivery(job);
+      if (!delivery.ok) return settlementFailure(delivery, requestId);
+      job = delivery.job;
     }
-
-    if (!isTerminal(created.job.status)) {
-      scheduleAfterResponse(() => advanceMusicJob(auth.user.id, created.job.id));
+    if (!isTerminal(job.status)) {
+      scheduleAfterResponse(() => advanceMusicJob(auth.user.id, job.id));
     }
-    return NextResponse.json(jobResponse(created.job, created.duplicate), {
-      status: created.duplicate && isTerminal(created.job.status) ? 200 : 202,
-      headers: { ...responseHeaders(requestId), Location: `${ROUTE}/${created.job.id}` },
+    return NextResponse.json(jobResponse(job, created.duplicate), {
+      status: created.duplicate && isTerminal(job.status) ? 200 : 202,
+      headers: { ...responseHeaders(requestId), Location: `${ROUTE}/${job.id}` },
     });
   } catch (cause) {
-    if (storedHum) await getObjectStore().delete(storedHum.key).catch(() => undefined);
     return error(
       "server_error",
       cause instanceof Error ? cause.message : "Could not create music job",
@@ -209,4 +182,22 @@ function error(code: string, message: string, status: number, requestId: string)
     status,
     headers: responseHeaders(requestId),
   });
+}
+
+function settlementFailure(
+  result: Extract<Awaited<ReturnType<typeof resolveMusicJobDelivery>>, { ok: false }>,
+  requestId: string,
+) {
+  const insufficient = result.reason === "insufficient_notes";
+  return NextResponse.json({
+    error: insufficient ? "insufficient_notes" : "billing_unavailable",
+    message: insufficient
+      ? "Generated audio is ready and waiting for Notes settlement. Retry this operation to recover it."
+      : "Generated audio is ready, but delivery settlement is temporarily unavailable.",
+    jobId: result.job.id,
+    jobStatus: "result_ready",
+    recoverable: true,
+    ...(insufficient ? { currentBalance: result.currentBalance, cost: COST.music_generate } : {}),
+    requestId,
+  }, { status: insufficient ? 402 : 503, headers: responseHeaders(requestId) });
 }

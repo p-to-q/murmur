@@ -91,15 +91,25 @@ flowchart TB
   progress event for UI timing and observability. It is never used to start
   billed generation or attribution; arrangement generation waits for the final
   humming-engine melody selection.
+- Clients that send a valid `x-operation-id` use the durable
+  `transcription_operations` receipt. The receipt binds the audio digest and
+  target instrument to one result, spend, lease epoch, and settlement state.
+  Exact retries recover the recorded result; a different request under the
+  same id returns `409`; worker failure atomically releases the fenced attempt
+  and records refund intent. Legacy requests without an operation id retain
+  their non-replayable behavior.
 
 ### 2. Arrangement and editing
 
 - The vibe and studio flows transform melody into arrangement choices.
-- Paid music generation currently has two API contracts: the shipped
-  synchronous `/api/music/generate` path and the opt-in recoverable
-  `/api/music/jobs` path. The latter records spend, provider identity, output,
-  and settlement state server-side; it is not the default production client
-  path yet.
+- Paid music generation has a synchronous compatibility contract at
+  `/api/music/generate` and a recoverable contract at `/api/music/jobs`.
+  Serverless synchronous requests carrying a stable clip id now use the same
+  `music_jobs` receipt and runner internally, so old clients still receive WAV
+  responses without losing provider identity on disconnect. Requests without a
+  stable id retain the legacy direct path. Local development may still use the
+  HTTP Worker directly; production stable-clip requests fail before billing in
+  HTTP mode until it implements the same durable receipt and artifact replay.
 - `src/modules/` owns the arrangement rules, preview behavior, and export logic.
 - `/api/strummer/edit` adds LLM-assisted edit-token classification when a
   compatible AI gateway is configured.
@@ -175,8 +185,10 @@ flowchart TB
   `provenance`, lineage, audio storage references) and `composition_events`
   indexes lifecycle actions by user, draft, flow, generation batch, clip, and
   song. `src/lib/db/queries/composition-events.ts` exposes the read shape used
-  for internal corpus export; event writes are best-effort and must not block
-  the user's creative save path.
+  for internal corpus export. Save/share lifecycle events remain best-effort so
+  they do not block the creative save path; `generation.completed` is part of
+  the audio delivery contract and must persist before generated audio is
+  settled or delivered.
 - Per-component latency budgets (`src/lib/observability/latency-budgets.ts`) define P50/P95 ceilings for transcribe, music_generate, llm_edit, and db query paths. Transcribe, music generation, and Strummer emit a dedicated `latency.budget_exceeded` event when they exceed P95; durable aggregation and paging are not yet connected.
 - Language is negotiated before first paint from the explicit `murmur.lang`
   cookie first, then the request `Accept-Language` header, then the product
@@ -210,9 +222,10 @@ flowchart TB
   explicit retry state; it does not auto-retry because a new attempt may have
   paid-generation consequences. Stable per-clip operation identities and
   browser IndexedDB artifact recovery prevent duplicate billing and recover
-  completed local audio. That path does not preserve a provider job after the
-  browser request ends. Generation notifications are collapsed by the
-  browser-minted batch id.
+  completed local audio. In serverless mode a stable clip also preserves its
+  provider job and verified object-store artifact even when the compatibility
+  request ends. Generation notifications are collapsed by the browser-minted
+  batch id.
 
   The first server-owned paid-generation boundary is available at
   `POST /api/music/jobs`: the spend
@@ -221,8 +234,8 @@ flowchart TB
   same provider job after a lost request, `DELETE` records cancellation intent,
   and successful audio is recovered through the authenticated job audio route.
   The browser adapter is guarded by
-  `NEXT_PUBLIC_MURMUR_DURABLE_MUSIC_JOBS=1`; the legacy synchronous route remains
-  the default while production cutover is validated. Short, one-status-read
+  `NEXT_PUBLIC_MURMUR_DURABLE_MUSIC_JOBS=1`; the synchronous response shape remains
+  the default while the polling client cutover is validated. Short, one-status-read
   advances are triggered after creation, by client GET polling, and through the
   authenticated `/api/music/cron/jobs` dispatcher endpoint when deployment
   infrastructure schedules it. DB leases, fencing epochs, application

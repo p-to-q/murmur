@@ -5,9 +5,10 @@ Owner: product engineering<br>
 Last verified: 2026-07-30
 
 Paid music generation uses `music_jobs` as its recoverable source of truth.
-This boundary exists alongside the legacy synchronous `/api/music/generate`
-route. The browser adapter is implemented but remains off by default until a
-measured Preview/canary cutover proves the new path in production conditions.
+The polling browser adapter remains off by default until Preview/canary proves
+it, while stable-clip serverless calls to the synchronous
+`/api/music/generate` compatibility route already reuse this same receipt and
+return its settled object-store artifact as a WAV response.
 
 ## API contract
 
@@ -18,7 +19,7 @@ measured Preview/canary cutover proves the new path in production conditions.
 - Reusing an operation id with different canonical input returns `409
   idempotency_conflict`.
 - `GET /api/music/jobs/:jobId` returns only the owner's job and opportunistically
-  opportunistically advances the already recorded provider job id for lower
+  advances the already recorded provider job id for lower
   interactive latency.
 - `DELETE /api/music/jobs/:jobId` records `canceled` before submission or
   `cancel_requested` after submission. Cancellation and refund are idempotent.
@@ -90,8 +91,12 @@ terminal/refund metrics, and a real provider canary are verified in Preview.
 ## Migration rule
 
 Keep `/api/music/generate` until the Vibe client has shipped against jobs and a
-production metric confirms no legacy calls. Migration must preserve stable
-clip operation ids and first-ready progressive presentation.
+production metric confirms no legacy calls. Stable serverless clip ids are
+already hash-bound to durable jobs at that route; malformed/missing ids and the
+local HTTP Worker retain the direct compatibility path. In production, stable
+clips selected to HTTP fail before billing until that transport implements the
+same durable receipt and replay contract. Migration must preserve stable clip
+operation ids and first-ready progressive presentation.
 
 The browser compatibility switch is
 `NEXT_PUBLIC_MURMUR_DURABLE_MUSIC_JOBS=1`. It is off by default. In a Preview

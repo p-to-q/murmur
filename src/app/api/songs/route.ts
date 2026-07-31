@@ -15,7 +15,10 @@ import {
   createSong,
   createSongWithSpend,
 } from "@/lib/db/queries/songs";
-import { createCompositionEvent } from "@/lib/db/queries/composition-events";
+import {
+  createCompositionEvent,
+  hasVerifiedGenerationEvidence,
+} from "@/lib/db/queries/composition-events";
 import {
   createLocalSongFallback,
   getLocalSongSummariesByUserFallback,
@@ -548,6 +551,10 @@ async function buildSongInput(body: SongPayload, userId: string): Promise<SongIn
   // Validated by sourceMelodyKindSchema (#311); default only when omitted.
   const sourceMelodyKind = body.sourceMelodyKind ?? "corrected";
   const editDepth = deriveEditDepth(editCount);
+  const provenance = await verifiedSongProvenance(body.provenance ?? null, {
+    userId,
+    songId: id,
+  });
   // Derive + validate lineage server-side from the owned parent (#297) rather
   // than trusting client-supplied root/depth.
   const lineage = await deriveServerLineage({
@@ -587,11 +594,54 @@ async function buildSongInput(body: SongPayload, userId: string): Promise<SongIn
     editDepth,
     artifactVersion: SONG_ARTIFACT_VERSION,
     melody: body.melody ?? null,
-    provenance: body.provenance ?? null,
+    provenance,
     visualConfig: body.visualConfig,
     arrangementState: body.arrangementState,
     tags: body.tags,
   };
+}
+
+async function verifiedSongProvenance(
+  provenance: SongPayload["provenance"],
+  context: { userId: string; songId: string },
+): Promise<NonNullable<SongPayload["provenance"]> | null> {
+  if (!provenance) return null;
+
+  const { generationBatchId, generationClipId, generationAudioSha256 } = provenance;
+  const nonGenerationProvenance = { ...provenance };
+  delete nonGenerationProvenance.generationBatchId;
+  delete nonGenerationProvenance.generationClipId;
+  delete nonGenerationProvenance.generationAudioSha256;
+  delete nonGenerationProvenance.generationBatchIndex;
+  const withoutGenerationIdentity = Object.keys(nonGenerationProvenance).length > 0
+    ? nonGenerationProvenance
+    : null;
+
+  if (!generationBatchId || !generationClipId || !generationAudioSha256) {
+    return withoutGenerationIdentity;
+  }
+
+  try {
+    const verified = await hasVerifiedGenerationEvidence({
+      userId: context.userId,
+      generationBatchId,
+      generationClipId,
+      outputSha256: generationAudioSha256,
+    });
+    return verified ? provenance : withoutGenerationIdentity;
+  } catch {
+    // Provenance validation enriches a save; an unavailable evidence store
+    // must not turn a demo-safe/local save into data loss.
+    log("song.provenance_validation_failed", {
+      reason: "generation_evidence_unavailable",
+      songId: context.songId,
+    }, {
+      route: ROUTE,
+      userId: context.userId,
+      level: "warn",
+    });
+    return withoutGenerationIdentity;
+  }
 }
 
 /**

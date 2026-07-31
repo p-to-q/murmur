@@ -82,9 +82,9 @@ is available, the release is a no-go for new object-backed saves.
 
 1. Deploy the controlled audio routes, response contract, and compatible UI
    with `MURMUR_PRIVATE_SONG_AUDIO_DELIVERY` unset/false.
-2. Configure a dedicated long-lived public smoke fixture via the GitHub
-   `MURMUR_SMOKE_SHARE_CODE` variable. Optionally configure owner smoke with
-   `MURMUR_SMOKE_SONG_ID` plus the `MURMUR_SMOKE_SESSION_TOKEN` secret.
+2. Configure dedicated long-lived public and owner smoke fixtures via the
+   GitHub `MURMUR_SMOKE_SHARE_CODE` and `MURMUR_SMOKE_SONG_ID` variables plus
+   the `MURMUR_SMOKE_SESSION_TOKEN` secret. All three are required for release.
 3. Confirm production smoke proves `HEAD 200`, `Range 206`, recognizable audio
    bytes, and attachment disposition on the exact release SHA.
 4. Exercise Save -> Gallery -> Detail -> Download -> Share in a real browser,

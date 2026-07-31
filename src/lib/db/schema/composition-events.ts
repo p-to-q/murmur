@@ -6,6 +6,7 @@ import { songs } from "./songs";
 import { users } from "./users";
 
 export type CompositionEventKind =
+  | "generation.completed"
   | "song.saved"
   | "song.shared"
   | "song.exported"

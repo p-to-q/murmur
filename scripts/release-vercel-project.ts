@@ -1,3 +1,10 @@
+import { appendFileSync } from "node:fs";
+
+import {
+  RELEASE_RESOURCE_FINGERPRINT_KEYS,
+  releaseResourceFingerprint,
+} from "../src/lib/platform/release-resource-fingerprint";
+
 type VercelTarget = "preview" | "production" | "development";
 
 export interface VercelEnvRecord {
@@ -37,6 +44,20 @@ const RELEASE_CREDENTIALS = [
   "RUNPOD_API_KEY",
 ] as const;
 
+const RELEASE_FAIL_CLOSED_FLAGS = [
+  "MURMUR_MUSIC_QUALITY_EVIDENCE_REQUIRED",
+  "MURMUR_MUSIC_V2_EVIDENCE_REQUIRED",
+] as const;
+
+const RELEASE_RUNTIME = [
+  "MURMUR_STORAGE_DRIVER",
+  "MURMUR_STORAGE_S3_BUCKET",
+  "MURMUR_STORAGE_S3_REGION",
+  "AUDIO_WORKER_URL",
+  "RUNPOD_SERVERLESS_ENDPOINT_ID",
+  "MUSIC_ENGINE_MODE",
+] as const;
+
 function targets(record: VercelEnvRecord): VercelTarget[] {
   if (!record.target) return [];
   return Array.isArray(record.target) ? record.target : [record.target];
@@ -61,6 +82,22 @@ function effectiveRecord(
 function plainIdentity(record: VercelEnvRecord | null): string | null {
   if (!record || record.type !== "plain") return null;
   return record.value?.trim().toLowerCase() || null;
+}
+
+export function productionReleaseResourceFingerprint(
+  records: VercelEnvRecord[],
+): string | null {
+  const environment: Record<string, string> = {};
+  for (const key of RELEASE_RESOURCE_FINGERPRINT_KEYS) {
+    const record = effectiveRecord(records, key, "production");
+    if (key === "MURMUR_STORAGE_S3_ENDPOINT" && !record) {
+      environment[key] = "";
+      continue;
+    }
+    if (record?.type !== "plain" || record.value == null) return null;
+    environment[key] = record.value;
+  }
+  return releaseResourceFingerprint(environment);
 }
 
 export function collectVercelProjectIssues(input: {
@@ -161,6 +198,147 @@ export function collectVercelProjectIssues(input: {
       issues.push(`${key} must not use one Vercel record for Preview and Production`);
     }
   }
+  for (const key of RELEASE_FAIL_CLOSED_FLAGS) {
+    const production = effectiveRecord(input.envs, key, "production");
+    if (production?.type !== "plain" || production.value?.trim() !== "1") {
+      issues.push(`Production ${key} must be one plain value set to 1`);
+    }
+  }
+  for (const key of RELEASE_RUNTIME) {
+    for (const target of ["preview", "production"] as const) {
+      const record = effectiveRecord(input.envs, key, target, input.previewBranch);
+      const label = target === "preview" ? "Preview" : "Production";
+      if (record?.type !== "plain" || !record.value?.trim()) {
+        issues.push(`${label} ${key} must be one plain non-empty value`);
+      }
+    }
+  }
+  for (const target of ["preview", "production"] as const) {
+    const label = target === "preview" ? "Preview" : "Production";
+    const driver = plainIdentity(effectiveRecord(
+      input.envs,
+      "MURMUR_STORAGE_DRIVER",
+      target,
+      input.previewBranch,
+    ));
+    if (driver && driver !== "s3-compatible") {
+      issues.push(`${label} MURMUR_STORAGE_DRIVER must select durable s3-compatible storage`);
+    }
+  }
+  const previewStorageBucket = plainIdentity(effectiveRecord(
+    input.envs,
+    "MURMUR_STORAGE_S3_BUCKET",
+    "preview",
+    input.previewBranch,
+  ));
+  const productionStorageBucket = plainIdentity(effectiveRecord(
+    input.envs,
+    "MURMUR_STORAGE_S3_BUCKET",
+    "production",
+  ));
+  if (
+    previewStorageBucket
+    && productionStorageBucket
+    && previewStorageBucket === productionStorageBucket
+  ) {
+    issues.push("Preview storage bucket must differ from Production");
+  }
+  const previewMode = plainIdentity(effectiveRecord(
+    input.envs,
+    "MUSIC_ENGINE_MODE",
+    "preview",
+    input.previewBranch,
+  ));
+  if (previewMode && previewMode !== "serverless") {
+    issues.push("Preview MUSIC_ENGINE_MODE must select the serverless transport");
+  }
+  const productionMode = plainIdentity(effectiveRecord(
+    input.envs,
+    "MUSIC_ENGINE_MODE",
+    "production",
+  ));
+  if (productionMode && productionMode !== "serverless") {
+    issues.push("Production MUSIC_ENGINE_MODE must select the canaried serverless transport");
+  }
+  const previewEndpoint = plainIdentity(effectiveRecord(
+    input.envs,
+    "RUNPOD_SERVERLESS_ENDPOINT_ID",
+    "preview",
+    input.previewBranch,
+  ));
+  const previewMusicMarker = plainIdentity(effectiveRecord(
+    input.envs,
+    "MURMUR_MUSIC_WORKER_RESOURCE_ID",
+    "preview",
+    input.previewBranch,
+  ));
+  if (previewEndpoint && previewMusicMarker && previewEndpoint !== previewMusicMarker) {
+    issues.push("Preview RunPod endpoint must equal the Preview music resource marker");
+  }
+  const productionEndpoint = plainIdentity(effectiveRecord(
+    input.envs,
+    "RUNPOD_SERVERLESS_ENDPOINT_ID",
+    "production",
+  ));
+  if (
+    productionEndpoint
+    && plainIdentity(effectiveRecord(
+      input.envs,
+      "MURMUR_MUSIC_WORKER_RESOURCE_ID",
+      "production",
+    )) !== productionEndpoint
+  ) {
+    issues.push("Production RunPod endpoint must equal the Production music resource marker");
+  }
+  if (
+    input.expectedMusicWorkerResourceId
+    && productionEndpoint
+    && productionEndpoint !== input.expectedMusicWorkerResourceId.toLowerCase()
+  ) {
+    issues.push("Production RunPod endpoint must equal the canary endpoint id");
+  }
+  const previewAudioWorker = plainIdentity(effectiveRecord(
+    input.envs,
+    "AUDIO_WORKER_URL",
+    "preview",
+    input.previewBranch,
+  ));
+  const previewAudioMarker = plainIdentity(effectiveRecord(
+    input.envs,
+    "MURMUR_AUDIO_WORKER_RESOURCE_ID",
+    "preview",
+    input.previewBranch,
+  ));
+  if (
+    previewAudioWorker
+    && previewAudioMarker
+    && previewAudioWorker.replace(/\/+$/, "") !== previewAudioMarker.replace(/\/+$/, "")
+  ) {
+    issues.push("Preview AUDIO_WORKER_URL must equal the Preview Audio Worker resource marker");
+  }
+  const productionAudioWorker = plainIdentity(effectiveRecord(
+    input.envs,
+    "AUDIO_WORKER_URL",
+    "production",
+  ));
+  if (
+    productionAudioWorker
+    && plainIdentity(effectiveRecord(
+      input.envs,
+      "MURMUR_AUDIO_WORKER_RESOURCE_ID",
+      "production",
+    ))?.replace(/\/+$/, "") !== productionAudioWorker.replace(/\/+$/, "")
+  ) {
+    issues.push("Production AUDIO_WORKER_URL must equal the Production Audio Worker resource marker");
+  }
+  if (
+    input.expectedAudioWorkerResourceId
+    && productionAudioWorker
+    && productionAudioWorker.replace(/\/+$/, "")
+      !== input.expectedAudioWorkerResourceId.toLowerCase().replace(/\/+$/, "")
+  ) {
+    issues.push("Production AUDIO_WORKER_URL must equal the health-checked origin");
+  }
   return issues;
 }
 
@@ -214,6 +392,16 @@ if (import.meta.main) {
     console.error("Vercel project preflight failed:");
     for (const issue of issues) console.error(`  - ${issue}`);
     process.exit(1);
+  }
+  const resourceFingerprint = productionReleaseResourceFingerprint(
+    Array.isArray(envResponse.envs) ? envResponse.envs as VercelEnvRecord[] : [],
+  );
+  if (!resourceFingerprint) {
+    throw new Error("Production release resource fingerprint inputs are incomplete");
+  }
+  const githubOutput = process.env.GITHUB_OUTPUT?.trim();
+  if (githubOutput) {
+    appendFileSync(githubOutput, `release_resource_fingerprint=${resourceFingerprint}\n`);
   }
   console.log("Vercel project preflight passed without reading secret values.");
 }

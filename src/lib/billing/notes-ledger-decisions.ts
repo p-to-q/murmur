@@ -268,6 +268,10 @@ export function deriveOperationState(input: {
 export type OperationDeliveryDecision =
   // The delivered marker already exists — settlement is a no-op replay.
   | { kind: "already_delivered" }
+  // A prior refund restored the spend, but the user consumed that balance
+  // elsewhere before this operation recovered. Keep the result resumable;
+  // delivery must never make the account balance negative.
+  | { kind: "insufficient"; currentBalance: number; required: number }
   // Record delivery; the charge is already correct (happy path, or a
   // pending-only operation whose balance was never actually reversed).
   | {
@@ -336,6 +340,9 @@ export function decideOperationDelivery(input: {
   }
 
   const cost = Math.abs(input.spend.delta);
+  if (input.currentBalance < cost) {
+    return { kind: "insufficient", currentBalance: input.currentBalance, required: cost };
+  }
   const balanceAfter = input.currentBalance - cost;
   const rechargePools = decideRechargePoolsForOriginalSpend(
     input.spend.metadata,

@@ -79,6 +79,18 @@ export async function requestDurableMusicAudio(input: {
     });
   }
 
+  if (state.status === "result_ready") {
+    return Response.json({
+      error: "insufficient_notes",
+      message: "Generated audio is ready and waiting for Notes settlement. Retry this operation to recover it.",
+      jobStatus: "result_ready",
+      recoverable: true,
+      currentBalance: state.currentBalance,
+      cost: state.cost,
+      requestId: state.requestId,
+    }, { status: 402 });
+  }
+
   const error = typeof state.error === "object" && state.error
     ? state.error
     : { code: String(state.error || state.status || "server_error"), message: state.message };
@@ -104,7 +116,14 @@ async function readState(response: Response): Promise<MusicJobResponse> {
 }
 
 function isTerminal(status: MusicJobStatus | undefined): boolean {
-  return ["succeeded", "failed", "canceled", "expired", "submission_unknown"].includes(
+  return [
+    "result_ready",
+    "succeeded",
+    "failed",
+    "canceled",
+    "expired",
+    "submission_unknown",
+  ].includes(
     status ?? "",
   );
 }

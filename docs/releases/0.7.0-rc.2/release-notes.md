@@ -29,6 +29,9 @@ production release control.
 - Web and Worker now exchange versioned hashes and bounded evidence for melody,
   prompt, conditioning, sampling, candidate selection, normalization, runtime,
   and delivered audio.
+- Synchronous generation records a stable, digest-bound evidence row before it
+  settles billing or returns audio. Evidence failure refunds and fails closed,
+  while a same-operation retry cannot create a second charge.
 - Requested conditioning must be proven as applied. Missing or inconsistent
   evidence fails closed after the cutover flag is enabled.
 - A versioned signal-quality Gate rejects objectively broken candidates such
@@ -65,6 +68,9 @@ production release control.
 - Production release requires a reviewed, CI-green exact `main` SHA, protected
   Release Evidence approval for read-only/provider proof, and a separate
   protected Production approval before migrations run.
+- Before promotion, the immutable deployment performs one real transcription
+  and one quality-gated generation through its own Vercel runtime credentials,
+  then verifies persisted evidence, Worker revision, and delivered audio hash.
 - Migrations, convergence verification, exact-SHA deploy, immutable/alias smoke,
   tag, and GitHub Pre-release all refer to the same commit.
 - Bun dependency audit runs in CI. This candidate resolves the currently known
@@ -72,7 +78,7 @@ production release control.
 
 ## Compatibility and rollout
 
-- Migrations through `0032_push_subscription_session_lifecycle` use
+- Migrations through `0034_transcription_operation_receipts` use
   expand-compatible defaults/triggers/indexes; existing songs, legacy
   null-session Push rows, and the synchronous generation route remain
   supported. New Push writes still require an owned persistent session.

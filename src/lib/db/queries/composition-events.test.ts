@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 
-import { listCompositionTrainingExamples } from "./composition-events";
+import {
+  buildGenerationEvidenceIdentity,
+  listCompositionTrainingExamples,
+} from "./composition-events";
 import { normalizeConsentedUserIds } from "./composition-training-scope";
 
 describe("composition training consent allowlist", () => {
@@ -20,5 +23,23 @@ describe("composition training consent allowlist", () => {
     expect(await listCompositionTrainingExamples({
       consentedUserIds: ["", "   "],
     })).toEqual([]);
+  });
+});
+
+describe("generation evidence identity", () => {
+  it("requires batch, clip, and exact audio digest so retries cannot cross-link", () => {
+    const base = {
+      userId: "user-1",
+      batchId: "batch-1",
+      clipId: "clip-1",
+      audioSha256: "A".repeat(64),
+    };
+    const identity = buildGenerationEvidenceIdentity(base);
+
+    expect(identity).not.toBeNull();
+    expect(identity).toContain("a".repeat(64));
+    expect(buildGenerationEvidenceIdentity({ ...base, batchId: null })).toBeNull();
+    expect(buildGenerationEvidenceIdentity({ ...base, audioSha256: "b".repeat(64) }))
+      .not.toBe(identity);
   });
 });

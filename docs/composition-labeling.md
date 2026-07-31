@@ -2,12 +2,14 @@
 
 Status: implementation contract<br>
 Owner: product data / music systems<br>
-Last reviewed: 2026-07-19
+Last reviewed: 2026-07-31
 
 Murmur has `composition_events`, provenance ids, and a typed training export.
-At present only `song.saved` is written. `song.shared`, `song.exported`, and
-`song.feedback` are reserved but not connected to product actions. Treat them
-as gaps, not collected data.
+`generation.completed` records bounded technical evidence before synchronous
+audio is delivered or a durable job reaches `succeeded`; `song.saved` records
+the durable artifact link. Evidence failure keeps delivery fail-closed.
+`song.shared`, `song.exported`, and `song.feedback` are reserved but not
+connected to product actions. Treat them as gaps, not collected data.
 
 ## Label unit
 
@@ -43,10 +45,22 @@ text out of training exports unless separately consented and reviewed.
 
 ## Collection sequence
 
-1. Record automatic diagnostics for every generation without raw inputs.
+1. Record automatic diagnostics for every successful generation without raw
+   inputs or prompt text. The event is keyed by generation batch/clip id and
+   carries the exact output SHA-256, Worker input receipt hashes, quality
+   metrics, candidate evidence, runtime labels, and bounded cost/timing fields.
 2. Collect creator feedback on selected and rejected versions where identity
    remains available.
 3. Write share/export/play outcomes as lifecycle events, not quality labels.
+
+Training export links pre-save generation evidence to a saved artifact only when
+user, generation batch id, generation clip id, and exact output SHA-256 all
+match. Reusing a clip id during recovery cannot attach evidence from different
+audio bytes; saving the same exact generated clip more than once remains valid.
+The song save API verifies this tuple against server-authored evidence before it
+persists generation provenance. Incomplete, forged, or temporarily unverifiable
+generation identity is removed while ordinary flow/draft provenance and the
+user's save remain available.
 4. Send important samples to a blinded reviewer queue with two ratings and
    adjudication when dimensions differ by more than two points.
 5. Build versioned exports excluding deleted users and honoring consent and
@@ -56,6 +70,12 @@ text out of training exports unless separately consented and reviewed.
 allowlist from a separately reviewed consent source and rechecks deletion before
 returning. An empty allowlist exports nothing. Do not derive this allowlist from
 save, play, share, export, billing, or account activity.
+
+The export marks a linked generation as
+`generationLinkTrust: "user_asserted_server_verified"`: the event and digest
+exist as server evidence, while the user's choice to associate that generation
+with a song remains user-asserted. Never use this association alone as a
+quality label; quality training requires explicit feedback or reviewer labels.
 
 ## Dataset release receipt
 

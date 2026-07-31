@@ -8,6 +8,7 @@ import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import { createVibePromptBatch } from "@/lib/music/vibe-prompts";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import {
+  deleteClipArtifact,
   loadClipArtifact,
   persistClipArtifact,
 } from "@/lib/store/generation-artifact-store";
@@ -321,14 +322,17 @@ function newOperationId(): string {
 }
 
 /**
- * Error-card retry: a fresh attempt at a FAILED slot whose note was already
- * refunded, so it must charge again — mint a NEW operationId so the server
- * treats it as a new purchase rather than a deduped resume (#300).
+ * Error-card retry normally represents a refunded failed attempt and mints a
+ * new purchase identity. Post-delivery integrity/evidence failures and a
+ * result waiting for Notes settlement are exceptions: they resume the same
+ * operation so the durable result can be delivered without regenerating it.
  */
 export function regenerateVersionAudio(version: VibeVersion): void {
   if (!version.generation) return;
-  const operationId = newOperationId();
-  patchGeneration(version.id, {
+  const operationId = shouldResumePaidOperation(version.generation.errorCode)
+    ? version.generation.operationId ?? newOperationId()
+    : newOperationId();
+  clearGeneratedAudioForPending(version, {
     status: "pending",
     operationId,
     error: undefined,
@@ -360,9 +364,21 @@ export async function recoverVersionAudio(version: VibeVersion): Promise<void> {
   if (operationId) {
     const blob = await loadClipArtifact(operationId);
     if (blob) {
+      let audioSha256: string;
+      try {
+        audioSha256 = await sha256Blob(blob);
+      } catch {
+        await deleteClipArtifact(operationId);
+        resumeClipGeneration(version);
+        return;
+      }
       const url = URL.createObjectURL(blob);
       liveObjectUrls.push(url);
-      const applied = patchGeneration(version.id, { status: "ready", audioUrl: url });
+      const applied = patchGeneration(version.id, {
+        status: "ready",
+        audioUrl: url,
+        audioSha256,
+      });
       if (!applied) {
         URL.revokeObjectURL(url);
         liveObjectUrls = liveObjectUrls.filter((u) => u !== url);
@@ -378,7 +394,7 @@ export async function recoverVersionAudio(version: VibeVersion): Promise<void> {
 function resumeClipGeneration(version: VibeVersion): void {
   const generation = version.generation;
   if (!generation) return;
-  patchGeneration(version.id, {
+  clearGeneratedAudioForPending(version, {
     status: "pending",
     error: undefined,
     errorCode: undefined,
@@ -504,12 +520,47 @@ async function requestClip(
       throw await buildMusicGenerateError(res);
     }
     const blob = await res.blob();
+    const declaredAudioSha256 = validSha256(res.headers.get("x-audio-sha256"));
+    let audioSha256: string;
+    try {
+      audioSha256 = await sha256Blob(blob);
+    } catch {
+      throw new MusicGenerateRequestError(
+        "delivery_integrity",
+        "Generated audio could not be verified. Retry will resume the same purchase.",
+        502,
+      );
+    }
+    if (declaredAudioSha256 && declaredAudioSha256 !== audioSha256) {
+      throw new MusicGenerateRequestError(
+        "delivery_integrity",
+        "Generated audio failed integrity verification. Retry will resume the same purchase.",
+        502,
+      );
+    }
+    // Wait for IndexedDB before exposing `ready` when it works. Storage is a
+    // recovery cache, not the source of truth: private mode/quota failures must
+    // not discard valid, digest-checked audio already held in this session.
+    // A reload resumes the same paid operation and the server dedupes it.
+    if (operationId) {
+      const persistence = await persistClipArtifact(operationId, blob);
+      if (persistence === "failed") {
+        log("magenta.clip_artifact_persistence_failed", {
+          vibe: version.vibe,
+          operationId,
+          bytes: blob.size,
+        }, {
+          level: "warn",
+        });
+      }
+    }
     const url = URL.createObjectURL(blob);
     liveObjectUrls.push(url);
-    // Persist the exact bytes durably so a later reload recovers this clip
-    // without regenerating or re-charging it (#300).
-    if (operationId) void persistClipArtifact(operationId, blob);
-    const applied = patchGeneration(version.id, { status: "ready", audioUrl: url });
+    const applied = patchGeneration(version.id, {
+      status: "ready",
+      audioUrl: url,
+      ...(audioSha256 ? { audioSha256 } : {}),
+    });
     if (!applied) {
       // Batch was replaced while this clip was in flight.
       URL.revokeObjectURL(url);
@@ -653,6 +704,10 @@ function mapMusicGenerateErrorCode(
       return "worker_unavailable";
     case "worker_overloaded":
       return "worker_overloaded";
+    case "generation_evidence_unavailable":
+      return "generation_evidence_unavailable";
+    case "audio_integrity_failed":
+      return "delivery_integrity";
     case "server_error":
       return "server_error";
     default:
@@ -662,6 +717,13 @@ function mapMusicGenerateErrorCode(
       if (status >= 500) return "worker_unavailable";
       return "server_error";
   }
+}
+
+function shouldResumePaidOperation(code: VersionGenerationErrorCode | undefined): boolean {
+  return code === "insufficient_notes"
+    || code === "billing_unavailable"
+    || code === "delivery_integrity"
+    || code === "generation_evidence_unavailable";
 }
 
 function notifyIfBatchComplete(): void {
@@ -706,7 +768,7 @@ type VersionGenerationPatch =
   | Partial<
       Pick<
         VersionGeneration,
-        "audioUrl" | "currentBalance" | "cost" | "operationId" | "batchOperationId"
+        "audioUrl" | "audioSha256" | "currentBalance" | "cost" | "operationId" | "batchOperationId"
       >
     > &
     ({ status: "pending" | "ready"; error?: undefined; errorCode?: undefined }
@@ -735,4 +797,38 @@ function patchGeneration(
     store.setCurrentVersion(next);
   }
   return true;
+}
+
+function clearGeneratedAudioForPending(
+  version: VibeVersion,
+  patch: VersionGenerationPatch & { status: "pending" },
+): void {
+  const store = useMurmurStore.getState();
+  const previousUrls = new Set([
+    store.vibeVersions.find((candidate) => candidate.id === version.id)?.generation?.audioUrl,
+    store.currentVersion?.id === version.id
+      ? store.currentVersion.generation?.audioUrl
+      : undefined,
+  ]);
+  const applied = patchGeneration(version.id, {
+    ...patch,
+    audioUrl: undefined,
+    audioSha256: undefined,
+  });
+  if (!applied) return;
+  for (const previousUrl of previousUrls) {
+    if (!previousUrl || !liveObjectUrls.includes(previousUrl)) continue;
+    URL.revokeObjectURL(previousUrl);
+    liveObjectUrls = liveObjectUrls.filter((url) => url !== previousUrl);
+  }
+}
+
+function validSha256(value: string | null): string | null {
+  const normalized = value?.trim().toLowerCase();
+  return normalized && /^[0-9a-f]{64}$/.test(normalized) ? normalized : null;
+}
+
+async function sha256Blob(blob: Blob): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }

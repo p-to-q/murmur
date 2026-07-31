@@ -139,7 +139,9 @@ export const musicJobs = pgTable(
     deadlineAt: timestamp("deadline_at")
       .notNull()
       .default(sql`now() + interval '15 minutes'`),
-    nextRunAt: timestamp("next_run_at"),
+    // Old app versions omit this dispatcher column during migrate-before-deploy.
+    // Keep the default through the compatibility window so accepted jobs remain runnable.
+    nextRunAt: timestamp("next_run_at").defaultNow(),
     cancelRequestedAt: timestamp("cancel_requested_at"),
     errorCode: varchar("error_code", { length: 64 }),
     errorMessage: text("error_message"),

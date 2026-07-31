@@ -148,6 +148,13 @@ the ~4 GB model **once** onto the network volume mounted at `/runpod-volume`
   (`serverless` | `http`; `pod`/`worker` alias to `http`, `:44-48`) so failover
   can't silently land on the wrong transport. `auto`/unset → **serverless wins**
   when configured, else `http`.
+
+Transport selection and paid-delivery support are intentionally separate. The
+durable job receipt, request-hash fence, object-store artifact, and exact replay
+path currently target Serverless. In production, a stable-clip request selected
+to `http` therefore fails before billing; HTTP remains available for local
+development and explicit health/canary validation until it implements the same
+durable contract.
 - **Non-production**: falls back to the other transport to keep demos alive.
 
 ### 2.3 Serverless client — submit / poll / cancel

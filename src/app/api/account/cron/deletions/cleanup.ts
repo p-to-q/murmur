@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import {
   accountDeletionRetryAt,
   claimDueAccountDeletionJobs,
@@ -16,6 +18,10 @@ import { getObjectStore } from "@/lib/storage";
 import { advanceMusicJob } from "@/lib/platform/music-job-runner";
 
 const LEASE_MS = 5 * 60 * 1_000;
+
+export function storageKeyFingerprint(storageKey: string): string {
+  return createHash("sha256").update(storageKey).digest("hex").slice(0, 16);
+}
 
 export interface AccountDeletionCleanupSummary {
   reconciled: number;
@@ -121,7 +127,7 @@ async function processAccountDeletionJob(
           now,
         });
         log("account.delete_object_failed", {
-          storageKey,
+          storageKeyHash: storageKeyFingerprint(storageKey),
           reason: message,
         }, { userId: job.userId, level: "warn" });
       }

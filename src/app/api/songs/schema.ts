@@ -113,6 +113,7 @@ export const songProvenanceSchema = z.object({
   recordingOperationId: z.string().max(256).optional(),
   generationBatchId: z.string().max(256).optional(),
   generationClipId: z.string().max(256).optional(),
+  generationAudioSha256: z.string().regex(/^[0-9a-f]{64}$/i).transform((value) => value.toLowerCase()).optional(),
   generationBatchIndex: z.number().int().optional(),
   sourceType: z.enum(["hum", "demo", "library"]).optional(),
   captureQuality: z.literal("reduced").optional(),

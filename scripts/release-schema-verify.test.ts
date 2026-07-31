@@ -10,6 +10,7 @@ const defaultExpressions = {
   none: null,
   accepted: "'accepted'::character varying",
   pending: "'pending'::character varying",
+  processing: "'processing'::character varying",
   zero: "0",
   now: "now()",
   deadline: "(now() + '00:15:00'::interval)",
@@ -58,9 +59,10 @@ function passingSnapshot(): ReleaseSchemaSnapshot {
         ? [...entry.referencedColumns]
         : [],
       deleteAction: entry.deleteAction ?? null,
-      definition:
-        entry.type === "foreign_key"
-          ? "FOREIGN KEY (session_id, user_id) REFERENCES public.sessions(id, user_id) ON DELETE CASCADE"
+      definition: entry.type === "primary_key"
+        ? `PRIMARY KEY (${entry.columns?.join(", ") ?? ""})`
+        : entry.type === "foreign_key"
+          ? `FOREIGN KEY (${entry.columns?.join(", ") ?? ""}) REFERENCES public.${entry.referencedTable}(${entry.referencedColumns?.join(", ") ?? ""}) ON DELETE ${entry.deleteAction?.toUpperCase()}`
           : "CHECK (((disabled_at IS NOT NULL) OR (session_id IS NOT NULL)))",
     })),
     invariants: {
@@ -75,8 +77,38 @@ function passingSnapshot(): ReleaseSchemaSnapshot {
 }
 
 describe("release schema verifier", () => {
-  test("accepts the expected 0027-0032 schema and zero-count invariants", () => {
+  test("accepts the expected 0027-0034 schema and zero-count invariants", () => {
     expect(collectReleaseSchemaIssues(passingSnapshot())).toEqual([]);
+  });
+
+  test("rejects drift in the 0034 transcription operation receipt contract", () => {
+    const snapshot = passingSnapshot();
+    snapshot.columns = snapshot.columns.filter(
+      (entry) => !(
+        entry.tableName === "transcription_operations"
+        && entry.columnName === "request_hash"
+      ),
+    );
+    const statusLease = snapshot.indexes.find(
+      (entry) => entry.name === "transcription_operations_status_lease_idx",
+    );
+    if (!statusLease) throw new Error("test fixture is missing transcription lease index");
+    statusLease.definition = statusLease.definition.replace(
+      "(status, lease_until)",
+      "(lease_until, status)",
+    );
+    const spendFk = snapshot.constraints.find(
+      (entry) =>
+        entry.name === "transcription_operations_spend_ledger_id_notes_ledger_id_fk",
+    );
+    if (!spendFk) throw new Error("test fixture is missing transcription spend FK");
+    spendFk.deleteAction = "cascade";
+
+    expect(collectReleaseSchemaIssues(snapshot)).toEqual(expect.arrayContaining([
+      "missing column public.transcription_operations.request_hash",
+      "transcription_operations_status_lease_idx definition is missing: using btree (status, lease_until)",
+      "transcription_operations.transcription_operations_spend_ledger_id_notes_ledger_id_fk uses ON DELETE cascade; expected set null",
+    ]));
   });
 
   test("fails closed on missing tables and drifted column constraints", () => {

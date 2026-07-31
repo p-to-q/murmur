@@ -101,12 +101,19 @@ describe("validateCleanMelody", () => {
 
 describe("validateSongProvenance", () => {
   it("keeps known fields and drops an all-empty object", () => {
-    expect(validateSongProvenance({ flow: "f", sourceType: "hum", bogus: 1 })).toEqual({
+    expect(validateSongProvenance({
       flow: "f",
       sourceType: "hum",
+      generationAudioSha256: "A".repeat(64),
+      bogus: 1,
+    })).toEqual({
+      flow: "f",
+      sourceType: "hum",
+      generationAudioSha256: "a".repeat(64),
     });
     expect(validateSongProvenance({})).toBeNull();
     expect(validateSongProvenance({ sourceType: "not-a-source" })).toBeNull();
+    expect(validateSongProvenance({ generationAudioSha256: "not-a-digest" })).toBeNull();
   });
 });
 

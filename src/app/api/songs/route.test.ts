@@ -47,6 +47,12 @@ const createCompositionEventMock = mock(async (data: Record<string, unknown>) =>
     createdAt: new Date("2026-06-05T12:00:00.000Z"),
   };
 });
+let generationEvidenceVerified = true;
+let generationEvidenceError: unknown = null;
+const hasVerifiedGenerationEvidenceMock = mock(async () => {
+  if (generationEvidenceError) throw generationEvidenceError;
+  return generationEvidenceVerified;
+});
 let createSongError: unknown = null;
 const createSongMock = mock(async (data: Record<string, unknown>) => {
   if (createSongError) throw createSongError;
@@ -95,6 +101,7 @@ mock.module("@/lib/db/queries/songs", () => ({
   deleteSong: mock(async () => false),
   deleteSongForUser: mock(async () => false),
   getPublicSongByShareCode: mock(async () => null),
+  getPublicSongMetadataByShareCode: mock(async () => null),
   getPublicSongSummaries: mock(async () => []),
   getSongById: getSongByIdMock,
   getSongByIdForUser: mock(async () => null),
@@ -113,6 +120,7 @@ mock.module("@/lib/db/queries/songs", () => ({
 
 mock.module("@/lib/db/queries/composition-events", () => ({
   createCompositionEvent: createCompositionEventMock,
+  hasVerifiedGenerationEvidence: hasVerifiedGenerationEvidenceMock,
   listCompositionTrainingExamples: mock(async () => []),
 }));
 
@@ -160,10 +168,13 @@ beforeEach(async () => {
   createSongMock.mockClear();
   createSongWithSpendMock.mockClear();
   createCompositionEventMock.mockClear();
+  hasVerifiedGenerationEvidenceMock.mockClear();
   getSongByIdMock.mockClear();
   reserveSongAudioObjectMock.mockClear();
   createSongError = null;
   createSongWithSpendError = null;
+  generationEvidenceVerified = true;
+  generationEvidenceError = null;
   existingConflictSong = null;
   songSummaries = [];
   getSongSummariesError = null;
@@ -1091,6 +1102,111 @@ describe("POST /api/songs", () => {
       hasAudio: false,
       audioStorage: "none",
     }));
+  });
+
+  it("persists generation provenance only when the server evidence tuple is verified", async () => {
+    const generationAudioSha256 = "A".repeat(64);
+    const response = await POST(buildRequest({
+      id: "song_verified_generation",
+      title: "Verified Generation",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 92,
+      keySignature: "D",
+      scaleType: "minor",
+      duration: 12,
+      provenance: {
+        flow: "flow_verified",
+        generationBatchId: "batch_verified",
+        generationClipId: "clip_verified",
+        generationAudioSha256,
+        generationBatchIndex: 1,
+      },
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(hasVerifiedGenerationEvidenceMock).toHaveBeenCalledWith({
+      userId: "usr_song",
+      generationBatchId: "batch_verified",
+      generationClipId: "clip_verified",
+      outputSha256: generationAudioSha256.toLowerCase(),
+    });
+    expect(createdSongs[0]?.provenance).toEqual({
+      flow: "flow_verified",
+      generationBatchId: "batch_verified",
+      generationClipId: "clip_verified",
+      generationAudioSha256: generationAudioSha256.toLowerCase(),
+      generationBatchIndex: 1,
+    });
+  });
+
+  it("strips an unverified generation identity while preserving other provenance", async () => {
+    generationEvidenceVerified = false;
+    const response = await POST(buildRequest({
+      id: "song_unverified_generation",
+      title: "Unverified Generation",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 92,
+      keySignature: "D",
+      scaleType: "minor",
+      duration: 12,
+      provenance: {
+        flow: "flow_unverified",
+        draftId: "draft_unverified",
+        sourceType: "hum",
+        generationBatchId: "batch_unverified",
+        generationClipId: "clip_unverified",
+        generationAudioSha256: "b".repeat(64),
+        generationBatchIndex: 2,
+      },
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(createdSongs[0]?.provenance).toEqual({
+      flow: "flow_unverified",
+      draftId: "draft_unverified",
+      sourceType: "hum",
+    });
+  });
+
+  it("keeps saving when generation evidence validation is unavailable", async () => {
+    generationEvidenceError = Object.assign(new Error("connect ECONNREFUSED"), {
+      code: "ECONNREFUSED",
+    });
+    const response = await POST(buildRequest({
+      id: "song_generation_validation_down",
+      title: "Local Evidence Fallback",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 92,
+      keySignature: "D",
+      scaleType: "minor",
+      duration: 12,
+      provenance: {
+        flow: "flow_local",
+        sourceType: "demo",
+        generationBatchId: "batch_local",
+        generationClipId: "clip_local",
+        generationAudioSha256: "c".repeat(64),
+        generationBatchIndex: 0,
+      },
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(createdSongs[0]?.provenance).toEqual({
+      flow: "flow_local",
+      sourceType: "demo",
+    });
   });
 
   it("derives root + depth from the owned parent, overriding client-supplied lineage (#297)", async () => {

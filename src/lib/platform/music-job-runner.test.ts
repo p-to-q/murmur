@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, mock } from "bun:test";
 
 import {
   attachProviderAfterSubmission,
+  buildDurableMusicGenerationEvidence,
+  decodeMusicJobProviderAudio,
   deleteSubmittedHum,
   musicJobFailureDisposition,
   shouldReleaseMusicJobLease,
@@ -17,6 +19,16 @@ describe("music job terminal safety", () => {
       hasProviderJobId: true,
       errorKind: null,
     })).toBe("resume");
+  });
+
+  it("fails and refunds a rejected provider delivery even after output was observed", () => {
+    expect(musicJobFailureDisposition({
+      hasRecordedOutput: false,
+      providerOutputObserved: true,
+      hasProviderJobId: true,
+      errorKind: null,
+      outputRejected: true,
+    })).toBe("fail_refund");
   });
 
   it("replays settlement when a durable result already exists", () => {
@@ -44,6 +56,42 @@ describe("music job terminal safety", () => {
       hasProviderJobId: false,
       errorKind: null,
     })).toBe("fail_refund");
+  });
+});
+
+describe("music job provider delivery", () => {
+  it("maps a fenced durable result to the same generation evidence identity", () => {
+    expect(buildDurableMusicGenerationEvidence({
+      id: "mjob_evidence",
+      userId: "usr_evidence",
+      operationId: "clip_evidence",
+      input: { generationBatchId: "batch_evidence", duration: 10, styleMix: 0.35 },
+      output: {
+        storageKey: "music/usr_evidence/mjob_evidence.wav",
+        contentType: "audio/wav",
+        sizeBytes: 1024,
+        digest: "a".repeat(64),
+        model: "mrt2_base",
+        generationMs: 100,
+        styleMix: "0.35",
+      },
+    })).toMatchObject({
+      requestId: "mjob_evidence",
+      batchId: "batch_evidence",
+      clipId: "clip_evidence",
+      outputSha256: "a".repeat(64),
+      outputBytes: 1024,
+    });
+  });
+
+  it("rejects a terminal provider success without audio", () => {
+    expect(() => decodeMusicJobProviderAudio({}, 10)).toThrow("provider_audio_missing");
+  });
+
+  it("rejects oversized base64 before decoding it", () => {
+    const oversized = "A".repeat(4 * 1024 * 1024);
+    expect(() => decodeMusicJobProviderAudio({ audio_b64: oversized }, 2))
+      .toThrow("payload_too_large");
   });
 });
 

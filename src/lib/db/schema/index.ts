@@ -11,5 +11,6 @@ export * from "./rate-limits";
 export * from "./push-subscriptions";
 export * from "./composition-events";
 export * from "./music-jobs";
+export * from "./transcription-operations";
 export * from "./account-deletion-jobs";
 export * from "./song-audio-objects";

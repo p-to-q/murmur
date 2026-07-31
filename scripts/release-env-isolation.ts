@@ -1,4 +1,7 @@
 import { parse } from "dotenv";
+import { databaseIdentity } from "../src/lib/db/resource-identity";
+
+export { databaseIdentity } from "../src/lib/db/resource-identity";
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
@@ -39,20 +42,6 @@ function firstValue(env: Environment, keys: readonly string[]): string | null {
     if (value) return value;
   }
   return null;
-}
-
-export function databaseIdentity(value: string): string | null {
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") return null;
-    const database = url.pathname.replace(/^\/+/, "").toLowerCase();
-    if (!url.hostname || !database) return null;
-    const hostname = url.hostname.toLowerCase().replace(/-pooler(?=\.|$)/, "");
-    const port = url.port || "5432";
-    return `${hostname}:${port}/${database}`;
-  } catch {
-    return null;
-  }
 }
 
 function endpointIdentity(value: string): string | null {

@@ -225,6 +225,20 @@
       "when": 1786000000008,
       "tag": "0032_push_subscription_session_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1786000000009,
+      "tag": "0033_music_jobs_next_run_default",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1786000000010,
+      "tag": "0034_transcription_operation_receipts",
+      "breakpoints": true
     }
   ]
 }

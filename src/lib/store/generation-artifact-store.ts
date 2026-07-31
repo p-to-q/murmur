@@ -10,9 +10,11 @@
  * the clip's stable `operationId`, so restoration rehydrates the exact audited
  * clip instead of re-purchasing it.
  *
- * Everything is best-effort and guarded: in SSR/tests/private-mode where
- * IndexedDB is unavailable, persist is a no-op and load returns null, so the
- * caller falls back to resuming the same paid operation.
+ * Everything is guarded: in SSR/tests where IndexedDB does not exist, persist
+ * reports `unavailable` and load returns null, so the caller can fall back to
+ * the same paid operation. A browser-side transaction failure is reported
+ * separately for telemetry, while the already verified in-memory clip remains
+ * usable for the current session.
  */
 
 const DB_NAME = "murmur-generation";
@@ -53,6 +55,10 @@ function openDb(): Promise<IDBDatabase | null> {
   dbPromise = new Promise<IDBDatabase | null>((resolve) => {
     try {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
+      const unavailable = () => {
+        dbPromise = null;
+        resolve(null);
+      };
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -63,9 +69,10 @@ function openDb(): Promise<IDBDatabase | null> {
         }
       };
       request.onsuccess = () => resolve(request.result);
-      request.onerror = () => resolve(null);
-      request.onblocked = () => resolve(null);
+      request.onerror = unavailable;
+      request.onblocked = unavailable;
     } catch {
+      dbPromise = null;
       resolve(null);
     }
   }).catch(() => null);
@@ -76,19 +83,21 @@ function txStore(db: IDBDatabase, mode: IDBTransactionMode): IDBObjectStore {
   return db.transaction(STORE_NAME, mode).objectStore(STORE_NAME);
 }
 
-/** Persist a completed clip's bytes under its stable operation id. Best-effort. */
+export type ClipArtifactPersistence = "stored" | "unavailable" | "failed";
+
+/** Persist a completed clip's bytes under its stable operation id. */
 export async function persistClipArtifact(
   operationId: string,
   blob: Blob,
-): Promise<void> {
-  if (!operationId) return;
+): Promise<ClipArtifactPersistence> {
+  if (!operationId || !hasIndexedDb()) return "unavailable";
   const db = await openDb();
-  if (!db) return;
+  if (!db) return "failed";
   let bytes: ArrayBuffer;
   try {
     bytes = await blob.arrayBuffer();
   } catch {
-    return;
+    return "failed";
   }
   const record: StoredClip = {
     operationId,
@@ -96,19 +105,21 @@ export async function persistClipArtifact(
     contentType: blob.type || "audio/wav",
     storedAt: Date.now(),
   };
-  await new Promise<void>((resolve) => {
+  const stored = await new Promise<boolean>((resolve) => {
     try {
       const store = txStore(db, "readwrite");
       store.put(record);
-      store.transaction.oncomplete = () => resolve();
-      store.transaction.onerror = () => resolve();
-      store.transaction.onabort = () => resolve();
+      store.transaction.oncomplete = () => resolve(true);
+      store.transaction.onerror = () => resolve(false);
+      store.transaction.onabort = () => resolve(false);
     } catch {
-      resolve();
+      resolve(false);
     }
   });
+  if (!stored) return "failed";
   // Opportunistic prune of anything past the TTL.
   void pruneExpired(db);
+  return "stored";
 }
 
 /** Load a previously persisted clip as a fresh Blob, or null if absent. */

@@ -6,7 +6,7 @@ let nextSong: Record<string, unknown> | null = null;
 let getSongError: unknown = null;
 let nextFallbackSong: Record<string, unknown> | null = null;
 let previousRateLimitDriver: string | undefined;
-const getPublicSongByShareCodeMock = mock(async () => {
+const getPublicSongMetadataByShareCodeMock = mock(async () => {
   if (getSongError) throw getSongError;
   return nextSong;
 });
@@ -17,7 +17,8 @@ mock.module("@/lib/db/queries/songs", () => ({
   createSongWithSpend: mock(async () => null),
   deleteSong: mock(async () => false),
   deleteSongForUser: mock(async () => false),
-  getPublicSongByShareCode: getPublicSongByShareCodeMock,
+  getPublicSongByShareCode: mock(async () => null),
+  getPublicSongMetadataByShareCode: getPublicSongMetadataByShareCodeMock,
   getPublicSongSummaries: mock(async () => []),
   getSongById: mock(async () => null),
   getSongByIdForUser: mock(async () => null),
@@ -70,7 +71,9 @@ beforeEach(async () => {
     editDepth: "fresh",
     visibility: "unlisted",
     shareCode: "abc234defg",
-    mp3DataUrl: "data:audio/mpeg;base64,SUQzYXVkaW8=",
+    hasAudio: true,
+    hasManagedAudio: true,
+    legacyAudioUrl: null,
     visualConfig: {
       preset: "warm_particles",
       gradient: "linear-gradient(135deg, #FF8A5C, #FF5924)",
@@ -83,7 +86,7 @@ beforeEach(async () => {
   };
   getSongError = null;
   nextFallbackSong = null;
-  getPublicSongByShareCodeMock.mockClear();
+  getPublicSongMetadataByShareCodeMock.mockClear();
   getLocalSongByShareCodeFallbackMock.mockClear();
 });
 
@@ -107,6 +110,7 @@ describe("GET /api/public/songs/[shareCode]", () => {
     expect(body.title).toBe("Shared Song");
     expect(body.audioUrl).toBe("/api/public/songs/abc234defg/audio");
     expect(body.mp3Url).toBe(body.audioUrl);
+    expect(getPublicSongMetadataByShareCodeMock).toHaveBeenCalledWith("abc234defg");
     expect(body).not.toHaveProperty("userId");
     expect(body).not.toHaveProperty("scaleType");
     expect(body).not.toHaveProperty("sourceMelodyKind");
@@ -129,8 +133,9 @@ describe("GET /api/public/songs/[shareCode]", () => {
     nextSong = {
       ...nextSong,
       visibility: "public",
-      mp3DataUrl: null,
-      mp3Url: null,
+      hasAudio: false,
+      hasManagedAudio: false,
+      legacyAudioUrl: null,
     };
 
     const response = await GET(request(), ctx());
@@ -139,6 +144,21 @@ describe("GET /api/public/songs/[shareCode]", () => {
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex, nofollow");
     const body = await response.json() as Record<string, unknown>;
     expect(body.error).toBe("not_found");
+  });
+
+  it("keeps a legacy external URL playable without routing it through storage", async () => {
+    nextSong = {
+      ...nextSong,
+      hasManagedAudio: false,
+      legacyAudioUrl: "https://legacy-audio.example/song.mp3",
+    };
+
+    const response = await GET(request(), ctx());
+    const body = await response.json() as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(body.audioUrl).toBe("https://legacy-audio.example/song.mp3");
+    expect(body.mp3Url).toBe(body.audioUrl);
   });
 
   it("returns 404 with noindex for no-audio local fallback shares", async () => {
@@ -167,7 +187,7 @@ describe("GET /api/public/songs/[shareCode]", () => {
     const response = await GET(request(), ctx("bad-code"));
 
     expect(response.status).toBe(400);
-    expect(getPublicSongByShareCodeMock).not.toHaveBeenCalled();
+    expect(getPublicSongMetadataByShareCodeMock).not.toHaveBeenCalled();
     const body = await response.json() as Record<string, unknown>;
     expect(body.error).toBe("validation_error");
   });
@@ -187,7 +207,7 @@ describe("GET /api/public/songs/[shareCode]", () => {
     const response = await GET(request(), ctx("demo-1"));
 
     expect(response.status).toBe(200);
-    expect(getPublicSongByShareCodeMock).not.toHaveBeenCalled();
+    expect(getPublicSongMetadataByShareCodeMock).not.toHaveBeenCalled();
     const body = await response.json() as Record<string, unknown>;
     expect(body.shareCode).toBe("demo-1");
     expect(body.audioUrl).toBe("/demo/weightless-dnb.mp3");
@@ -201,7 +221,7 @@ describe("GET /api/public/songs/[shareCode]", () => {
     const response = await GET(request(), ctx("demo-1"));
 
     expect(response.status).toBe(200);
-    expect(getPublicSongByShareCodeMock).not.toHaveBeenCalled();
+    expect(getPublicSongMetadataByShareCodeMock).not.toHaveBeenCalled();
     const body = await response.json() as Record<string, unknown>;
     expect(body.shareCode).toBe("demo-1");
   });
