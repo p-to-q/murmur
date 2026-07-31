@@ -31,6 +31,8 @@ export interface CachedRecording {
   mimeType: string;
   savedAt: number;
   operationId: string | null;
+  /** True when `blob` is the exact byte sequence sent to `/api/transcribe`. */
+  uploadReady: boolean;
 }
 
 interface StoredRecord {
@@ -38,6 +40,7 @@ interface StoredRecord {
   mimeType: string;
   savedAt: number;
   operationId?: string;
+  uploadReady?: boolean;
 }
 
 type StoredRecordRead =
@@ -89,6 +92,7 @@ function openDatabase(): Promise<IDBDatabase | null> {
 export async function saveRecordingBlob(
   blob: Blob,
   operationId?: string,
+  options: { uploadReady?: boolean } = {},
 ): Promise<boolean> {
   const db = await openDatabase();
   if (!db) return false;
@@ -106,6 +110,7 @@ export async function saveRecordingBlob(
         mimeType: blob.type || "application/octet-stream",
         savedAt: Date.now(),
         operationId,
+        uploadReady: options.uploadReady === true,
       };
       try {
         tx.objectStore(STORE_NAME).put(record, RECORD_KEY);
@@ -204,6 +209,9 @@ function parseCachedRecording(value: unknown): CachedRecording | null {
     savedAt: typeof record.savedAt === "number" ? record.savedAt : 0,
     operationId:
       typeof record.operationId === "string" ? record.operationId : null,
+    // Legacy entries stored the raw capture and must still pass through the
+    // deterministic preparation step before retrying with their operation id.
+    uploadReady: record.uploadReady === true,
   };
 }
 

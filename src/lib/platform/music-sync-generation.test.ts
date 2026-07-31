@@ -86,6 +86,23 @@ describe("generateDurableMusicSynchronously", () => {
     expect(advances).toBe(0);
   });
 
+  it("returns a narrow recoverable status when the sync deadline leaves the job running", async () => {
+    const job = musicJob({ status: "running", output: null });
+    let clockReads = 0;
+    const result = await generateDurableMusicSynchronously(baseInput(), deps({
+      createReceipt: async () => ({ ok: true, job, duplicate: false, spend: null }),
+      getJob: async () => job,
+      now: () => clockReads++ === 0 ? 1_000 : 286_000,
+    }));
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: "operation_pending",
+      status: 504,
+      jobId: "mjob_test",
+    });
+  });
+
   it("fails closed when stored bytes do not match the recorded digest", async () => {
     const job = musicJob({ status: "succeeded" });
     const result = await generateDurableMusicSynchronously(baseInput(), deps({

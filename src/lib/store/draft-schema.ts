@@ -29,6 +29,7 @@ const EDIT_DEPTHS = new Set<EditDepth>(["fresh", "shaped", "reworked"]);
 const GENERATION_STATUSES = new Set(["pending", "ready", "error"]);
 const GENERATION_ERROR_CODES = new Set<VersionGenerationErrorCode>([
   "background_canceled",
+  "operation_pending",
   "insufficient_notes",
   "rate_limited",
   "billing_unavailable",
@@ -40,6 +41,7 @@ const GENERATION_ERROR_CODES = new Set<VersionGenerationErrorCode>([
   "server_error",
   "network_error",
 ]);
+const MUSIC_JOB_ID_PATTERN = /^mjob_[a-f0-9]{32}$/;
 const PULSE_SOURCES = new Set<VisualConfig["pulseSource"]>(["drums", "melody", "energy"]);
 const ARRANGEMENT_TRACKS = [
   "melody",
@@ -157,6 +159,9 @@ function parseGeneration(value: unknown): VersionGeneration | null {
     ...(isFiniteNumber(value.currentBalance) ? { currentBalance: value.currentBalance } : {}),
     ...(isFiniteNumber(value.cost) ? { cost: value.cost } : {}),
     ...(nonEmptyString(value.operationId) ? { operationId: value.operationId } : {}),
+    ...(typeof value.jobId === "string" && MUSIC_JOB_ID_PATTERN.test(value.jobId)
+      ? { jobId: value.jobId }
+      : {}),
     ...(nonEmptyString(value.batchOperationId) ? { batchOperationId: value.batchOperationId } : {}),
   };
 

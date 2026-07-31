@@ -59,10 +59,11 @@ const durableGenerationInputs: Array<{
   bill: boolean;
 }> = [];
 let nextDurableGenerationError: {
-  error: "idempotency_conflict" | "worker_http_error";
+  error: "idempotency_conflict" | "worker_http_error" | "operation_pending";
   message: string;
   status: number;
 } | null = null;
+const DURABLE_JOB_ID = `mjob_${"d".repeat(32)}`;
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
@@ -165,7 +166,7 @@ mock.module("@/lib/platform/music-sync-generation", () => ({
   }) => {
     durableGenerationInputs.push(input);
     if (nextDurableGenerationError) {
-      return { ok: false as const, ...nextDurableGenerationError, jobId: "mjob_test" };
+      return { ok: false as const, ...nextDurableGenerationError, jobId: DURABLE_JOB_ID };
     }
     const audio = Buffer.from(validWavBase64(input.duration), "base64");
     return {
@@ -177,7 +178,7 @@ mock.module("@/lib/platform/music-sync-generation", () => ({
       styleMix: "0",
       outputSha256: createHash("sha256").update(audio).digest("hex"),
       duplicate: durableGenerationInputs.filter((item) => item.operationId === input.operationId).length > 1,
-      jobId: "mjob_test",
+      jobId: DURABLE_JOB_ID,
     };
   },
 }));
@@ -213,10 +214,20 @@ mock.module("@/lib/platform/notifications-server", () => ({
   },
 }));
 
-// Publish is scheduled via scheduleAfterResponse, which falls back to a
-// microtask outside a Next request scope — flush it before asserting.
-async function flushScheduledPublishes(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0));
+mock.module("@/lib/platform/request-lifecycle", () => ({
+  scheduleAfterResponse: (task: () => Promise<void> | void) => {
+    void Promise.resolve().then(task).catch(() => {});
+  },
+}));
+
+// Publish is scheduled via scheduleAfterResponse. Coverage instrumentation can
+// add an extra turn before the scheduled task observes the mocked publisher, so
+// positive assertions wait for the expected count instead of racing one tick.
+async function flushScheduledPublishes(expectedCount = publishedNotifications.length): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (publishedNotifications.length >= expectedCount) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
 }
 
 function validWavBase64(duration: number): string {
@@ -467,7 +478,7 @@ describe("POST /api/music/generate", () => {
 
     await POST(buildRequest("req_clip_a", { "x-generation-clip-id": clipId }));
     await POST(buildRequest("req_clip_b", { "x-generation-clip-id": clipId }));
-    await flushScheduledPublishes();
+    await flushScheduledPublishes(1);
 
     expect(durableGenerationInputs).toHaveLength(2);
     expect(durableGenerationInputs.map((input) => input.operationId)).toEqual([clipId, clipId]);
@@ -492,7 +503,52 @@ describe("POST /api/music/generate", () => {
     expect(durableGenerationInputs).toEqual([
       expect.objectContaining({ operationId: "clip-settle-abcdef", bill: true }),
     ]);
-    expect(response.headers.get("X-Music-Job-Id")).toBe("mjob_test");
+    expect(response.headers.get("X-Music-Job-Id")).toBe(DURABLE_JOB_ID);
+  });
+
+  it("returns the recoverable job handle when the synchronous deadline expires", async () => {
+    nextEngineMode = "serverless";
+    nextDurableGenerationError = {
+      error: "operation_pending",
+      message: "Music generation is still running; retry this clip to resume it",
+      status: 504,
+    };
+    nextAuth = {
+      ok: true,
+      user: { id: "usr_pending", email: null, name: "Pending", avatarUrl: null },
+      source: "session",
+      sessionId: "sess_pending",
+    };
+
+    const response = await POST(buildRequest("req_pending", {
+      "x-generation-clip-id": "clip-pending-abcdef",
+    }));
+
+    expect(response.status).toBe(504);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "operation_pending",
+      jobId: DURABLE_JOB_ID,
+      durableJob: true,
+      recoverable: true,
+    });
+  });
+
+  it("does not mark a terminal worker failure as a recoverable operation", async () => {
+    nextEngineMode = "serverless";
+    nextDurableGenerationError = {
+      error: "worker_http_error",
+      message: "Music generation failed",
+      status: 503,
+    };
+
+    const response = await POST(buildRequest("req_terminal", {
+      "x-generation-clip-id": "clip-terminal-abcdef",
+    }));
+
+    await expect(response.json()).resolves.toMatchObject({
+      error: "worker_http_error",
+      recoverable: false,
+    });
   });
 
   it("settles a successful retry after the stable clip's original spend was refunded", async () => {
@@ -790,7 +846,7 @@ describe("POST /api/music/generate", () => {
       "x-generation-batch-id": "batch-evidence-down",
       "x-generation-clip-id": "clip-evidence-down",
     }));
-    await flushScheduledPublishes();
+    await flushScheduledPublishes(2);
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ error: "worker_http_error" });

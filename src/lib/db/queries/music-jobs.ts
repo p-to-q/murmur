@@ -149,6 +149,18 @@ export async function getMusicJobForUser(
   return job ?? null;
 }
 
+export async function getMusicJobByOperationForUser(
+  userId: string,
+  operationId: string,
+): Promise<MusicJob | null> {
+  const [job] = await db
+    .select()
+    .from(musicJobs)
+    .where(and(eq(musicJobs.userId, userId), eq(musicJobs.operationId, operationId)))
+    .limit(1);
+  return job ?? null;
+}
+
 export async function claimMusicJob(input: {
   userId: string;
   jobId: string;

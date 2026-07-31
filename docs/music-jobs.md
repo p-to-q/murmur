@@ -16,6 +16,9 @@ return its settled object-store artifact as a WAV response.
   stable `operationId` (or `Idempotency-Key`). It returns `202`, a `jobId`, and
   status/audio URLs.
 - Exact replays return the existing job and never charge or submit twice.
+- `GET /api/music/jobs?operationId=...` resolves the authenticated owner's
+  existing receipt without resending prompt, melody, or hum input. Restored
+  drafts use this only when an older draft has no persisted `jobId`.
 - Reusing an operation id with different canonical input returns `409
   idempotency_conflict`.
 - `GET /api/music/jobs/:jobId` returns only the owner's job and opportunistically
@@ -74,6 +77,13 @@ identity survives a dead request, so recovery never requires another provider
 submit. `result_ready` persists private, content-addressed audio without a TTL
 before billing settlement; a later advance can replay settlement without
 rerunning the model or refunding delivered work.
+
+The browser persists both `operationId` and the accepted `jobId` in its draft.
+After a synchronous compatibility request reaches its deadline, the route
+returns `operation_pending`, `recoverable: true`, and that `jobId`. Retry or
+refresh polls the receipt and audio endpoint directly; it does not rebuild the
+multipart request or depend on the in-memory hum Blob. A lost styled-hum input
+with no server receipt fails closed before a replacement job can be created.
 
 Every job has a 15-minute application deadline in addition to the provider TTL.
 A RunPod `404` gets a short propagation grace period and then expires instead

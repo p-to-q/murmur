@@ -67,6 +67,19 @@ describe("buildTopupCheckoutHref", () => {
     })).toBe("/topup/checkout?sku=topup_120_notes&currency=CNY&payMethod=wxpay");
   });
 
+  it("keeps the bounded transcription resume marker through checkout", () => {
+    expect(buildTopupCheckoutHref({
+      selectedId: "topup_120_notes",
+      selectedSkuId: "topup_120_notes",
+      customAmount: 10,
+      customAmountUsd: 10,
+      currency: "USD",
+      payMethod: "card",
+      requiresSignIn: false,
+      resumeTranscription: true,
+    })).toBe("/topup/checkout?sku=topup_120_notes&resume=transcription");
+  });
+
   it("builds sign-in-gated custom checkout links", () => {
     expect(buildTopupCheckoutHref({
       selectedId: "topup_custom",

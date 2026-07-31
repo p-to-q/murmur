@@ -76,6 +76,7 @@ type MusicRouteError =
   | "worker_overloaded"
   | "generation_evidence_unavailable"
   | "idempotency_conflict"
+  | "operation_pending"
   | "client_closed_request"
   | "server_error";
 
@@ -311,9 +312,19 @@ export async function POST(request: NextRequest) {
             jobId: durable.jobId ?? null,
             currentBalance: durable.currentBalance ?? null,
           },
-          ...(durable.currentBalance === undefined
-            ? {}
-            : { body: { currentBalance: durable.currentBalance, cost: COST.music_generate } }),
+          body: {
+            ...(durable.jobId ? { jobId: durable.jobId } : {}),
+            durableJob: true,
+            recoverable: Boolean(durable.jobId) && (
+              durable.error === "operation_pending"
+              || durable.error === "client_closed_request"
+              || durable.error === "billing_unavailable"
+              || durable.error === "insufficient_notes"
+            ),
+            ...(durable.currentBalance === undefined
+              ? {}
+              : { currentBalance: durable.currentBalance, cost: COST.music_generate }),
+          },
         });
       }
       const durationMs = Math.round(performance.now() - startedAt);

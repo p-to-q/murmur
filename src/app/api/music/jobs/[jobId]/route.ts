@@ -36,7 +36,7 @@ export async function GET(request: NextRequest, context: Context) {
     job = delivery.job;
   }
 
-  if (["accepted", "queued", "running", "cancel_requested"].includes(job.status)) {
+  if (["accepted", "submitting", "queued", "running", "cancel_requested"].includes(job.status)) {
     scheduleAfterResponse(() => advanceMusicJob(auth.user.id, job.id));
   }
   return NextResponse.json(toResponse(job), { headers: headers(requestId) });

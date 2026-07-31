@@ -98,6 +98,12 @@ flowchart TB
   same id returns `409`; worker failure atomically releases the fenced attempt
   and records refund intent. Legacy requests without an operation id retain
   their non-replayable behavior.
+- The browser caches the exact prepared upload bytes and operation id for a
+  bounded recovery window. If a recorded result is waiting for Notes
+  settlement, Top Up and Checkout carry only a fixed continuation marker; on
+  return, Hum resubmits the same bytes and operation id so the server settles
+  the receipt without rerunning transcription. The marker remains until the
+  flow succeeds, so another disconnect cannot strand the cached take.
 
 ### 2. Arrangement and editing
 

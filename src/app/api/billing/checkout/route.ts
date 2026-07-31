@@ -53,6 +53,7 @@ import { db } from "@/lib/db/client";
 import { purchases } from "@/lib/db/schema/purchases";
 import { log } from "@/lib/observability/log";
 import { TaxCategory } from "@waffo/pancake-ts";
+import { isTranscriptionResumeRequested } from "@/lib/audio/transcription-recovery";
 
 export const runtime = "nodejs";
 
@@ -67,6 +68,7 @@ type CheckoutRequestBody = {
   currency?: unknown;
   payMethod?: unknown;
   billingEmail?: unknown;
+  resume?: unknown;
 };
 
 type CheckoutProduct =
@@ -231,6 +233,9 @@ export async function POST(request: NextRequest) {
       { status: 400, headers: { "X-Request-Id": requestId } },
     );
   }
+  const resumeQuery = isTranscriptionResumeRequested(body.resume)
+    ? "&resume=transcription"
+    : "";
 
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
@@ -325,6 +330,7 @@ export async function POST(request: NextRequest) {
         payMethod as ZpayPaymentType,
         billingEmail,
         requestId,
+        resumeQuery,
       );
     } catch (err) {
       log(
@@ -389,7 +395,7 @@ export async function POST(request: NextRequest) {
       productId,
       currency: product.currency,
       ...(billingEmail ? { buyerEmail: billingEmail } : {}),
-      successUrl: `${origin}/topup/checkout?${product.successQuery}&status=success`,
+      successUrl: `${origin}/topup/checkout?${product.successQuery}&status=success${resumeQuery}`,
       metadata,
       orderMerchantExternalId: pendingProviderRef,
       priceSnapshot: {
@@ -461,12 +467,13 @@ async function handleZpayCheckout(
   payMethod: ZpayPaymentType,
   billingEmail: string | null,
   requestId: string,
+  resumeQuery: string,
 ) {
   const origin = resolveAppOrigin(request);
   const outTradeNo = createZpayOrderId();
   const moneyYuan = (product.amountCents / 100).toFixed(2);
   const notifyUrl = `${origin}/api/billing/zpay-notify`;
-  const returnUrl = `${origin}/topup/checkout?${product.successQuery}&status=success`;
+  const returnUrl = `${origin}/topup/checkout?${product.successQuery}&status=success${resumeQuery}`;
   const clientIp =
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     request.headers.get("x-real-ip") ||

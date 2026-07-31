@@ -49,6 +49,7 @@ export type DurableMusicGenerationResult =
       ok: false;
       error:
         | "idempotency_conflict"
+        | "operation_pending"
         | "insufficient_notes"
         | "billing_unavailable"
         | "client_closed_request"
@@ -149,7 +150,7 @@ export async function generateDurableMusicSynchronously(input: {
     if (deps.now() >= deadline) {
       return {
         ok: false,
-        error: "worker_http_error",
+        error: "operation_pending",
         message: "Music generation is still running; retry this clip to resume it",
         status: 504,
         jobId: job.id,

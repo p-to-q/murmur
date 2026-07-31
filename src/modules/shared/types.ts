@@ -166,6 +166,7 @@ export type VisualConfig = {
 export type VersionGenerationStatus = "pending" | "ready" | "error";
 export type VersionGenerationErrorCode =
   | "background_canceled"
+  | "operation_pending"
   | "insufficient_notes"
   | "rate_limited"
   | "billing_unavailable"
@@ -196,6 +197,8 @@ type VersionGenerationBase = {
    * legacy drafts minted before #300.
    */
   operationId?: string;
+  /** Server receipt handle. Recovery polls this job without rebuilding input. */
+  jobId?: string;
   /** Stable per-batch (fan-out) operation identity; shared by sibling clips. */
   batchOperationId?: string;
 };

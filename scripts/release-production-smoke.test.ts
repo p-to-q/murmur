@@ -163,7 +163,7 @@ describe("production Worker canary operation identity", () => {
     expect(attempt.retriedAfterAmbiguousFailure).toBe(true);
     expect(() => assertCanaryOperationEvidence(
       attempt,
-      "music canary",
+      "music",
     )).not.toThrow();
     expect(seenHeaders).toHaveLength(2);
     expect(seenHeaders[0]?.get("x-generation-batch-id")).toBe(
@@ -187,7 +187,7 @@ describe("production Worker canary operation identity", () => {
         headers: { "X-Murmur-Operation-Replayed": "true" },
       }),
       retriedAfterAmbiguousFailure: false,
-    }, "music canary")).toThrow("does not prove a new provider call");
+    }, "music")).toThrow("does not prove a new provider call");
   });
 
   it("accepts fresh delivery and a replay only after an ambiguous retry", () => {
@@ -196,17 +196,22 @@ describe("production Worker canary operation identity", () => {
         headers: { "X-Murmur-Operation-Replayed": "false" },
       }),
       retriedAfterAmbiguousFailure: false,
-    }, "music canary")).not.toThrow();
+    }, "music")).not.toThrow();
     expect(() => assertCanaryOperationEvidence({
       response: new Response(null),
       retriedAfterAmbiguousFailure: false,
-    }, "transcription canary")).not.toThrow();
+    }, "transcription")).not.toThrow();
     expect(() => assertCanaryOperationEvidence({
       response: new Response(null, {
         headers: { "X-Murmur-Operation-Replayed": "true" },
       }),
       retriedAfterAmbiguousFailure: true,
-    }, "music canary")).not.toThrow();
+    }, "music")).not.toThrow();
+
+    expect(() => assertCanaryOperationEvidence({
+      response: new Response(null),
+      retriedAfterAmbiguousFailure: false,
+    }, "music")).toThrow("omitted X-Murmur-Operation-Replayed");
   });
 
   it("accepts a replay after the first same-operation network attempt failed", async () => {
@@ -231,7 +236,7 @@ describe("production Worker canary operation identity", () => {
     expect(attempt.retriedAfterAmbiguousFailure).toBe(true);
     expect(() => assertCanaryOperationEvidence(
       attempt,
-      "transcription canary",
+      "transcription",
     )).not.toThrow();
   });
 
@@ -241,6 +246,6 @@ describe("production Worker canary operation identity", () => {
         headers: { "X-Murmur-Operation-Replayed": "yes" },
       }),
       retriedAfterAmbiguousFailure: false,
-    }, "music canary")).toThrow("invalid X-Murmur-Operation-Replayed");
+    }, "music")).toThrow("invalid X-Murmur-Operation-Replayed");
   });
 });

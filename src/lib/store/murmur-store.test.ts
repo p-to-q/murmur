@@ -283,6 +283,7 @@ describe("creation draft store helpers", () => {
         batchIndex: 0,
         styleMix: 0.6,
         operationId: "op_clip_2",
+        jobId: `mjob_${"b".repeat(32)}`,
       },
     });
 
@@ -291,5 +292,6 @@ describe("creation draft store helpers", () => {
     expect(stored.generation?.status).toBe("pending");
     expect(stored.generation?.audioUrl).toBeUndefined();
     expect(stored.generation?.operationId).toBe("op_clip_2");
+    expect(stored.generation?.jobId).toBe(`mjob_${"b".repeat(32)}`);
   });
 });

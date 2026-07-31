@@ -6,6 +6,7 @@ import { resolveRequestAuth } from "@/lib/auth";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import type { MusicJob } from "@/lib/db/schema/music-jobs";
+import { getMusicJobByOperationForUser } from "@/lib/db/queries/music-jobs";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { safeHostnameFromUrl } from "@/lib/http/safe-hostname";
 import {
@@ -27,6 +28,30 @@ const RATE_LIMIT = { capacity: 12, refillWindowMs: 60_000 };
 const MAX_PROMPT_CHARS = 300;
 const MAX_MELODY_CHARS = 256_000;
 const MAX_HUM_BYTES = 4 * 1024 * 1024;
+
+export async function GET(request: NextRequest) {
+  const requestId = getRequestId(request);
+  const auth = await resolveRequestAuth(request);
+  if (!auth.ok) return auth.response;
+  const operationId = request.nextUrl.searchParams.get("operationId")?.trim() ?? "";
+  if (!MUSIC_OPERATION_ID_PATTERN.test(operationId)) {
+    return error("operation_id_required", "A valid operationId is required", 400, requestId);
+  }
+
+  let job = await getMusicJobByOperationForUser(auth.user.id, operationId);
+  if (!job) return error("not_found", "Music job not found", 404, requestId);
+  if (job.status === "result_ready") {
+    const delivery = await resolveMusicJobDelivery(job);
+    if (!delivery.ok) return settlementFailure(delivery, requestId);
+    job = delivery.job;
+  }
+  if (!isTerminal(job.status)) {
+    scheduleAfterResponse(() => advanceMusicJob(auth.user.id, job.id));
+  }
+  return NextResponse.json(jobResponse(job, true), {
+    headers: responseHeaders(requestId),
+  });
+}
 
 export async function POST(request: NextRequest) {
   const requestId = getRequestId(request);

@@ -592,6 +592,45 @@ describe("POST /api/transcribe", () => {
       }
     });
 
+    it("retries result_ready settlement with the same operation without rerunning the worker", async () => {
+      const prevNodeEnv = process.env.NODE_ENV;
+      setTestNodeEnv("production");
+      nextOperationPreparation = "result_ready";
+      nextOperationSettleResult = "insufficient_notes";
+      let workerCalls = 0;
+      nextWorkerImpl = async () => {
+        workerCalls += 1;
+        return stubTranscription;
+      };
+
+      try {
+        const firstForm = new FormData();
+        firstForm.append("audio", audioFile());
+        const first = await POST(buildRequest(firstForm, {
+          requestId: "req_result_ready_empty",
+          operationId: "op-result-ready-1",
+        }));
+        expect(first.status).toBe(402);
+        expect((await first.json()).error).toBe("insufficient_notes");
+
+        nextOperationSettleResult = "ok";
+        const retryForm = new FormData();
+        retryForm.append("audio", audioFile());
+        const retry = await POST(buildRequest(retryForm, {
+          requestId: "req_result_ready_retry",
+          operationId: "op-result-ready-1",
+        }));
+
+        expect(retry.status).toBe(200);
+        expect(retry.headers.get("X-Murmur-Operation-Replayed")).toBe("true");
+        expect(workerCalls).toBe(0);
+        expect(lastSpendInputs).toHaveLength(0);
+        expect(lastSettleInputs).toHaveLength(2);
+      } finally {
+        setTestNodeEnv(prevNodeEnv);
+      }
+    });
+
     it("rejects a reused operation id when the request digest differs", async () => {
       const prevNodeEnv = process.env.NODE_ENV;
       setTestNodeEnv("production");

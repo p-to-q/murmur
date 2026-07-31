@@ -51,6 +51,10 @@ import { fetchUserBalance, type UserBalance } from "@/lib/hooks/use-user-balance
 import { MurmurMark } from "@/components/murmur/murmur-mark";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  checkoutSuccessDestination,
+  isTranscriptionResumeRequested,
+} from "@/lib/audio/transcription-recovery";
 
 type Phase =
   | "review"
@@ -113,6 +117,7 @@ export function CheckoutScreen() {
     params?.get("payMethod") === "wxpay" ? "wxpay" : "card";
   const returnStatus = params?.get("status");
   const requestedGate = params?.get("gate");
+  const requestedResume = params?.get("resume");
 
   const [payMethod, setPayMethod] = useState<PayMethod>(requestedPayMethod);
   const [acceptedPolicy, setAcceptedPolicy] = useState(false);
@@ -201,9 +206,12 @@ export function CheckoutScreen() {
           String(granted),
         ),
       );
-      window.setTimeout(() => router.push("/me"), 1800);
+      window.setTimeout(
+        () => router.push(checkoutSuccessDestination(requestedResume)),
+        1800,
+      );
     },
-    [router, t],
+    [requestedResume, router, t],
   );
 
   const confirmGrant = useCallback(
@@ -270,8 +278,21 @@ export function CheckoutScreen() {
           : { sku: purchase.id, currency: purchase.currency };
       const checkoutBody =
         payMethod === "wxpay"
-          ? { ...baseBody, payMethod, billingEmail: billingEmail.trim() }
-          : { ...baseBody, billingEmail: billingEmail.trim() };
+          ? {
+              ...baseBody,
+              payMethod,
+              billingEmail: billingEmail.trim(),
+              ...(isTranscriptionResumeRequested(requestedResume)
+                ? { resume: requestedResume }
+                : {}),
+            }
+          : {
+              ...baseBody,
+              billingEmail: billingEmail.trim(),
+              ...(isTranscriptionResumeRequested(requestedResume)
+                ? { resume: requestedResume }
+                : {}),
+            };
 
       const startingBalance = await fetchCheckoutBalance({ force: true });
       writeCheckoutBaselineBalance(startingBalance?.balance);
@@ -335,7 +356,7 @@ export function CheckoutScreen() {
       setFailureKind("generic");
       setPhase("failed");
     }
-  }, [billingEmail, payMethod, purchase, t, tearReceiptIfCurrentPage]);
+  }, [billingEmail, payMethod, purchase, requestedResume, t, tearReceiptIfCurrentPage]);
 
   const handleSignIn = () => {
     const currentUrl = window.location.pathname + window.location.search;

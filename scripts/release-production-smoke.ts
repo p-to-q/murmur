@@ -291,7 +291,7 @@ async function probeDeployedWorkerPaths(
     },
     body: transcribe,
   }, 90_000);
-  assertCanaryOperationEvidence(transcribeAttempt, "transcription canary");
+  assertCanaryOperationEvidence(transcribeAttempt, "transcription");
   const transcribeResponse = transcribeAttempt.response;
   const transcription = await parseJsonResponse(transcribeResponse, "transcription canary");
   const cleanMelody = objectValue(transcription.cleanMelody);
@@ -322,7 +322,7 @@ async function probeDeployedWorkerPaths(
     },
     body: music,
   }, 310_000);
-  assertCanaryOperationEvidence(musicAttempt, "music canary");
+  assertCanaryOperationEvidence(musicAttempt, "music");
   const musicResponse = musicAttempt.response;
   if (!musicResponse.ok) {
     throw new Error(`music canary returned ${musicResponse.status}: ${await boundedBody(musicResponse)}`);
@@ -388,10 +388,15 @@ export async function fetchCanaryWithRetry(
 
 export function assertCanaryOperationEvidence(
   attempt: Awaited<ReturnType<typeof fetchCanaryWithRetry>>,
-  label: string,
+  kind: "transcription" | "music",
 ): void {
+  const label = `${kind} canary`;
   const replayed = attempt.response.headers.get("x-murmur-operation-replayed");
-  if (replayed === null || replayed === "false") return;
+  if (replayed === null) {
+    if (kind === "transcription") return;
+    throw new Error(`${label} omitted X-Murmur-Operation-Replayed`);
+  }
+  if (replayed === "false") return;
   if (replayed === "true") {
     if (attempt.retriedAfterAmbiguousFailure) return;
     throw new Error(

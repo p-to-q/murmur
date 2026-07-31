@@ -159,6 +159,36 @@ describe("POST /api/billing/checkout", () => {
     expect(purchaseUpdates).toHaveLength(1);
   });
 
+  it("keeps a validated transcription continuation on the provider return URL", async () => {
+    const response = await POST(
+      buildRequest({
+        sku: "topup_120_notes",
+        resume: "transcription",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createdSessions[0]).toMatchObject({
+      successUrl:
+        "http://test.local/topup/checkout?sku=topup_120_notes&currency=USD&status=success&resume=transcription",
+    });
+  });
+
+  it("does not accept an arbitrary checkout return destination", async () => {
+    const response = await POST(
+      buildRequest({
+        sku: "topup_120_notes",
+        resume: "https://evil.example/steal",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createdSessions[0]).toMatchObject({
+      successUrl:
+        "http://test.local/topup/checkout?sku=topup_120_notes&currency=USD&status=success",
+    });
+  });
+
   it("falls back to the signed-in account email when no billing email is supplied", async () => {
     const response = await POST(buildRequest({ sku: "topup_120_notes" }));
     expect(response.status).toBe(200);
