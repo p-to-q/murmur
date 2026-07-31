@@ -24,7 +24,7 @@
   and pass the protected Vercel resource-isolation preflight.
 - Protected credential migration, real production database/provider evidence,
   the final human listen, merge order, and exact-SHA Pre-release are tracked in
-  release-blocker issue #445. Do not replace those receipts with placeholders.
+  final release-command issue. Do not replace those receipts with placeholders.
 - The pinned 8-case HumTrans `auto` run passes quality acceptance, but its one
   local p95 latency observation is 1303.45 ms. Repeated CI measurement and
   performance work are tracked in non-blocking issue #446.

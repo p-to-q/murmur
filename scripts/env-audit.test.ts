@@ -185,7 +185,8 @@ function runPreviewAudit(extraEnv: Record<string, string> = {}) {
     cwd: process.cwd(),
     encoding: "utf8",
     env: {
-      ...process.env,
+      PATH: process.env.PATH ?? "",
+      TMPDIR: process.env.TMPDIR ?? "/tmp",
       VERCEL: "1",
       VERCEL_ENV: "preview",
       NODE_ENV: "production",
