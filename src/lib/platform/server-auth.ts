@@ -1,9 +1,13 @@
 import type { AppUser } from "./types";
 import { auth as nextAuthSession } from "@/lib/auth/auth";
 import { getSessionByToken, type ResolvedSession } from "@/lib/db/queries/sessions";
+import {
+  getSessionToken,
+  SESSION_COOKIE_NAME,
+  SESSION_MAX_AGE_SECONDS,
+} from "@/lib/auth/session-token";
 
-export const SESSION_COOKIE_NAME = "__murmur_session";
-export const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
+export { getSessionToken, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS };
 
 type AuthRuntimeMode = "production" | "demo" | "local";
 
@@ -17,24 +21,6 @@ const DEFAULT_USER: AppUser = {
 
 function readHeader(request: Request, key: string): string | null {
   return request.headers.get(key)?.trim() || null;
-}
-
-export function getSessionToken(request: Request): string | null {
-  const authorization = readHeader(request, "authorization");
-  if (authorization?.toLowerCase().startsWith("bearer ")) {
-    return authorization.slice("bearer ".length).trim() || null;
-  }
-
-  const cookie = readHeader(request, "cookie");
-  if (!cookie) return null;
-
-  for (const pair of cookie.split(";")) {
-    const [rawKey, ...rawValue] = pair.trim().split("=");
-    if (rawKey === SESSION_COOKIE_NAME) {
-      return decodeURIComponent(rawValue.join("=")).trim() || null;
-    }
-  }
-  return null;
 }
 
 export function murmurSessionCookieOptions(expires: Date) {

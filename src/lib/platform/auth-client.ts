@@ -1,6 +1,10 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import {
+  completeAccountExit,
+  type AccountExitResult,
+} from "@/lib/platform/account-exit";
 import type { AppUser, DevicePlatform } from "./types";
 
 const STORAGE_KEY = "murmur.local-user";
@@ -152,8 +156,10 @@ export const authClient = {
     return currentUser;
   },
   async logout() {
-    await revokeMurmurSession();
+    const result = await completeAccountExit(revokeMurmurSession);
     saveUser(DEFAULT_USER);
+    reportDeviceCleanupFailures("logout", result);
+    return result;
   },
   setUser(partial: Partial<AppUser>) {
     saveUser({ ...loadUser(), ...partial });
@@ -174,6 +180,20 @@ export const authClient = {
     };
   },
 };
+
+export function reportDeviceCleanupFailures(
+  action: "logout" | "account-delete",
+  result: AccountExitResult,
+): void {
+  if (result.deviceCleanup.failed.length === 0) return;
+  console.warn(
+    JSON.stringify({
+      event: "account.device_cleanup_incomplete",
+      action,
+      failedSteps: result.deviceCleanup.failed.map(({ step }) => step),
+    }),
+  );
+}
 
 async function revokeMurmurSession(): Promise<void> {
   if (typeof window === "undefined") return;

@@ -4,11 +4,12 @@ import {
   getSessionToken,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth";
-import { revokeSessionByToken } from "@/lib/db/queries/sessions";
+import { revokeSessionAndPushByToken } from "@/lib/db/queries/sessions";
 import { checkApiRateLimit, rateLimitedResponse } from "@/lib/api/rate-limit";
 import { getRequestId } from "@/lib/api/request-id";
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { log } from "@/lib/observability/log";
+import { revokeLogoutSession } from "./session-exit";
 
 export const runtime = "nodejs";
 
@@ -33,10 +34,13 @@ export async function POST(request: NextRequest) {
 
   const token = getSessionToken(request);
   let revoked = false;
+  let disabledPushSubscriptions = 0;
 
   if (token) {
     try {
-      revoked = await revokeSessionByToken(token);
+      const result = await revokeLogoutSession(token, revokeSessionAndPushByToken);
+      revoked = result.revoked;
+      disabledPushSubscriptions = result.disabledPushSubscriptions;
     } catch (error) {
       log("auth.logout_failed", {
         error: error instanceof Error ? error.message : String(error),
@@ -58,11 +62,15 @@ export async function POST(request: NextRequest) {
   }
 
   if (revoked) {
-    log("auth.session_revoked", { reason: "logout" }, { route: ROUTE, requestId });
+    log(
+      "auth.session_revoked",
+      { reason: "logout", disabledPushSubscriptions },
+      { route: ROUTE, requestId },
+    );
   }
 
   const response = NextResponse.json(
-    { ok: true, revoked, requestId },
+    { ok: true, revoked, disabledPushSubscriptions, requestId },
     { headers: { "X-Request-Id": requestId } },
   );
   response.cookies.set(SESSION_COOKIE_NAME, "", clearMurmurSessionCookieOptions());

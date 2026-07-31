@@ -33,11 +33,13 @@ public 是在 org 设置允许 public 包后**手动**点的，一次性、推�
 > ```
 > 部署脚本会注册成 RunPod 凭证 `murmur-ghcr` 并自动带上；或设 `RUNPOD_REGISTRY_AUTH_ID` 复用。
 
-本地也可：
+本地也可。必须使用目标 `main` 的完整 SHA，不要发布可变的 `latest`：
 
 ```bash
+export RELEASE_SHA=$(git rev-parse HEAD)
 docker buildx build --platform linux/amd64 \
-  -t ghcr.io/p-to-q/murmur-music-engine:latest \
+  --build-arg MURMUR_MUSIC_ENGINE_REVISION="$RELEASE_SHA" \
+  -t "ghcr.io/p-to-q/murmur-music-engine:$RELEASE_SHA" \
   workers/music-engine --push
 ```
 
@@ -45,6 +47,7 @@ docker buildx build --platform linux/amd64 \
 
 ```bash
 export RUNPOD_API_KEY=rpa_xxxxxxxx
+export MURMUR_MUSIC_RELEASE_SHA=$(git rev-parse HEAD)
 export VERCEL=1          # 自动 vercel env add；不会绕过 Actions 直接部署
 bun run deploy:music-serverless
 ```
@@ -52,18 +55,19 @@ bun run deploy:music-serverless
 脚本会（全部走 RunPod REST API `rest.runpod.io/v1`）：
 
 1. 创建/复用 50 GB **网络卷** `murmur-music-vol`（默认数据中心 `EU-RO-1`，`RUNPOD_DATA_CENTER_ID` 可改）
-2. 创建/更新 **template** `murmur-music-serverless`（镜像 + `MAGENTA_BACKEND=jax` 等环境变量）
-3. 创建/更新 **serverless endpoint**（`workersMin=0`、`flashboot=true`、`idleTimeout=120s`、挂载网络卷、GPU 候选列表）
-4. 发一个 **warm-up** 作业并轮询 `/status`：首次会拉镜像 + 下载 ~4 GB 模型到网络卷（约 ~20 min），把模型缓存下来
+2. 用完整 SHA 镜像创建独立 **template** `murmur-music-<sha12>`；脚本拒绝 `latest` 等可变 tag
+3. 创建独立 **serverless endpoint** `murmur-music-<sha12>`；旧 endpoint 继续服务，失败不会影响线上
+4. 发带 hum + melody 的 **warm-up** 并轮询 `/status`；校验完整 v2 receipt、候选 digest、conditioning、WAV 和 `engine_revision == release SHA`
 5. 写入 Vercel `RUNPOD_SERVERLESS_ENDPOINT_ID` / `RUNPOD_API_KEY` /
    `MUSIC_ENGINE_MODE=serverless` /
-   `MURMUR_MUSIC_QUALITY_EVIDENCE_REQUIRED=1`。只有 warm-up 输出
-   通过 `music-technical-v1` 协议校验后才会执行这一步；旧 warm worker 或旧镜像
+   `MURMUR_MUSIC_QUALITY_EVIDENCE_REQUIRED=1` /
+   `MURMUR_MUSIC_V2_EVIDENCE_REQUIRED=1`。只有 warm-up 输出
+   通过 `music-technical-v2` 协议校验后才会执行这一步；旧 warm worker 或旧镜像
    仍在服务时，脚本会拒绝切换。环境同步后，通过 GitHub Actions 的
    **Release (production)** 对最新 `main` SHA 进行正式发布；脚本不会直接执行
    `vercel --prod`。
 
-端点信息保存在 `.env.workers.cloud`（已 gitignore）：`RUNPOD_SERVERLESS_ENDPOINT_ID` + `RUNPOD_NETWORK_VOLUME_ID`。
+端点信息保存在 `.env.workers.cloud`（已 gitignore），包括 endpoint、volume、release SHA 和不可变镜像引用。切流稳定后再手动清理旧 endpoint/template。
 
 ### 4. 验证
 
@@ -90,6 +94,10 @@ curl -sS https://murmur.ptoq.io/api/music/health
 | `RUNPOD_GPU_TYPE_ID` | _(列表)_ | 偏好 GPU，如 `NVIDIA L4` |
 | `MAGENTA_MODEL` | `mrt2_base` | 线上最高规格模型；`mrt2_small` 只适合低配本地调试 |
 | `MAGENTA_CFG_NOTES` | `1.5` | 当前实验收敛值；更高会让旋律过度受控，容易 robotic / dissonant |
+| `MAGENTA_TEMPERATURE` | `1.3` | 第一候选采样温度；技术失败重试会使用更保守值 |
+| `MAGENTA_TOP_K` | `40` | 第一候选 top-k；技术失败重试会使用更保守值 |
+| `MUSIC_QUALITY_MAX_ATTEMPTS` | `2` | 同一付费作业最多生成 1–3 个技术候选 |
+| `MUSIC_QUALITY_MAX_TOTAL_SECONDS` | `165` | 同一作业的候选生成总预算；上限 175 秒，低于 RunPod 180 秒执行上限 |
 | `WARMUP` | `1` | `0` 跳过部署后的预热作业 |
 
 > **想要始终热（无冷启动）？** 在 RunPod 控制台把该端点的 *Active (min) workers* 设为 1，

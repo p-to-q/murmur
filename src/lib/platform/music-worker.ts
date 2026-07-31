@@ -11,9 +11,9 @@
  *    answers instantly; stop it when unused to stop paying for the GPU.
  *
  * `MUSIC_ENGINE_MODE=auto` treats serverless as canonical whenever it is
- * configured. An explicit `MUSIC_ENGINE_MODE=http` is the production failover
- * switch for a warm pod, even when serverless credentials remain present for
- * failback.
+ * configured. An explicit `MUSIC_ENGINE_MODE=http` selects a warm pod for
+ * health/canary traffic. The production stable-clip route fails closed in this
+ * mode until HTTP implements the durable receipt and artifact replay contract.
  */
 
 export type MusicEngineMode = "serverless" | "http";

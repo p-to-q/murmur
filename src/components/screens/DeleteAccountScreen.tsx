@@ -14,7 +14,11 @@ import {
   clearCurrentAccountCache,
   useCurrentAccount,
 } from "@/lib/hooks/use-current-account";
-import { authClient } from "@/lib/platform/auth-client";
+import {
+  authClient,
+  reportDeviceCleanupFailures,
+} from "@/lib/platform/auth-client";
+import { completeAccountExit } from "@/lib/platform/account-exit";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -40,11 +44,14 @@ export function DeleteAccountScreen() {
     setIsSubmitting(true);
 
     try {
-      const response = await request("/api/account/delete", {
-        method: "POST",
-        credentials: "same-origin",
+      const exitResult = await completeAccountExit(async () => {
+        const response = await request("/api/account/delete", {
+          method: "POST",
+          credentials: "same-origin",
+        });
+        if (!response.ok) throw new Error(`delete HTTP ${response.status}`);
       });
-      if (!response.ok) throw new Error(`delete HTTP ${response.status}`);
+      reportDeviceCleanupFailures("account-delete", exitResult);
 
       clearCurrentAccountCache();
       authClient.setUser({

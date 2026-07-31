@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, lte, or, sql } from "drizzle-orm";
 
 import { COST } from "@murmur/core";
 import { db } from "../client";
@@ -11,17 +11,23 @@ import {
   type MusicJobStatus,
 } from "../schema/music-jobs";
 import { spendNotesInTransaction, type SpendNotesResult } from "./notes-ledger";
+import { recordPendingRefundInTransaction } from "./notes-ledger";
+import { musicJobDeadlineFrom } from "@/lib/music/music-job-policy";
+import { users } from "../schema/users";
+import { notesLedger } from "../schema/notes-ledger";
 
 const TERMINAL_STATUSES: MusicJobStatus[] = [
   "succeeded", "failed", "canceled", "expired", "submission_unknown",
 ];
-const ACTIVE_STATUSES: MusicJobStatus[] = ["accepted", "queued", "running", "result_ready"];
+const ACTIVE_STATUSES: MusicJobStatus[] = [
+  "accepted", "submitting", "queued", "running",
+];
 
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type CreateMusicJobResult =
   | { ok: true; job: MusicJob; duplicate: boolean; spend: SpendNotesResult | null }
-  | { ok: false; reason: "idempotency_conflict"; job: MusicJob }
+  | { ok: false; reason: "idempotency_conflict"; job: MusicJob | null }
   | {
       ok: false;
       reason: "insufficient_notes" | "user_not_found";
@@ -46,8 +52,34 @@ export async function createMusicJob(
   input: CreateMusicJobInput,
 ): Promise<CreateMusicJobResult> {
   return db.transaction(async (tx) => {
+    const [activeUser] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, input.userId), sql`${users.deletedAt} IS NULL`))
+      .limit(1)
+      .for("update");
+    if (!activeUser) {
+      return { ok: false as const, reason: "user_not_found" as const, currentBalance: 0 };
+    }
+
     const existing = await findByOperation(tx, input.userId, input.operationId);
     if (existing) return classifyReplay(existing, input.requestHash);
+
+    const [orphanSpend] = await tx
+      .select({ id: notesLedger.id })
+      .from(notesLedger)
+      .where(and(
+        eq(notesLedger.userId, input.userId),
+        eq(notesLedger.reason, "spend:music_generate"),
+        eq(notesLedger.externalRef, `music_generate:${input.operationId}`),
+      ))
+      .limit(1);
+    // A job and its spend are now atomic. A spend without a job came from the
+    // legacy direct route and carries no trustworthy request receipt, so it
+    // cannot be adopted by arbitrary new input under the same operation id.
+    if (orphanSpend) {
+      return { ok: false as const, reason: "idempotency_conflict" as const, job: null };
+    }
 
     const spend = input.bill
       ? await spendNotesInTransaction(tx, {
@@ -73,6 +105,7 @@ export async function createMusicJob(
     }
 
     const id = createMusicJobId();
+    const now = new Date();
     const inserted = await tx
       .insert(musicJobs)
       .values({
@@ -82,6 +115,10 @@ export async function createMusicJob(
         requestHash: input.requestHash,
         input: input.input,
         spendLedgerId: spend?.ok && spend.ledgerId ? spend.ledgerId : null,
+        deadlineAt: musicJobDeadlineFrom(now),
+        nextRunAt: now,
+        createdAt: now,
+        updatedAt: now,
       })
       .onConflictDoNothing({
         target: [musicJobs.userId, musicJobs.operationId],
@@ -112,6 +149,18 @@ export async function getMusicJobForUser(
   return job ?? null;
 }
 
+export async function getMusicJobByOperationForUser(
+  userId: string,
+  operationId: string,
+): Promise<MusicJob | null> {
+  const [job] = await db
+    .select()
+    .from(musicJobs)
+    .where(and(eq(musicJobs.userId, userId), eq(musicJobs.operationId, operationId)))
+    .limit(1);
+  return job ?? null;
+}
+
 export async function claimMusicJob(input: {
   userId: string;
   jobId: string;
@@ -122,10 +171,15 @@ export async function claimMusicJob(input: {
   const [job] = await db
     .update(musicJobs)
     .set({
-      status: sql`case when ${musicJobs.status} = 'cancel_requested' then 'cancel_requested' else 'running' end`,
+      status: sql`case
+        when ${musicJobs.status} = 'cancel_requested' then 'cancel_requested'
+        when ${musicJobs.status} = 'accepted' then 'submitting'
+        else 'running'
+      end`,
       leaseUntil,
       startedAt: sql`coalesce(${musicJobs.startedAt}, ${now})`,
-      attempt: sql`${musicJobs.attempt} + 1`,
+      leaseEpoch: sql`${musicJobs.leaseEpoch} + 1`,
+      nextRunAt: null,
       updatedAt: now,
     })
     .where(
@@ -134,9 +188,9 @@ export async function claimMusicJob(input: {
         eq(musicJobs.userId, input.userId),
         or(
           eq(musicJobs.status, "accepted"),
-          eq(musicJobs.status, "result_ready"),
           and(
             inArray(musicJobs.status, ["queued", "running", "cancel_requested"]),
+            sql`${musicJobs.providerJobId} IS NOT NULL`,
             or(lt(musicJobs.leaseUntil, now), sql`${musicJobs.leaseUntil} IS NULL`),
           ),
         ),
@@ -149,7 +203,7 @@ export async function claimMusicJob(input: {
 export async function attachMusicJobProvider(input: {
   userId: string;
   jobId: string;
-  attempt: number;
+  leaseEpoch: number;
   provider: string;
   providerJobId: string;
   leaseMs: number;
@@ -161,55 +215,67 @@ export async function attachMusicJobProvider(input: {
       status: sql`case when ${musicJobs.status} = 'cancel_requested' then 'cancel_requested' else 'queued' end`,
       provider: input.provider,
       providerJobId: input.providerJobId,
+      providerSubmittedAt: now,
       leaseUntil: new Date(now.getTime() + input.leaseMs),
+      nextRunAt: now,
       updatedAt: now,
     })
     .where(
       and(
         eq(musicJobs.id, input.jobId),
         eq(musicJobs.userId, input.userId),
-        eq(musicJobs.attempt, input.attempt),
-        inArray(musicJobs.status, ["running", "cancel_requested"]),
+        eq(musicJobs.leaseEpoch, input.leaseEpoch),
+        inArray(musicJobs.status, ["submitting", "cancel_requested"]),
+        sql`${musicJobs.providerJobId} IS NULL`,
       ),
     )
     .returning();
   return job ?? null;
 }
 
-export async function renewMusicJobLease(input: {
+export async function refreshMusicJobSubmissionLease(input: {
   userId: string;
   jobId: string;
-  attempt: number;
+  leaseEpoch: number;
   leaseMs: number;
-}): Promise<void> {
+}): Promise<MusicJob | null> {
   const now = new Date();
-  await db
+  const [job] = await db
     .update(musicJobs)
-    .set({ leaseUntil: new Date(now.getTime() + input.leaseMs), updatedAt: now })
-    .where(
-      and(
-        eq(musicJobs.id, input.jobId),
-        eq(musicJobs.userId, input.userId),
-        eq(musicJobs.attempt, input.attempt),
-        inArray(musicJobs.status, ["queued", "running", "cancel_requested"]),
-      ),
-    );
+    .set({
+      leaseUntil: new Date(now.getTime() + input.leaseMs),
+      updatedAt: now,
+    })
+    .where(and(
+      eq(musicJobs.id, input.jobId),
+      eq(musicJobs.userId, input.userId),
+      eq(musicJobs.leaseEpoch, input.leaseEpoch),
+      inArray(musicJobs.status, ["submitting", "cancel_requested"]),
+      sql`${musicJobs.providerJobId} IS NULL`,
+    ))
+    .returning();
+  return job ?? null;
 }
 
 export async function releaseMusicJobLease(input: {
   userId: string;
   jobId: string;
-  attempt: number;
+  leaseEpoch: number;
+  nextRunAt?: Date;
 }): Promise<void> {
   await db
     .update(musicJobs)
-    .set({ leaseUntil: null, updatedAt: new Date() })
+    .set({
+      leaseUntil: null,
+      nextRunAt: input.nextRunAt ?? new Date(),
+      updatedAt: new Date(),
+    })
     .where(
       and(
         eq(musicJobs.id, input.jobId),
         eq(musicJobs.userId, input.userId),
-        eq(musicJobs.attempt, input.attempt),
-        inArray(musicJobs.status, ["queued", "running", "cancel_requested"]),
+        eq(musicJobs.leaseEpoch, input.leaseEpoch),
+        inArray(musicJobs.status, ["submitting", "queued", "running", "cancel_requested"]),
       ),
     );
 }
@@ -219,17 +285,32 @@ export async function succeedMusicJob(input: {
   jobId: string;
   output: MusicJobOutput;
 }): Promise<MusicJob | null> {
-  return finishMusicJob(input.userId, input.jobId, "succeeded", {
-    output: input.output,
-    errorCode: null,
-    errorMessage: null,
-  });
+  const now = new Date();
+  const [job] = await db
+    .update(musicJobs)
+    .set({
+      status: "succeeded",
+      output: input.output,
+      errorCode: null,
+      errorMessage: null,
+      leaseUntil: null,
+      nextRunAt: null,
+      finishedAt: now,
+      updatedAt: now,
+    })
+    .where(and(
+      eq(musicJobs.id, input.jobId),
+      eq(musicJobs.userId, input.userId),
+      eq(musicJobs.status, "result_ready"),
+    ))
+    .returning();
+  return job ?? null;
 }
 
 export async function recordMusicJobResult(input: {
   userId: string;
   jobId: string;
-  attempt: number;
+  leaseEpoch: number;
   output: MusicJobOutput;
 }): Promise<MusicJob | null> {
   const now = new Date();
@@ -239,6 +320,7 @@ export async function recordMusicJobResult(input: {
       status: "result_ready",
       output: input.output,
       leaseUntil: null,
+      nextRunAt: now,
       errorCode: null,
       errorMessage: null,
       updatedAt: now,
@@ -247,8 +329,8 @@ export async function recordMusicJobResult(input: {
       and(
         eq(musicJobs.id, input.jobId),
         eq(musicJobs.userId, input.userId),
-        eq(musicJobs.attempt, input.attempt),
-        inArray(musicJobs.status, ["queued", "running", "cancel_requested", "result_ready"]),
+        eq(musicJobs.leaseEpoch, input.leaseEpoch),
+        inArray(musicJobs.status, ["queued", "running", "cancel_requested"]),
       ),
     )
     .returning();
@@ -259,41 +341,55 @@ export async function markMusicJobSubmissionUnknown(input: {
   userId: string;
   jobId: string;
   errorMessage: string;
+  leaseEpoch?: number;
+  leaseExpiredBefore?: Date;
 }): Promise<MusicJob | null> {
   const now = new Date();
-  const [job] = await db
-    .update(musicJobs)
-    .set({
-      status: "submission_unknown",
-      errorCode: "submission_unknown",
-      errorMessage: input.errorMessage.slice(0, 2_000),
-      leaseUntil: null,
-      finishedAt: now,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(musicJobs.id, input.jobId),
-        eq(musicJobs.userId, input.userId),
-        eq(musicJobs.status, "running"),
-        sql`${musicJobs.providerJobId} IS NULL`,
-      ),
-    )
-    .returning();
-  return job ?? null;
+  return terminalizeMusicJobWithRefundIntent({
+    userId: input.userId,
+    jobId: input.jobId,
+    leaseEpoch: input.leaseEpoch,
+    status: "submission_unknown",
+    errorCode: "submission_unknown",
+    errorMessage: input.errorMessage,
+    // `running` covers rows created before the explicit submitting state
+    // existed. A missing provider id there is equally ambiguous and must never
+    // be resubmitted during a rolling deployment.
+    allowedStatuses: ["submitting", "running", "cancel_requested"],
+    requireProviderMissing: true,
+    leaseExpiredBefore: input.leaseExpiredBefore,
+    now,
+  });
 }
 
 export async function failMusicJob(input: {
   userId: string;
   jobId: string;
-  attempt?: number;
+  leaseEpoch?: number;
   errorCode: string;
   errorMessage: string;
 }): Promise<MusicJob | null> {
-  return finishMusicJob(input.userId, input.jobId, "failed", {
+  return terminalizeMusicJobWithRefundIntent({
+    userId: input.userId,
+    jobId: input.jobId,
+    leaseEpoch: input.leaseEpoch,
+    status: "failed",
     errorCode: input.errorCode,
-    errorMessage: input.errorMessage.slice(0, 2_000),
-  }, input.attempt);
+    errorMessage: input.errorMessage,
+  });
+}
+
+export async function expireMusicJob(input: {
+  userId: string;
+  jobId: string;
+  leaseEpoch?: number;
+  errorCode: string;
+  errorMessage: string;
+}): Promise<MusicJob | null> {
+  return terminalizeMusicJobWithRefundIntent({
+    ...input,
+    status: "expired",
+  });
 }
 
 export type CancelMusicJobResult =
@@ -333,12 +429,25 @@ export async function requestMusicJobCancellation(
       .set({
         status: nextStatus,
         cancelRequestedAt: now,
-        leaseUntil: null,
+        // A submit in flight owns this lease until it attaches the provider or
+        // becomes submission_unknown. Releasing it permits a second /run.
+        leaseUntil: nextStatus === "cancel_requested" ? current.leaseUntil : null,
+        nextRunAt: nextStatus === "cancel_requested" ? current.nextRunAt : null,
         finishedAt: nextStatus === "canceled" ? now : null,
         updatedAt: now,
       })
       .where(and(eq(musicJobs.id, jobId), eq(musicJobs.userId, userId)))
       .returning();
+    if (job && nextStatus === "canceled" && job.spendLedgerId) {
+      await recordPendingRefundInTransaction(tx, {
+        userId: job.userId,
+        originalLedgerId: job.spendLedgerId,
+        amount: COST.music_generate,
+        spendReason: "spend:music_generate",
+        source: "music_job_terminal_state",
+        metadata: { jobId: job.id, trigger: "user_canceled" },
+      });
+    }
     return nextStatus === "canceled"
       ? { kind: "canceled" as const, job: job! }
       : { kind: "cancel_requested" as const, job: job! };
@@ -351,7 +460,7 @@ export function nextMusicJobCancellationStatus(
   if (TERMINAL_STATUSES.includes(job.status) || job.status === "result_ready" || job.output) {
     return "terminal";
   }
-  return job.providerJobId || job.status === "running"
+  return job.providerJobId || job.status === "submitting" || job.status === "running"
     ? "cancel_requested"
     : "canceled";
 }
@@ -359,32 +468,125 @@ export function nextMusicJobCancellationStatus(
 export async function confirmMusicJobCanceled(
   userId: string,
   jobId: string,
-  attempt?: number,
+  leaseEpoch?: number,
 ): Promise<MusicJob | null> {
-  return finishMusicJob(userId, jobId, "canceled", {}, attempt);
+  return terminalizeMusicJobWithRefundIntent({
+    userId,
+    jobId,
+    leaseEpoch,
+    status: "canceled",
+    errorCode: "user_canceled",
+    errorMessage: "Music generation was canceled",
+  });
 }
 
-async function finishMusicJob(
-  userId: string,
-  jobId: string,
-  status: Extract<MusicJobStatus, "succeeded" | "failed" | "canceled">,
-  values: Partial<Pick<MusicJob, "output" | "errorCode" | "errorMessage">>,
-  attempt?: number,
-): Promise<MusicJob | null> {
-  const now = new Date();
-  const [job] = await db
-    .update(musicJobs)
-    .set({ ...values, status, leaseUntil: null, finishedAt: now, updatedAt: now })
-    .where(
-      and(
-        eq(musicJobs.id, jobId),
-        eq(musicJobs.userId, userId),
-        ...(attempt === undefined ? [] : [eq(musicJobs.attempt, attempt)]),
-        inArray(musicJobs.status, [...ACTIVE_STATUSES, "cancel_requested"]),
-      ),
-    )
-    .returning();
-  return job ?? null;
+export async function listRunnableMusicJobs(input: {
+  limit: number;
+  now?: Date;
+}): Promise<Array<{ id: string; userId: string }>> {
+  const now = input.now ?? new Date();
+  const limit = Math.max(1, Math.min(100, Math.trunc(input.limit)));
+  return db
+    .select({ id: musicJobs.id, userId: musicJobs.userId })
+    .from(musicJobs)
+    .where(and(
+      inArray(musicJobs.status, [
+        "accepted", "queued", "running", "cancel_requested", "result_ready",
+      ]),
+      or(lte(musicJobs.nextRunAt, now), sql`${musicJobs.nextRunAt} IS NULL`),
+      or(lt(musicJobs.leaseUntil, now), sql`${musicJobs.leaseUntil} IS NULL`),
+    ))
+    .orderBy(asc(musicJobs.nextRunAt), asc(musicJobs.createdAt))
+    .limit(limit);
+}
+
+export async function terminalizeExpiredSubmittingJobs(input: {
+  limit: number;
+  now?: Date;
+}): Promise<MusicJob[]> {
+  const now = input.now ?? new Date();
+  const rows = await db
+    .select({ id: musicJobs.id, userId: musicJobs.userId, leaseEpoch: musicJobs.leaseEpoch })
+    .from(musicJobs)
+    .where(and(
+      inArray(musicJobs.status, ["submitting", "running", "cancel_requested"]),
+      sql`${musicJobs.providerJobId} IS NULL`,
+      or(lt(musicJobs.leaseUntil, now), sql`${musicJobs.leaseUntil} IS NULL`),
+    ))
+    .orderBy(asc(musicJobs.leaseUntil))
+    .limit(Math.max(1, Math.min(100, Math.trunc(input.limit))));
+  const terminalized: Array<MusicJob | null> = [];
+  for (const row of rows) {
+    terminalized.push(await markMusicJobSubmissionUnknown({
+      userId: row.userId,
+      jobId: row.id,
+      leaseEpoch: row.leaseEpoch,
+      leaseExpiredBefore: now,
+      errorMessage: "Provider submission lease expired before a job id was recorded",
+    }));
+  }
+  return terminalized.filter((job): job is MusicJob => Boolean(job));
+}
+
+async function terminalizeMusicJobWithRefundIntent(input: {
+  userId: string;
+  jobId: string;
+  leaseEpoch?: number;
+  status: Extract<MusicJobStatus, "failed" | "canceled" | "expired" | "submission_unknown">;
+  errorCode: string;
+  errorMessage: string;
+  allowedStatuses?: MusicJobStatus[];
+  requireProviderMissing?: boolean;
+  leaseExpiredBefore?: Date;
+  now?: Date;
+}): Promise<MusicJob | null> {
+  return db.transaction(async (tx) => {
+    const now = input.now ?? new Date();
+    const [job] = await tx
+      .update(musicJobs)
+      .set({
+        status: input.status,
+        errorCode: input.errorCode,
+        errorMessage: input.errorMessage.slice(0, 2_000),
+        leaseUntil: null,
+        nextRunAt: null,
+        finishedAt: now,
+        updatedAt: now,
+      })
+      .where(and(
+        eq(musicJobs.id, input.jobId),
+        eq(musicJobs.userId, input.userId),
+        ...(input.leaseEpoch === undefined
+          ? []
+          : [eq(musicJobs.leaseEpoch, input.leaseEpoch)]),
+        inArray(musicJobs.status, input.allowedStatuses ?? [
+          ...ACTIVE_STATUSES, "cancel_requested",
+        ]),
+        sql`${musicJobs.output} IS NULL`,
+        ...(input.requireProviderMissing
+          ? [sql`${musicJobs.providerJobId} IS NULL`]
+          : []),
+        ...(input.leaseExpiredBefore
+          ? [or(
+              lt(musicJobs.leaseUntil, input.leaseExpiredBefore),
+              sql`${musicJobs.leaseUntil} IS NULL`,
+            )]
+          : []),
+      ))
+      .returning();
+    if (!job) return null;
+    if (job.spendLedgerId) {
+      await recordPendingRefundInTransaction(tx, {
+        userId: job.userId,
+        originalLedgerId: job.spendLedgerId,
+        amount: COST.music_generate,
+        spendReason: "spend:music_generate",
+        source: "music_job_terminal_state",
+        metadata: { jobId: job.id, trigger: input.errorCode },
+      });
+    }
+    return job;
+  });
 }
 
 async function findByOperation(

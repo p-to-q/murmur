@@ -29,6 +29,7 @@ import { useNotificationStore } from "@/lib/store/notification-store";
 import { ActivityHeatmap } from "@/components/gallery/ActivityHeatmap";
 import { ARTWORK_CATALOG } from "@/presets/artworks/catalog";
 import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
+import { resolveClientSongAudioUrl } from "@/lib/music/song-audio-client";
 
 // The gallery only renders light metadata; the heavy SongCard fields
 // (visualConfig, duration, arrangementState) stay optional so demo
@@ -37,6 +38,7 @@ type SongWithMeta = Omit<SongCardType, "visualConfig" | "duration" | "arrangemen
   Partial<Pick<SongCardType, "visualConfig" | "duration" | "arrangementState">> & {
     mp3DataUrl?: string | null;
     mp3Url?: string | null;
+    audioUrl?: string | null;
     bpm?: number;
     keySignature?: string;
     tags?: string[];
@@ -247,7 +249,7 @@ export function GalleryScreen() {
       previewOperationRef.current = operationId;
       const isCurrentOperation = () => previewOperationRef.current === operationId;
       const demo = isDemoSongId(song.id) ? getDemoSong(song.id) : null;
-      let audioSrc = demo?.mp3Url ?? song.mp3Url ?? song.mp3DataUrl ?? null;
+      let audioSrc = demo?.mp3Url ?? resolveClientSongAudioUrl(song);
 
       if (!audioSrc && !demo) {
         setLoadingPreviewId(song.id);
@@ -265,7 +267,7 @@ export function GalleryScreen() {
             setLoadingPreviewId((current) => (current === song.id ? null : current));
             return;
           }
-          audioSrc = fullSong.mp3Url ?? fullSong.mp3DataUrl ?? null;
+          audioSrc = resolveClientSongAudioUrl(fullSong);
         } catch (error) {
           if (!isCurrentOperation()) return;
           console.error("[Gallery] song preview load failed:", error);
@@ -477,7 +479,10 @@ export function GalleryScreen() {
             </motion.div>
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 xl:gap-6">
+          <div
+            data-testid="gallery-song-grid"
+            className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 xl:gap-6"
+          >
             {sorted.map((song, i) => (
               <SongCard
                 key={song.id}

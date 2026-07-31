@@ -49,6 +49,11 @@ import {
 } from "@/lib/audio/recording-cache";
 import { createRecordingOperationId } from "@/lib/audio/recording-operation";
 import {
+  isTranscriptionResumeRequested,
+  TRANSCRIPTION_RESUME_PARAM,
+  withTranscriptionResume,
+} from "@/lib/audio/transcription-recovery";
+import {
   nextInputLevelDecision,
   randomQuietInputLevelLabelKey,
   type InputLevelLabelKey,
@@ -101,6 +106,8 @@ type HumErrorVariant =
   | "rate_limited"
   | "unavailable";
 
+type LocalHumRecoveryCode = "transcription_resume";
+
 type CapturePhase = "idle" | "starting";
 type Translator = ReturnType<typeof useTranslator>;
 
@@ -127,6 +134,12 @@ const CACHED_RETRY_CODES = new Set<HumErrorState["code"]>([
   "server_error",
   "worker_unavailable",
   "rate_limited",
+  "billing_unavailable",
+]);
+
+const CACHE_PRESERVING_CODES = new Set<HumErrorState["code"]>([
+  ...CACHED_RETRY_CODES,
+  "insufficient_notes",
 ]);
 
 interface HumRecoveryPlan {
@@ -136,7 +149,11 @@ interface HumRecoveryPlan {
 
 interface HumErrorState {
   variant: HumErrorVariant;
-  code: TranscribeRequestErrorCode | "mic_unavailable" | "music_engine_unavailable";
+  code:
+    | TranscribeRequestErrorCode
+    | "mic_unavailable"
+    | "music_engine_unavailable"
+    | LocalHumRecoveryCode;
   requestId: string | null;
   currentBalance: number | null;
   showSupportCode: boolean;
@@ -432,6 +449,33 @@ export function HumScreen() {
   }, [resetFlow, setCurrentFlowId]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!isTranscriptionResumeRequested(params.get(TRANSCRIPTION_RESUME_PARAM))) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const cached = await loadRecordingBlob();
+      if (cancelled) return;
+      if (!cached?.operationId) {
+        removeTranscriptionResumeMarker();
+        return;
+      }
+      setCachedRecordingAvailable(true);
+      setHumError({
+        variant: "unavailable",
+        code: "transcription_resume",
+        requestId: null,
+        currentBalance: null,
+        showSupportCode: false,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     unmountingRef.current = false;
     return () => {
       unmountingRef.current = true;
@@ -614,13 +658,14 @@ export function HumScreen() {
 
   const transcribeAndGenerate = async (
     blob: Blob | undefined,
-    restoredOperationId?: string | null,
+    restored?: { operationId: string; uploadReady: boolean },
   ) => {
     setRecordingState("processing");
     tickMessages();
     // Tracks whether *this* run left a recoverable copy in IndexedDB, so the
     // catch block only offers "retry last recording" when there is one.
-    let persistedRecording = false;
+    let persistedRecording = Boolean(blob && restored);
+    let activeOperationId = restored?.operationId ?? null;
     try {
       // Fail fast while the engine is known-down (fresh negative health
       // verdict, ≤10s old): transcription spends a note server-side, and a
@@ -634,17 +679,22 @@ export function HumScreen() {
       // configured for a worker we never silently downgrade to Tone.js.
       const magentaPathPromise = shouldUseMagentaEngine();
       const preparedBlob = blob
-        ? await withHumProcessingTimeout(prepareAudioBlob(blob))
+        ? restored?.uploadReady
+          ? blob
+          : await withHumProcessingTimeout(prepareAudioBlob(blob))
         : undefined;
-      // Persist the raw take locally right before the upload leaves the device.
-      // A mid-flight network drop then leaves a recoverable copy instead of
-      // forcing the user to re-hum. Storage failures degrade to today's
-      // behavior (no cache, no retry affordance).
+      // Persist the exact upload bytes right before they leave the device.
+      // A retry can then reuse the operation id without changing its request
+      // hash. Storage failures degrade to today's no-cache behavior.
       const operationId = blob
-        ? restoredOperationId ?? createRecordingOperationId()
+        ? activeOperationId ?? createRecordingOperationId()
         : undefined;
+      activeOperationId = operationId ?? null;
       if (blob) {
-        persistedRecording = await saveRecordingBlob(blob, operationId);
+        const saved = await saveRecordingBlob(preparedBlob!, operationId, {
+          uploadReady: true,
+        });
+        persistedRecording = persistedRecording || saved;
       }
       const result = await withHumProcessingTimeout(
         transcribeWithStainer({
@@ -811,7 +861,9 @@ export function HumScreen() {
       // Offer to resubmit the same take only when it is actually recoverable
       // and the failure is the transient kind a re-submit can clear.
       setCachedRecordingAvailable(
-        persistedRecording && CACHED_RETRY_CODES.has(errorState.code),
+        persistedRecording &&
+          activeOperationId !== null &&
+          CACHE_PRESERVING_CODES.has(errorState.code),
       );
     } finally {
       stopMessages();
@@ -1064,7 +1116,8 @@ export function HumScreen() {
   const canRetryCachedRecording =
     cachedRecordingAvailable &&
     humError !== null &&
-    CACHED_RETRY_CODES.has(humError.code);
+    (CACHED_RETRY_CODES.has(humError.code) ||
+      humError.code === "transcription_resume");
   const recoveryPlan =
     humError && errorCopy
       ? recoveryForState(humError, errorCopy, isGuest, canRetryCachedRecording, t)
@@ -1103,8 +1156,9 @@ export function HumScreen() {
   // recording gated on the guest quota, matching the plain retry path.
   const retryLastRecording = async () => {
     const cached = await loadRecordingBlob();
-    if (!cached) {
+    if (!cached?.operationId) {
       setCachedRecordingAvailable(false);
+      removeTranscriptionResumeMarker();
       startAudioContext();
       setHumError(null);
       if (!(await passGuestGate())) return;
@@ -1114,13 +1168,20 @@ export function HumScreen() {
     startAudioContext();
     setHumError(null);
     setCachedRecordingAvailable(false);
-    await transcribeAndGenerate(cached.blob, cached.operationId);
+    await transcribeAndGenerate(cached.blob, {
+      operationId: cached.operationId,
+      uploadReady: cached.uploadReady,
+    });
   };
 
   const handleRecoveryAction = (action: HumRecoveryAction) => {
     switch (action.kind) {
       case "topup":
-        router.push("/topup");
+        router.push(
+          cachedRecordingAvailable
+            ? withTranscriptionResume("/topup")
+            : "/topup",
+        );
         return;
       case "retry_cached":
         void retryLastRecording();
@@ -1713,6 +1774,14 @@ function copyForState(
   error: HumErrorState,
   t: Translator,
 ): HumErrorCopy {
+  if (error.code === "transcription_resume") {
+    return {
+      title: t("hum.resume.title"),
+      detail: t("hum.resume.detail"),
+      retry: t("hum.resume.cta"),
+      demo: t("hum.cta_demo"),
+    };
+  }
   if (error.code === "music_engine_unavailable") {
     return {
       title: t("hum.err.music_engine.title"),
@@ -1792,6 +1861,17 @@ function copyForState(
   }
 }
 
+function removeTranscriptionResumeMarker(): void {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(TRANSCRIPTION_RESUME_PARAM)) return;
+  url.searchParams.delete(TRANSCRIPTION_RESUME_PARAM);
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${url.pathname}${url.search}${url.hash}`,
+  );
+}
+
 function recoveryForState(
   error: HumErrorState,
   copy: HumErrorCopy,
@@ -1806,7 +1886,10 @@ function recoveryForState(
     return {
       primary: {
         kind: "retry_cached",
-        label: t("hum.retry_recording"),
+        label:
+          error.code === "transcription_resume"
+            ? copy.retry
+            : t("hum.retry_recording"),
       },
       secondary: {
         kind: "demo",

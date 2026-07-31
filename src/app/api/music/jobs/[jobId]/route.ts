@@ -9,8 +9,11 @@ import {
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
 import {
   advanceMusicJob,
+  deleteSubmittedHum,
   refundCanceledMusicJob,
 } from "@/lib/platform/music-job-runner";
+import { resolveMusicJobDelivery } from "@/lib/platform/music-job-delivery";
+import { COST } from "@murmur/core";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -24,10 +27,16 @@ export async function GET(request: NextRequest, context: Context) {
   const auth = await resolveRequestAuth(request);
   if (!auth.ok) return auth.response;
   const { jobId } = await context.params;
-  const job = await getMusicJobForUser(auth.user.id, jobId);
+  let job = await getMusicJobForUser(auth.user.id, jobId);
   if (!job) return notFound(requestId);
 
-  if (["accepted", "queued", "running", "result_ready", "cancel_requested"].includes(job.status)) {
+  if (job.status === "result_ready") {
+    const delivery = await resolveMusicJobDelivery(job);
+    if (!delivery.ok) return settlementFailure(delivery, requestId);
+    job = delivery.job;
+  }
+
+  if (["accepted", "submitting", "queued", "running", "cancel_requested"].includes(job.status)) {
     scheduleAfterResponse(() => advanceMusicJob(auth.user.id, job.id));
   }
   return NextResponse.json(toResponse(job), { headers: headers(requestId) });
@@ -42,7 +51,10 @@ export async function DELETE(request: NextRequest, context: Context) {
   if (result.kind === "not_found") return notFound(requestId);
 
   if (result.kind === "canceled") {
-    scheduleAfterResponse(() => refundCanceledMusicJob(auth.user.id, jobId));
+    scheduleAfterResponse(async () => {
+      await deleteSubmittedHum(result.job.input).catch(() => undefined);
+      await refundCanceledMusicJob(auth.user.id, jobId);
+    });
   } else if (result.kind === "cancel_requested") {
     scheduleAfterResponse(() => advanceMusicJob(auth.user.id, jobId));
   }
@@ -57,7 +69,10 @@ function toResponse(job: import("@/lib/db/schema/music-jobs").MusicJob) {
     jobId: job.id,
     operationId: job.operationId,
     status: job.status,
-    attempt: job.attempt,
+    // Keep the old response key during the client migration; this value is a
+    // fencing epoch, not a provider or model attempt.
+    attempt: job.leaseEpoch,
+    leaseEpoch: job.leaseEpoch,
     audioUrl: job.status === "succeeded" ? `/api/music/jobs/${job.id}/audio` : null,
     error: job.errorCode
       ? { code: job.errorCode, message: job.errorMessage ?? "Music generation failed" }
@@ -78,4 +93,22 @@ function notFound(requestId: string) {
     status: 404,
     headers: headers(requestId),
   });
+}
+
+function settlementFailure(
+  result: Extract<Awaited<ReturnType<typeof resolveMusicJobDelivery>>, { ok: false }>,
+  requestId: string,
+) {
+  const insufficient = result.reason === "insufficient_notes";
+  return NextResponse.json({
+    error: insufficient ? "insufficient_notes" : "billing_unavailable",
+    message: insufficient
+      ? "Generated audio is ready and waiting for Notes settlement. Retry this operation to recover it."
+      : "Generated audio is ready, but delivery settlement is temporarily unavailable.",
+    jobId: result.job.id,
+    jobStatus: "result_ready",
+    recoverable: true,
+    ...(insufficient ? { currentBalance: result.currentBalance, cost: COST.music_generate } : {}),
+    requestId,
+  }, { status: insufficient ? 402 : 503, headers: headers(requestId) });
 }

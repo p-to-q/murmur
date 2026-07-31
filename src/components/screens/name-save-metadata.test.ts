@@ -1,6 +1,32 @@
 import { describe, expect, it } from "bun:test";
 
-import { buildNameSaveMetadata } from "./name-save-metadata";
+import { buildNameSaveMetadata, buildSaveProvenance } from "./name-save-metadata";
+
+describe("buildSaveProvenance", () => {
+  it("persists the exact generated clip identity for later evidence linkage", () => {
+    expect(buildSaveProvenance({
+      originFlowId: "flow_1",
+      draftId: "draft_1",
+      sourceType: "hum",
+      generation: {
+        engine: "magenta",
+        prompt: "warm",
+        vibeLabel: { zh: "暖", en: "Warm" },
+        status: "ready",
+        durationSec: 10,
+        batchIndex: 0,
+        styleMix: 0.35,
+        operationId: "clip_1",
+        batchOperationId: "batch_1",
+        audioSha256: "a".repeat(64),
+      },
+    })).toMatchObject({
+      generationBatchId: "batch_1",
+      generationClipId: "clip_1",
+      generationAudioSha256: "a".repeat(64),
+    });
+  });
+});
 
 describe("buildNameSaveMetadata", () => {
   it("keeps generated English vibe metadata separate from the song title", () => {

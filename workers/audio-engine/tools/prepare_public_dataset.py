@@ -19,6 +19,7 @@ from build_dataset_manifest import build_manifest_items, collect_audio_files, is
 
 
 TOOLS_DIR = Path(__file__).resolve().parent
+HUMTRANS_REVISION = "c3c8504280cbdef0f00bb8119f16f034bea2bd9f"
 
 DATASET_PRESETS: dict[str, dict[str, object]] = {
     "humtrans": {
@@ -28,11 +29,12 @@ DATASET_PRESETS: dict[str, dict[str, object]] = {
         "expected_min_notes": 3,
         "pitch_match_min": 0.65,
         "music_feel_min": 0.48,
-        "download_url": "https://huggingface.co/datasets/dadinghh2/HumTrans/resolve/main/all_wav.zip",
+        "revision": HUMTRANS_REVISION,
+        "download_url": f"https://huggingface.co/datasets/dadinghh2/HumTrans/resolve/{HUMTRANS_REVISION}/all_wav.zip",
         "archive_name": "humtrans-all_wav.zip",
-        "midi_download_url": "https://huggingface.co/datasets/dadinghh2/HumTrans/resolve/main/all_midi.zip",
+        "midi_download_url": f"https://huggingface.co/datasets/dadinghh2/HumTrans/resolve/{HUMTRANS_REVISION}/all_midi.zip",
         "midi_archive_name": "humtrans-all_midi.zip",
-        "split_keys_url": "https://huggingface.co/datasets/dadinghh2/HumTrans/resolve/main/train_valid_test_keys.json",
+        "split_keys_url": f"https://huggingface.co/datasets/dadinghh2/HumTrans/resolve/{HUMTRANS_REVISION}/train_valid_test_keys.json",
         "split_keys_name": "humtrans-train_valid_test_keys.json",
         "size_bytes": 14_685_583_595,
         "large_download": True,
@@ -962,6 +964,7 @@ def main() -> int:
             "sizeHuman": format_bytes(int(preset["size_bytes"])),
             "largeDownload": preset["large_download"],
             "notes": preset["notes"],
+            "revision": preset.get("revision"),
         },
     }
     if args.describe:

@@ -18,6 +18,14 @@
     {
       "path": "/api/billing/cron/refunds",
       "schedule": "30 5 * * *"
+    },
+    {
+      "path": "/api/account/cron/deletions",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/storage/cron/song-audio",
+      "schedule": "30 6 * * *"
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { RunpodError, runJob, submitJob } from "./runpod-serverless";
+import { getJobStatus, RunpodError, runJob, submitJob } from "./runpod-serverless";
 
 const realFetch = global.fetch;
 
@@ -74,5 +74,52 @@ describe("submitJob ambiguity", () => {
     expect(caught).toBeInstanceOf(RunpodError);
     expect((caught as RunpodError).kind).toBe("submission_unknown");
     expect(submissions).toBe(1);
+  });
+});
+
+describe("getJobStatus", () => {
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  it("classifies a missing provider job without retaining the response body", async () => {
+    global.fetch = (async () => new Response(
+      JSON.stringify({ error: "provider secret must not reach logs" }),
+      { status: 404, headers: { "Content-Type": "application/json" } },
+    )) as unknown as typeof fetch;
+
+    let caught: unknown;
+    try {
+      await getJobStatus(
+        { endpointId: "ep-test", apiKey: "key-test" },
+        "job-missing",
+      );
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(RunpodError);
+    expect((caught as RunpodError).kind).toBe("not_found");
+    expect((caught as RunpodError).detail).toBeUndefined();
+  });
+
+  it("classifies status transport failures without retaining fetch details", async () => {
+    global.fetch = (async () => {
+      throw new Error("socket contains provider detail");
+    }) as unknown as typeof fetch;
+
+    let caught: unknown;
+    try {
+      await getJobStatus(
+        { endpointId: "ep-test", apiKey: "key-test" },
+        "job-transient",
+      );
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(RunpodError);
+    expect((caught as RunpodError).kind).toBe("http");
+    expect((caught as RunpodError).detail).toBeUndefined();
   });
 });

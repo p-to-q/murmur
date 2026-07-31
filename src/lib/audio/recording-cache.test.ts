@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   clearRecordingBlob,
+  isRecordingExpired,
   loadRecordingBlob,
+  RECORDING_CACHE_TTL_MS,
   saveRecordingBlob,
+  sweepExpiredRecordingBlob,
 } from "./recording-cache";
 
 // The bun test environment has no `indexedDB` global — the same situation a
@@ -23,7 +26,22 @@ describe("recording-cache graceful degradation", () => {
     await expect(loadRecordingBlob()).resolves.toBeNull();
   });
 
-  test("clearRecordingBlob resolves without throwing", async () => {
-    await expect(clearRecordingBlob()).resolves.toBeUndefined();
+  test("clearRecordingBlob reports an unavailable store without throwing", async () => {
+    await expect(clearRecordingBlob()).resolves.toBe(false);
+  });
+
+  test("startup sweep reports an unavailable store without throwing", async () => {
+    await expect(sweepExpiredRecordingBlob()).resolves.toBe(false);
+  });
+
+  test("expires recordings after 24 hours and rejects legacy timestamps", () => {
+    const now = Date.parse("2026-07-30T00:00:00.000Z");
+
+    expect(isRecordingExpired(now - RECORDING_CACHE_TTL_MS + 1, now)).toBe(
+      false,
+    );
+    expect(isRecordingExpired(now - RECORDING_CACHE_TTL_MS, now)).toBe(true);
+    expect(isRecordingExpired(0, now)).toBe(true);
+    expect(isRecordingExpired(Number.NaN, now)).toBe(true);
   });
 });

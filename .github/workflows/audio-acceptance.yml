@@ -2,6 +2,17 @@ name: Audio Acceptance
 
 on:
   workflow_dispatch:
+    inputs:
+      real_humtrans:
+        description: Download a bounded HumTrans valid subset and run strict real-data closure
+        required: true
+        default: true
+        type: boolean
+      real_humtrans_limit:
+        description: Number of official validation samples to evaluate (1-32)
+        required: true
+        default: "8"
+        type: string
   schedule:
     - cron: "30 18 * * 1-5"
 
@@ -19,15 +30,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.9
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.11"
           cache: "pip"
@@ -45,13 +58,76 @@ jobs:
       - name: Run audio acceptance suite
         run: bun run audit:audio:acceptance
 
+      - name: Prepare bounded HumTrans validation evidence
+        if: github.event_name == 'schedule' || inputs.real_humtrans
+        env:
+          HUMTRANS_LIMIT: ${{ github.event_name == 'schedule' && '8' || inputs.real_humtrans_limit }}
+        run: |
+          case "$HUMTRANS_LIMIT" in
+            ''|*[!0-9]*) echo "::error::real_humtrans_limit must be an integer from 1 to 32"; exit 1 ;;
+          esac
+          if [ "$HUMTRANS_LIMIT" -lt 1 ] || [ "$HUMTRANS_LIMIT" -gt 32 ]; then
+            echo "::error::real_humtrans_limit must be an integer from 1 to 32"
+            exit 1
+          fi
+          evidence="$RUNNER_TEMP/humtrans-evidence"
+          mkdir -p "$evidence"
+          workers/audio-engine/.venv/bin/python \
+            workers/audio-engine/tools/prepare_public_dataset.py humtrans \
+            --remote-subset \
+            --split valid \
+            --limit "$HUMTRANS_LIMIT" \
+            --include-midi-ref \
+            --stage-root "$evidence/dataset" \
+            --manifest-out "$evidence/manifest.json" \
+            --pitch-map-out "$evidence/pitch-map.json" \
+            --name-mode relative \
+            --pretty > "$evidence/prepare.json"
+          jq -e --argjson expected "$HUMTRANS_LIMIT" '
+            .manifestBuild.count == $expected and
+            .manifestBuild.annotatedCases == $expected and
+            .preset.revision == "c3c8504280cbdef0f00bb8119f16f034bea2bd9f"
+          ' "$evidence/prepare.json" > /dev/null
+          jq -r '.[].path' "$evidence/manifest.json" | while IFS= read -r path; do
+            sha256sum "$evidence/dataset/$path"
+          done > "$evidence/audio-sha256.txt"
+          jq -n \
+            --arg manifest "$evidence/manifest.json" \
+            --arg root "$evidence/dataset" \
+            '{suites:[{name:"humtrans_valid_auto",required:true,strict:false,allProviders:false,provider:"auto",manifest:$manifest,manifestRoot:$root,manifestOnly:true}]}' \
+            > "$evidence/closure-config.json"
+          workers/audio-engine/.venv/bin/python \
+            workers/audio-engine/tools/audio_eval_closure.py \
+            --config "$evidence/closure-config.json" \
+            --pretty \
+            --markdown-out "$evidence/closure.md" \
+            > "$evidence/closure.json"
+          jq -e --argjson expected "$HUMTRANS_LIMIT" '
+            .ok == true and
+            .summary.requiredFailed == [] and
+            .summary.realDataSuites == ["humtrans_valid_auto"] and
+            (.suites[0].result.runs | length) == 1 and
+            .suites[0].result.runs[0].provider == "auto" and
+            (.suites[0].result.runs[0].cases | length) == $expected and
+            .suites[0].result.providers.auto.pass == $expected and
+            .suites[0].result.providers.auto.warn == 0 and
+            .suites[0].result.providers.auto.fail == 0 and
+            .suites[0].result.providers.auto.error == 0
+          ' "$evidence/closure.json" > /dev/null
+
       - name: Upload audio acceptance reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: audio-acceptance-reports
           path: |
             workers/audio-engine/tools/reports/audio-closure.md
             workers/audio-engine/tools/reports/audio-acceptance.md
             workers/audio-engine/tools/reports/audio-acceptance.json
+            ${{ runner.temp }}/humtrans-evidence/prepare.json
+            ${{ runner.temp }}/humtrans-evidence/manifest.json
+            ${{ runner.temp }}/humtrans-evidence/pitch-map.json
+            ${{ runner.temp }}/humtrans-evidence/audio-sha256.txt
+            ${{ runner.temp }}/humtrans-evidence/closure.json
+            ${{ runner.temp }}/humtrans-evidence/closure.md
           if-no-files-found: warn

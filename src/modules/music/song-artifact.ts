@@ -96,6 +96,10 @@ export function validateSongProvenance(value: unknown): SongProvenance | null {
   out.recordingOperationId = str(value.recordingOperationId);
   out.generationBatchId = str(value.generationBatchId);
   out.generationClipId = str(value.generationClipId);
+  if (typeof value.generationAudioSha256 === "string"
+      && /^[0-9a-f]{64}$/i.test(value.generationAudioSha256)) {
+    out.generationAudioSha256 = value.generationAudioSha256.toLowerCase();
+  }
   if (isFiniteNumber(value.generationBatchIndex)) {
     out.generationBatchIndex = value.generationBatchIndex;
   }

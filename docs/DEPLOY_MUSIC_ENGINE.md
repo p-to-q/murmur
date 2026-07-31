@@ -8,9 +8,10 @@ Vercel 上跑的只是 Next.js 壳；真正干活的是两个 Python worker：
 | `workers/music-engine` | 8002 | prompt + 哼唱 → 音乐 | Magenta RT2（需要算力） |
 
 音乐生成有两条线：**默认生产走 RunPod Serverless**（`MUSIC_ENGINE_MODE=auto`
-或 unset 时，`RUNPOD_SERVERLESS_ENDPOINT_ID` + `RUNPOD_API_KEY` 优先），**warm pod
-failover 走 HTTP worker**（显式 `MUSIC_ENGINE_MODE=http` + `MUSIC_WORKER_URL` +
-`MUSIC_WORKER_TOKEN`）。显式 `MUSIC_ENGINE_MODE=serverless` 只认 Serverless
+或 unset 时，`RUNPOD_SERVERLESS_ENDPOINT_ID` + `RUNPOD_API_KEY` 优先）。HTTP worker
+仍用于本地验证和 warm pod canary；当前正式创建流带稳定 clip identity，生产切到
+`MUSIC_ENGINE_MODE=http` 会在扣费前 fail closed，直到 HTTP transport 接入同一套
+durable job receipt、结果持久化和重放协议。显式 `MUSIC_ENGINE_MODE=serverless` 只认 Serverless
 配置；显式模式缺对应 env 会在 health 里显示 unconfigured。`auto` 模式下两者都没配
 才回退 Tone.js。
 
@@ -23,10 +24,11 @@ AUDIO_WORKER_URL=   AUDIO_WORKER_TOKEN=
 MUSIC_WORKER_URL=   MUSIC_WORKER_TOKEN=
 ```
 
-> Failover contract：生产环境不再无条件让 serverless 覆盖 `MUSIC_ENGINE_MODE=http`。
-> 如果 Vercel 同时保留 serverless env 和 pod env，`MUSIC_ENGINE_MODE=http` 会走 pod；
+> Transport contract：生产环境不再无条件让 serverless 覆盖 `MUSIC_ENGINE_MODE=http`。
+> 如果 Vercel 同时保留 serverless env 和 pod env，`MUSIC_ENGINE_MODE=http` 会选择 pod；
 > 缺 `MUSIC_WORKER_URL` 时 `/api/music/health` 会回 `mode:"http"`、`reason:"unconfigured"`，
-> 而不是悄悄报告 serverless healthy。
+> 而不是悄悄报告 serverless healthy。选择成功只表示 health/canary transport 已切换，
+> 不表示正式的稳定 clip 创建流已经具备 durable failover 能力。
 
 audio-engine 的生产镜像会在 Docker build 阶段准备
 `/app/models/rmvpe.onnx`，Fly 环境固定

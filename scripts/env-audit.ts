@@ -1,5 +1,6 @@
 import { ZPAY_PRODUCTION_REFUND_GAP_ALLOW_ENV } from "@/lib/billing/zpay";
 import { collectDatabaseEnvAuditIssues } from "@/lib/db/config";
+import { privateSongAudioDeliveryEnabled } from "@/lib/storage/song-audio";
 
 const REQUIRED_IN_PRODUCTION = [
   // The database DSN contract (DATABASE_URL / POSTGRES_URL precedence, pooler
@@ -66,6 +67,33 @@ function isTruthyEnv(key: string): boolean {
   return value === "1" || value === "true" || value === "yes";
 }
 
+function isTruthyValue(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
+}
+
+export function collectProductionFallbackEnvAuditIssues(
+  env: Readonly<Record<string, string | undefined>>,
+): string[] {
+  const issues: string[] = [];
+  if (isTruthyValue(env.MURMUR_ALLOW_DEV_BILLING_FALLBACK)) {
+    issues.push("MURMUR_ALLOW_DEV_BILLING_FALLBACK must be unset/false in production");
+  }
+  if (isTruthyValue(env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW)) {
+    issues.push("MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW must be unset/false in production");
+  }
+
+  const authMode = env.MURMUR_AUTH_MODE?.trim().toLowerCase();
+  if (authMode && authMode !== "production" && authMode !== "prod") {
+    issues.push("MURMUR_AUTH_MODE must be production/prod in production");
+  }
+  const publicAuthMode = env.NEXT_PUBLIC_MURMUR_AUTH_MODE?.trim().toLowerCase();
+  if (publicAuthMode && publicAuthMode !== "production" && publicAuthMode !== "prod") {
+    issues.push("NEXT_PUBLIC_MURMUR_AUTH_MODE must be unset or production/prod in production");
+  }
+  return issues;
+}
+
 function isPlaceholderSecret(key: string): boolean {
   const value = process.env[key]?.trim().toLowerCase();
   return !value || value === "replace_with_a_long_random_string";
@@ -104,6 +132,92 @@ export function collectUrlEnvAuditIssues(
   return issues;
 }
 
+export function collectDurableRuntimeEnvAuditIssues(
+  env: Readonly<Record<string, string | undefined>>,
+  environment: "preview" | "production",
+): string[] {
+  const issues: string[] = [];
+  const declaredEnvironment = env.MURMUR_DEPLOYMENT_ENV?.trim().toLowerCase();
+  if (declaredEnvironment !== environment) {
+    issues.push(`MURMUR_DEPLOYMENT_ENV must be ${environment} on Vercel ${environment}`);
+  }
+
+  const rateLimitDriver = env.MURMUR_RATE_LIMIT_DRIVER?.trim().toLowerCase();
+  if (rateLimitDriver && rateLimitDriver !== "postgres") {
+    issues.push(`MURMUR_RATE_LIMIT_DRIVER must be unset or postgres on Vercel ${environment}`);
+  }
+
+  if (environment === "production" && !isTruthyValue(env.MURMUR_STORAGE_TMP_LIFECYCLE_CONFIRMED)) {
+    issues.push(
+      "MURMUR_STORAGE_TMP_LIFECYCLE_CONFIRMED must be true after verifying a 24-hour tmp/ bucket lifecycle",
+    );
+  }
+  return issues;
+}
+
+/**
+ * Misconfiguration that makes a Preview deployment unsafe: a mislabelled
+ * environment, a database DSN that would exhaust connections, a malformed URL,
+ * or a production fallback switch left on. These always fail the build,
+ * because shipping them is worse than not shipping at all.
+ */
+export function collectPreviewIsolationEnvAuditIssues(
+  env: Readonly<Record<string, string | undefined>>,
+): string[] {
+  return [
+    ...collectDurableRuntimeEnvAuditIssues(env, "preview"),
+    ...collectDatabaseEnvAuditIssues(env),
+    ...collectUrlEnvAuditIssues(env),
+    ...collectProductionFallbackEnvAuditIssues(env),
+  ];
+}
+
+/**
+ * Provisioning that a Preview deployment needs to be *functionally* equal to
+ * production: its own bucket and its own worker credentials.
+ *
+ * Absence is reported separately from misconfiguration because it is not a
+ * safety problem — `getObjectStore()` already refuses to run with an
+ * unconfigured driver, so an unprovisioned Preview fails closed at the first
+ * storage call instead of writing somewhere it should not. Blocking the build
+ * on it instead makes the required `Vercel` status check unsatisfiable, which
+ * blocks *every* pull request in the repository, including the one that would
+ * provision the environment.
+ *
+ * Set MURMUR_PREVIEW_REQUIRE_FULL_STACK=1 in the Vercel Preview environment
+ * once the preview bucket and worker credentials exist; from then on these are
+ * blocking again and Preview deployments are held to the production contract.
+ */
+export function collectPreviewProvisioningEnvAuditIssues(
+  env: Readonly<Record<string, string | undefined>>,
+): string[] {
+  const issues: string[] = [];
+  if (env.MURMUR_STORAGE_DRIVER?.trim() !== "s3-compatible") {
+    issues.push("MURMUR_STORAGE_DRIVER must be s3-compatible on Vercel preview");
+  }
+  for (const key of REQUIRED_S3_ENV) {
+    if (!env[key]?.trim()) issues.push(`${key} is required on Vercel preview`);
+  }
+  for (const key of ["AUDIO_WORKER_TOKEN", "RUNPOD_API_KEY"] as const) {
+    if (!env[key]?.trim()) issues.push(`${key} is required on Vercel preview`);
+  }
+  if (
+    !privateSongAudioDeliveryEnabled(env)
+    && !env.MURMUR_STORAGE_S3_PUBLIC_URL_BASE?.trim()
+  ) {
+    issues.push(
+      "MURMUR_STORAGE_S3_PUBLIC_URL_BASE is required on Vercel preview until private song audio delivery is enabled",
+    );
+  }
+  return issues;
+}
+
+export function previewRequiresFullStack(
+  env: Readonly<Record<string, string | undefined>>,
+): boolean {
+  return isTruthyValue(env.MURMUR_PREVIEW_REQUIRE_FULL_STACK);
+}
+
 function main() {
   const onVercel = process.env.VERCEL === "1";
   const inCi = process.env.CI === "true";
@@ -111,6 +225,32 @@ function main() {
   const productionDeployment =
     vercelEnv === "production" ||
     (!onVercel && process.env.NODE_ENV === "production");
+
+  const previewDeployment = onVercel && vercelEnv === "preview";
+  if (previewDeployment) {
+    const blocking = collectPreviewIsolationEnvAuditIssues(process.env);
+    const provisioning = collectPreviewProvisioningEnvAuditIssues(process.env);
+    const strict = previewRequiresFullStack(process.env);
+    if (strict) blocking.push(...provisioning);
+
+    if (blocking.length > 0) {
+      console.error("Preview env audit failed:");
+      for (const item of blocking) console.error(`  - ${item}`);
+      process.exitCode = 1;
+      return;
+    }
+    if (provisioning.length > 0) {
+      console.warn("Preview env audit passed with an unprovisioned stack:");
+      for (const item of provisioning) console.warn(`  - ${item}`);
+      console.warn(
+        "  Storage-backed routes fail closed at runtime until these are set."
+        + " Set MURMUR_PREVIEW_REQUIRE_FULL_STACK=1 to make them blocking again.",
+      );
+      return;
+    }
+    console.log("Preview env audit passed.");
+    return;
+  }
 
   if (!productionDeployment || (!onVercel && !inCi)) {
     console.log("env audit skipped (not production deployment CI/Vercel).");
@@ -129,6 +269,9 @@ function main() {
 
   missing.push(...collectDatabaseEnvAuditIssues(process.env));
   missing.push(...collectUrlEnvAuditIssues(process.env));
+  if (onVercel) {
+    missing.push(...collectDurableRuntimeEnvAuditIssues(process.env, "production"));
+  }
 
   const googleConfigured =
     Boolean(process.env.GOOGLE_CLIENT_ID?.trim()) &&
@@ -154,9 +297,7 @@ function main() {
     missing.push("AUTH_SECRET (required when GitHub OAuth is configured)");
   }
 
-  if (isTruthyEnv("MURMUR_ALLOW_DEV_BILLING_FALLBACK")) {
-    missing.push("MURMUR_ALLOW_DEV_BILLING_FALLBACK must be unset/false in production");
-  }
+  missing.push(...collectProductionFallbackEnvAuditIssues(process.env));
 
   const zpayHasPid = Boolean(process.env.ZPAY_PID?.trim());
   const zpayHasKey = Boolean(process.env.ZPAY_KEY?.trim());
@@ -183,14 +324,17 @@ function main() {
     missing.push("MURMUR_STORAGE_DRIVER must be s3-compatible on Vercel production");
   }
 
-  const rateLimitDriver = process.env.MURMUR_RATE_LIMIT_DRIVER?.trim();
-  if (rateLimitDriver === "redis") {
-    missing.push("MURMUR_RATE_LIMIT_DRIVER must not be redis until that adapter ships");
-  }
-
   if (storageDriver === "s3-compatible") {
     for (const key of REQUIRED_S3_ENV) {
       if (!process.env[key]?.trim()) missing.push(key);
+    }
+    if (
+      !privateSongAudioDeliveryEnabled(process.env)
+      && !process.env.MURMUR_STORAGE_S3_PUBLIC_URL_BASE?.trim()
+    ) {
+      missing.push(
+        "MURMUR_STORAGE_S3_PUBLIC_URL_BASE (required until private song audio delivery is enabled)",
+      );
     }
   }
 

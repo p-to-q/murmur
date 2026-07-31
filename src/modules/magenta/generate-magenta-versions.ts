@@ -8,6 +8,7 @@ import { generateVibeVersions } from "@/modules/strummer/generate-versions";
 import { createVibePromptBatch } from "@/lib/music/vibe-prompts";
 import { useMurmurStore } from "@/lib/store/murmur-store";
 import {
+  deleteClipArtifact,
   loadClipArtifact,
   persistClipArtifact,
 } from "@/lib/store/generation-artifact-store";
@@ -20,6 +21,7 @@ import { songGeneratedNotificationCopy } from "@/lib/notifications/notification-
 import { request } from "@/lib/api/request";
 import {
   durableMusicJobsEnabled,
+  recoverDurableMusicAudio,
   requestDurableMusicAudio,
 } from "@/lib/api/music-jobs";
 
@@ -75,6 +77,7 @@ let liveObjectUrls: string[] = [];
 export type GenerationCancellationKind = "navigation" | "background";
 
 const BACKGROUND_CANCELLATION_REASON = "murmur:background-generation-canceled";
+const SUPERSEDED_CANCELLATION_REASON = "murmur:generation-superseded";
 
 export function invalidateMusicEngineCache(): void {
   healthCache = null;
@@ -321,16 +324,21 @@ function newOperationId(): string {
 }
 
 /**
- * Error-card retry: a fresh attempt at a FAILED slot whose note was already
- * refunded, so it must charge again — mint a NEW operationId so the server
- * treats it as a new purchase rather than a deduped resume (#300).
+ * Error-card retry normally represents a refunded failed attempt and mints a
+ * new purchase identity. Post-delivery integrity/evidence failures and a
+ * result waiting for Notes settlement are exceptions: they resume the same
+ * operation so the durable result can be delivered without regenerating it.
  */
 export function regenerateVersionAudio(version: VibeVersion): void {
   if (!version.generation) return;
-  const operationId = newOperationId();
-  patchGeneration(version.id, {
+  const resumePaidOperation = shouldResumePaidOperation(version.generation.errorCode);
+  const operationId = resumePaidOperation
+    ? version.generation.operationId ?? newOperationId()
+    : newOperationId();
+  clearGeneratedAudioForPending(version, {
     status: "pending",
     operationId,
+    jobId: resumePaidOperation ? version.generation.jobId : undefined,
     error: undefined,
     errorCode: undefined,
     currentBalance: undefined,
@@ -341,7 +349,7 @@ export function regenerateVersionAudio(version: VibeVersion): void {
     activeAbort = new AbortController();
   }
   activeBatchId ??= version.generation.batchOperationId ?? newOperationId();
-  void requestClip(version, humBlob, activeAbort.signal, activeBatchId, operationId);
+  void requestClip(version, humBlob, activeAbort.signal, activeBatchId, operationId, resumePaidOperation);
 }
 
 /**
@@ -360,9 +368,21 @@ export async function recoverVersionAudio(version: VibeVersion): Promise<void> {
   if (operationId) {
     const blob = await loadClipArtifact(operationId);
     if (blob) {
+      let audioSha256: string;
+      try {
+        audioSha256 = await sha256Blob(blob);
+      } catch {
+        await deleteClipArtifact(operationId);
+        resumeClipGeneration(version);
+        return;
+      }
       const url = URL.createObjectURL(blob);
       liveObjectUrls.push(url);
-      const applied = patchGeneration(version.id, { status: "ready", audioUrl: url });
+      const applied = patchGeneration(version.id, {
+        status: "ready",
+        audioUrl: url,
+        audioSha256,
+      });
       if (!applied) {
         URL.revokeObjectURL(url);
         liveObjectUrls = liveObjectUrls.filter((u) => u !== url);
@@ -378,7 +398,7 @@ export async function recoverVersionAudio(version: VibeVersion): Promise<void> {
 function resumeClipGeneration(version: VibeVersion): void {
   const generation = version.generation;
   if (!generation) return;
-  patchGeneration(version.id, {
+  clearGeneratedAudioForPending(version, {
     status: "pending",
     error: undefined,
     errorCode: undefined,
@@ -388,7 +408,7 @@ function resumeClipGeneration(version: VibeVersion): void {
     activeAbort = new AbortController();
   }
   activeBatchId ??= generation.batchOperationId ?? newOperationId();
-  void requestClip(version, humBlob, activeAbort.signal, activeBatchId, generation.operationId);
+  void requestClip(version, humBlob, activeAbort.signal, activeBatchId, generation.operationId, true);
 }
 
 function startBatchGeneration(
@@ -396,7 +416,7 @@ function startBatchGeneration(
   humBlob: Blob | null,
   batchId: string,
 ): void {
-  activeAbort?.abort();
+  activeAbort?.abort(SUPERSEDED_CANCELLATION_REASON);
   const controller = new AbortController();
   activeAbort = controller;
   // One id per fan-out. The server threads it through logs and web-push
@@ -466,50 +486,110 @@ async function requestClip(
   signal: AbortSignal | null,
   batchId: string,
   operationId?: string,
+  recoverExisting = false,
 ): Promise<void> {
   const generation = version.generation!;
   const startedAt = performance.now();
+  let acceptedJobId = generation.jobId;
   try {
-    const form = new FormData();
-    form.append("prompt", generation.prompt);
-    form.append("duration", String(generation.durationSec));
-    if (version.melody?.notes?.length) {
-      form.append("melody", JSON.stringify(version.melody));
-    }
-    if (humBlob && generation.styleMix > 0) {
-      form.append("styleMix", String(generation.styleMix));
-      form.append("hum", humBlob, "hum.webm");
-    }
-
     const headers: Record<string, string> = { "x-generation-batch-id": batchId };
     // Stable per-clip identity: the server keys spend idempotency on it, so a
     // resume/retry of the same clip never double-charges (#300).
-    if (operationId) headers["x-generation-clip-id"] = operationId;
+    const stableOperationId = operationId ?? generation.operationId ?? newOperationId();
+    if (!generation.operationId) {
+      patchGeneration(version.id, { status: "pending", operationId: stableOperationId });
+    }
+    headers["x-generation-clip-id"] = stableOperationId;
 
     const requestSignal = withGenerateTimeout(signal);
-    const res = durableMusicJobsEnabled()
-      ? await requestDurableMusicAudio({
-          form,
-          headers,
+    const onJobAccepted = (jobId: string) => {
+      acceptedJobId = jobId;
+      patchGeneration(version.id, { status: "pending", jobId });
+    };
+    const allowCreate = generation.styleMix <= 0 || humBlob !== null;
+    const buildForm = () => buildGenerationForm(version, humBlob);
+    let res: Response;
+    const recovered = recoverExisting || generation.jobId
+      ? await recoverDurableMusicAudio({
+          operationId: stableOperationId,
+          jobId: generation.jobId,
+          onJobAccepted,
           signal: requestSignal,
           cancelSignal: signal ?? undefined,
         })
-      : await request("/api/music/generate", {
+      : null;
+    if (recovered) {
+      res = recovered;
+    } else if (!allowCreate) {
+      res = Response.json({
+        error: "generation_input_unavailable",
+        message: "The original hum input is no longer available. Murmur did not start or charge a replacement job.",
+      }, { status: 409 });
+    } else if (durableMusicJobsEnabled()) {
+      res = await requestDurableMusicAudio({
+          form: buildForm,
+          headers,
+          operationId: stableOperationId,
+          jobId: generation.jobId,
+          onJobAccepted,
+          allowCreate,
+          signal: requestSignal,
+          cancelSignal: signal ?? undefined,
+        });
+    } else {
+      res = await request("/api/music/generate", {
           method: "POST",
-          body: form,
+          body: buildForm(),
           headers,
           signal: requestSignal,
         });
+      await captureJobIdFromResponse(res, onJobAccepted);
+    }
     if (!res.ok) {
       throw await buildMusicGenerateError(res);
     }
     const blob = await res.blob();
+    const declaredAudioSha256 = validSha256(res.headers.get("x-audio-sha256"));
+    let audioSha256: string;
+    try {
+      audioSha256 = await sha256Blob(blob);
+    } catch {
+      throw new MusicGenerateRequestError(
+        "delivery_integrity",
+        "Generated audio could not be verified. Retry will resume the same purchase.",
+        502,
+      );
+    }
+    if (declaredAudioSha256 && declaredAudioSha256 !== audioSha256) {
+      throw new MusicGenerateRequestError(
+        "delivery_integrity",
+        "Generated audio failed integrity verification. Retry will resume the same purchase.",
+        502,
+      );
+    }
+    // Wait for IndexedDB before exposing `ready` when it works. Storage is a
+    // recovery cache, not the source of truth: private mode/quota failures must
+    // not discard valid, digest-checked audio already held in this session.
+    // A reload resumes the same paid operation and the server dedupes it.
+    if (stableOperationId) {
+      const persistence = await persistClipArtifact(stableOperationId, blob);
+      if (persistence === "failed") {
+        log("magenta.clip_artifact_persistence_failed", {
+          vibe: version.vibe,
+          operationId: stableOperationId,
+          bytes: blob.size,
+        }, {
+          level: "warn",
+        });
+      }
+    }
     const url = URL.createObjectURL(blob);
     liveObjectUrls.push(url);
-    // Persist the exact bytes durably so a later reload recovers this clip
-    // without regenerating or re-charging it (#300).
-    if (operationId) void persistClipArtifact(operationId, blob);
-    const applied = patchGeneration(version.id, { status: "ready", audioUrl: url });
+    const applied = patchGeneration(version.id, {
+      status: "ready",
+      audioUrl: url,
+      ...(audioSha256 ? { audioSha256 } : {}),
+    });
     if (!applied) {
       // Batch was replaced while this clip was in flight.
       URL.revokeObjectURL(url);
@@ -543,13 +623,17 @@ async function requestClip(
       notifyIfBatchComplete();
       return;
     }
-    const failure = normalizeMusicGenerateError(error);
+    const normalized = normalizeMusicGenerateError(error);
+    const failure = normalized.code === "network_error" && acceptedJobId
+      ? { ...normalized, code: "operation_pending" as const, jobId: acceptedJobId }
+      : normalized;
     patchGeneration(version.id, {
       status: "error",
       error: failure.message,
       errorCode: failure.code,
       currentBalance: failure.currentBalance,
       cost: failure.cost,
+      ...(failure.jobId ? { jobId: failure.jobId } : {}),
     });
     log("magenta.clip_failed", {
       vibe: version.vibe,
@@ -584,6 +668,7 @@ class MusicGenerateRequestError extends Error {
     readonly status: number,
     readonly currentBalance?: number,
     readonly cost?: number,
+    readonly jobId?: string,
   ) {
     super(message);
     this.name = "MusicGenerateRequestError";
@@ -606,12 +691,20 @@ async function buildMusicGenerateError(response: Response): Promise<MusicGenerat
   const currentBalance =
     typeof payload.currentBalance === "number" ? payload.currentBalance : undefined;
   const cost = typeof payload.cost === "number" ? payload.cost : undefined;
+  const jobId = typeof payload.jobId === "string" && /^mjob_[a-f0-9]{32}$/.test(payload.jobId)
+    ? payload.jobId
+    : undefined;
+  const mappedCode = serverError === "operation_pending"
+    && !(payload.recoverable === true && jobId)
+    ? "worker_unavailable"
+    : mapMusicGenerateErrorCode(serverError, response.status);
   return new MusicGenerateRequestError(
-    mapMusicGenerateErrorCode(serverError, response.status),
+    mappedCode,
     message,
     response.status,
     currentBalance,
     cost,
+    jobId,
   );
 }
 
@@ -620,6 +713,7 @@ function normalizeMusicGenerateError(error: unknown): {
   message: string;
   currentBalance?: number;
   cost?: number;
+  jobId?: string;
 } {
   if (error instanceof MusicGenerateRequestError) {
     return {
@@ -627,6 +721,7 @@ function normalizeMusicGenerateError(error: unknown): {
       message: error.message,
       currentBalance: error.currentBalance,
       cost: error.cost,
+      jobId: error.jobId,
     };
   }
   return {
@@ -648,11 +743,18 @@ function mapMusicGenerateErrorCode(
       return "billing_unavailable";
     case "worker_unconfigured":
       return "worker_unconfigured";
+    case "operation_pending":
+      return "operation_pending";
     case "worker_http_error":
     case "worker_unauthorized":
       return "worker_unavailable";
     case "worker_overloaded":
       return "worker_overloaded";
+    case "generation_evidence_unavailable":
+      return "generation_evidence_unavailable";
+    case "audio_integrity_failed":
+    case "generation_input_unavailable":
+      return "delivery_integrity";
     case "server_error":
       return "server_error";
     default:
@@ -662,6 +764,50 @@ function mapMusicGenerateErrorCode(
       if (status >= 500) return "worker_unavailable";
       return "server_error";
   }
+}
+
+async function captureJobIdFromResponse(
+  response: Response,
+  onJobAccepted: (jobId: string) => void,
+): Promise<void> {
+  const headerJobId = response.headers.get("x-music-job-id")?.trim();
+  if (headerJobId && /^mjob_[a-f0-9]{32}$/.test(headerJobId)) {
+    onJobAccepted(headerJobId);
+    return;
+  }
+  if (response.ok) return;
+  try {
+    const payload = await response.clone().json() as Record<string, unknown>;
+    if (typeof payload.jobId === "string" && /^mjob_[a-f0-9]{32}$/.test(payload.jobId)) {
+      onJobAccepted(payload.jobId);
+    }
+  } catch {
+    // Non-JSON errors carry no recoverable handle.
+  }
+}
+
+function buildGenerationForm(version: VibeVersion, humBlob: Blob | null): FormData {
+  const generation = version.generation!;
+  const form = new FormData();
+  form.append("prompt", generation.prompt);
+  form.append("duration", String(generation.durationSec));
+  if (version.melody?.notes?.length) {
+    form.append("melody", JSON.stringify(version.melody));
+  }
+  if (humBlob && generation.styleMix > 0) {
+    form.append("styleMix", String(generation.styleMix));
+    form.append("hum", humBlob, "hum.webm");
+  }
+  return form;
+}
+
+function shouldResumePaidOperation(code: VersionGenerationErrorCode | undefined): boolean {
+  return code === "insufficient_notes"
+    || code === "operation_pending"
+    || code === "billing_unavailable"
+    || code === "delivery_integrity"
+    || code === "generation_evidence_unavailable"
+    || code === "network_error";
 }
 
 function notifyIfBatchComplete(): void {
@@ -706,7 +852,7 @@ type VersionGenerationPatch =
   | Partial<
       Pick<
         VersionGeneration,
-        "audioUrl" | "currentBalance" | "cost" | "operationId" | "batchOperationId"
+        "audioUrl" | "audioSha256" | "currentBalance" | "cost" | "operationId" | "jobId" | "batchOperationId"
       >
     > &
     ({ status: "pending" | "ready"; error?: undefined; errorCode?: undefined }
@@ -735,4 +881,38 @@ function patchGeneration(
     store.setCurrentVersion(next);
   }
   return true;
+}
+
+function clearGeneratedAudioForPending(
+  version: VibeVersion,
+  patch: VersionGenerationPatch & { status: "pending" },
+): void {
+  const store = useMurmurStore.getState();
+  const previousUrls = new Set([
+    store.vibeVersions.find((candidate) => candidate.id === version.id)?.generation?.audioUrl,
+    store.currentVersion?.id === version.id
+      ? store.currentVersion.generation?.audioUrl
+      : undefined,
+  ]);
+  const applied = patchGeneration(version.id, {
+    ...patch,
+    audioUrl: undefined,
+    audioSha256: undefined,
+  });
+  if (!applied) return;
+  for (const previousUrl of previousUrls) {
+    if (!previousUrl || !liveObjectUrls.includes(previousUrl)) continue;
+    URL.revokeObjectURL(previousUrl);
+    liveObjectUrls = liveObjectUrls.filter((url) => url !== previousUrl);
+  }
+}
+
+function validSha256(value: string | null): string | null {
+  const normalized = value?.trim().toLowerCase();
+  return normalized && /^[0-9a-f]{64}$/.test(normalized) ? normalized : null;
+}
+
+async function sha256Blob(blob: Blob): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }

@@ -15,7 +15,10 @@ import {
   createSong,
   createSongWithSpend,
 } from "@/lib/db/queries/songs";
-import { createCompositionEvent } from "@/lib/db/queries/composition-events";
+import {
+  createCompositionEvent,
+  hasVerifiedGenerationEvidence,
+} from "@/lib/db/queries/composition-events";
 import {
   createLocalSongFallback,
   getLocalSongSummariesByUserFallback,
@@ -23,11 +26,19 @@ import {
 import { isDatabaseUnavailable, objectFieldAsString } from "@/app/api/songs/db-fallback";
 import {
   parseAudioDataUrl,
+  ownerSongAudioUrl,
+  songMasterStorageKey,
   storedSongAudioDigest,
   uploadSongMasterFromDataUrl,
 } from "@/lib/storage/song-audio";
+import { reserveSongAudioObject } from "@/lib/db/queries/song-audio-objects";
 import { isObject } from "@/lib/utils/is-object";
+import { MAX_SONG_AUDIO_BYTES } from "@/lib/audio/file-signature";
 import { log } from "@/lib/observability/log";
+import {
+  legacyExternalSongAudioUrl,
+  serializeOwnerSong,
+} from "@/lib/storage/song-audio-delivery";
 import {
   langFromAcceptLanguage,
   songSavedNotificationCopy,
@@ -62,6 +73,7 @@ const SONG_CREATE_RATE_LIMIT = { capacity: 20, refillWindowMs: 60_000 };
 // bounded, URL-safe shape. Covers every id the app mints today: raw UUIDs,
 // `demo-<uuid>` drafts, and server-generated `song_<ulid>` fallbacks.
 const SONG_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+const MAX_SONG_AUDIO_DATA_URL_CHARS = Math.ceil(MAX_SONG_AUDIO_BYTES * 4 / 3) + 128;
 
 const songPayloadSchema = z.object({
   id: z.string().regex(SONG_ID_PATTERN, "Invalid song id").optional(),
@@ -80,7 +92,7 @@ const songPayloadSchema = z.object({
   sourceMelodyKind: sourceMelodyKindSchema.optional(),
   editCount: z.number().int().optional(),
   editDepth: z.enum(["fresh", "shaped", "reworked"]).optional(),
-  mp3DataUrl: z.string().nullable().optional(),
+  mp3DataUrl: z.string().max(MAX_SONG_AUDIO_DATA_URL_CHARS).nullable().optional(),
   melody: cleanMelodySchema.nullable().optional(),
   provenance: songProvenanceSchema.nullable().optional(),
   visualConfig: visualConfigSchema,
@@ -116,7 +128,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const rows = await getSongSummariesByUser(userId);
-    return NextResponse.json(rows);
+    return NextResponse.json(rows.map(serializeSongSummary));
   } catch (err) {
     if (shouldUseLocalSongFallback(auth, requestHost) && isDatabaseUnavailable(err)) {
       const rows = getLocalSongSummariesByUserFallback(userId);
@@ -130,7 +142,7 @@ export async function GET(req: NextRequest) {
         sessionId: auth.sessionId,
         level: "warn",
       });
-      return NextResponse.json(rows);
+      return NextResponse.json(rows.map(serializeSongSummary));
     }
 
     log("song.list_failed", {
@@ -152,6 +164,19 @@ export async function GET(req: NextRequest) {
       { status: 500, headers: { "X-Request-Id": requestId } },
     );
   }
+}
+
+function serializeSongSummary<T extends {
+  id: string;
+  hasAudio: boolean;
+  legacyAudioUrl?: string | null;
+}>(song: T) {
+  const audioUrl = song.hasAudio
+    ? legacyExternalSongAudioUrl(song.legacyAudioUrl) ?? ownerSongAudioUrl(song.id)
+    : null;
+  const rest = { ...song };
+  delete rest.legacyAudioUrl;
+  return { ...rest, audioUrl, mp3Url: audioUrl };
 }
 
 export async function POST(req: NextRequest) {
@@ -209,12 +234,34 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const baseInput = await buildSongInput(body, userId);
   const dataUrl =
     typeof body.mp3DataUrl === "string" && body.mp3DataUrl.length > 0
       ? body.mp3DataUrl
       : null;
-  const candidateAudioDigest = dataUrl ? parseAudioDataUrl(dataUrl)?.digest ?? null : null;
+  const parsedCandidateAudio = dataUrl ? parseAudioDataUrl(dataUrl) : null;
+  if (dataUrl && !parsedCandidateAudio) {
+    log("song.audio_payload_rejected", {
+      songId: body.id ?? null,
+      reason: "invalid_audio_signature",
+    }, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+      level: "warn",
+    });
+    return NextResponse.json(
+      {
+        error: "invalid_audio",
+        message: "Rendered audio is not a valid MP3 or WAV file",
+        requestId,
+      },
+      { status: 422, headers: { "X-Request-Id": requestId } },
+    );
+  }
+
+  const baseInput = await buildSongInput(body, userId);
+  const candidateAudioDigest = parsedCandidateAudio?.digest ?? null;
   const candidateFingerprint = computeSaveFingerprint({
     ...baseInput,
     mp3Url: null,
@@ -251,11 +298,34 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const resolvedAudio = await resolveSongAudioForSave(baseInput, body, {
-    requestId,
-    userId,
-    sessionId: auth.sessionId,
-  });
+  let resolvedAudio: ResolvedSongAudio;
+  try {
+    resolvedAudio = await resolveSongAudioForSave(baseInput, body, {
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+      allowDataUrlFallback: shouldUseLocalSongFallback(auth, requestHost),
+    });
+  } catch (error) {
+    log("song.audio_upload_failed", {
+      error: error instanceof Error ? error.message : String(error),
+      songId: baseInput.id,
+    }, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+      level: "error",
+    });
+    return NextResponse.json(
+      {
+        error: "audio_storage_unavailable",
+        message: "Rendered audio could not be stored safely",
+        requestId,
+      },
+      { status: 503, headers: { "X-Request-Id": requestId } },
+    );
+  }
   // Fingerprint the fully resolved payload so save replay (idempotent) is
   // distinguishable from a same-id/different-payload conflict (#297).
   const songInput: SongInput = {
@@ -292,7 +362,7 @@ export async function POST(req: NextRequest) {
           audioStorage: resolvedAudio.audioStorage,
         }));
 
-        return NextResponse.json(song, {
+        return NextResponse.json(serializeOwnerSong(song), {
           headers: { "X-Request-Id": requestId, ...audioStorageHeaders },
         });
       } catch (dbError) {
@@ -303,7 +373,9 @@ export async function POST(req: NextRequest) {
           shouldUseLocalSongFallback(auth, requestHost)
           && isDatabaseUnavailable(dbError)
         ) {
-          const fallbackSong = createLocalSongFallback(songInput);
+          const fallbackSong = createLocalSongFallback(
+            localFallbackSongInput(songInput, dataUrl, candidateAudioDigest),
+          );
           log("song.create_failed", {
             reason: "database_unavailable",
             fallback: "local_song_snapshot",
@@ -315,7 +387,7 @@ export async function POST(req: NextRequest) {
             sessionId: auth.sessionId,
             level: "warn",
           });
-          return NextResponse.json(fallbackSong, {
+          return NextResponse.json(serializeOwnerSong(fallbackSong), {
             headers: {
               "X-Request-Id": requestId,
               "X-Murmur-Fallback": "local-song",
@@ -396,12 +468,14 @@ export async function POST(req: NextRequest) {
       audioStorage: resolvedAudio.audioStorage,
     }));
 
-    return NextResponse.json(result.song, {
+    return NextResponse.json(serializeOwnerSong(result.song), {
       headers: { "X-Request-Id": requestId, ...audioStorageHeaders },
     });
   } catch (err) {
     if (shouldUseLocalSongFallback(auth, requestHost) && isDatabaseUnavailable(err)) {
-      const fallbackSong = createLocalSongFallback(songInput);
+      const fallbackSong = createLocalSongFallback(
+        localFallbackSongInput(songInput, dataUrl, candidateAudioDigest),
+      );
       log("song.create_failed", {
         reason: "database_unavailable",
         fallback: "local_guest_song_snapshot",
@@ -413,14 +487,13 @@ export async function POST(req: NextRequest) {
         sessionId: auth.sessionId,
         level: "warn",
       });
-      return NextResponse.json(fallbackSong, {
+      return NextResponse.json(serializeOwnerSong(fallbackSong), {
         headers: {
           "X-Request-Id": requestId,
           "X-Murmur-Fallback": "local-guest-song",
         },
       });
     }
-
     const cause = err instanceof Error && "cause" in err ? err.cause : undefined;
     log("song.create_failed", {
       error: err instanceof Error ? err.message : String(err),
@@ -452,6 +525,24 @@ export async function POST(req: NextRequest) {
   }
 }
 
+function localFallbackSongInput(
+  input: SongInput,
+  dataUrl: string | null,
+  audioDigest: string | null,
+): SongInput {
+  if (!dataUrl || !audioDigest) return input;
+  const fallback = {
+    ...input,
+    mp3Url: null,
+    mp3StorageKey: null,
+    mp3DataUrl: dataUrl,
+  };
+  return {
+    ...fallback,
+    saveFingerprint: computeSaveFingerprint({ ...fallback, audioDigest }),
+  };
+}
+
 async function buildSongInput(body: SongPayload, userId: string): Promise<SongInput> {
   // Prefer the client-minted draft id (idempotent retry key); mint a
   // server-side id only when the payload omits one.
@@ -460,6 +551,10 @@ async function buildSongInput(body: SongPayload, userId: string): Promise<SongIn
   // Validated by sourceMelodyKindSchema (#311); default only when omitted.
   const sourceMelodyKind = body.sourceMelodyKind ?? "corrected";
   const editDepth = deriveEditDepth(editCount);
+  const provenance = await verifiedSongProvenance(body.provenance ?? null, {
+    userId,
+    songId: id,
+  });
   // Derive + validate lineage server-side from the owned parent (#297) rather
   // than trusting client-supplied root/depth.
   const lineage = await deriveServerLineage({
@@ -499,11 +594,54 @@ async function buildSongInput(body: SongPayload, userId: string): Promise<SongIn
     editDepth,
     artifactVersion: SONG_ARTIFACT_VERSION,
     melody: body.melody ?? null,
-    provenance: body.provenance ?? null,
+    provenance,
     visualConfig: body.visualConfig,
     arrangementState: body.arrangementState,
     tags: body.tags,
   };
+}
+
+async function verifiedSongProvenance(
+  provenance: SongPayload["provenance"],
+  context: { userId: string; songId: string },
+): Promise<NonNullable<SongPayload["provenance"]> | null> {
+  if (!provenance) return null;
+
+  const { generationBatchId, generationClipId, generationAudioSha256 } = provenance;
+  const nonGenerationProvenance = { ...provenance };
+  delete nonGenerationProvenance.generationBatchId;
+  delete nonGenerationProvenance.generationClipId;
+  delete nonGenerationProvenance.generationAudioSha256;
+  delete nonGenerationProvenance.generationBatchIndex;
+  const withoutGenerationIdentity = Object.keys(nonGenerationProvenance).length > 0
+    ? nonGenerationProvenance
+    : null;
+
+  if (!generationBatchId || !generationClipId || !generationAudioSha256) {
+    return withoutGenerationIdentity;
+  }
+
+  try {
+    const verified = await hasVerifiedGenerationEvidence({
+      userId: context.userId,
+      generationBatchId,
+      generationClipId,
+      outputSha256: generationAudioSha256,
+    });
+    return verified ? provenance : withoutGenerationIdentity;
+  } catch {
+    // Provenance validation enriches a save; an unavailable evidence store
+    // must not turn a demo-safe/local save into data loss.
+    log("song.provenance_validation_failed", {
+      reason: "generation_evidence_unavailable",
+      songId: context.songId,
+    }, {
+      route: ROUTE,
+      userId: context.userId,
+      level: "warn",
+    });
+    return withoutGenerationIdentity;
+  }
 }
 
 /**
@@ -527,7 +665,12 @@ type ResolvedSongAudio = {
 async function resolveSongAudioForSave(
   base: SongInput,
   body: SongPayload,
-  ctx: { requestId: string; userId: string; sessionId: string | null },
+  ctx: {
+    requestId: string;
+    userId: string;
+    sessionId: string | null;
+    allowDataUrlFallback: boolean;
+  },
 ): Promise<ResolvedSongAudio> {
   const dataUrl =
     typeof body.mp3DataUrl === "string" && body.mp3DataUrl.length > 0
@@ -543,12 +686,43 @@ async function resolveSongAudioForSave(
   }
 
   const parsed = parseAudioDataUrl(dataUrl);
-  const audioDigest = parsed?.digest ?? null;
+  if (!parsed) {
+    log("song.audio_payload_rejected", {
+      songId: base.id,
+      reason: "invalid_audio_signature",
+    }, {
+      route: ROUTE,
+      requestId: ctx.requestId,
+      userId: ctx.userId,
+      sessionId: ctx.sessionId,
+      level: "warn",
+    });
+    return {
+      input: { ...base, mp3Url: null, mp3StorageKey: null, mp3DataUrl: null },
+      audioStorage: "none",
+      audioDigest: null,
+    };
+  }
+  const audioDigest = parsed.digest;
+  const storageKey = songMasterStorageKey({
+    userId: base.userId,
+    songId: base.id!,
+    digest: parsed.digest,
+    incarnationId: ulid(),
+    ext: parsed.ext,
+  });
 
   try {
+    await reserveSongAudioObject({
+      storageKey,
+      userId: base.userId,
+      songId: base.id!,
+      digest: parsed.digest,
+    });
     const uploaded = await uploadSongMasterFromDataUrl({
       userId: base.userId,
       songId: base.id!,
+      storageKey,
       dataUrl,
     });
     if (uploaded) {
@@ -574,6 +748,7 @@ async function resolveSongAudioForSave(
       sessionId: ctx.sessionId,
       level: "warn",
     });
+    if (!ctx.allowDataUrlFallback) throw err;
   }
 
   // Demo-safe fallback: keep the rendered audio as an embedded data URL rather
@@ -642,7 +817,7 @@ async function handleSongIdConflict(
       (fingerprint) => !fingerprint || existingFingerprint === fingerprint,
     );
   if (isExactReplay) {
-    return NextResponse.json(existing, {
+    return NextResponse.json(serializeOwnerSong(existing), {
       headers: {
         "X-Request-Id": requestId,
         "X-Murmur-Idempotent-Replay": "song",

@@ -4,7 +4,8 @@ Wraps [Magenta RealTime 2](https://github.com/magenta/magenta-realtime) so
 Murmur's vibe cards (`/api/music/generate`) can turn randomized text prompts —
 optionally blended with the user's hum — into real audio clips.
 
-Two frontends share one backend-agnostic core (`engine.py`):
+Two frontends share one backend-agnostic model core (`engine.py`) and one
+transport-independent generation/quality pipeline (`pipeline.py`):
 
 - **`main.py`** — local dev HTTP server (FastAPI, MLX backend on Apple Silicon),
   run via `bun run dev:music`.
@@ -46,15 +47,21 @@ WebM/Opus blob directly, the worker transcodes it through ffmpeg to a temporary
 | --- | --- | --- |
 | `MAGENTA_MODEL` | `mrt2_base` | production highest-spec default; use `mrt2_small` only for constrained local tests |
 | `MAGENTA_CFG_NOTES` | `1.5` | melody-conditioning scale; current experiment winner for clear melody without robotic over-control |
+| `MAGENTA_TEMPERATURE` | `1.3` | first-candidate sampling temperature; quality retries use a lower versioned recovery value |
+| `MAGENTA_TOP_K` | `40` | first-candidate top-k; quality retries use a lower versioned recovery value |
 | `MUSIC_WORKER_TOKEN` | _(unset in loopback dev)_ | bearer token, required for deployed/public HTTP workers |
 | `MUSIC_WORKER_REQUIRE_AUTH` | _(unset)_ | `1` forces startup to fail when `MUSIC_WORKER_TOKEN` is missing |
 | `MUSIC_ENGINE_MOCK` | _(unset)_ | `1` → sine-chord placeholder clips, no model |
 | `MUSIC_ENGINE_PRELOAD` | `1` | `0` → lazy-load on first request |
 | `MUSIC_QUALITY_MAX_ATTEMPTS` | `2` | generate at most 1–3 candidates until the technical Gate passes |
+| `MUSIC_QUALITY_MAX_TOTAL_SECONDS` | `165` | cumulative candidate budget; clamped to 175 s so RunPod's 180 s execution limit remains authoritative |
 
-The serverless handler returns a hashed input receipt and `music-technical-v1`
-quality evidence. It retries failed technical candidates inside the same RunPod
-job; raw prompts, melody arrays, and hum bytes are not included in diagnostics.
+The serverless handler returns a hashed input receipt and `music-technical-v2`
+quality evidence. It rejects requested hum/melody conditioning that cannot be
+applied, and retries failed technical candidates inside the same RunPod job
+with an explicit conservative sampling policy. Raw prompts, melody arrays, and
+hum bytes are not included in diagnostics; candidate/audio digests, applied
+conditioning, sampling, runtime revision, and normalization evidence are.
 The Web runtime independently applies the same versioned signal checks. Keep
 threshold changes synchronized across `quality_gate.py` and
 `src/lib/music/music-output-quality.ts`, and bump the Gate version whenever the

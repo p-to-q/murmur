@@ -1,7 +1,9 @@
 """Unit tests for the music-engine worker's pure helpers (no model needed)."""
 
 import io
+import json
 import os
+import subprocess
 import sys
 import types
 import unittest
@@ -13,7 +15,60 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 
+import engine
 import main
+
+
+def _sampling_config(temperature: str, top_k: str, cfg_notes: str = "1.5") -> dict:
+    env = os.environ.copy()
+    env.update(
+        {
+            "MAGENTA_TEMPERATURE": temperature,
+            "MAGENTA_TOP_K": top_k,
+            "MAGENTA_CFG_NOTES": cfg_notes,
+            "MUSIC_ENGINE_MOCK": "1",
+        }
+    )
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import json; import engine; "
+                "print(json.dumps({'temperature': engine.SAMPLING_TEMPERATURE, "
+                "'top_k': engine.SAMPLING_TOP_K, "
+                "'cfg_notes': engine.CFG_NOTES_MELODY}))"
+            ),
+        ],
+        cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        env=env,
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    return json.loads(completed.stdout)
+
+
+class SamplingConfigurationTest(unittest.TestCase):
+    def test_invalid_values_fall_back_to_defaults_at_import(self):
+        self.assertEqual(
+            _sampling_config("not-a-number", "not-an-integer"),
+            {"temperature": 1.3, "top_k": 40, "cfg_notes": 1.5},
+        )
+        self.assertEqual(
+            _sampling_config("nan", "40"),
+            {"temperature": 1.3, "top_k": 40, "cfg_notes": 1.5},
+        )
+        self.assertEqual(
+            _sampling_config("1.3", "40", "invalid"),
+            {"temperature": 1.3, "top_k": 40, "cfg_notes": 1.5},
+        )
+
+    def test_valid_values_are_clamped_at_import(self):
+        self.assertEqual(
+            _sampling_config("99", "0"),
+            {"temperature": 2.0, "top_k": 1, "cfg_notes": 1.5},
+        )
 
 
 class BlendStyleEmbeddingsTest(unittest.TestCase):
@@ -94,6 +149,21 @@ class WavEncodingTest(unittest.TestCase):
     def test_mock_clip_deterministic_per_prompt(self):
         self.assertEqual(main.mock_clip("a", 2.0), main.mock_clip("a", 2.0))
         self.assertNotEqual(main.mock_clip("a", 2.0), main.mock_clip("b", 2.0))
+
+
+class MelodyConditioningTest(unittest.TestCase):
+    def test_segments_tile_the_clip_and_ignore_invalid_notes(self):
+        segments = engine.melody_to_segments({"notes": [
+            {"pitch": 60, "start": 0.2, "duration": 0.5},
+            {"pitch": 999, "start": 0, "duration": 1},
+        ]}, 2.0)
+        self.assertEqual(sum(frames for _notes, frames in segments), 50)
+        self.assertEqual(sum(1 for notes, _frames in segments if notes is not None), 1)
+
+    def test_no_valid_notes_produces_no_conditioning(self):
+        self.assertEqual(engine.melody_to_segments({"notes": [
+            {"pitch": 999, "start": 0, "duration": 1},
+        ]}, 2.0), [])
 
 
 if __name__ == "__main__":

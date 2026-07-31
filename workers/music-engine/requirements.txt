@@ -4,6 +4,7 @@
 # Local dev (main.py / `bun run dev:music`) uses the MLX backend + FastAPI.
 # Production (handler.py on RunPod Serverless) uses magenta-rt[jax] + runpod;
 # see Dockerfile for the container's install list.
+numpy>=1.26,<3
 magenta-rt[mlx]
 fastapi
 uvicorn[standard]

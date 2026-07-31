@@ -34,6 +34,10 @@ import { useUserBalance } from "@/lib/hooks/use-user-balance";
 import { useCurrentAccount } from "@/lib/hooks/use-current-account";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { copyTextToClipboard } from "@/lib/platform/clipboard";
+import {
+  isTranscriptionResumeRequested,
+  withTranscriptionResume,
+} from "@/lib/audio/transcription-recovery";
 
 const SLIDER_MAX_USD = Math.min(100, CUSTOM_TOPUP_MAX_USD);
 const SLIDER_MAX_CNY = 500;
@@ -82,21 +86,25 @@ export function buildTopupCheckoutHref(input: {
   currency: Currency;
   payMethod: "card" | "wxpay";
   requiresSignIn: boolean;
+  resumeTranscription?: boolean;
 }): string | null {
   const methodParam = input.payMethod === "wxpay" ? "&payMethod=wxpay" : "";
   const gateParam = input.requiresSignIn ? "&gate=sign_in" : "";
 
   if (input.selectedId === CUSTOM_TOPUP_ID) {
     if (input.currency === "CNY") {
-      return `/topup/checkout?customAmountCny=${encodeURIComponent(String(input.customAmount))}&currency=CNY${methodParam}${gateParam}`;
+      const href = `/topup/checkout?customAmountCny=${encodeURIComponent(String(input.customAmount))}&currency=CNY${methodParam}${gateParam}`;
+      return input.resumeTranscription ? withTranscriptionResume(href) : href;
     }
     if (input.customAmountUsd == null) return null;
-    return `/topup/checkout?customAmountUsd=${encodeURIComponent(String(input.customAmountUsd))}${methodParam}${gateParam}`;
+    const href = `/topup/checkout?customAmountUsd=${encodeURIComponent(String(input.customAmountUsd))}${methodParam}${gateParam}`;
+    return input.resumeTranscription ? withTranscriptionResume(href) : href;
   }
 
   if (!input.selectedSkuId) return null;
   const currencyParam = input.currency === "CNY" ? "&currency=CNY" : "";
-  return `/topup/checkout?sku=${encodeURIComponent(input.selectedSkuId)}${currencyParam}${methodParam}${gateParam}`;
+  const href = `/topup/checkout?sku=${encodeURIComponent(input.selectedSkuId)}${currencyParam}${methodParam}${gateParam}`;
+  return input.resumeTranscription ? withTranscriptionResume(href) : href;
 }
 
 const paperTextureStyle = {
@@ -520,6 +528,9 @@ export function TopupScreen() {
       currency: effectiveCurrency,
       payMethod,
       requiresSignIn,
+      resumeTranscription: isTranscriptionResumeRequested(
+        new URLSearchParams(window.location.search).get("resume"),
+      ),
     });
     if (href) router.push(href);
   };

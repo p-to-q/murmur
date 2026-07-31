@@ -6,7 +6,6 @@ import { createSpendReference } from "@/lib/billing/spend-ref";
 import { shouldBypassBillingInDevelopment } from "@/lib/billing/dev-balance";
 import { shouldSkipNotesBilling } from "@/lib/billing/session-billing";
 import {
-  getNotesBalance,
   recordPendingRefund,
   refundNotes,
   settleOperationDelivery,
@@ -15,6 +14,7 @@ import {
 import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { safeHostnameFromUrl } from "@/lib/http/safe-hostname";
 import { classifyError } from "@/lib/errors/transient";
+import { analyzePcm16Wav } from "@/lib/music/music-output-quality";
 import { log } from "@/lib/observability/log";
 import { reportBudget } from "@/lib/observability/latency-budgets";
 import {
@@ -28,8 +28,16 @@ import {
   songGeneratedNotificationCopy,
 } from "@/lib/notifications/notification-copy";
 import { scheduleAfterResponse } from "@/lib/platform/request-lifecycle";
+import { recordMusicGenerationEvidence } from "@/lib/platform/music-generation-evidence";
+import { generateDurableMusicSynchronously } from "@/lib/platform/music-sync-generation";
 import { RunpodError, runJob, getQueueDepth } from "@/lib/platform/runpod-serverless";
-import { verifyMusicWorkerOutput } from "@/lib/platform/music-worker-output";
+import {
+  isMusicDeliveryBase64WithinLimit,
+  maxMusicDeliveryBytes,
+  MUSIC_QUALITY_GATE_COMPAT_VERSION,
+  verifyMusicWorkerOutput,
+} from "@/lib/platform/music-worker-output";
+import { verifyHttpConditioningHeaders } from "@/lib/platform/music-http-output";
 import { COST } from "@murmur/core";
 import { createHash } from "node:crypto";
 
@@ -66,6 +74,9 @@ type MusicRouteError =
   | "worker_unauthorized"
   | "worker_http_error"
   | "worker_overloaded"
+  | "generation_evidence_unavailable"
+  | "idempotency_conflict"
+  | "operation_pending"
   | "client_closed_request"
   | "server_error";
 
@@ -188,7 +199,7 @@ export async function POST(request: NextRequest) {
   // Vercel timeout — after the note was spent. Shed BEFORE spending, for every
   // account kind (not just local_creator), so a cold pool never charges a note
   // it can't deliver. `getQueueDepth` fails open (null → allow).
-  if (mode === "serverless") {
+  if (mode === "serverless" && !clipId) {
     const serverlessConfig = getMusicServerlessConfig();
     if (serverlessConfig) {
       const depth = await getQueueDepth(serverlessConfig);
@@ -261,6 +272,102 @@ export async function POST(request: NextRequest) {
     const melody = typeof melodyRaw === "string" ? melodyRaw.trim() : "";
 
     const params: GenerateParams = { prompt, duration, styleMix, hum, melody };
+    if (mode === "http" && clipId && process.env.NODE_ENV === "production") {
+      return fail(
+        "worker_unconfigured",
+        "Stable clip delivery requires the durable serverless music transport",
+        503,
+        {
+          requestId,
+          userId,
+          startedAt,
+          ext: { transport: mode, durableReceiptRequired: true },
+        },
+      );
+    }
+    if (mode === "serverless" && clipId) {
+      const durable = await generateDurableMusicSynchronously({
+        userId,
+        operationId: clipId,
+        requestId,
+        prompt,
+        duration,
+        styleMix,
+        melody,
+        hum,
+        generationBatchId: batchId,
+        bill: !(
+          shouldSkipNotesBilling(auth)
+          || shouldBypassMusicBillingForLocalDemo(request, auth)
+        ),
+        signal: request.signal,
+      });
+      if (!durable.ok) {
+        return fail(durable.error, durable.message, durable.status, {
+          requestId,
+          userId,
+          startedAt,
+          ext: {
+            durableJob: true,
+            jobId: durable.jobId ?? null,
+            currentBalance: durable.currentBalance ?? null,
+          },
+          body: {
+            ...(durable.jobId ? { jobId: durable.jobId } : {}),
+            durableJob: true,
+            recoverable: Boolean(durable.jobId) && (
+              durable.error === "operation_pending"
+              || durable.error === "client_closed_request"
+              || durable.error === "billing_unavailable"
+              || durable.error === "insufficient_notes"
+            ),
+            ...(durable.currentBalance === undefined
+              ? {}
+              : { currentBalance: durable.currentBalance, cost: COST.music_generate }),
+          },
+        });
+      }
+      const durationMs = Math.round(performance.now() - startedAt);
+      log("music.generate_completed", {
+        mode,
+        batchId,
+        clipId,
+        jobId: durable.jobId,
+        durableJob: true,
+        duplicate: durable.duplicate,
+        bytes: durable.audio.byteLength,
+        model: durable.model,
+        outputSha256: durable.outputSha256,
+      }, {
+        route: ROUTE,
+        requestId,
+        userId,
+        sessionId: auth.sessionId,
+        durationMs,
+      });
+      if (!durable.duplicate) {
+        scheduleAfterResponse(() => publishMusicGeneratedNotification({
+          userId,
+          sessionId: auth.sessionId,
+          requestId,
+          batchId,
+          acceptLanguage: request.headers.get("accept-language"),
+        }));
+      }
+      return new NextResponse(durable.audio, {
+        headers: {
+          "Content-Type": durable.contentType,
+          "Cache-Control": "no-store",
+          "X-Request-Id": requestId,
+          "X-Music-Job-Id": durable.jobId,
+          "X-Murmur-Operation-Replayed": String(durable.duplicate),
+          "X-Model": durable.model,
+          "X-Generation-Ms": durable.generationMs,
+          "X-Style-Mix": durable.styleMix,
+          "X-Audio-SHA256": durable.outputSha256,
+        },
+      });
+    }
     const billing = await prepareMusicGenerationBilling({
       request,
       auth,
@@ -326,6 +433,55 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const genDurationMs = Math.round(performance.now() - startedAt);
+    const outputSha256 = createHash("sha256")
+      .update(new Uint8Array(result.audio))
+      .digest("hex");
+    const genBudget = reportBudget("music_generate", genDurationMs, {
+      route: ROUTE,
+      requestId,
+      userId,
+      sessionId: auth.sessionId,
+    });
+    const evidenceRecorded = await recordMusicGenerationEvidence({
+      eventId: generationEvidenceEventId({ userId, batchId, clipId, outputSha256 }),
+      userId,
+      requestId,
+      batchId,
+      clipId,
+      mode,
+      model: result.model,
+      quality: result.quality,
+      outputSha256,
+      outputBytes: result.audio.byteLength,
+      duration,
+      styleMix,
+    });
+    if (!evidenceRecorded) {
+      const outcome = await refundMusicGenerateSpendIfNeeded({
+        spend: spendForRefund,
+        requestId,
+        userId,
+        sessionId: auth.sessionId,
+        promptLength: prompt.length,
+        duration,
+        trigger: "generation_evidence_unavailable",
+      });
+      spendForRefund = null;
+      if (outcome === "pending") {
+        return fail("refund_pending", REFUND_PENDING_MESSAGE, 500, {
+          requestId, userId, startedAt,
+          ext: { trigger: "generation_evidence_unavailable" },
+        });
+      }
+      return fail(
+        "generation_evidence_unavailable",
+        "Generation evidence could not be persisted. Retry will resume the same purchase.",
+        503,
+        { requestId, userId, startedAt },
+      );
+    }
+
     await settleDeliveredMusicGenerateOperation({
       clipId,
       spend: billing.spend,
@@ -333,14 +489,8 @@ export async function POST(request: NextRequest) {
       requestId,
       sessionId: auth.sessionId,
     });
+    spendForRefund = null;
 
-    const genDurationMs = Math.round(performance.now() - startedAt);
-    const genBudget = reportBudget("music_generate", genDurationMs, {
-      route: ROUTE,
-      requestId,
-      userId,
-      sessionId: auth.sessionId,
-    });
     log("music.generate_completed", {
       mode,
       batchId,
@@ -350,6 +500,7 @@ export async function POST(request: NextRequest) {
       billingMode: billing.billingMode,
       generationMs: Number(result.generationMs) || null,
       model: result.model,
+      outputSha256,
       styleMix: result.styleMix,
       qualityGateVersion: result.quality?.quality.version ?? null,
       qualityEvidence: result.quality?.diagnostics.evidence ?? null,
@@ -368,7 +519,6 @@ export async function POST(request: NextRequest) {
       sessionId: auth.sessionId,
       requestId,
       batchId,
-      prompt,
       acceptLanguage: request.headers.get("accept-language"),
     }));
 
@@ -380,6 +530,7 @@ export async function POST(request: NextRequest) {
         "X-Model": result.model,
         "X-Generation-Ms": result.generationMs,
         "X-Style-Mix": result.styleMix,
+        "X-Audio-SHA256": outputSha256,
       },
     });
   } catch (error) {
@@ -411,6 +562,21 @@ export async function POST(request: NextRequest) {
       },
     });
   }
+}
+
+function generationEvidenceEventId(input: {
+  userId: string;
+  batchId: string | null;
+  clipId: string | null;
+  outputSha256: string;
+}): string {
+  const identity = [
+    input.userId,
+    input.batchId ?? "unbatched",
+    input.clipId ?? "legacy",
+    input.outputSha256,
+  ].join(":");
+  return `cmp_generation_${createHash("sha256").update(identity).digest("hex")}`;
 }
 
 // The browser groups the sibling clip requests of one Studio fan-out under a
@@ -489,7 +655,6 @@ async function publishMusicGeneratedNotification(input: {
   sessionId: string | null;
   requestId: string;
   batchId: string | null;
-  prompt: string;
   acceptLanguage: string | null;
 }) {
   const lang = langFromAcceptLanguage(input.acceptLanguage);
@@ -516,7 +681,6 @@ async function publishMusicGeneratedNotification(input: {
         batchId: input.batchId,
         sourceId: groupId,
         notificationId: `song_generated:${groupId}`,
-        prompt: input.prompt.slice(0, 120),
       },
     })
     .catch((error) => {
@@ -570,45 +734,6 @@ async function prepareMusicGenerationBilling(options: {
       },
       balanceBefore: null,
       billingMode: "dev_fallback",
-    };
-  }
-
-  let balance: Awaited<ReturnType<typeof getNotesBalance>>;
-  try {
-    balance = await getNotesBalance(options.userId);
-  } catch (error) {
-    return {
-      ok: false,
-      response: fail("billing_unavailable", "User balance is unavailable", 503, {
-        requestId: options.requestId,
-        userId: options.userId,
-        startedAt: options.startedAt,
-        ext: { message: error instanceof Error ? error.message : String(error) },
-      }),
-    };
-  }
-
-  if (!balance.ok) {
-    return {
-      ok: false,
-      response: fail("billing_unavailable", "User balance is unavailable", 503, {
-        requestId: options.requestId,
-        userId: options.userId,
-        startedAt: options.startedAt,
-      }),
-    };
-  }
-
-  if (balance.notes < COST.music_generate) {
-    return {
-      ok: false,
-      response: fail("insufficient_notes", "Not enough Murmur Notes", 402, {
-        requestId: options.requestId,
-        userId: options.userId,
-        startedAt: options.startedAt,
-        ext: { currentBalance: balance.notes, cost: COST.music_generate },
-        body: { currentBalance: balance.notes, cost: COST.music_generate },
-      }),
     };
   }
 
@@ -842,7 +967,6 @@ async function generateViaServerless(
     humBytes = new Uint8Array(await params.hum.arrayBuffer());
     input.hum_b64 = Buffer.from(humBytes).toString("base64");
   }
-
   let output: Record<string, unknown>;
   try {
     output = await runJob(config, input, { budgetMs: WORKER_TIMEOUT_MS, signal });
@@ -864,7 +988,7 @@ async function generateViaServerless(
             ? "RunPod rejected our API key (RUNPOD_API_KEY out of sync?)"
             : error.message,
         status: 502,
-        ext: { runpodKind: error.kind, runpodDetail: error.detail },
+        ext: { runpodKind: error.kind, providerDetailPresent: error.detail != null },
       };
     }
     return {
@@ -882,8 +1006,11 @@ async function generateViaServerless(
       error: "worker_http_error",
       message: "RunPod job returned no audio",
       status: 502,
-      ext: { output },
+      ext: { outputKeys: Object.keys(output).slice(0, 16) },
     };
+  }
+  if (!isMusicDeliveryBase64WithinLimit(audioB64, params.duration)) {
+    return musicDeliverySizeFailure();
   }
 
   // Slice out exactly this clip's bytes into a standalone ArrayBuffer: Node
@@ -953,6 +1080,9 @@ async function generateViaHttp(
     workerForm.append("style_mix", String(params.styleMix));
     workerForm.append("hum", params.hum, params.hum.name || "hum.webm");
   }
+  // New workers return the same v2 JSON envelope as RunPod. Older FastAPI
+  // workers ignore this extra form field and keep returning WAV bytes.
+  workerForm.append("response_mode", "json_v2");
 
   const headers = new Headers({ "X-Request-Id": requestId });
   const token = process.env.MUSIC_WORKER_TOKEN?.trim();
@@ -987,9 +1117,10 @@ async function generateViaHttp(
   if (!workerRes.ok) {
     // Surface the worker's own error payload — without it, "HTTP 500" hides
     // whether generation failed, auth drifted, or the worker was mid-load.
-    let workerDetail: unknown = null;
+    let workerErrorCode: string | null = null;
     try {
-      workerDetail = (await workerRes.json()) as unknown;
+      const body = (await workerRes.json()) as unknown;
+      workerErrorCode = safeWorkerErrorCode(body);
     } catch (parseError) {
       log(
         "music.worker_error_parse_failed",
@@ -1008,18 +1139,199 @@ async function generateViaHttp(
         ? "Music worker rejected our token (MUSIC_WORKER_TOKEN out of sync?)"
         : `Music worker returned HTTP ${workerRes.status}`,
       status: 502,
-      ext: { workerStatus: workerRes.status, workerDetail },
+      ext: { workerStatus: workerRes.status, workerErrorCode },
+    };
+  }
+
+  const workerContentType = workerRes.headers.get("content-type") ?? "";
+  if (workerContentType.includes("application/json")) {
+    let output: Record<string, unknown>;
+    try {
+      const parsed = await workerRes.json() as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("worker_json_invalid");
+      }
+      output = parsed as Record<string, unknown>;
+    } catch {
+      return {
+        ok: false,
+        error: "worker_http_error",
+        message: "Music worker returned an invalid evidence envelope",
+        status: 502,
+      };
+    }
+    const audioB64 = output.audio_b64;
+    if (typeof audioB64 !== "string" || !audioB64) {
+      return {
+        ok: false,
+        error: "worker_http_error",
+        message: "Music worker returned no audio",
+        status: 502,
+      };
+    }
+    if (!isMusicDeliveryBase64WithinLimit(audioB64, params.duration)) {
+      return musicDeliverySizeFailure();
+    }
+    const decoded = Buffer.from(audioB64, "base64");
+    const humBytes = params.hum?.size && params.styleMix > 0
+      ? new Uint8Array(await params.hum.arrayBuffer())
+      : null;
+    let verified: ReturnType<typeof verifyMusicWorkerOutput>;
+    try {
+      verified = verifyMusicWorkerOutput({
+        output,
+        bytes: new Uint8Array(decoded.buffer, decoded.byteOffset, decoded.byteLength),
+        expected: {
+          requestId,
+          prompt: params.prompt,
+          duration: params.duration,
+          styleMix: humBytes ? params.styleMix : 0,
+          melody: params.melody,
+          humSha256: humBytes
+            ? createHash("sha256").update(humBytes).digest("hex")
+            : null,
+        },
+        requireEvidence: true,
+      });
+    } catch (error) {
+      return {
+        ok: false,
+        error: "worker_http_error",
+        message: "Generated audio did not pass delivery verification",
+        status: 502,
+        ext: {
+          qualityGateRejected: true,
+          reason: error instanceof Error ? error.message : String(error),
+        },
+      };
+    }
+    return {
+      ok: true,
+      audio: decoded.buffer.slice(
+        decoded.byteOffset,
+        decoded.byteOffset + decoded.byteLength,
+      ) as ArrayBuffer,
+      contentType: "audio/wav",
+      model: typeof output.model === "string" ? output.model : "",
+      generationMs: output.generation_ms != null ? String(output.generation_ms) : "",
+      styleMix: typeof output.style_mix === "string" ? output.style_mix : "",
+      quality: verified,
+    };
+  }
+
+  if (process.env.MURMUR_MUSIC_RELEASE_SHA?.trim()) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "Music worker did not return revision-verifiable evidence",
+      status: 502,
+      ext: { qualityGateRejected: true, reason: "music_worker_revision_unverifiable" },
+    };
+  }
+
+  const maxDeliveryBytes = maxMusicDeliveryBytes(params.duration);
+  const contentLength = Number(workerRes.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxDeliveryBytes) {
+    return musicDeliverySizeFailure();
+  }
+  const audio = await workerRes.arrayBuffer();
+  if (audio.byteLength > maxDeliveryBytes) {
+    return musicDeliverySizeFailure();
+  }
+  const quality = analyzePcm16Wav(new Uint8Array(audio), params.duration);
+  if (!quality.passed) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "Generated audio did not pass delivery verification",
+      status: 502,
+      ext: { qualityGateRejected: true, reason: quality.failures.join(",") },
+    };
+  }
+  const workerGateVersion = workerRes.headers.get("x-quality-gate-version");
+  const workerDigest = workerRes.headers.get("x-audio-sha256");
+  const deliveredDigest = createHash("sha256").update(new Uint8Array(audio)).digest("hex");
+  if (workerDigest && workerDigest !== deliveredDigest) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "Generated audio failed delivery integrity verification",
+      status: 502,
+      ext: { qualityGateRejected: true, reason: "worker_digest_mismatch" },
+    };
+  }
+  if (
+    workerGateVersion
+    && ![MUSIC_QUALITY_GATE_COMPAT_VERSION, quality.version].includes(workerGateVersion)
+  ) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "Music worker quality protocol is out of sync",
+      status: 502,
+      ext: { qualityGateRejected: true, reason: "worker_gate_version_mismatch" },
+    };
+  }
+  const conditioningFailure = verifyHttpConditioningHeaders(workerRes.headers, {
+    humPresent: Boolean(params.hum?.size),
+    styleMix: params.styleMix,
+    melody: params.melody,
+  }, workerGateVersion === quality.version);
+  if (conditioningFailure) {
+    return {
+      ok: false,
+      error: "worker_http_error",
+      message: "Music worker did not apply the requested conditioning",
+      status: 502,
+      ext: { qualityGateRejected: true, reason: conditioningFailure },
     };
   }
 
   return {
     ok: true,
-    audio: await workerRes.arrayBuffer(),
+    audio,
     contentType: workerRes.headers.get("content-type") ?? "audio/wav",
     model: workerRes.headers.get("x-model") ?? "",
     generationMs: workerRes.headers.get("x-generation-ms") ?? "",
     styleMix: workerRes.headers.get("x-style-mix") ?? "",
+    quality: {
+      quality,
+      diagnostics: {
+        version: 1,
+        gateVersion: quality.version,
+        evidence: "legacy_missing",
+        candidateCount: finitePositiveHeader(workerRes.headers.get("x-candidate-count")) ?? 1,
+        totalGenerationMs: null,
+        workerWallMs: null,
+        estimatedCostUsd: null,
+        runtime: {},
+        inputReceipt: null,
+        candidates: [],
+      },
+    },
   };
+}
+
+function musicDeliverySizeFailure(): GenerateResult {
+  return {
+    ok: false,
+    error: "worker_http_error",
+    message: "Generated audio exceeded the delivery size limit",
+    status: 502,
+    ext: { qualityGateRejected: true, reason: "payload_too_large" },
+  };
+}
+
+function finitePositiveHeader(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 3 ? parsed : null;
+}
+
+function safeWorkerErrorCode(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const code = (value as Record<string, unknown>).error;
+  return typeof code === "string" && /^[a-z0-9_:-]{1,64}$/i.test(code) ? code : null;
 }
 
 function fail(

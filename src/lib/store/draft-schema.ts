@@ -9,7 +9,7 @@ import type {
   VibeVersion,
   VisualConfig,
 } from "@/modules/shared/types";
-import type { CreationRoute } from "./murmur-store";
+export type CreationRoute = "/vibe" | "/studio" | "/studio/name";
 
 /**
  * Versioned runtime parser for persisted Vibe drafts (#315).
@@ -29,15 +29,19 @@ const EDIT_DEPTHS = new Set<EditDepth>(["fresh", "shaped", "reworked"]);
 const GENERATION_STATUSES = new Set(["pending", "ready", "error"]);
 const GENERATION_ERROR_CODES = new Set<VersionGenerationErrorCode>([
   "background_canceled",
+  "operation_pending",
   "insufficient_notes",
   "rate_limited",
   "billing_unavailable",
   "worker_unconfigured",
   "worker_unavailable",
   "worker_overloaded",
+  "delivery_integrity",
+  "generation_evidence_unavailable",
   "server_error",
   "network_error",
 ]);
+const MUSIC_JOB_ID_PATTERN = /^mjob_[a-f0-9]{32}$/;
 const PULSE_SOURCES = new Set<VisualConfig["pulseSource"]>(["drums", "melody", "energy"]);
 const ARRANGEMENT_TRACKS = [
   "melody",
@@ -149,9 +153,15 @@ function parseGeneration(value: unknown): VersionGeneration | null {
     batchIndex: value.batchIndex,
     styleMix: value.styleMix,
     ...(typeof value.audioUrl === "string" ? { audioUrl: value.audioUrl } : {}),
+    ...(typeof value.audioSha256 === "string" && /^[0-9a-f]{64}$/i.test(value.audioSha256)
+      ? { audioSha256: value.audioSha256.toLowerCase() }
+      : {}),
     ...(isFiniteNumber(value.currentBalance) ? { currentBalance: value.currentBalance } : {}),
     ...(isFiniteNumber(value.cost) ? { cost: value.cost } : {}),
     ...(nonEmptyString(value.operationId) ? { operationId: value.operationId } : {}),
+    ...(typeof value.jobId === "string" && MUSIC_JOB_ID_PATTERN.test(value.jobId)
+      ? { jobId: value.jobId }
+      : {}),
     ...(nonEmptyString(value.batchOperationId) ? { batchOperationId: value.batchOperationId } : {}),
   };
 

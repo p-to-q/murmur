@@ -6,6 +6,13 @@ import {
   spendNotesInTransaction,
   type SpendNotesResult,
 } from "./notes-ledger";
+import { users } from "../schema/users";
+import {
+  commitSongAudioObjectInTransaction,
+  markSongAudioDeletePendingInTransaction,
+} from "./song-audio-objects";
+
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // Gallery / shelf / profile-count listings never touch the audio or the
 // arrangement editor — they only render cover metadata. `mp3DataUrl` is a
@@ -35,7 +42,13 @@ const songSummaryColumns = {
   tags: songs.tags,
   // Cheap boolean so the gallery can flag an incomplete/draft song (#291)
   // without pulling the audio payload into the list response.
-  hasAudio: sql<boolean>`((${songs.mp3Url} is not null and ${songs.mp3Url} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> ''))`,
+  hasAudio: sql<boolean>`((${songs.mp3StorageKey} is not null and ${songs.mp3StorageKey} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> '') or (${songs.mp3Url} is not null and ${songs.mp3Url} <> ''))`,
+  legacyAudioUrl: sql<string | null>`case
+    when (${songs.mp3StorageKey} is null or ${songs.mp3StorageKey} = '')
+      and (${songs.mp3DataUrl} is null or ${songs.mp3DataUrl} = '')
+      then ${songs.mp3Url}
+    else null
+  end`,
   createdAt: songs.createdAt,
   updatedAt: songs.updatedAt,
 } as const;
@@ -73,7 +86,7 @@ export async function getSongShareMetaByShareCode(shareCode: string) {
     .select({
       visibility: songs.visibility,
       title: songs.title,
-      hasAudio: sql<boolean>`((${songs.mp3Url} is not null and ${songs.mp3Url} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> ''))`,
+      hasAudio: sql<boolean>`((${songs.mp3StorageKey} is not null and ${songs.mp3StorageKey} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> '') or (${songs.mp3Url} is not null and ${songs.mp3Url} <> ''))`,
     })
     .from(songs)
     .where(and(
@@ -84,9 +97,39 @@ export async function getSongShareMetaByShareCode(shareCode: string) {
   return rows[0] ?? null;
 }
 
-// Public share playback needs the audio but never the arrangement editor
-// state; leaving the fat jsonb in the database roughly halves what this
-// unauthenticated endpoint reads and discards per hit.
+// Public share metadata needs to identify the delivery path, but it must not
+// pull a legacy multi-MB data URL into every anonymous page request.
+export async function getPublicSongMetadataByShareCode(shareCode: string) {
+  const rows = await db
+    .select({
+      id: songs.id,
+      title: songs.title,
+      vibe: songs.vibe,
+      vibeEn: songs.vibeEn,
+      bpm: songs.bpm,
+      keySignature: songs.keySignature,
+      duration: songs.duration,
+      visibility: songs.visibility,
+      shareCode: songs.shareCode,
+      hasAudio: sql<boolean>`((${songs.mp3StorageKey} is not null and ${songs.mp3StorageKey} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> '') or (${songs.mp3Url} is not null and ${songs.mp3Url} <> ''))`,
+      hasManagedAudio: sql<boolean>`((${songs.mp3StorageKey} is not null and ${songs.mp3StorageKey} <> '') or (${songs.mp3DataUrl} is not null and ${songs.mp3DataUrl} <> ''))`,
+      legacyAudioUrl: songs.mp3Url,
+      visualConfig: songs.visualConfig,
+      tags: songs.tags,
+      createdAt: songs.createdAt,
+      updatedAt: songs.updatedAt,
+    })
+    .from(songs)
+    .where(and(
+      eq(songs.shareCode, shareCode),
+      inArray(songs.visibility, ["unlisted", "public"]),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+// The audio endpoint keeps the complete legacy reference so it can serve old
+// embedded masters while storage migration is still in progress.
 export async function getPublicSongByShareCode(shareCode: string) {
   const rows = await db
     .select({
@@ -105,6 +148,7 @@ export async function getPublicSongByShareCode(shareCode: string) {
       shareCode: songs.shareCode,
       mp3DataUrl: songs.mp3DataUrl,
       mp3Url: songs.mp3Url,
+      mp3StorageKey: songs.mp3StorageKey,
       visualConfig: songs.visualConfig,
       tags: songs.tags,
       createdAt: songs.createdAt,
@@ -184,11 +228,20 @@ export async function getSongSummaryByIdForUser(songId: string, userId: string) 
 }
 
 export async function createSong(data: typeof songs.$inferInsert) {
-  const rows = await db
-    .insert(songs)
-    .values(data)
-    .returning();
-  return rows[0];
+  return db.transaction(async (tx) => {
+    if (!await lockActiveUser(tx, data.userId)) {
+      throw new Error("account_deleted_or_missing");
+    }
+    const [song] = await tx.insert(songs).values(data).returning();
+    if (data.mp3StorageKey) {
+      await commitSongAudioObjectInTransaction(tx, {
+        storageKey: data.mp3StorageKey,
+        userId: data.userId,
+        songId: data.id!,
+      });
+    }
+    return song;
+  });
 }
 
 export type CreateSongWithSpendResult =
@@ -214,6 +267,9 @@ export async function createSongWithSpend(
   await ensureBillingAccount(data.userId);
 
   return db.transaction(async (tx) => {
+    if (!await lockActiveUser(tx, data.userId)) {
+      return { ok: false, reason: "user_not_found", currentBalance: 0 };
+    }
     const spend = await spendNotesInTransaction(tx, {
       userId: data.userId,
       cost: input.cost,
@@ -227,6 +283,13 @@ export async function createSongWithSpend(
     }
 
     const [song] = await tx.insert(songs).values(data).returning();
+    if (data.mp3StorageKey) {
+      await commitSongAudioObjectInTransaction(tx, {
+        storageKey: data.mp3StorageKey,
+        userId: data.userId,
+        songId: data.id!,
+      });
+    }
     return {
       ok: true,
       song,
@@ -252,12 +315,15 @@ export async function updateSongForUser(
   userId: string,
   data: Partial<typeof songs.$inferInsert>,
 ) {
-  const rows = await db
-    .update(songs)
-    .set({ ...data, updatedAt: new Date() })
-    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
-    .returning();
-  return rows[0] ?? null;
+  return db.transaction(async (tx) => {
+    if (!await lockActiveUser(tx, userId)) return null;
+    const rows = await tx
+      .update(songs)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+      .returning();
+    return rows[0] ?? null;
+  });
 }
 
 export async function publishSongShareForUser(
@@ -268,29 +334,35 @@ export async function publishSongShareForUser(
     visibility?: "unlisted" | "public";
   },
 ) {
-  const rows = await db
-    .update(songs)
-    .set({
-      shareCode: input.shareCode,
-      visibility: input.visibility ?? "unlisted",
-      updatedAt: new Date(),
-    })
-    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
-    .returning();
-  return rows[0] ?? null;
+  return db.transaction(async (tx) => {
+    if (!await lockActiveUser(tx, userId)) return null;
+    const rows = await tx
+      .update(songs)
+      .set({
+        shareCode: input.shareCode,
+        visibility: input.visibility ?? "unlisted",
+        updatedAt: new Date(),
+      })
+      .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+      .returning();
+    return rows[0] ?? null;
+  });
 }
 
 export async function revokeSongShareForUser(songId: string, userId: string) {
-  const rows = await db
-    .update(songs)
-    .set({
-      shareCode: null,
-      visibility: "private",
-      updatedAt: new Date(),
-    })
-    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
-    .returning();
-  return rows[0] ?? null;
+  return db.transaction(async (tx) => {
+    if (!await lockActiveUser(tx, userId)) return null;
+    const rows = await tx
+      .update(songs)
+      .set({
+        shareCode: null,
+        visibility: "private",
+        updatedAt: new Date(),
+      })
+      .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+      .returning();
+    return rows[0] ?? null;
+  });
 }
 
 export async function deleteSong(songId: string) {
@@ -299,9 +371,33 @@ export async function deleteSong(songId: string) {
 }
 
 export async function deleteSongForUser(songId: string, userId: string) {
-  const rows = await db
-    .delete(songs)
-    .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
-    .returning({ id: songs.id });
-  return rows.length > 0;
+  return db.transaction(async (tx) => {
+    const [deleted] = await tx
+      .delete(songs)
+      .where(and(eq(songs.id, songId), eq(songs.userId, userId)))
+      .returning({
+        id: songs.id,
+        userId: songs.userId,
+        mp3StorageKey: songs.mp3StorageKey,
+      });
+    if (!deleted) return null;
+    if (deleted.mp3StorageKey) {
+      await markSongAudioDeletePendingInTransaction(tx, {
+        storageKey: deleted.mp3StorageKey,
+        userId: deleted.userId,
+        songId: deleted.id,
+      });
+    }
+    return deleted;
+  });
+}
+
+async function lockActiveUser(tx: DbTransaction, userId: string): Promise<boolean> {
+  const [activeUser] = await tx
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.id, userId), sql`${users.deletedAt} IS NULL`))
+    .limit(1)
+    .for("update");
+  return Boolean(activeUser);
 }

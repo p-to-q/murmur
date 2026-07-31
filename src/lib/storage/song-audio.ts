@@ -1,5 +1,9 @@
-import { getObjectStore, objectKey } from "@/lib/storage";
+import { getObjectStore, objectKey, StorageError } from "@/lib/storage";
 import { createHash } from "node:crypto";
+import {
+  detectAudioFileType,
+  MAX_SONG_AUDIO_BYTES,
+} from "@/lib/audio/file-signature";
 
 /**
  * Server-side helper that moves a freshly rendered song master from the
@@ -41,10 +45,26 @@ export function parseAudioDataUrl(dataUrl: string): ParsedAudioDataUrl | null {
   const isBase64 = /;base64/i.test(match[2] ?? "");
   const payload = match[3] ?? "";
   try {
+    const compactPayload = payload.replace(/\s+/g, "");
+    const estimatedBytes = isBase64
+      ? Math.floor((compactPayload.length * 3) / 4)
+      : payload.length;
+    if (estimatedBytes > MAX_SONG_AUDIO_BYTES) return null;
+    if (
+      isBase64
+      && (
+        compactPayload.length % 4 !== 0
+        || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(compactPayload)
+      )
+    ) {
+      return null;
+    }
     const bytes = isBase64
-      ? new Uint8Array(Buffer.from(payload, "base64"))
+      ? new Uint8Array(Buffer.from(compactPayload, "base64"))
       : new TextEncoder().encode(decodeURIComponent(payload));
     if (bytes.byteLength === 0) return null;
+    const detectedType = detectAudioFileType(bytes);
+    if (!detectedType || detectedType !== ext) return null;
     const digest = createHash("sha256").update(bytes).digest("hex");
     return { contentType, ext, bytes, digest };
   } catch {
@@ -58,6 +78,23 @@ export interface UploadedSongAudio {
   contentType: string;
   sizeBytes: number;
   digest: string;
+  created: boolean;
+}
+
+export function songMasterStorageKey(input: {
+  userId: string;
+  songId: string;
+  digest: string;
+  incarnationId: string;
+  ext: string;
+}): string {
+  return objectKey({
+    kind: "song-master",
+    userId: input.userId,
+    songId: input.songId,
+    id: `${input.digest}-${input.incarnationId}`,
+    ext: input.ext,
+  });
 }
 
 export async function storedSongAudioDigest(
@@ -69,9 +106,9 @@ export async function storedSongAudioDigest(
 }
 
 /**
- * Upload a rendered master to object storage under a deterministic,
- * content-addressed song key. Exact retries reuse the existing object while
- * different audio for the same song id cannot overwrite an earlier master.
+ * Upload a rendered master to a caller-reserved incarnation key. The digest
+ * remains visible in the key, but each upload gets a distinct incarnation so
+ * an expired cleanup worker can never delete bytes from a later save.
  *
  * Returns null when the data URL is not decodable audio (the caller treats
  * that as "no audio"). Storage/adapter failures throw and are handled by the
@@ -80,45 +117,70 @@ export async function storedSongAudioDigest(
 export async function uploadSongMasterFromDataUrl(input: {
   userId: string;
   songId: string;
+  storageKey: string;
   dataUrl: string;
 }): Promise<UploadedSongAudio | null> {
   const parsed = parseAudioDataUrl(input.dataUrl);
   if (!parsed) return null;
 
-  const key = objectKey({
-    kind: "song-master",
-    userId: input.userId,
-    songId: input.songId,
-    id: parsed.digest,
-    ext: parsed.ext,
-  });
+  const key = input.storageKey;
 
   const store = getObjectStore();
+  const privateDelivery = privateSongAudioDeliveryEnabled();
   const existing = await store.get(key);
   if (existing) {
-    return {
-      mp3Url: store.url(key, "public"),
-      mp3StorageKey: key,
-      contentType: existing.contentType,
-      sizeBytes: existing.size,
-      digest: parsed.digest,
-    };
+    throw new StorageError(
+      "io_error",
+      "Song audio incarnation already exists",
+    );
   }
   const result = await store.put(key, parsed.bytes, {
-    // Song masters are fetched directly by the browser <audio> element and by
-    // the public share page, so they need a stable URL. Presigned private URLs
-    // would expire out from under a persisted row; public scope yields a
-    // durable, storable URL (the key itself is the unguessable capability).
-    scope: "public",
+    scope: privateDelivery ? "private" : "public",
     contentType: parsed.contentType,
-    meta: { songId: input.songId },
+    meta: { songId: input.songId, digest: parsed.digest },
   });
 
+  const verified = await store.get(key);
+  const verifiedDigest = verified
+    ? createHash("sha256").update(verified.body).digest("hex")
+    : null;
+  if (!verified || verifiedDigest !== parsed.digest) {
+    await store.delete(key).catch(() => undefined);
+    throw new StorageError(
+      "io_error",
+      "Song audio failed read-after-write verification",
+    );
+  }
+
   return {
-    mp3Url: result.url,
+    mp3Url: privateDelivery
+      ? ownerSongAudioUrl(input.songId)
+      : result.url,
     mp3StorageKey: result.key,
-    contentType: result.contentType,
-    sizeBytes: result.size,
+    contentType: verified.contentType,
+    sizeBytes: verified.size,
     digest: parsed.digest,
+    created: true,
   };
+}
+
+export function ownerSongAudioUrl(songId: string): string {
+  return `/api/songs/${encodeURIComponent(songId)}/audio`;
+}
+
+export function publicSongAudioUrl(shareCode: string): string {
+  return `/api/public/songs/${encodeURIComponent(shareCode)}/audio`;
+}
+
+/**
+ * Private writes are an expand/contract cutover. Production defaults to the
+ * legacy public object until a Web release containing the controlled read
+ * routes has become the tested rollback baseline.
+ */
+export function privateSongAudioDeliveryEnabled(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  const configured = env.MURMUR_PRIVATE_SONG_AUDIO_DELIVERY?.trim().toLowerCase();
+  if (configured) return ["1", "true", "yes"].includes(configured);
+  return env.NODE_ENV !== "production";
 }

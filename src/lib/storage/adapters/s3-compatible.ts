@@ -112,9 +112,8 @@ export function createS3CompatibleStore(opts: S3CompatibleStoreOptions): ObjectS
             Body: Buffer.from(body),
             ContentType: putOpts.contentType,
             Metadata: stringifyMeta(putOpts.meta),
-            CacheControl: putOpts.ttlSeconds
-              ? `max-age=${putOpts.ttlSeconds}`
-              : undefined,
+            // S3 Cache-Control does not delete an object. Ephemeral prefixes
+            // require a bucket lifecycle rule; callers also delete eagerly.
           }),
         );
       } catch (cause) {

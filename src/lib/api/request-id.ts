@@ -11,5 +11,10 @@ import { type NextRequest } from "next/server";
  * `NextResponse.json(..., { headers })` explicitly.
  */
 export function getRequestId(request: NextRequest): string {
-  return request.headers.get("x-request-id") || crypto.randomUUID();
+  const supplied = request.headers.get("x-request-id")?.trim();
+  return supplied && isValidRequestId(supplied) ? supplied : crypto.randomUUID();
+}
+
+export function isValidRequestId(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
 }

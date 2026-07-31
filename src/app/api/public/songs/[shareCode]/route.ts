@@ -6,6 +6,10 @@ import { clientIpFromHeaders } from "@/lib/http/client-ip";
 import { log } from "@/lib/observability/log";
 import { hasSongShareAudio, normalizeSongShareCode } from "@/lib/share/song-share";
 import { getDemoSong, isDemoSongId } from "@/presets/demo-songs";
+import { publicSongAudioUrl } from "@/lib/storage/song-audio";
+import { hasSongAudioReference } from "@/lib/storage/song-audio-delivery";
+import { isDatabaseUnavailable } from "@/app/api/songs/db-fallback";
+import { shouldAllowLocalPreviewFallback } from "@/lib/auth/local-preview";
 
 const ROUTE = "/api/public/songs/[shareCode]";
 const PUBLIC_SONG_RATE_LIMIT = { capacity: 120, refillWindowMs: 60_000 };
@@ -43,15 +47,17 @@ export async function GET(
   }
 
   try {
-    const { getPublicSongByShareCode } = await import("@/lib/db/queries/songs");
-    const song = await getPublicSongByShareCode(shareCode!);
-    if (!song || !hasSongShareAudio(song)) {
+    const { getPublicSongMetadataByShareCode } = await import("@/lib/db/queries/songs");
+    const song = await getPublicSongMetadataByShareCode(shareCode!);
+    if (!song || !song.hasAudio) {
       return errorResponse("not_found", 404, requestId);
     }
     return publicSongResponse(toPublicSong(song), requestId);
   } catch (err) {
-    const { getLocalSongByShareCodeFallback } = await import("@/lib/db/queries/local-song-fallback");
-    const fallbackSong = getLocalSongByShareCodeFallback(shareCode!);
+    const fallbackSong = shouldAllowLocalPreviewFallback(req) && isDatabaseUnavailable(err)
+      ? (await import("@/lib/db/queries/local-song-fallback"))
+          .getLocalSongByShareCodeFallback(shareCode!)
+      : null;
     if (fallbackSong && !hasSongShareAudio(fallbackSong)) {
       return errorResponse("not_found", 404, requestId);
     }
@@ -82,12 +88,9 @@ function publicSongResponse(
 ) {
   const headers: Record<string, string> = {
     "X-Request-Id": requestId,
-    // s-maxage stays short so unsharing a song propagates within ~5 minutes;
-    // stale-while-revalidate only papers over the refresh itself.
-    "Cache-Control":
-      song.visibility === "public"
-        ? "public, max-age=60, s-maxage=300, stale-while-revalidate=600"
-        : "private, no-store",
+    // Share codes are revocable capabilities; metadata must not outlive a
+    // revoke in a CDN stale cache.
+    "Cache-Control": "private, no-store",
     ...extraHeaders,
   };
   if (song.visibility !== "public") {
@@ -115,20 +118,29 @@ function toPublicSong(song: {
   vibeEn: string;
   bpm: number;
   keySignature: string;
-  scaleType: string;
   duration: number;
-  sourceMelodyKind: string;
-  editCount: number;
-  editDepth: string;
   visibility: string;
   shareCode: string | null;
   mp3DataUrl?: string | null;
   mp3Url?: string | null;
+  mp3StorageKey?: string | null;
+  hasAudio?: boolean;
+  hasManagedAudio?: boolean;
+  legacyAudioUrl?: string | null;
   visualConfig: unknown;
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
 }) {
+  const legacyAudioUrl = song.legacyAudioUrl ?? song.mp3Url ?? null;
+  const hasManagedAudio = song.hasManagedAudio === undefined
+    ? hasSongAudioReference(song)
+    : song.hasManagedAudio || hasSongAudioReference({ mp3Url: legacyAudioUrl });
+  const audioUrl = isDemoSongId(song.id)
+    ? legacyAudioUrl
+    : hasManagedAudio
+      ? publicSongAudioUrl(song.shareCode!)
+      : legacyAudioUrl;
   return {
     id: song.id,
     title: song.title,
@@ -139,8 +151,8 @@ function toPublicSong(song: {
     duration: song.duration,
     visibility: song.visibility,
     shareCode: song.shareCode,
-    mp3DataUrl: song.mp3DataUrl ?? null,
-    mp3Url: song.mp3Url ?? null,
+    audioUrl,
+    mp3Url: audioUrl,
     visualConfig: song.visualConfig,
     tags: song.tags,
     createdAt: song.createdAt,

@@ -20,15 +20,18 @@ configuration. Source: [GitHub Docs: Sharing actions and workflows with your org
 GitHub Releases can attach distributable assets in addition to the auto-generated
 zip and tarball of the repository at a tag. Source: [GitHub Docs: About releases](https://docs.github.com/articles/about-releases?ref=amos-blog)
 
-### Current Vercel deployment (settled)
+### Current Vercel deployment
 
-The deploy path is no longer open: production runs on **Vercel's native Git
-integration**. Every pull request gets a Preview deployment and every push to
-`main` gets a Production deployment, using the build command
-`bun run env:audit && bun run build` (see `vercel.json`). The operational
-runbook — required env, migration ordering, rollback, and ownership — lives in
-[repository-operations.md](./repository-operations.md); this document covers
-versioning and packaging.
+Pull requests use Vercel's native Git integration for Preview. The canonical
+Production path is the protected **Release (production)** GitHub workflow: it
+proves the exact green `main` SHA, runs the approved provider canary and ordered
+database migration, asks Vercel to build that checkout without assigning the
+Production domains, smokes the immutable deployment, and only then promotes it.
+The owner still has to verify in the Vercel dashboard that native Production
+auto-deploys for `main` are disabled before acknowledging the cutover. The
+operational runbook — required env, migration ordering, rollback, and ownership
+— lives in [repository-operations.md](./repository-operations.md); this document
+covers versioning and packaging.
 
 One plan constraint is load-bearing: the account **rejects sub-daily cron
 schedules** (a Hobby-tier restriction learned empirically — an hourly cron broke
@@ -38,8 +41,9 @@ crons.
 
 ### Prebuilt deploy option (alternative, not current)
 
-Native Git integration is the current path. If provenance control later requires
-decoupling the build from Vercel, Vercel also supports `vercel build` followed by
+The protected workflow currently uploads the exact source checkout for a remote
+Vercel build. If provenance control later requires decoupling the build from
+Vercel, Vercel also supports `vercel build` followed by
 `vercel deploy --prebuilt`, which lets a prebuilt project be deployed without
 sharing source code with Vercel at deploy time. Source:
 
@@ -74,6 +78,8 @@ Required signals:
 - `lint` and `build` are green
 - critical user flow is manually checked
 - environment contract is current
+- final merged PR Preview is bound to its exact head SHA and succeeded
+- protected release credentials and the recent dashboard acknowledgement exist
 
 ### 2. Artifact release
 
@@ -139,20 +145,26 @@ For artifact-oriented milestones, also preserve:
 
 ## Stage 3. Deployable app output
 
-The hosting path is settled: **Option A (Vercel native Git integration)** is the
-production path today. Options B and C are kept as documented alternatives, not
-open decisions.
+The hosting path is settled: **Option A (protected GitHub Actions exact-SHA
+release to Vercel)** is the production path. Vercel's Git integration remains
+enabled only for pull-request Previews. Options B and C are documented
+alternatives, not open decisions.
 
-### Option A. Vercel native Git integration (current)
+### Option A. GitHub Actions exact-SHA Vercel release (current)
 
 This is what production runs on:
 
 - source stays in the private GitHub repo
 - the repo is connected to a Vercel project with Preview + Production
   environments
-- Preview deploys on every PR, Production deploys on every push to `main`
-- schema changes are applied by `.github/workflows/migrate.yml`, not by the
-  deploy (see [repository-operations.md](./repository-operations.md))
+- Preview deploys on every PR; native Production auto-deploy for `main` is
+  disabled and the protected exact-SHA Actions workflow owns Production
+- a maintainer dispatches the full current `main` SHA only when the release
+  train is ready; Release Evidence and Production require separate protected
+  approvals
+- schema changes are applied by `.github/workflows/migrate.yml` before the
+  exact-SHA Vercel build and deploy (see
+  [repository-operations.md](./repository-operations.md))
 
 ### Option B. Prebuilt Vercel deploy
 
@@ -238,11 +250,15 @@ Sequence, once the release change (version bump + `CHANGELOG.md` +
 `docs/releases/X.Y.Z/release-notes.md`) is merged:
 
 1. update local `main`: `git checkout main && git pull`
-2. confirm CI is green on the merged commit and the migration workflow succeeded
-3. tag the merge commit: `git tag vX.Y.Z && git push origin vX.Y.Z`
-4. create the GitHub Release for `vX.Y.Z`, using
+2. confirm CI is green, dispatch `Release (production)` for the full merged SHA,
+   and wait for migration, deploy, and production smoke to succeed
+3. create an annotated tag on the deployed commit, matching the real `v0.5.0`
+   repository precedent:
+   `git tag -a vX.Y.Z <release-sha> -m "Murmur vX.Y.Z" && git push origin vX.Y.Z`
+4. confirm `git rev-parse vX.Y.Z^{}` equals the exact deployed, green `main` SHA
+5. create the GitHub Release for `vX.Y.Z` with `--verify-tag`, using
    `docs/releases/X.Y.Z/release-notes.md`
-   as the body
+   as the body; add `--prerelease` for every `rc.N` version
 
 There is intentionally no tag-triggered release workflow yet (see the "optional
 hardening" list in [repository-operations.md](./repository-operations.md)); the
@@ -250,14 +266,15 @@ tag and Release are created by the owner of the production release path.
 
 ## Recommended next operational step for Murmur
 
-The deploy path is settled (Vercel native Git integration; see
-[repository-operations.md](./repository-operations.md)), and CI already runs the
-required gate. The remaining operational steps are owner/admin actions, not code:
+The deploy path is settled (protected exact-SHA Actions release with Vercel
+Preview integration; see [repository-operations.md](./repository-operations.md)).
+The remaining operational steps require owner credentials and protected
+environment approval:
 
 1. keep collaboration in the private GitHub repo
-2. activate the ordered migrate-then-deploy cutover so production code never
-   ships ahead of its schema (tracked in issue #307)
-3. apply a branch-protection ruleset on `main` (tracked in issue #308)
+2. configure the protected Release Evidence and Production values
+3. prove the ordered preflight/canary/migrate/deploy path on the exact green
+   `main` SHA
 4. follow [Post-merge tag and release](#post-merge-tag-and-release) on each
    product release
 
@@ -266,12 +283,12 @@ required gate. The remaining operational steps are owner/admin actions, not code
 Murmur uses a hybrid version string with one engineering source of truth and
 two display shapes in the Me screen About card.
 
-### Current release candidate (calibrated 2026-07-18)
+### Current release candidate (calibrated 2026-07-30)
 
-- **SemVer**: `0.7.0-rc.1`
-- **Build**: `409` (release-candidate PR number)
-- **Product display**: `v0.7.0-rc.1 · 409`
-- **Developer mode display**: `v0.7.0-rc.1 · build 409 · <git-sha>`
+- **SemVer**: `0.7.0-rc.2`
+- **Build**: `440` (release-candidate PR number)
+- **Product display**: `v0.7.0-rc.2 · 440`
+- **Developer mode display**: `v0.7.0-rc.2 · build 440 · <git-sha>`
 
 This release reflects milestones since the earlier `v0.2.0` hackathon label:
 
@@ -282,6 +299,14 @@ This release reflects milestones since the earlier `v0.2.0` hackathon label:
 - `0.6.0` — browser-side transcription fallback, latency budgets, stage tracking, ISR caching, security hardening, and RTE-Dev infrastructure
 - `0.7.0-rc.1` — recoverable generation jobs, creation-journey hardening,
   browser golden-path coverage, and ordered exact-SHA release automation
+- `0.7.0-rc.2` — music-quality evidence and Gates, fenced job dispatch,
+  durable Gallery audio delivery, account/device lifecycle closure, release
+  dependency remediation, and protected exact-SHA release governance
+
+These are product-version calibration milestones, not a claim that every entry
+was tagged or published. Repository and GitHub release truth currently contain
+only `v0.5.0`; do not backfill `v0.6.0` or `v0.7.0-rc.1` tags during the rc.2
+release. The next tag is created only for the exact approved rc.2 `main` SHA.
 
 ### Source of truth
 
@@ -294,6 +319,8 @@ This release reflects milestones since the earlier `v0.2.0` hackathon label:
 Implementation:
 
 - formatter: `src/lib/app-version.ts`
+- public deployment identity: `GET /api/release` (version, build, full SHA;
+  `Cache-Control: no-store`)
 - Me UI: `src/components/screens/MeScreen.tsx`
 - logs already use commit SHA as `release` in `src/lib/observability/log.ts`
 
@@ -322,6 +349,13 @@ release note):
 | export or saved-song incompatibility | MINOR + migration note | yes |
 | declared production-stable product | MAJOR to `1.0.0` | yes |
 
+Pre-release identifiers follow SemVer ordering: increment `rc.N` for each new
+candidate, and remove the suffix only for the final stable release. Git tags use
+the `vX.Y.Z[-rc.N]` spelling, are immutable once pushed, and must point to the
+exact released `main` SHA. GitHub Releases for `rc.N` tags must be marked as
+pre-releases; the leading `v` belongs to the tag and is not part of the
+`package.json` version.
+
 Between releases, production deploys may advance the git SHA without changing
 SemVer or build.
 
@@ -333,14 +367,10 @@ SemVer or build.
 - exported user artifacts still work
 - release note states what changed and what remains provisional
 
-## Suggested next decision
+## Remaining release decisions
 
-The deploy-path decision is closed (Vercel native Git integration). The open
-decisions now are operational governance, not hosting:
-
-- **ordered production rollout** (issue #307): serialize migrate-before-deploy
-  instead of the current parallel race — an owner/admin action, documented in
-  [repository-operations.md](./repository-operations.md).
-- **branch protection on `main`** (issue #308): require PR + the CI `verify`
-  check + approval before merge — a repository setting the owner applies in
-  GitHub.
+The deploy-path and branch-protection decisions are closed. The remaining work
+for a release is evidence collection: configure protected credentials, verify
+the Vercel dashboard-only cutover, run the real provider canary, review its WAV,
+accept or reject the frozen audio evaluation and other release receipts, complete
+end-to-end browser sign-off, and release only the exact green `main` SHA.

@@ -8,6 +8,7 @@ import type { VisualArtwork } from "@/modules/shared/types";
 import { SongVisualCanvas } from "@/components/song-detail/song-visual-canvas";
 import { downloadBlob } from "@/lib/platform/download";
 import { toast } from "sonner";
+import { withTimeout } from "@/lib/api/timeout";
 
 interface ShareTicketCardProps {
   title: string;
@@ -86,6 +87,16 @@ export function ShareTicketCard({
   }, [open]);
 
   useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.pause();
+    el.removeAttribute("src");
+    audioRef.current = null;
+    setPlaying(false);
+    setCurrentTime(0);
+  }, [audioSrc]);
+
+  useEffect(() => {
     return () => {
       audioRef.current?.pause();
     };
@@ -103,8 +114,11 @@ export function ShareTicketCard({
       audioRef.current = el;
     }
     if (el.paused) {
-      el.play().catch((error) => {
+      withTimeout(el.play(), 8_000, "Share preview timed out").catch((error) => {
         console.error("[ShareTicketCard] playback error:", error);
+        el?.pause();
+        el?.removeAttribute("src");
+        audioRef.current = null;
         setPlaying(false);
         toast.error("Couldn't play that preview.");
       });

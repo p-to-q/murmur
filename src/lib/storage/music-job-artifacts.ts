@@ -9,10 +9,14 @@ export async function storeMusicJobHum(input: {
   contentType: string;
 }): Promise<{ key: string; digest: string }> {
   const digest = createHash("sha256").update(input.bytes).digest("hex");
+  const artifactId = createHash("sha256")
+    .update(`${input.operationId}:${digest}`)
+    .digest("hex")
+    .slice(0, 32);
   const key = objectKey({
     kind: "tmp",
     userId: input.userId,
-    id: `hum_${digest}`,
+    id: `hum_${artifactId}`,
     ext: extensionForAudio(input.contentType),
   });
   const store = getObjectStore();
@@ -21,7 +25,11 @@ export async function storeMusicJobHum(input: {
       contentType: input.contentType,
       scope: "private",
       ttlSeconds: 24 * 60 * 60,
-      meta: { operationId: input.operationId, digest },
+      meta: {
+        operationId: input.operationId,
+        digest,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString(),
+      },
     });
   }
   return { key, digest };

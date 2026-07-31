@@ -8,6 +8,7 @@ import {
 } from "@/lib/storage";
 import { computeSaveFingerprint } from "@/modules/music/song-artifact";
 import type { ResolvedRequestAuth } from "@/lib/platform/server-auth";
+import { validMp3DataUrl } from "@/lib/test/audio-fixtures";
 
 const BASE_VISUAL_CONFIG = {
   preset: "soft_gradient",
@@ -26,9 +27,7 @@ const BASE_ARRANGEMENT = {
 };
 
 // 1x1 silent-ish MP3 payload stand-in — the route only needs decodable bytes.
-const SAMPLE_MP3_DATA_URL = `data:audio/mpeg;base64,${Buffer.from(
-  "ID3-fake-mp3-master-bytes",
-).toString("base64")}`;
+const SAMPLE_MP3_DATA_URL = validMp3DataUrl();
 
 let nextAuth: ResolvedRequestAuth = {
   ok: true,
@@ -47,6 +46,12 @@ const createCompositionEventMock = mock(async (data: Record<string, unknown>) =>
     occurredAt: new Date("2026-06-05T12:00:00.000Z"),
     createdAt: new Date("2026-06-05T12:00:00.000Z"),
   };
+});
+let generationEvidenceVerified = true;
+let generationEvidenceError: unknown = null;
+const hasVerifiedGenerationEvidenceMock = mock(async () => {
+  if (generationEvidenceError) throw generationEvidenceError;
+  return generationEvidenceVerified;
 });
 let createSongError: unknown = null;
 const createSongMock = mock(async (data: Record<string, unknown>) => {
@@ -79,9 +84,12 @@ const createSongWithSpendMock = mock(async (data: Record<string, unknown>) => {
   };
 });
 let existingConflictSong: Record<string, unknown> | null = null;
+let songSummaries: Array<Record<string, unknown>> = [];
+let getSongSummariesError: unknown = null;
 const getSongByIdMock = mock(async (songId: string) =>
   existingConflictSong?.id === songId ? existingConflictSong : null,
 );
+const reserveSongAudioObjectMock = mock(async () => undefined);
 
 mock.module("@/lib/auth", () => ({
   resolveRequestAuth: async () => nextAuth,
@@ -93,12 +101,16 @@ mock.module("@/lib/db/queries/songs", () => ({
   deleteSong: mock(async () => false),
   deleteSongForUser: mock(async () => false),
   getPublicSongByShareCode: mock(async () => null),
+  getPublicSongMetadataByShareCode: mock(async () => null),
   getPublicSongSummaries: mock(async () => []),
   getSongById: getSongByIdMock,
   getSongByIdForUser: mock(async () => null),
   getSongByShareCode: mock(async () => null),
   getSongShareMetaByShareCode: mock(async () => null),
-  getSongSummariesByUser: mock(async () => []),
+  getSongSummariesByUser: mock(async () => {
+    if (getSongSummariesError) throw getSongSummariesError;
+    return songSummaries;
+  }),
   getSongSummaryByIdForUser: mock(async () => null),
   publishSongShareForUser: mock(async () => null),
   revokeSongShareForUser: mock(async () => null),
@@ -108,11 +120,23 @@ mock.module("@/lib/db/queries/songs", () => ({
 
 mock.module("@/lib/db/queries/composition-events", () => ({
   createCompositionEvent: createCompositionEventMock,
+  hasVerifiedGenerationEvidence: hasVerifiedGenerationEvidenceMock,
   listCompositionTrainingExamples: mock(async () => []),
 }));
 
-const { POST } = await import("./route");
-const { resetLocalSongFallbackForTests } = await import("@/lib/db/queries/local-song-fallback");
+mock.module("@/lib/db/queries/song-audio-objects", () => ({
+  reserveSongAudioObject: reserveSongAudioObjectMock,
+  claimDueSongAudioObjects: mock(async () => []),
+  markSongAudioObjectDeleted: mock(async () => undefined),
+  markSongAudioObjectRetry: mock(async () => undefined),
+  songAudioObjectRetryAt: (_attempts: number, now: Date) => now,
+}));
+
+const { GET, POST } = await import("./route");
+const {
+  createLocalSongFallback,
+  resetLocalSongFallbackForTests,
+} = await import("@/lib/db/queries/local-song-fallback");
 
 function buildRequest(
   body: Record<string, unknown>,
@@ -144,12 +168,69 @@ beforeEach(async () => {
   createSongMock.mockClear();
   createSongWithSpendMock.mockClear();
   createCompositionEventMock.mockClear();
+  hasVerifiedGenerationEvidenceMock.mockClear();
   getSongByIdMock.mockClear();
+  reserveSongAudioObjectMock.mockClear();
   createSongError = null;
   createSongWithSpendError = null;
+  generationEvidenceVerified = true;
+  generationEvidenceError = null;
   existingConflictSong = null;
+  songSummaries = [];
+  getSongSummariesError = null;
   resetLocalSongFallbackForTests();
   __resetObjectStoreForTesting();
+});
+
+describe("GET /api/songs", () => {
+  it("keeps the N-1 mp3Url alias on audio-bearing summaries", async () => {
+    songSummaries = [{
+      id: "song_summary",
+      title: "Summary Song",
+      hasAudio: true,
+      legacyAudioUrl: null,
+    }];
+
+    const response = await GET(new Request("http://test.local/api/songs", {
+      headers: { "x-request-id": "req_song_list" },
+    }) as unknown as NextRequest);
+    const [song] = await response.json() as Array<Record<string, unknown>>;
+
+    expect(response.status).toBe(200);
+    expect(song?.audioUrl).toBe("/api/songs/song_summary/audio");
+    expect(song?.mp3Url).toBe(song?.audioUrl);
+    expect(song).not.toHaveProperty("legacyAudioUrl");
+  });
+
+  it("keeps the N-1 alias in the demo-safe local-store fallback", async () => {
+    getSongSummariesError = Object.assign(new Error("connect ECONNREFUSED"), {
+      code: "ECONNREFUSED",
+    });
+    createLocalSongFallback({
+      id: "song_local_summary",
+      userId: "usr_song",
+      title: "Local Summary",
+      vibe: "soft",
+      vibeEn: "soft",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 12,
+      mp3DataUrl: SAMPLE_MP3_DATA_URL,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    });
+
+    const response = await GET(new Request("http://localhost:3000/api/songs", {
+      headers: { "x-request-id": "req_local_song_list" },
+    }) as unknown as NextRequest);
+    const [song] = await response.json() as Array<Record<string, unknown>>;
+
+    expect(response.status).toBe(200);
+    expect(song?.audioUrl).toBe("/api/songs/song_local_summary/audio");
+    expect(song?.mp3Url).toBe(song?.audioUrl);
+  });
 });
 
 afterEach(() => {
@@ -159,8 +240,10 @@ afterEach(() => {
 function makeRecordingStore(): {
   store: ObjectStore;
   puts: Array<{ key: string; body: Uint8Array }>;
+  deletes: string[];
 } {
   const puts: Array<{ key: string; body: Uint8Array }> = [];
+  const deletes: string[] = [];
   const objects = new Map<string, {
     body: Uint8Array;
     contentType: string;
@@ -196,12 +279,15 @@ function makeRecordingStore(): {
           }
         : null;
     },
-    async delete() {},
+    async delete(key) {
+      deletes.push(key);
+      objects.delete(key);
+    },
     url(key) {
       return `https://cdn.test/${key}`;
     },
   };
-  return { store, puts };
+  return { store, puts, deletes };
 }
 
 describe("POST /api/songs", () => {
@@ -727,7 +813,7 @@ describe("POST /api/songs", () => {
     expect(body.requestId).toBe("req_registered_db_down");
   });
 
-  it("uploads rendered audio to object storage and persists an object URL, not base64 (#292)", async () => {
+  it("uploads rendered audio privately and persists its controlled route, not base64 (#292)", async () => {
     const { store, puts } = makeRecordingStore();
     __setObjectStoreForTesting(store);
 
@@ -763,10 +849,41 @@ describe("POST /api/songs", () => {
     expect(puts[0]?.key).toContain("songs/master/usr_song/song_audio_object");
     expect(createdSongs).toHaveLength(1);
     // The persisted row references object storage and carries NO embedded base64.
-    expect(createdSongs[0]?.mp3Url).toBe(`https://cdn.test/${puts[0]!.key}`);
+    expect(createdSongs[0]?.mp3Url).toBe("/api/songs/song_audio_object/audio");
     expect(createdSongs[0]?.mp3StorageKey).toBe(puts[0]!.key);
     expect(createdSongs[0]?.mp3DataUrl).toBeNull();
     expect(response.headers.get("X-Murmur-Audio-Storage")).toBeNull();
+    const body = await response.json() as Record<string, unknown>;
+    expect(body.audioUrl).toBe("/api/songs/song_audio_object/audio");
+    expect(body.mp3Url).toBe(body.audioUrl);
+    expect(body).not.toHaveProperty("mp3StorageKey");
+    expect(body).not.toHaveProperty("mp3DataUrl");
+  });
+
+  it("leaves its unique pending master for outbox cleanup when account deletion wins", async () => {
+    const { store, puts, deletes } = makeRecordingStore();
+    __setObjectStoreForTesting(store);
+    createSongError = new Error("account_deleted_or_missing");
+
+    const response = await POST(buildRequest({
+      id: "song_deleted_account_race",
+      title: "Closing Draft",
+      vibe: "quiet",
+      vibeEn: "quiet",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      mp3DataUrl: SAMPLE_MP3_DATA_URL,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(500);
+    expect(puts).toHaveLength(1);
+    expect(deletes).toEqual([]);
+    expect(createdSongs).toHaveLength(0);
   });
 
   it("does not overwrite stored audio when the same song id conflicts", async () => {
@@ -791,9 +908,7 @@ describe("POST /api/songs", () => {
     existingConflictSong = { ...createdSongs[0] };
     const originalKey = String(createdSongs[0]?.mp3StorageKey);
     const originalBytes = new Uint8Array(puts[0]!.body);
-    const differentAudio = `data:audio/mpeg;base64,${Buffer.from(
-      "ID3-different-master-bytes",
-    ).toString("base64")}`;
+    const differentAudio = validMp3DataUrl(1);
 
     const response = await POST(buildRequest({
       ...payload,
@@ -919,6 +1034,28 @@ describe("POST /api/songs", () => {
     expect(createdSongs[0]?.mp3DataUrl).toBe(SAMPLE_MP3_DATA_URL);
   });
 
+  it("rejects mislabeled audio bytes instead of persisting a broken artifact", async () => {
+    __setObjectStoreForTesting(makeRecordingStore().store);
+    const response = await POST(buildRequest({
+      id: "song_invalid_audio",
+      title: "Broken Master",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 80,
+      keySignature: "C",
+      scaleType: "major",
+      duration: 20,
+      mp3DataUrl: `data:audio/mpeg;base64,${Buffer.from("upstream error").toString("base64")}`,
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(422);
+    expect((await response.json() as { error: string }).error).toBe("invalid_audio");
+    expect(createdSongs).toHaveLength(0);
+  });
+
   it("stamps the artifact version and persists the canonical melody + provenance (#297)", async () => {
     const melody = {
       notes: [{ pitch: 62, start: 0, duration: 0.5, velocity: 0.8, confidence: 0.9 }],
@@ -965,6 +1102,111 @@ describe("POST /api/songs", () => {
       hasAudio: false,
       audioStorage: "none",
     }));
+  });
+
+  it("persists generation provenance only when the server evidence tuple is verified", async () => {
+    const generationAudioSha256 = "A".repeat(64);
+    const response = await POST(buildRequest({
+      id: "song_verified_generation",
+      title: "Verified Generation",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 92,
+      keySignature: "D",
+      scaleType: "minor",
+      duration: 12,
+      provenance: {
+        flow: "flow_verified",
+        generationBatchId: "batch_verified",
+        generationClipId: "clip_verified",
+        generationAudioSha256,
+        generationBatchIndex: 1,
+      },
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(hasVerifiedGenerationEvidenceMock).toHaveBeenCalledWith({
+      userId: "usr_song",
+      generationBatchId: "batch_verified",
+      generationClipId: "clip_verified",
+      outputSha256: generationAudioSha256.toLowerCase(),
+    });
+    expect(createdSongs[0]?.provenance).toEqual({
+      flow: "flow_verified",
+      generationBatchId: "batch_verified",
+      generationClipId: "clip_verified",
+      generationAudioSha256: generationAudioSha256.toLowerCase(),
+      generationBatchIndex: 1,
+    });
+  });
+
+  it("strips an unverified generation identity while preserving other provenance", async () => {
+    generationEvidenceVerified = false;
+    const response = await POST(buildRequest({
+      id: "song_unverified_generation",
+      title: "Unverified Generation",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 92,
+      keySignature: "D",
+      scaleType: "minor",
+      duration: 12,
+      provenance: {
+        flow: "flow_unverified",
+        draftId: "draft_unverified",
+        sourceType: "hum",
+        generationBatchId: "batch_unverified",
+        generationClipId: "clip_unverified",
+        generationAudioSha256: "b".repeat(64),
+        generationBatchIndex: 2,
+      },
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(createdSongs[0]?.provenance).toEqual({
+      flow: "flow_unverified",
+      draftId: "draft_unverified",
+      sourceType: "hum",
+    });
+  });
+
+  it("keeps saving when generation evidence validation is unavailable", async () => {
+    generationEvidenceError = Object.assign(new Error("connect ECONNREFUSED"), {
+      code: "ECONNREFUSED",
+    });
+    const response = await POST(buildRequest({
+      id: "song_generation_validation_down",
+      title: "Local Evidence Fallback",
+      vibe: "sunset",
+      vibeEn: "sunset",
+      bpm: 92,
+      keySignature: "D",
+      scaleType: "minor",
+      duration: 12,
+      provenance: {
+        flow: "flow_local",
+        sourceType: "demo",
+        generationBatchId: "batch_local",
+        generationClipId: "clip_local",
+        generationAudioSha256: "c".repeat(64),
+        generationBatchIndex: 0,
+      },
+      visualConfig: BASE_VISUAL_CONFIG,
+      arrangementState: BASE_ARRANGEMENT,
+      tags: [],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(createdSongs[0]?.provenance).toEqual({
+      flow: "flow_local",
+      sourceType: "demo",
+    });
   });
 
   it("derives root + depth from the owned parent, overriding client-supplied lineage (#297)", async () => {

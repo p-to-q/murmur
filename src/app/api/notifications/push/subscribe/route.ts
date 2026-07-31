@@ -59,6 +59,16 @@ export async function POST(request: NextRequest) {
     return rateLimitedResponse(rateLimit, requestId);
   }
 
+  if (!auth.sessionId) {
+    return NextResponse.json(
+      {
+        error: "persistent_session_required",
+        message: "Push notifications require an active device session.",
+      },
+      { status: 409, headers: { "X-Request-Id": requestId } },
+    );
+  }
+
   let body: z.infer<typeof subscribeSchema>;
   try {
     body = subscribeSchema.parse(await request.json());

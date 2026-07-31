@@ -1,13 +1,14 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { stat } from "node:fs/promises";
 
 const SONG_ID = "e2e-song-1";
 const SHARE_CODE = "e2e-share-1";
 const AUDIO_DATA_URL =
-  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+  "data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQIAAAAAAA==";
 
 type JsonObject = Record<string, unknown>;
 
-test("demo recovery completes creation, gallery, share, and public playback", async ({
+test("demo recovery completes creation, gallery playback, download, share, and public playback", async ({
   page,
 }) => {
   const browserErrors: string[] = [];
@@ -66,14 +67,29 @@ test("demo recovery completes creation, gallery, share, and public playback", as
   await page.getByRole("button", { name: "Back to Gallery" }).click();
   await expect(page).toHaveURL(/\/gallery$/);
   await expect(page.getByTestId("gallery-screen")).toBeVisible();
+  const gallery = page.getByTestId("gallery-screen");
+  const galleryPlay = gallery.getByRole("button", { name: "Play" });
+  await expect(galleryPlay).toBeEnabled();
+  await galleryPlay.click();
+  await expect(gallery.getByRole("button", { name: "Pause" })).toBeVisible();
   await page
-    .getByTestId("gallery-screen")
-    .getByRole("button", { name: /^Golden Hum / })
+    .getByTestId("gallery-song-grid")
+    .getByTestId(`gallery-song-${SONG_ID}`)
     .click();
 
   await expect(page).toHaveURL(new RegExp(`/song/${SONG_ID}$`));
-  await page.getByRole("button", { name: "Share link" }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /^Audio mp3 / }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("Golden-Hum.wav");
+  const downloadedPath = await download.path();
+  expect(downloadedPath).not.toBeNull();
+  expect((await stat(downloadedPath!)).size).toBeGreaterThan(0);
+  const shareLinkButton = page.getByRole("button", { name: "Share link" });
+  await shareLinkButton.click();
   await expect.poll(() => api.shareCreated).toBe(true);
+  await expect(page.getByText("Share link copied", { exact: true })).toBeVisible();
+  await expect(shareLinkButton).toBeEnabled();
 
   await page.goto(`/s/${SHARE_CODE}`);
   await expect(page.getByTestId("public-song-screen")).toBeVisible();
@@ -220,10 +236,29 @@ async function installDeterministicApi(page: Page): Promise<{
         ? json(route, state.savedSong)
         : json(route, { error: "not_found" }, 404);
     }
+    if (path === `/api/songs/${SONG_ID}/audio`) {
+      return route.fulfill({
+        status: 200,
+        headers: {
+          "Accept-Ranges": "bytes",
+          "Content-Disposition": 'attachment; filename="Golden-Hum.wav"',
+          "Content-Length": String(Buffer.from(AUDIO_DATA_URL.split(",")[1]!, "base64").byteLength),
+        },
+        contentType: "audio/wav",
+        body: Buffer.from(AUDIO_DATA_URL.split(",")[1]!, "base64"),
+      });
+    }
     if (path === `/api/public/songs/${SHARE_CODE}`) {
       return state.savedSong
         ? json(route, publicSongFrom(state.savedSong))
         : json(route, { error: "not_found" }, 404);
+    }
+    if (path === `/api/public/songs/${SHARE_CODE}/audio`) {
+      return route.fulfill({
+        status: 200,
+        contentType: "audio/wav",
+        body: Buffer.from(AUDIO_DATA_URL.split(",")[1]!, "base64"),
+      });
     }
     if (path.startsWith("/api/observability/") || path.startsWith("/api/memory")) {
       return json(route, { ok: true });
@@ -241,7 +276,9 @@ function savedSongFrom(input: JsonObject): JsonObject {
     id: SONG_ID,
     userId: "local-creator",
     title: input.title ?? "Golden Hum",
-    mp3DataUrl: typeof input.mp3DataUrl === "string" ? input.mp3DataUrl : AUDIO_DATA_URL,
+    audioUrl: `/api/songs/${SONG_ID}/audio`,
+    hasAudio: true,
+    mp3DataUrl: null,
     mp3Url: null,
     mp3StorageKey: null,
     visibility: "private",
@@ -281,6 +318,7 @@ function publicSongFrom(song: JsonObject): JsonObject {
     duration: song.duration,
     visibility: "unlisted",
     shareCode: SHARE_CODE,
+    audioUrl: `/api/public/songs/${SHARE_CODE}/audio`,
     mp3DataUrl: song.mp3DataUrl,
     mp3Url: null,
     visualConfig: song.visualConfig,

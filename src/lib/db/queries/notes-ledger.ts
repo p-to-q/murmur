@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
-import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, notExists, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "../client";
 import { notesLedger } from "../schema/notes-ledger";
 import { users } from "../schema/users";
@@ -191,7 +192,7 @@ export type ReverseTopupGrantInput = {
   metadata?: Record<string, unknown>;
 };
 
-type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // ─── DB orchestration ──────────────────────────────────────────────
 
@@ -536,7 +537,11 @@ export type SettleOperationDeliveryResult =
       rechargeLedgerId: string | null;
       balanceAfter: number;
     }
-  | { ok: false; reason: "invalid_operation" | "user_not_found" };
+  | {
+      ok: false;
+      reason: "invalid_operation" | "user_not_found" | "insufficient_notes";
+      currentBalance?: number;
+    };
 
 /**
  * Settle a successfully delivered operation so it ends in exactly one net charge
@@ -635,6 +640,13 @@ export async function settleOperationDelivery(
         duplicate: true,
         rechargeLedgerId: existingRecharge?.id ?? null,
         balanceAfter: user.notesBalance,
+      };
+    }
+    if (decision.kind === "insufficient") {
+      return {
+        ok: false,
+        reason: "insufficient_notes",
+        currentBalance: decision.currentBalance,
       };
     }
 
@@ -870,9 +882,19 @@ export async function recordPendingRefund(
 ): Promise<RecordPendingRefundResult> {
   if (!input.originalLedgerId) return { ok: false, reason: "invalid_original" };
 
+  return db.transaction((tx) => recordPendingRefundInTransaction(tx, input));
+}
+
+/** Write refund intent inside a caller-owned terminal-state transaction. */
+export async function recordPendingRefundInTransaction(
+  tx: DbTransaction,
+  input: RecordPendingRefundInput,
+): Promise<RecordPendingRefundResult> {
+  if (!input.originalLedgerId) return { ok: false, reason: "invalid_original" };
+
   const externalRef = pendingRefundReferenceFor(input.originalLedgerId);
   const ledgerId = createLedgerId();
-  const inserted = await db
+  const inserted = await tx
     .insert(notesLedger)
     .values({
       id: ledgerId,
@@ -929,6 +951,26 @@ export async function listPendingRefundMarkers(input: {
         ),
       )
     : undefined;
+  const settledLedger = alias(notesLedger, "settled_pending_refund");
+  const originalLedgerId = sql<string>`substring(${notesLedger.externalRef} from 16)`;
+  const unresolvedFilter = notExists(
+    db
+      .select({ id: settledLedger.id })
+      .from(settledLedger)
+      .where(and(
+        eq(settledLedger.userId, notesLedger.userId),
+        or(
+          and(
+            eq(settledLedger.reason, "refund:spend"),
+            eq(settledLedger.externalRef, sql<string>`'refund:' || ${originalLedgerId}`),
+          ),
+          and(
+            eq(settledLedger.reason, OPERATION_DELIVERED_REASON),
+            eq(settledLedger.externalRef, sql<string>`'op_delivered:' || ${originalLedgerId}`),
+          ),
+        ),
+      )),
+  );
 
   const rows = await db
     .select({
@@ -939,7 +981,7 @@ export async function listPendingRefundMarkers(input: {
       metadata: notesLedger.metadata,
     })
     .from(notesLedger)
-    .where(cursorFilter ? and(reasonFilter, cursorFilter) : reasonFilter)
+    .where(and(reasonFilter, unresolvedFilter, cursorFilter))
     .orderBy(asc(notesLedger.createdAt), asc(notesLedger.id))
     .limit(limit);
 

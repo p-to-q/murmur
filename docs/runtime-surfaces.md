@@ -66,6 +66,8 @@ Important subgroups:
 - `src/lib/errors/` — shared error classification for retry/observability decisions
 - `src/lib/observability/` — latency budgets, stage tracking, logging
 - `src/lib/store/` — client application state
+- `src/lib/storage/` — object-store adapters, validated song-audio delivery,
+  and retryable object lifecycle helpers
 
 ### Worker/runtime-adjacent services
 
@@ -76,6 +78,35 @@ Important subgroups:
 Current example:
 
 - `workers/audio-engine/main.py`
+
+## 1.1 Runtime ownership matrix
+
+| Data or capability | Device/browser copy and retention | Canonical service owner | Failure/fallback policy |
+| --- | --- | --- | --- |
+| Web UI, icons, artwork | Installed app bundle or normal HTTP cache; deployment-versioned | Exact-SHA Web deployment/CDN | No service-worker offline shell is promised in this release |
+| Pitch runtime | Lazy-loaded browser WASM/model cache when server transcription needs rescue | Audio Worker is the production transcription owner | Browser pYIN is explicit reduced-quality recovery, never music generation |
+| Last hum recording | IndexedDB `murmur-recordings`, one slot, recoverable for at most 24 hours; swept on the next app start/access and cleared after success/reset/account exit | Device owns it until upload | Browser closure is not a timed-delete guarantee; storage denial degrades to no recovery copy, not a failed recording |
+| Unsaved creation draft | `localStorage` `murmur-creation-draft-v1`, recoverable for at most seven days; swept on the next app start/access | Device owns it until save | Corrupt/expired drafts are deleted when storage is next available; production never promotes them to saved songs |
+| Generated recovery clips | IndexedDB `murmur-generation`, recoverable for at most 24 hours; swept on the next app start/access and cleared on flow reset/account exit | Device recovery copy plus durable job state when enabled | Browser closure is not a timed-delete guarantee; a stable operation id resumes rather than repurchases |
+| Notifications and preferences | Notification inbox is account-scoped and cleared at exit; language/theme/currency/audio preferences remain until browser data is cleared | Postgres/Push owns delivery; device owns preferences | Logout atomically revokes session Push and locally unsubscribes the browser endpoint |
+| Account, Notes, songs, jobs, quality evidence | Response/UI cache only | Postgres through `src/lib/db/` | Production DB failures are typed errors; local/demo adapters require explicit mode |
+| Durable raw hum | No canonical browser copy after accepted upload | Private object `tmp/`, 24-hour bucket lifecycle | Production build requires lifecycle acknowledgement; adapter TTL metadata is not deletion |
+| Final saved master and job output | Current render/download Blob only | S3-compatible object store plus Postgres lifecycle receipts | Local filesystem in dev; data URLs only for legacy/local-demo compatibility |
+| Playback/share/download authorization | Session cookie or revocable share capability | Same-origin Next.js API | Missing/corrupt objects return typed 404/410; raw credentials never reach clients |
+| Audio and music inference | No preinstalled production model beyond lazy browser pitch fallback | Versioned remote Workers behind `src/lib/platform/` | Loopback/mock Workers require explicit local/test configuration |
+
+Fallbacks keep a local demo usable but do not change production ownership.
+Production failures return typed errors and preserve retry evidence instead of
+silently promoting browser storage, embedded audio, or an in-memory adapter to
+canonical state.
+
+Preview is production-like but not production-backed. The Preview build audit
+requires durable adapters and rejects local fallbacks. Before Production
+approval, the release workflow independently pulls the actual Preview and
+Production Vercel environments and compares database identity, object bucket,
+Worker endpoints, and cross-environment credentials without logging values.
+Both hosted environments use Postgres-backed rate limits; process memory is
+test/local only.
 
 ## 2. Build and validation support
 

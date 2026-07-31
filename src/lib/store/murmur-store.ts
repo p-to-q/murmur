@@ -1,13 +1,30 @@
 import { create } from "zustand";
 import type { VibeVersion, VersionGeneration } from "@/modules/shared/types";
-import { clearAllClipArtifacts } from "@/lib/store/generation-artifact-store";
-import { parsePersistedDraft } from "@/lib/store/draft-schema";
+import { sweepExpiredRecordingBlob } from "@/lib/audio/recording-cache";
+import {
+  clearAllClipArtifacts,
+  sweepExpiredClipArtifacts,
+} from "@/lib/store/generation-artifact-store";
+import {
+  parsePersistedDraft,
+  type CreationRoute,
+} from "@/lib/store/draft-schema";
 
-export type RecordingState = "idle" | "recording" | "processing" | "done" | "error";
-export type CreationRoute = "/vibe" | "/studio" | "/studio/name";
+export type RecordingState =
+  "idle" | "recording" | "processing" | "done" | "error";
+export type { CreationRoute } from "@/lib/store/draft-schema";
 
 const DRAFT_STORAGE_KEY = "murmur-creation-draft-v1";
 const DRAFT_STORAGE_VERSION = 1;
+export const CREATION_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
+
+export type LocalCreationDataSweepArea =
+  "last-recording" | "generation-clips" | "creation-draft";
+
+export interface LocalCreationDataSweepResult {
+  succeeded: LocalCreationDataSweepArea[];
+  failed: LocalCreationDataSweepArea[];
+}
 
 type PersistedDraftPayload = {
   version: typeof DRAFT_STORAGE_VERSION;
@@ -54,11 +71,11 @@ interface MurmurStore {
   hasHydratedDraft: boolean;
 
   // Playback state — which version card is being previewed
-  auditioningVersionId: string | null;  // version card id being previewed
+  auditioningVersionId: string | null; // version card id being previewed
   setAuditioning: (versionId: string | null) => void;
 
   // Reset the recording flow (keeps gallery)
-  resetFlow: () => void;
+  resetFlow: () => Promise<boolean>;
 }
 
 export type CreationRouteState = Pick<
@@ -86,7 +103,9 @@ function stripSessionAudio(
   };
 }
 
-export function prepareVersionForDraftStorage(version: VibeVersion): VibeVersion {
+export function prepareVersionForDraftStorage(
+  version: VibeVersion,
+): VibeVersion {
   return {
     ...version,
     generation: stripSessionAudio(version.generation),
@@ -133,17 +152,44 @@ function buildPersistedDraft(state: MurmurStore): PersistedDraftPayload | null {
   };
 }
 
-function writeDraftSnapshot(state: MurmurStore) {
-  if (typeof window === "undefined") return;
+function writeDraftSnapshot(state: MurmurStore): boolean {
+  if (typeof window === "undefined") return false;
   try {
     const payload = buildPersistedDraft(state);
     if (!payload) {
       window.localStorage.removeItem(DRAFT_STORAGE_KEY);
-      return;
+      return true;
     }
     window.localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(payload));
+    return true;
   } catch {
     // Storage can be unavailable in private modes; keep the in-memory flow alive.
+    return false;
+  }
+}
+
+function removeStoredDraft(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    window.localStorage.removeItem(DRAFT_STORAGE_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function sweepStoredCreationDraft(now = Date.now()): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return true;
+    const parsed = parsePersistedDraft(JSON.parse(raw), DRAFT_STORAGE_VERSION);
+    if (!parsed || isCreationDraftExpired(parsed.draftUpdatedAt, now)) {
+      return removeStoredDraft();
+    }
+    return true;
+  } catch {
+    return removeStoredDraft();
   }
 }
 
@@ -155,7 +201,14 @@ function readStoredDraft(): Partial<MurmurStore> {
     // Versioned runtime parse (#315): validate the envelope + every nested
     // version, dropping malformed ones instead of casting them into the store.
     const parsed = parsePersistedDraft(JSON.parse(raw), DRAFT_STORAGE_VERSION);
-    if (!parsed) return {};
+    if (!parsed) {
+      removeStoredDraft();
+      return {};
+    }
+    if (isCreationDraftExpired(parsed.draftUpdatedAt)) {
+      removeStoredDraft();
+      return {};
+    }
 
     // Blob URLs never survive a reload; normalize the restored generations.
     const vibeVersions = parsed.vibeVersions.map(prepareVersionForDraftStorage);
@@ -182,8 +235,58 @@ function readStoredDraft(): Partial<MurmurStore> {
       restoredDraftAt: Date.now(),
     };
   } catch {
+    removeStoredDraft();
     return {};
   }
+}
+
+/**
+ * Sweep recoverable browser data at the client module boundary. TTLs are
+ * enforced on the next startup/visit; this does not promise deletion while the
+ * browser is closed. Every area is attempted and the result remains observable.
+ */
+export async function sweepExpiredLocalCreationData(
+  now = Date.now(),
+): Promise<LocalCreationDataSweepResult> {
+  if (typeof window === "undefined") {
+    return {
+      succeeded: [],
+      failed: ["last-recording", "generation-clips", "creation-draft"],
+    };
+  }
+
+  const tasks: Array<
+    readonly [LocalCreationDataSweepArea, () => boolean | Promise<boolean>]
+  > = [
+    ["last-recording", () => sweepExpiredRecordingBlob(now)],
+    ["generation-clips", () => sweepExpiredClipArtifacts(now)],
+    ["creation-draft", () => sweepStoredCreationDraft(now)],
+  ];
+  const settled = await Promise.allSettled(
+    tasks.map(([, task]) => Promise.resolve().then(task)),
+  );
+  const result: LocalCreationDataSweepResult = { succeeded: [], failed: [] };
+  settled.forEach((entry, index) => {
+    const area = tasks[index]?.[0];
+    if (!area) return;
+    if (entry.status === "fulfilled" && entry.value) {
+      result.succeeded.push(area);
+    } else {
+      result.failed.push(area);
+    }
+  });
+  return result;
+}
+
+export function isCreationDraftExpired(
+  updatedAt: number | null,
+  now = Date.now(),
+): boolean {
+  return (
+    updatedAt == null ||
+    updatedAt <= 0 ||
+    updatedAt <= now - CREATION_DRAFT_TTL_MS
+  );
 }
 
 const restoredDraft = readStoredDraft();
@@ -224,7 +327,7 @@ export const useMurmurStore = create<MurmurStore>((set, get) => {
     auditioningVersionId: null,
     setAuditioning: (versionId) => set({ auditioningVersionId: versionId }),
 
-    resetFlow: () => {
+    resetFlow: async () => {
       set({
         recordingState: "idle",
         vibeVersions: [],
@@ -238,9 +341,14 @@ export const useMurmurStore = create<MurmurStore>((set, get) => {
         processingMessage: "",
         auditioningVersionId: null,
       });
-      writeDraftSnapshot(get());
+      const draftCleared = writeDraftSnapshot(get());
       // The flow's clips are no longer reachable — release their durable bytes.
-      void clearAllClipArtifacts();
+      const clipsCleared = await clearAllClipArtifacts();
+      return draftCleared && clipsCleared;
     },
   };
 });
+
+if (typeof window !== "undefined") {
+  void sweepExpiredLocalCreationData();
+}

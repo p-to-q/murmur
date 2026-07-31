@@ -21,10 +21,15 @@ export function isSongShareVisibility(value: unknown): value is SongShareVisibil
 }
 
 export function hasSongShareAudio(song: {
+  audioUrl?: unknown;
+  mp3StorageKey?: unknown;
   mp3DataUrl?: unknown;
   mp3Url?: unknown;
 }): boolean {
-  return isNonEmptyString(song.mp3DataUrl) || isNonEmptyString(song.mp3Url);
+  return isNonEmptyString(song.audioUrl)
+    || isNonEmptyString(song.mp3StorageKey)
+    || isNonEmptyString(song.mp3DataUrl)
+    || isNonEmptyString(song.mp3Url);
 }
 
 export function isSongShareCode(value: unknown): value is string {

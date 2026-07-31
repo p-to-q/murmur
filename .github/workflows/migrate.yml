@@ -2,130 +2,418 @@ name: Release (production)
 
 # This is the only production release path. Vercel's native Git integration
 # must keep Preview deployments enabled and Production auto-deploys disabled.
-# A successful main-branch CI run releases that exact SHA in this order:
-# migrate -> verify schema convergence -> deploy -> production smoke.
+# A maintainer dispatches an exact, CI-green main SHA. Release Evidence approval
+# authorizes read-only preflight and an optional provider canary; Production
+# approval authorizes migration and deployment. Release order: validate ->
+# evidence approval -> preflight/canary -> Production approval -> migrate ->
+# verify -> deploy -> immutable audio smoke -> promote -> alias audio smoke,
+# with the prior deployment captured for deterministic rollback.
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       release_sha:
         description: Full main-branch commit SHA to release
         required: true
         type: string
+      preview_pr:
+        description: Number of the final merged release PR whose Preview is evidence
+        required: true
+        type: string
+      preview_sha:
+        description: Full head SHA of that PR's successful Vercel Preview
+        required: true
+        type: string
+      preview_branch:
+        description: Head branch of the final merged release PR
+        required: true
+        type: string
+      mode:
+        description: Run read-only evidence, approved provider canary, or the full production release
+        required: true
+        default: preflight
+        type: choice
+        options:
+          - preflight
+          - canary
+          - release
 
 permissions:
   actions: read
+  checks: read
   contents: read
+  pull-requests: read
 
 concurrency:
   group: release-production
   cancel-in-progress: false
 
 env:
-  RELEASE_SHA: ${{ github.event.workflow_run.head_sha || inputs.release_sha }}
+  RELEASE_SHA: ${{ inputs.release_sha }}
   VERCEL_PROJECT_NAME: ${{ vars.VERCEL_PROJECT_NAME || 'murmur' }}
   VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE || 'moapachas-projects' }}
+  PRODUCTION_URL: https://murmur.ptoq.io
 
 jobs:
-  migrate:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 5
     steps:
-      - name: Checkout release SHA
-        uses: actions/checkout@v7
+      - name: Require dispatch from the protected main workflow
+        run: test "$GITHUB_REF" = "refs/heads/main"
+
+      - name: Checkout exact release SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ env.RELEASE_SHA }}
+          ref: ${{ inputs.release_sha }}
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove the checkout is the current main tip before executing it
+        run: |
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)"
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.9
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify exact main SHA and successful CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bun scripts/release-verify-main.ts
+
+  evidence:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: Release Evidence
+    outputs:
+      database_resource_id: ${{ steps.database.outputs.database_resource_id }}
+      release_resource_fingerprint: ${{ steps.vercel.outputs.release_resource_fingerprint }}
+      audio_worker_resource_id: ${{ vars.MURMUR_RELEASE_AUDIO_WORKER_URL }}
+      music_worker_resource_id: ${{ vars.MURMUR_RELEASE_RUNPOD_ENDPOINT_ID }}
+      music_worker_sha: ${{ vars.MURMUR_RELEASE_MUSIC_WORKER_SHA }}
+    steps:
+      - name: Checkout exact release SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove the approved checkout is still the current main tip
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main"
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.9
+
+      - name: Re-verify immutable release and Preview provenance after approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
+          PREVIEW_PR: ${{ inputs.preview_pr }}
+          PREVIEW_SHA: ${{ inputs.preview_sha }}
+          PREVIEW_BRANCH: ${{ inputs.preview_branch }}
+        run: |
+          bun scripts/release-verify-main.ts
+          bun scripts/release-verify-preview.ts
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate protected evidence configuration
+        env:
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.MURMUR_RELEASE_DATABASE_PREFLIGHT_URL_UNPOOLED }}
+          DATABASE_URL: ${{ secrets.MURMUR_RELEASE_DATABASE_RUNTIME_URL }}
+          AUDIO_WORKER_URL: ${{ vars.MURMUR_RELEASE_AUDIO_WORKER_URL }}
+          RUNPOD_SERVERLESS_ENDPOINT_ID: ${{ vars.MURMUR_RELEASE_RUNPOD_ENDPOINT_ID }}
+          RUNPOD_API_KEY: ${{ secrets.MURMUR_RELEASE_RUNPOD_API_KEY }}
+          MURMUR_MUSIC_RELEASE_SHA: ${{ vars.MURMUR_RELEASE_MUSIC_WORKER_SHA }}
+          VERCEL_NATIVE_PRODUCTION_DISABLED: ${{ vars.VERCEL_NATIVE_PRODUCTION_DISABLED }}
+          VERCEL_NATIVE_PRODUCTION_DISABLED_VERIFIED_AT: ${{ vars.VERCEL_NATIVE_PRODUCTION_DISABLED_VERIFIED_AT }}
+        run: |
+          for value in VERCEL_TOKEN DATABASE_URL_UNPOOLED DATABASE_URL AUDIO_WORKER_URL; do
+            if [ -z "${!value:-}" ]; then
+              echo "::error title=Release evidence is not configured::Set protected Release Evidence value ${value}."
+              exit 1
+            fi
+          done
+          bun scripts/release-owner-ack.ts
+          for value in RUNPOD_SERVERLESS_ENDPOINT_ID MURMUR_MUSIC_RELEASE_SHA; do
+            if [ -z "${!value:-}" ]; then
+              echo "::error title=Worker identity is not configured::Set protected Release Evidence value ${value}."
+              exit 1
+            fi
+          done
+          if [ "${{ inputs.mode }}" != "preflight" ]; then
+            for value in RUNPOD_API_KEY; do
+              if [ -z "${!value:-}" ]; then
+                echo "::error title=Provider canary is not configured::Set protected Release Evidence value ${value}."
+                exit 1
+              fi
+            done
+          fi
+
+      - name: Prove production database identity and exact migration prefix read-only
+        id: database
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.MURMUR_RELEASE_DATABASE_PREFLIGHT_URL_UNPOOLED }}
+          DATABASE_URL: ${{ secrets.MURMUR_RELEASE_DATABASE_RUNTIME_URL }}
+        run: bun scripts/release-database-preflight.ts
+
+      - name: Prove Vercel project, Rolling Releases, and environment isolation
+        id: vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
+          VERCEL_PREVIEW_BRANCH: ${{ inputs.preview_branch }}
+          EXPECTED_DATABASE_RESOURCE_ID: ${{ steps.database.outputs.database_resource_id }}
+          EXPECTED_AUDIO_WORKER_RESOURCE_ID: ${{ vars.MURMUR_RELEASE_AUDIO_WORKER_URL }}
+          EXPECTED_MUSIC_WORKER_RESOURCE_ID: ${{ vars.MURMUR_RELEASE_RUNPOD_ENDPOINT_ID }}
+          EXPECTED_MUSIC_WORKER_SHA: ${{ vars.MURMUR_RELEASE_MUSIC_WORKER_SHA }}
+        run: bun scripts/release-vercel-project.ts
+
+      - name: Verify production Audio Worker health read-only
+        env:
+          AUDIO_WORKER_URL: ${{ vars.MURMUR_RELEASE_AUDIO_WORKER_URL }}
+        run: bun scripts/release-worker-health.ts
+
+      - name: Prepare three pinned, annotated HumTrans inputs
+        if: inputs.mode == 'canary' || inputs.mode == 'release'
+        env:
+          MURMUR_RELEASE_EVIDENCE_DIR: ${{ runner.temp }}/release-evidence
+          MURMUR_CANARY_DATASET_DIR: ${{ runner.temp }}/music-canary-input
+        run: |
+          mkdir -p "$MURMUR_RELEASE_EVIDENCE_DIR" "$MURMUR_CANARY_DATASET_DIR"
+          python workers/audio-engine/tools/prepare_public_dataset.py humtrans \
+            --remote-subset \
+            --split valid \
+            --limit 3 \
+            --include-midi-ref \
+            --stage-root "$MURMUR_CANARY_DATASET_DIR/dataset" \
+            --manifest-out "$MURMUR_CANARY_DATASET_DIR/manifest.json" \
+            --pitch-map-out "$MURMUR_CANARY_DATASET_DIR/pitch-map.json" \
+            --name-mode relative \
+            --pretty > "$MURMUR_RELEASE_EVIDENCE_DIR/humtrans-prepare.json"
+          jq -e '
+            .manifestBuild.count == 3 and
+            .manifestBuild.annotatedCases == 3 and
+            .preset.revision == "c3c8504280cbdef0f00bb8119f16f034bea2bd9f"
+          ' "$MURMUR_RELEASE_EVIDENCE_DIR/humtrans-prepare.json" > /dev/null
+
+      - name: Run a three-profile real, quality-gated music provider canary
+        if: inputs.mode == 'canary' || inputs.mode == 'release'
+        env:
+          RUNPOD_SERVERLESS_ENDPOINT_ID: ${{ vars.MURMUR_RELEASE_RUNPOD_ENDPOINT_ID }}
+          RUNPOD_API_KEY: ${{ secrets.MURMUR_RELEASE_RUNPOD_API_KEY }}
+          MURMUR_MUSIC_RELEASE_SHA: ${{ vars.MURMUR_RELEASE_MUSIC_WORKER_SHA }}
+          MAGENTA_MODEL: ${{ vars.MURMUR_RELEASE_MUSIC_MODEL || 'mrt2_base' }}
+          RUNPOD_GPU_USD_PER_SECOND: ${{ vars.RUNPOD_GPU_USD_PER_SECOND }}
+          MURMUR_RELEASE_EVIDENCE_DIR: ${{ runner.temp }}/release-evidence
+          MURMUR_CANARY_DATASET_MANIFEST: ${{ runner.temp }}/music-canary-input/manifest.json
+          MURMUR_CANARY_DATASET_ROOT: ${{ runner.temp }}/music-canary-input/dataset
+          MURMUR_CANARY_DATASET_REVISION: c3c8504280cbdef0f00bb8119f16f034bea2bd9f
+        run: |
+          mkdir -p "$MURMUR_RELEASE_EVIDENCE_DIR"
+          bun scripts/release-music-provider-canary.ts
+
+      - name: Upload provider canary for evidence and human listening review
+        if: always() && (inputs.mode == 'canary' || inputs.mode == 'release')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-provider-canary-${{ inputs.release_sha }}
+          path: ${{ runner.temp }}/release-evidence/
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    if: inputs.mode == 'release'
+    needs: evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment: Production
+    steps:
+      - name: Checkout exact release SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prove the release checkout is still the current main tip
+        run: |
+          test "$GITHUB_REF" = "refs/heads/main"
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.9
 
       - name: Verify exact main SHA and successful CI
         env:
           GH_TOKEN: ${{ github.token }}
-          CI_RUN_ID: ${{ github.event.workflow_run.id }}
         run: bun scripts/release-verify-main.ts
-
-      - name: Validate migration configuration
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
-          VERCEL_NATIVE_PRODUCTION_DISABLED: ${{ vars.VERCEL_NATIVE_PRODUCTION_DISABLED }}
-        run: |
-          if [ "${VERCEL_NATIVE_PRODUCTION_DISABLED:-}" != "true" ]; then
-            echo "::error title=Production release cutover is not acknowledged::Disable Vercel native Production auto-deploy for main, retain Preview, then set VERCEL_NATIVE_PRODUCTION_DISABLED=true."
-            exit 1
-          fi
-          if [ -z "${DATABASE_URL:-}" ]; then
-            echo "::error title=Production migration is not configured::Set DATABASE_URL_UNPOOLED to the direct production Postgres connection string."
-            exit 1
-          fi
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Validate protected release configuration
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.MURMUR_RELEASE_DATABASE_MIGRATION_URL_UNPOOLED }}
+          DATABASE_URL: ${{ secrets.MURMUR_RELEASE_DATABASE_RUNTIME_URL }}
+          DATABASE_PREFLIGHT_URL_UNPOOLED: ${{ secrets.MURMUR_RELEASE_DATABASE_PREFLIGHT_URL_UNPOOLED }}
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
+          RUNPOD_SERVERLESS_ENDPOINT_ID: ${{ needs.evidence.outputs.music_worker_resource_id }}
+          RUNPOD_API_KEY: ${{ secrets.MURMUR_RELEASE_RUNPOD_API_KEY }}
+          MURMUR_MUSIC_RELEASE_SHA: ${{ needs.evidence.outputs.music_worker_sha }}
+          MURMUR_SMOKE_SHARE_CODE: ${{ vars.MURMUR_RELEASE_SMOKE_SHARE_CODE }}
+          MURMUR_SMOKE_SONG_ID: ${{ vars.MURMUR_RELEASE_SMOKE_SONG_ID }}
+          MURMUR_SMOKE_SESSION_TOKEN: ${{ secrets.MURMUR_RELEASE_SMOKE_SESSION_TOKEN }}
+          VERCEL_NATIVE_PRODUCTION_DISABLED: ${{ vars.VERCEL_NATIVE_PRODUCTION_DISABLED }}
+          VERCEL_NATIVE_PRODUCTION_DISABLED_VERIFIED_AT: ${{ vars.VERCEL_NATIVE_PRODUCTION_DISABLED_VERIFIED_AT }}
+        run: |
+          bun scripts/release-owner-ack.ts
+          for value in DATABASE_URL_UNPOOLED DATABASE_URL DATABASE_PREFLIGHT_URL_UNPOOLED VERCEL_TOKEN RUNPOD_SERVERLESS_ENDPOINT_ID RUNPOD_API_KEY MURMUR_MUSIC_RELEASE_SHA MURMUR_SMOKE_SHARE_CODE MURMUR_SMOKE_SONG_ID MURMUR_SMOKE_SESSION_TOKEN; do
+            if [ -z "${!value:-}" ]; then
+              echo "::error title=Production release is not configured::Set protected Production value ${value}."
+              exit 1
+            fi
+          done
+
+      - name: Re-prove approved database before mutation
+        id: database_recheck
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.MURMUR_RELEASE_DATABASE_PREFLIGHT_URL_UNPOOLED }}
+          DATABASE_URL: ${{ secrets.MURMUR_RELEASE_DATABASE_RUNTIME_URL }}
+        run: bun scripts/release-database-preflight.ts
+
+      - name: Re-prove migration writer identity before its first write
+        id: migration_database_recheck
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.MURMUR_RELEASE_DATABASE_MIGRATION_URL_UNPOOLED }}
+          DATABASE_URL: ${{ secrets.MURMUR_RELEASE_DATABASE_RUNTIME_URL }}
+        run: bun scripts/release-database-preflight.ts
+
+      - name: Bind migration writer to approved database identity
+        run: >-
+          test "${{ steps.migration_database_recheck.outputs.database_resource_id }}"
+          = "${{ needs.evidence.outputs.database_resource_id }}"
+
+      - name: Re-prove approved Vercel resources before mutation
+        id: vercel_recheck
+        env:
+          EXPECTED_DATABASE_RESOURCE_ID: ${{ needs.evidence.outputs.database_resource_id }}
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
+          VERCEL_PREVIEW_BRANCH: ${{ inputs.preview_branch }}
+          EXPECTED_AUDIO_WORKER_RESOURCE_ID: ${{ needs.evidence.outputs.audio_worker_resource_id }}
+          EXPECTED_MUSIC_WORKER_RESOURCE_ID: ${{ needs.evidence.outputs.music_worker_resource_id }}
+          EXPECTED_MUSIC_WORKER_SHA: ${{ needs.evidence.outputs.music_worker_sha }}
+        run: |
+          test "${{ steps.database_recheck.outputs.database_resource_id }}" = "$EXPECTED_DATABASE_RESOURCE_ID"
+          bun scripts/release-vercel-project.ts
+
+      - name: Bind pre-mutation Vercel resources to approved evidence
+        run: >-
+          test "${{ steps.vercel_recheck.outputs.release_resource_fingerprint }}"
+          = "${{ needs.evidence.outputs.release_resource_fingerprint }}"
+
+      - name: Re-prove approved Audio Worker before mutation
+        env:
+          AUDIO_WORKER_URL: ${{ needs.evidence.outputs.audio_worker_resource_id }}
+        run: bun scripts/release-worker-health.ts
+
+      - name: Prepare one pinned HumTrans input for Production re-attestation
+        env:
+          MURMUR_CANARY_DATASET_DIR: ${{ runner.temp }}/production-music-canary-input
+        run: |
+          mkdir -p "$MURMUR_CANARY_DATASET_DIR"
+          python workers/audio-engine/tools/prepare_public_dataset.py humtrans \
+            --remote-subset \
+            --split valid \
+            --limit 1 \
+            --include-midi-ref \
+            --stage-root "$MURMUR_CANARY_DATASET_DIR/dataset" \
+            --manifest-out "$MURMUR_CANARY_DATASET_DIR/manifest.json" \
+            --pitch-map-out "$MURMUR_CANARY_DATASET_DIR/pitch-map.json" \
+            --name-mode relative \
+            --pretty > "$MURMUR_CANARY_DATASET_DIR/prepare.json"
+          jq -e '
+            .manifestBuild.count == 1 and
+            .manifestBuild.annotatedCases == 1 and
+            .preset.revision == "c3c8504280cbdef0f00bb8119f16f034bea2bd9f"
+          ' "$MURMUR_CANARY_DATASET_DIR/prepare.json" > /dev/null
+
+      - name: Re-attest approved music Worker before mutation
+        env:
+          RUNPOD_SERVERLESS_ENDPOINT_ID: ${{ needs.evidence.outputs.music_worker_resource_id }}
+          RUNPOD_API_KEY: ${{ secrets.MURMUR_RELEASE_RUNPOD_API_KEY }}
+          MURMUR_MUSIC_RELEASE_SHA: ${{ needs.evidence.outputs.music_worker_sha }}
+          MAGENTA_MODEL: ${{ vars.MURMUR_RELEASE_MUSIC_MODEL || 'mrt2_base' }}
+          RUNPOD_GPU_USD_PER_SECOND: ${{ vars.RUNPOD_GPU_USD_PER_SECOND }}
+          MURMUR_CANARY_PROFILE_LIMIT: "1"
+          MURMUR_RELEASE_EVIDENCE_DIR: ${{ runner.temp }}/production-pre-mutation-attestation
+          MURMUR_CANARY_DATASET_MANIFEST: ${{ runner.temp }}/production-music-canary-input/manifest.json
+          MURMUR_CANARY_DATASET_ROOT: ${{ runner.temp }}/production-music-canary-input/dataset
+          MURMUR_CANARY_DATASET_REVISION: c3c8504280cbdef0f00bb8119f16f034bea2bd9f
+        run: |
+          mkdir -p "$MURMUR_RELEASE_EVIDENCE_DIR"
+          bun scripts/release-music-provider-canary.ts
+
+      - name: Upload pre-mutation Worker attestation
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: production-worker-pre-mutation-${{ inputs.release_sha }}
+          path: ${{ runner.temp }}/production-pre-mutation-attestation/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Apply production migrations
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          DATABASE_URL: ${{ secrets.MURMUR_RELEASE_DATABASE_MIGRATION_URL_UNPOOLED }}
         run: bun run db:migrate
 
-  verify:
-    needs: migrate
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout release SHA
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ env.RELEASE_SHA }}
-          fetch-depth: 0
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.9
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Verify schema convergence
+      - name: Verify migration journal convergence
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          DATABASE_URL: ${{ secrets.MURMUR_RELEASE_DATABASE_MIGRATION_URL_UNPOOLED }}
         run: bun run db:migrate
 
-  deploy:
-    needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    environment: Production
-    outputs:
-      deployment_url: ${{ steps.deploy.outputs.deployment_url }}
-    steps:
-      - name: Checkout release SHA
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ env.RELEASE_SHA }}
-          fetch-depth: 0
+      - name: Prove the migration ledger exactly matches this release
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.MURMUR_RELEASE_DATABASE_MIGRATION_URL_UNPOOLED }}
+          DATABASE_URL: ${{ secrets.MURMUR_RELEASE_DATABASE_RUNTIME_URL }}
+        run: bun scripts/release-database-preflight.ts --require-complete
 
-      - name: Verify checkout
-        run: test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+      - name: Prove the catalog reader targets the migrated production database
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.MURMUR_RELEASE_DATABASE_PREFLIGHT_URL_UNPOOLED }}
+          DATABASE_URL: ${{ secrets.MURMUR_RELEASE_DATABASE_RUNTIME_URL }}
+        run: bun scripts/release-database-preflight.ts --require-complete
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.9
+      - name: Verify schema catalog and data invariants
+        env:
+          DATABASE_URL: ${{ secrets.MURMUR_RELEASE_DATABASE_PREFLIGHT_URL_UNPOOLED }}
+        run: bun scripts/release-schema-verify.ts
 
       - name: Validate Vercel configuration
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
         run: |
           for value in VERCEL_TOKEN VERCEL_PROJECT_NAME VERCEL_SCOPE; do
             if [ -z "${!value:-}" ]; then
@@ -136,21 +424,77 @@ jobs:
 
       - name: Link Vercel project
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
         run: |
           bunx vercel@56.3.1 link --yes \
             --project "$VERCEL_PROJECT_NAME" \
-            --scope "$VERCEL_SCOPE" \
-            --token "$VERCEL_TOKEN"
+            --scope "$VERCEL_SCOPE"
 
-      - name: Deploy exact release SHA
+      - name: Capture the currently serving Production deployment
+        id: previous
+        env:
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
+        run: |
+          inspect_json="$RUNNER_TEMP/vercel-previous-production-inspect.json"
+          bunx vercel@56.3.1 inspect "$PRODUCTION_URL" \
+            --format=json \
+            --scope "$VERCEL_SCOPE" > "$inspect_json"
+          deployment_id="$(bun scripts/release-vercel-deployment.ts "$inspect_json")"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "Rollback target is $deployment_id"
+
+      - name: Re-attest approved music Worker immediately before deploy
+        env:
+          RUNPOD_SERVERLESS_ENDPOINT_ID: ${{ needs.evidence.outputs.music_worker_resource_id }}
+          RUNPOD_API_KEY: ${{ secrets.MURMUR_RELEASE_RUNPOD_API_KEY }}
+          MURMUR_MUSIC_RELEASE_SHA: ${{ needs.evidence.outputs.music_worker_sha }}
+          MAGENTA_MODEL: ${{ vars.MURMUR_RELEASE_MUSIC_MODEL || 'mrt2_base' }}
+          RUNPOD_GPU_USD_PER_SECOND: ${{ vars.RUNPOD_GPU_USD_PER_SECOND }}
+          MURMUR_CANARY_PROFILE_LIMIT: "1"
+          MURMUR_RELEASE_EVIDENCE_DIR: ${{ runner.temp }}/production-pre-deploy-attestation
+          MURMUR_CANARY_DATASET_MANIFEST: ${{ runner.temp }}/production-music-canary-input/manifest.json
+          MURMUR_CANARY_DATASET_ROOT: ${{ runner.temp }}/production-music-canary-input/dataset
+          MURMUR_CANARY_DATASET_REVISION: c3c8504280cbdef0f00bb8119f16f034bea2bd9f
+        run: |
+          mkdir -p "$MURMUR_RELEASE_EVIDENCE_DIR"
+          bun scripts/release-music-provider-canary.ts
+
+      - name: Upload pre-deploy Worker attestation
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: production-worker-pre-deploy-${{ inputs.release_sha }}
+          path: ${{ runner.temp }}/production-pre-deploy-attestation/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Re-prove Vercel resources immediately before deploy
+        id: deploy_preflight
+        env:
+          EXPECTED_DATABASE_RESOURCE_ID: ${{ needs.evidence.outputs.database_resource_id }}
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
+          VERCEL_PREVIEW_BRANCH: ${{ inputs.preview_branch }}
+          EXPECTED_AUDIO_WORKER_RESOURCE_ID: ${{ needs.evidence.outputs.audio_worker_resource_id }}
+          EXPECTED_MUSIC_WORKER_RESOURCE_ID: ${{ needs.evidence.outputs.music_worker_resource_id }}
+          EXPECTED_MUSIC_WORKER_SHA: ${{ needs.evidence.outputs.music_worker_sha }}
+        run: |
+          bun scripts/release-vercel-project.ts
+
+      - name: Bind deploy-time Vercel resources to approved evidence
+        run: >-
+          test "${{ steps.deploy_preflight.outputs.release_resource_fingerprint }}"
+          = "${{ needs.evidence.outputs.release_resource_fingerprint }}"
+
+      - name: Deploy exact release SHA without promoting domains
         id: deploy
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
         run: |
+          set -o pipefail
           deployment_url="$(bunx vercel@56.3.1 deploy --prod --yes \
+            --skip-domain \
             --scope "$VERCEL_SCOPE" \
-            --token "$VERCEL_TOKEN" \
+            --build-env NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA="$RELEASE_SHA" \
             --meta githubCommitSha="$RELEASE_SHA" \
             --meta githubCommitRef=main | tail -n 1)"
           case "$deployment_url" in
@@ -158,22 +502,150 @@ jobs:
             *) echo "::error title=Vercel deployment failed::Unexpected deployment URL: ${deployment_url}"; exit 1 ;;
           esac
           echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
-          echo "Released $RELEASE_SHA to $deployment_url"
+          echo "Built $RELEASE_SHA at $deployment_url"
 
-  smoke:
-    needs: deploy
-    runs-on: ubuntu-latest
-    timeout-minutes: 8
-    steps:
-      - name: Checkout release SHA
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ env.RELEASE_SHA }}
+      - name: Require immutable deployment readiness
+        id: immutable
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
+        run: |
+          inspect_json="$RUNNER_TEMP/vercel-immutable-inspect.json"
+          bunx vercel@56.3.1 inspect "$DEPLOYMENT_URL" \
+            --wait \
+            --timeout 10m \
+            --format=json \
+            --scope "$VERCEL_SCOPE" > "$inspect_json"
+          deployment_id="$(bun scripts/release-vercel-deployment.ts "$inspect_json")"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "Immutable deployment $deployment_id is READY with target=production"
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.9
+      - name: Smoke immutable deployment identity and real audio delivery
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          MURMUR_SMOKE_SHARE_CODE: ${{ vars.MURMUR_RELEASE_SMOKE_SHARE_CODE }}
+          MURMUR_SMOKE_SONG_ID: ${{ vars.MURMUR_RELEASE_SMOKE_SONG_ID }}
+          MURMUR_SMOKE_SESSION_TOKEN: ${{ secrets.MURMUR_RELEASE_SMOKE_SESSION_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.MURMUR_RELEASE_VERCEL_BYPASS_SECRET }}
+          EXPECTED_RELEASE_RESOURCE_FINGERPRINT: ${{ needs.evidence.outputs.release_resource_fingerprint }}
+          MURMUR_CANARY_DATASET_MANIFEST: ${{ runner.temp }}/production-music-canary-input/manifest.json
+          MURMUR_CANARY_DATASET_ROOT: ${{ runner.temp }}/production-music-canary-input/dataset
+          MURMUR_CANARY_DATASET_REVISION: c3c8504280cbdef0f00bb8119f16f034bea2bd9f
+          MURMUR_RELEASE_SMOKE_RUN_ID: ${{ github.run_id }}
+          MURMUR_RELEASE_SMOKE_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: >-
+          bun scripts/release-production-smoke.ts
+          "$DEPLOYMENT_URL"
+          "$RELEASE_SHA"
+          --require-audio
+          --require-worker-canary
+
+      - name: Promote verified deployment to Production
+        id: promote
+        continue-on-error: true
+        env:
+          DEPLOYMENT_ID: ${{ steps.immutable.outputs.deployment_id }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
+        run: |
+          promotion_output="$(bunx vercel@56.3.1 promote "$DEPLOYMENT_URL" \
+            --yes \
+            --timeout 5m \
+            --scope "$VERCEL_SCOPE" 2>&1)"
+          printf '%s\n' "$promotion_output"
+          case "$promotion_output" in
+            *"queued"*|*"Rolling Releases enabled"*|*"initial percentage"*)
+              echo "::error title=Partial production promotion detected::Disable Rolling Releases and rerun the release from a new approved SHA."
+              exit 1
+              ;;
+          esac
+
+          promoted=false
+          for attempt in $(seq 1 60); do
+            inspect_json="$RUNNER_TEMP/vercel-production-inspect.json"
+            if bunx vercel@56.3.1 inspect "$PRODUCTION_URL" \
+              --format=json \
+              --scope "$VERCEL_SCOPE" > "$inspect_json" \
+              && bun scripts/release-vercel-deployment.ts \
+                "$inspect_json" \
+                "$DEPLOYMENT_ID" > /dev/null; then
+              promoted=true
+              break
+            fi
+            sleep 5
+          done
+          if [ "$promoted" != "true" ]; then
+            echo "::error title=Production promotion did not converge::The production alias does not resolve to the verified deployment."
+            exit 1
+          fi
+          echo "Promoted $RELEASE_SHA from $DEPLOYMENT_URL"
 
       - name: Smoke production alias
-        run: bun scripts/release-production-smoke.ts https://murmur.ptoq.io
+        id: alias_smoke
+        if: steps.promote.outcome == 'success'
+        continue-on-error: true
+        env:
+          MURMUR_SMOKE_SHARE_CODE: ${{ vars.MURMUR_RELEASE_SMOKE_SHARE_CODE }}
+          MURMUR_SMOKE_SONG_ID: ${{ vars.MURMUR_RELEASE_SMOKE_SONG_ID }}
+          MURMUR_SMOKE_SESSION_TOKEN: ${{ secrets.MURMUR_RELEASE_SMOKE_SESSION_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.MURMUR_RELEASE_VERCEL_BYPASS_SECRET }}
+          EXPECTED_RELEASE_RESOURCE_FINGERPRINT: ${{ needs.evidence.outputs.release_resource_fingerprint }}
+          MURMUR_CANARY_DATASET_MANIFEST: ${{ runner.temp }}/production-music-canary-input/manifest.json
+          MURMUR_CANARY_DATASET_ROOT: ${{ runner.temp }}/production-music-canary-input/dataset
+          MURMUR_CANARY_DATASET_REVISION: c3c8504280cbdef0f00bb8119f16f034bea2bd9f
+        run: >-
+          bun scripts/release-production-smoke.ts
+          "$PRODUCTION_URL"
+          "$RELEASE_SHA"
+          --require-audio
+
+      - name: Roll back a failed Production cutover
+        if: >-
+          always() &&
+          steps.previous.outputs.deployment_id != '' &&
+          (steps.promote.outcome == 'failure' ||
+           steps.alias_smoke.outcome == 'failure' ||
+           cancelled())
+        env:
+          PREVIOUS_DEPLOYMENT_ID: ${{ steps.previous.outputs.deployment_id }}
+          VERCEL_TOKEN: ${{ secrets.MURMUR_RELEASE_VERCEL_TOKEN }}
+        run: |
+          test -n "$PREVIOUS_DEPLOYMENT_ID"
+          current_inspect="$RUNNER_TEMP/vercel-current-production-inspect.json"
+          current_deployment_id=""
+          if bunx vercel@56.3.1 inspect "$PRODUCTION_URL" \
+            --format=json \
+            --scope "$VERCEL_SCOPE" > "$current_inspect"; then
+            current_deployment_id="$(bun scripts/release-vercel-deployment.ts "$current_inspect" || true)"
+          fi
+          if [ "$current_deployment_id" = "$PREVIOUS_DEPLOYMENT_ID" ]; then
+            echo "Production alias never left $PREVIOUS_DEPLOYMENT_ID; rollback is unnecessary."
+            exit 0
+          fi
+          bunx vercel@56.3.1 rollback "$PREVIOUS_DEPLOYMENT_ID" \
+            --yes \
+            --timeout 5m \
+            --scope "$VERCEL_SCOPE"
+          restored=false
+          for attempt in $(seq 1 60); do
+            inspect_json="$RUNNER_TEMP/vercel-rollback-production-inspect.json"
+            if bunx vercel@56.3.1 inspect "$PRODUCTION_URL" \
+              --format=json \
+              --scope "$VERCEL_SCOPE" > "$inspect_json" \
+              && test "$(bun scripts/release-vercel-deployment.ts "$inspect_json")" \
+                = "$PREVIOUS_DEPLOYMENT_ID"; then
+              restored=true
+              break
+            fi
+            sleep 5
+          done
+          test "$restored" = "true"
+
+      - name: Require successful Production cutover
+        if: always()
+        env:
+          PROMOTE_OUTCOME: ${{ steps.promote.outcome }}
+          ALIAS_SMOKE_OUTCOME: ${{ steps.alias_smoke.outcome }}
+        run: |
+          test "$PROMOTE_OUTCOME" = "success"
+          test "$ALIAS_SMOKE_OUTCOME" = "success"

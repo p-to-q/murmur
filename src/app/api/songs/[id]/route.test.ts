@@ -19,7 +19,10 @@ let nextUpdatedSong: Record<string, unknown> | null = {
   userId: "usr_owner",
   title: "Renamed Song",
 };
-let nextDeleteResult = true;
+let nextDeleteResult: { id: string; mp3StorageKey: string | null } | null = {
+  id: "song_owner",
+  mp3StorageKey: null,
+};
 let updateSongError: unknown = null;
 
 const getSongByIdForUserMock = mock(async () => nextSong);
@@ -40,6 +43,7 @@ mock.module("@/lib/db/queries/songs", () => ({
   deleteSong: mock(async () => false),
   deleteSongForUser: deleteSongForUserMock,
   getPublicSongByShareCode: mock(async () => null),
+  getPublicSongMetadataByShareCode: mock(async () => null),
   getPublicSongSummaries: mock(async () => []),
   getSongById: mock(async () => null),
   getSongByIdForUser: getSongByIdForUserMock,
@@ -95,7 +99,7 @@ beforeEach(() => {
     userId: "usr_owner",
     title: "Renamed Song",
   };
-  nextDeleteResult = true;
+  nextDeleteResult = { id: "song_owner", mp3StorageKey: null };
   updateSongError = null;
   getSongByIdForUserMock.mockClear();
   getSongSummaryByIdForUserMock.mockClear();
@@ -209,6 +213,16 @@ describe("PATCH /api/songs/[id]", () => {
     expect(body.error).toBe("validation_error");
   });
 
+  it("keeps audio storage coordinates server-managed", async () => {
+    const response = await PATCH(
+      request("PATCH", { mp3StorageKey: "songs/other.mp3" }),
+      ctx(),
+    );
+
+    expect(response.status).toBe(400);
+    expect(updateSongForUserMock).not.toHaveBeenCalled();
+  });
+
   it("updates the local guest fallback when the dev database is unavailable", async () => {
     nextAuth = {
       ok: true,
@@ -273,7 +287,7 @@ describe("DELETE /api/songs/[id]", () => {
   });
 
   it("returns 404 when the song is not owned by the requester", async () => {
-    nextDeleteResult = false;
+    nextDeleteResult = null;
 
     const response = await DELETE(request("DELETE"), ctx("song_other"));
 

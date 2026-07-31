@@ -10,7 +10,8 @@
  *   RUNPOD_API_KEY   — https://www.runpod.io/console/user/settings
  *
  * Optional:
- *   MURMUR_MUSIC_IMAGE        — override container image (default ghcr public image)
+ *   MURMUR_MUSIC_RELEASE_SHA  — exact 40-char Git SHA (default current HEAD)
+ *   MURMUR_MUSIC_IMAGE        — immutable SHA tag/digest override
  *   MAGENTA_MODEL             — mrt2_base (default) | mrt2_small
  *   MAGENTA_CFG_NOTES         — melody CFG scale passed to the worker
  *   RUNPOD_DATA_CENTER_ID     — DC for the network volume (default EU-RO-1)
@@ -26,11 +27,16 @@
  *   RUNPOD_API_KEY=rpa_… VERCEL=1 bun run deploy:music-serverless
  */
 
+import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
+import {
+  isMusicDeliveryBase64WithinLimit,
+  verifyMusicWorkerOutput,
+} from "../src/lib/platform/music-worker-output";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 loadEnv({ path: resolve(ROOT, ".env.local") });
@@ -42,18 +48,32 @@ const RUN_BASE = "https://api.runpod.ai/v2";
 
 const VOLUME_NAME = "murmur-music-vol";
 const VOLUME_GB = 50;
-const TEMPLATE_NAME = "murmur-music-serverless";
-const ENDPOINT_NAME = "murmur-music-serverless";
 const DEFAULT_DATA_CENTER = "EU-RO-1";
 const REGISTRY_AUTH_NAME = "murmur-ghcr";
 
 const MODEL = process.env.MAGENTA_MODEL?.trim() || "mrt2_base";
+const RELEASE_REVISION = process.env.MURMUR_MUSIC_RELEASE_SHA?.trim() || gitRevision();
 const IMAGE =
   process.env.MURMUR_MUSIC_IMAGE?.trim() ||
-  "ghcr.io/p-to-q/murmur-music-engine:latest";
+  `ghcr.io/p-to-q/murmur-music-engine:${RELEASE_REVISION}`;
+const RELEASE_SUFFIX = RELEASE_REVISION.slice(0, 12);
+const TEMPLATE_NAME = `murmur-music-${RELEASE_SUFFIX}`;
+const ENDPOINT_NAME = `murmur-music-${RELEASE_SUFFIX}`;
 const WORKERS_MAX = clampInt(process.env.RUNPOD_WORKERS_MAX, 2, 1, 10);
 const IDLE_TIMEOUT = clampInt(process.env.RUNPOD_IDLE_TIMEOUT, 120, 5, 3600);
 const EXECUTION_TIMEOUT_MS = 180_000;
+const QUALITY_MAX_ATTEMPTS = clampInt(
+  process.env.MUSIC_QUALITY_MAX_ATTEMPTS,
+  2,
+  1,
+  3,
+);
+const QUALITY_TOTAL_SECONDS = clampInt(
+  process.env.MUSIC_QUALITY_MAX_TOTAL_SECONDS,
+  165,
+  1,
+  175,
+);
 
 const GPU_CANDIDATES = [
   process.env.RUNPOD_GPU_TYPE_ID?.trim(),
@@ -69,6 +89,14 @@ type Template = { id: string; name: string };
 type Endpoint = { id: string; name: string };
 
 async function main() {
+  if (!/^[a-f0-9]{40}$/.test(RELEASE_REVISION)) {
+    throw new Error("MURMUR_MUSIC_RELEASE_SHA must be an exact 40-character Git SHA.");
+  }
+  if (!isImmutableImageReference(IMAGE)) {
+    throw new Error(
+      "MURMUR_MUSIC_IMAGE must use an immutable 40-character SHA tag or sha256 digest; mutable tags are not deployable.",
+    );
+  }
   const apiKey = process.env.RUNPOD_API_KEY?.trim();
   if (!apiKey) {
     console.error(
@@ -84,6 +112,7 @@ async function main() {
   }
 
   console.log(`Image: ${IMAGE}`);
+  console.log(`Release revision: ${RELEASE_REVISION}`);
   console.log(`Model: ${MODEL} · workersMax=${WORKERS_MAX} · idleTimeout=${IDLE_TIMEOUT}s · scale-to-zero + FlashBoot`);
 
   const registryAuthId = await ensureRegistryAuth(apiKey);
@@ -110,7 +139,7 @@ async function main() {
     );
     qualityProtocolVerified = await warmUp(apiKey, endpointId);
     if (qualityProtocolVerified) {
-      console.log("Warm-up completed — model cached and music-technical-v1 evidence verified.");
+      console.log("Warm-up completed — model cached and music-technical-v2 evidence verified.");
     } else {
       console.warn(
         "Warm-up did not complete in time. The endpoint is created; the model will download on the first real request instead. Check the RunPod console logs.",
@@ -125,7 +154,7 @@ async function main() {
   if (shouldSyncVercel()) {
     if (!qualityProtocolVerified) {
       throw new Error(
-        "Refusing Vercel cutover: warm-up did not prove music-technical-v1. Drain old RunPod workers, confirm the SHA image is active, and rerun with WARMUP=1.",
+        "Refusing Vercel cutover: warm-up did not prove music-technical-v2. Drain old RunPod workers, confirm the SHA image is active, and rerun with WARMUP=1.",
       );
     }
     await syncVercelEnv(apiKey, endpointId);
@@ -264,9 +293,15 @@ function templateBody(registryAuthId?: string) {
     MAGENTA_BACKEND: "jax",
     MAGENTA_MODEL: MODEL,
     MUSIC_ENGINE_PRELOAD: "1",
+    MUSIC_QUALITY_MAX_ATTEMPTS: String(QUALITY_MAX_ATTEMPTS),
+    MUSIC_QUALITY_MAX_TOTAL_SECONDS: String(QUALITY_TOTAL_SECONDS),
   };
   const cfgNotes = process.env.MAGENTA_CFG_NOTES?.trim();
   if (cfgNotes) env.MAGENTA_CFG_NOTES = cfgNotes;
+  const temperature = process.env.MAGENTA_TEMPERATURE?.trim();
+  if (temperature) env.MAGENTA_TEMPERATURE = temperature;
+  const topK = process.env.MAGENTA_TOP_K?.trim();
+  if (topK) env.MAGENTA_TOP_K = topK;
 
   const body: Record<string, unknown> = {
     name: TEMPLATE_NAME,
@@ -283,10 +318,7 @@ async function ensureTemplate(apiKey: string, registryAuthId?: string): Promise<
   const templates = await rest<Template[]>(apiKey, "GET", "/templates");
   const existing = templates.find((t) => t.name === TEMPLATE_NAME);
   if (existing) {
-    // Reuse as-is. RunPod's PATCH /templates rejects the create body ("extra
-    // input keys"), and re-runs need no change: the image is :latest (cold
-    // workers always pull it) and env is already set. To change image/env,
-    // delete the template in the console and redeploy.
+    // Names include the release SHA, so reuse is immutable and idempotent.
     console.log(`Reusing existing template ${existing.id}.`);
     return existing.id;
   }
@@ -321,8 +353,8 @@ async function ensureEndpoint(
   const endpoints = await rest<Endpoint[]>(apiKey, "GET", "/endpoints");
   const existing = endpoints.find((e) => e.name === ENDPOINT_NAME);
   if (existing) {
-    // Reuse as-is (same reason as the template: PATCH rejects the create body).
-    // To change GPU/scaling, edit the endpoint in the console or delete it first.
+    // Names include the release SHA, so a new release never mutates the live
+    // endpoint. Vercel switches endpoint ids only after the warm-up proof.
     console.log(`Reusing existing endpoint ${existing.id}.`);
     return existing.id;
   }
@@ -336,13 +368,32 @@ async function warmUp(apiKey: string, endpointId: string): Promise<boolean> {
     "Content-Type": "application/json",
   };
   const requestId = `deploy-warmup-${Date.now()}`;
+  const prompt = "warm piano with a clear steady melody";
+  const duration = 2;
+  const styleMix = 0.25;
+  const melody = JSON.stringify({
+    notes: [
+      { pitch: 60, start: 0, duration: 0.5 },
+      { pitch: 64, start: 0.5, duration: 0.5 },
+      { pitch: 67, start: 1, duration: 0.5 },
+      { pitch: 64, start: 1.5, duration: 0.5 },
+    ],
+  });
+  const hum = warmupHumWav(duration);
   let jobId: string;
   try {
     const submit = await fetch(`${RUN_BASE}/${endpointId}/run`, {
       method: "POST",
       headers,
       body: JSON.stringify({
-        input: { prompt: "warm up the model", duration: 2, request_id: requestId },
+        input: {
+          prompt,
+          duration,
+          style_mix: styleMix,
+          melody,
+          hum_b64: Buffer.from(hum).toString("base64"),
+          request_id: requestId,
+        },
       }),
       signal: AbortSignal.timeout(30_000),
     });
@@ -356,7 +407,9 @@ async function warmUp(apiKey: string, endpointId: string): Promise<boolean> {
       return false;
     }
     if ((body.status ?? "").toUpperCase() === "COMPLETED") {
-      return hasExpectedQualityProtocol(body.output, requestId);
+      return hasExpectedQualityProtocol(body.output, {
+        requestId, prompt, duration, styleMix, melody, hum,
+      });
     }
     jobId = body.id;
   } catch (error) {
@@ -375,8 +428,10 @@ async function warmUp(apiKey: string, endpointId: string): Promise<boolean> {
       const body = (await res.json()) as { status?: string; output?: unknown };
       const status = (body.status ?? "").toUpperCase();
       if (status === "COMPLETED") {
-        const verified = hasExpectedQualityProtocol(body.output, requestId);
-        if (!verified) console.warn("Warm-up completed without music-technical-v1 evidence.");
+        const verified = hasExpectedQualityProtocol(body.output, {
+          requestId, prompt, duration, styleMix, melody, hum,
+        });
+        if (!verified) console.warn("Warm-up completed without music-technical-v2 evidence.");
         return verified;
       }
       if (status === "FAILED" || status === "CANCELLED" || status === "TIMED_OUT") {
@@ -392,18 +447,54 @@ async function warmUp(apiKey: string, endpointId: string): Promise<boolean> {
   return false;
 }
 
-function hasExpectedQualityProtocol(output: unknown, requestId: string): boolean {
+function hasExpectedQualityProtocol(
+  output: unknown,
+  expected: {
+    requestId: string;
+    prompt: string;
+    duration: number;
+    styleMix: number;
+    melody: string;
+    hum: Uint8Array;
+  },
+): boolean {
   if (!output || typeof output !== "object" || Array.isArray(output)) return false;
   const value = output as Record<string, unknown>;
-  const quality = value.quality && typeof value.quality === "object"
-    ? value.quality as Record<string, unknown>
-    : null;
-  const receipt = value.input_receipt && typeof value.input_receipt === "object"
-    ? value.input_receipt as Record<string, unknown>
-    : null;
-  return quality?.version === "music-technical-v1"
-    && quality.passed === true
-    && receipt?.request_id === requestId;
+  const audioB64 = typeof value.audio_b64 === "string" ? value.audio_b64 : "";
+  if (!audioB64 || !isMusicDeliveryBase64WithinLimit(audioB64, expected.duration)) {
+    return false;
+  }
+  try {
+    const bytes = new Uint8Array(Buffer.from(audioB64, "base64"));
+    const verified = verifyMusicWorkerOutput({
+      output: value,
+      bytes,
+      expected: {
+        requestId: expected.requestId,
+        prompt: expected.prompt,
+        duration: expected.duration,
+        styleMix: expected.styleMix,
+        melody: expected.melody,
+        humSha256: createHash("sha256").update(expected.hum).digest("hex"),
+      },
+      requireEvidence: true,
+      requireV2Evidence: true,
+    });
+    if (verified.diagnostics.runtime.engine_revision !== RELEASE_REVISION) {
+      console.warn(
+        `Warm-up revision mismatch: expected ${RELEASE_REVISION}, received ${verified.diagnostics.runtime.engine_revision ?? "missing"}.`,
+      );
+      return false;
+    }
+    return verified.quality.version === "music-technical-v2"
+      && verified.diagnostics.version === 2
+      && verified.diagnostics.candidateCount >= 1;
+  } catch (error) {
+    console.warn(
+      `Warm-up delivery verification failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return false;
+  }
 }
 
 // ── Persistence + Vercel ───────────────────────────────────────────────
@@ -414,6 +505,8 @@ function persistEnv(endpointId: string, volumeId: string) {
     `RUNPOD_SERVERLESS_ENDPOINT_ID=${endpointId}`,
     `RUNPOD_NETWORK_VOLUME_ID=${volumeId}`,
     `MAGENTA_BACKEND=jax`,
+    `MURMUR_MUSIC_RELEASE_SHA=${RELEASE_REVISION}`,
+    `MURMUR_MUSIC_IMAGE=${IMAGE}`,
   ];
   writeFileSync(ENV_FILE, `${lines.join("\n")}\n`);
   console.log(`Saved ${ENV_FILE}`);
@@ -422,16 +515,16 @@ function persistEnv(endpointId: string, volumeId: string) {
 async function syncVercelEnv(apiKey: string, endpointId: string) {
   console.log("Syncing Vercel production env (RunPod serverless music engine)…");
   const pathEnv = `${process.env.HOME}/.bun/bin:${process.env.PATH ?? ""}`;
-  for (const [key, value] of [
-    ["RUNPOD_SERVERLESS_ENDPOINT_ID", endpointId],
-    ["RUNPOD_API_KEY", apiKey],
-    ["MUSIC_ENGINE_MODE", "serverless"],
-    ["MURMUR_MUSIC_QUALITY_EVIDENCE_REQUIRED", "1"],
+  for (const [key, value, sensitivity] of [
+    ["RUNPOD_SERVERLESS_ENDPOINT_ID", endpointId, "--no-sensitive"],
+    ["RUNPOD_API_KEY", apiKey, "--sensitive"],
+    ["MURMUR_MUSIC_RELEASE_SHA", RELEASE_REVISION, "--no-sensitive"],
+    ["MURMUR_MUSIC_WORKER_RESOURCE_ID", endpointId, "--no-sensitive"],
+    ["MUSIC_ENGINE_MODE", "serverless", "--no-sensitive"],
+    ["MURMUR_MUSIC_QUALITY_EVIDENCE_REQUIRED", "1", "--no-sensitive"],
+    ["MURMUR_MUSIC_V2_EVIDENCE_REQUIRED", "1", "--no-sensitive"],
   ] as const) {
-    await runShell(
-      `printf '%s' '${value.replace(/'/g, `'\\''`)}' | vercel env add ${key} production --force`,
-      { cwd: ROOT, pathEnv },
-    );
+    await runVercelEnvAdd(key, value, sensitivity, pathEnv);
   }
   console.log(
     "Vercel production env updated. Release the exact main SHA through the GitHub Actions Release (production) workflow; this script does not bypass that gate.",
@@ -456,21 +549,67 @@ function clampInt(raw: string | undefined, fallback: number, lo: number, hi: num
   return Math.max(lo, Math.min(hi, Math.round(n)));
 }
 
-function runShell(
-  command: string,
-  options: { cwd?: string; pathEnv?: string } = {},
+function gitRevision(): string {
+  const result = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: ROOT });
+  if (result.exitCode !== 0) return "unknown";
+  return result.stdout.toString().trim().toLowerCase();
+}
+
+function isImmutableImageReference(value: string): boolean {
+  return /@sha256:[a-f0-9]{64}$/i.test(value) || /:[a-f0-9]{40}$/i.test(value);
+}
+
+function warmupHumWav(duration: number): Uint8Array {
+  const sampleRate = 16_000;
+  const frames = Math.round(sampleRate * duration);
+  const bytes = new Uint8Array(44 + frames * 2);
+  const view = new DataView(bytes.buffer);
+  for (const [offset, value] of [[0, "RIFF"], [8, "WAVE"], [12, "fmt "], [36, "data"]] as const) {
+    for (let index = 0; index < value.length; index += 1) {
+      bytes[offset + index] = value.charCodeAt(index);
+    }
+  }
+  view.setUint32(4, bytes.byteLength - 8, true);
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  view.setUint32(40, frames * 2, true);
+  for (let frame = 0; frame < frames; frame += 1) {
+    const frequency = frame < frames / 2 ? 261.63 : 329.63;
+    const sample = Math.round(Math.sin(2 * Math.PI * frequency * frame / sampleRate) * 8_000);
+    view.setInt16(44 + frame * 2, sample, true);
+  }
+  return bytes;
+}
+
+function runVercelEnvAdd(
+  key: string,
+  value: string,
+  sensitivity: "--sensitive" | "--no-sensitive",
+  pathEnv: string,
 ): Promise<void> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn("sh", ["-lc", command], {
-      cwd: options.cwd,
-      env: { ...process.env, PATH: options.pathEnv ?? process.env.PATH },
-      stdio: "inherit",
+    const child = spawn(
+      "vercel",
+      ["env", "add", key, "production", "--force", sensitivity],
+      {
+        cwd: ROOT,
+        env: { ...process.env, PATH: pathEnv },
+        stdio: ["pipe", "inherit", "inherit"],
+      },
+    );
+    child.on("error", (error) => {
+      reject(error);
     });
-    child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) resolvePromise();
-      else reject(new Error(`shell ${command} exited with code ${code ?? "unknown"}`));
+      else reject(new Error(`vercel env add ${key} exited with code ${code ?? "unknown"}`));
     });
+    child.stdin.end(value);
   });
 }
 

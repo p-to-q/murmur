@@ -17,6 +17,7 @@ mock.module("@/lib/db/queries/songs", () => ({
   deleteSong: mock(async () => false),
   deleteSongForUser: mock(async () => false),
   getPublicSongByShareCode: mock(async () => null),
+  getPublicSongMetadataByShareCode: mock(async () => null),
   getPublicSongSummaries: mock(async () => []),
   getSongById: mock(async () => null),
   getSongByIdForUser: mock(async () => null),
@@ -103,7 +104,7 @@ describe("generateMetadata for public song share pages", () => {
       duration: 20,
       visibility: "public",
       shareCode: "abc234defg",
-      mp3DataUrl: "data:audio/mpeg;base64,abc",
+      mp3DataUrl: "data:audio/mpeg;base64,SUQzYXVkaW8=",
       visualConfig: {
         preset: "soft_gradient",
         gradient: "linear-gradient(135deg, #f6d365, #fda085)",

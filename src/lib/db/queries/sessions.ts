@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "crypto";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "../client";
+import { pushSubscriptions } from "../schema/push-subscriptions";
 import { sessions } from "../schema/sessions";
 import { users } from "../schema/users";
 import type { AppUser } from "@/lib/platform/types";
@@ -97,13 +98,44 @@ export async function getSessionByToken(
   };
 }
 
-export async function revokeSessionByToken(token: string): Promise<boolean> {
-  const rows = await db
-    .update(sessions)
-    .set({ revokedAt: new Date() })
-    .where(eq(sessions.tokenHash, hashSessionToken(token)))
-    .returning({ id: sessions.id });
-  return rows.length > 0;
+export async function revokeSessionAndPushByToken(token: string): Promise<{
+  revoked: boolean;
+  disabledPushSubscriptions: number;
+}> {
+  const now = new Date();
+  return db.transaction(async (tx) => {
+    const [session] = await tx
+      .update(sessions)
+      .set({ revokedAt: now })
+      .where(eq(sessions.tokenHash, hashSessionToken(token)))
+      .returning({ id: sessions.id, userId: sessions.userId });
+
+    if (!session) {
+      return { revoked: false, disabledPushSubscriptions: 0 };
+    }
+
+    const disabledPushSubscriptions = await tx
+      .update(pushSubscriptions)
+      .set({ disabledAt: now, updatedAt: now })
+      .where(
+        and(
+          isNull(pushSubscriptions.disabledAt),
+          or(
+            eq(pushSubscriptions.sessionId, session.id),
+            and(
+              eq(pushSubscriptions.userId, session.userId),
+              isNull(pushSubscriptions.sessionId),
+            ),
+          ),
+        ),
+      )
+      .returning({ id: pushSubscriptions.id });
+
+    return {
+      revoked: true,
+      disabledPushSubscriptions: disabledPushSubscriptions.length,
+    };
+  });
 }
 
 export function hashSessionToken(token: string): string {

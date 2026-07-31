@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import type { NextRequest } from "next/server";
 import type {
-  BalanceResult,
   RefundNotesInput,
   SpendNotesInput,
   SpendNotesResult,
@@ -19,15 +18,6 @@ let nextAuth: ResolvedRequestAuth = {
   source: "guest",
   sessionId: null,
 };
-let nextBalance: BalanceResult = {
-  ok: true,
-  userId: "usr_test",
-  notes: 10,
-  accountNotes: 5,
-  dailyFreeNotes: 5,
-  planTier: "free",
-  freeNotesGrantedAt: new Date(),
-};
 let nextSpendResult: SpendNotesResult = {
   ok: true,
   ledgerId: "nle_test",
@@ -36,10 +26,20 @@ let nextSpendResult: SpendNotesResult = {
   duplicate: false,
 };
 let nextSpendThrows: Error | null = null;
-let nextBalanceThrows: Error | null = null;
 let nextRefundThrows: Error | null = null;
 let nextRefundResult: { ok: false; reason: string } | null = null;
 let nextWorkerImpl: (() => Promise<TranscriptionResult>) | null = null;
+let nextOperationPreparation:
+  | "proceed"
+  | "replay"
+  | "result_ready"
+  | "idempotency_conflict"
+  | "operation_in_progress" = "proceed";
+let nextOperationRecordResult = true;
+let nextOperationReleaseResult = true;
+let nextOperationSettleResult: "ok" | "insufficient_notes" | "billing_unavailable" = "ok";
+const recordedOperationResults: Array<{ operationId: string; leaseEpoch: number }> = [];
+const releasedOperationAttempts: Array<{ operationId: string; leaseEpoch: number }> = [];
 const lastSpendInputs: SpendNotesInput[] = [];
 const lastRefundInputs: RefundNotesInput[] = [];
 const lastPendingRefundInputs: Array<{ userId: string; originalLedgerId: string }> = [];
@@ -142,10 +142,6 @@ mock.module("@/lib/auth", () => ({
 }));
 
 mock.module("@/lib/db/queries/notes-ledger", () => ({
-  getNotesBalance: async () => {
-    if (nextBalanceThrows) throw nextBalanceThrows;
-    return nextBalance;
-  },
   spendNotes: async (input: SpendNotesInput) => {
     lastSpendInputs.push(input);
     if (nextSpendThrows) throw nextSpendThrows;
@@ -259,6 +255,63 @@ mock.module("@/lib/platform/audio-worker", () => {
   };
 });
 
+mock.module("@/lib/platform/transcription-operation", () => ({
+  prepareTranscriptionOperation: async (input: {
+    operationId: string | null;
+    requestId: string;
+    bill: boolean;
+  }) => {
+    if (!input.operationId) {
+      return { ok: true as const, kind: "legacy" as const, spend: null, balanceBefore: null, requestHash: null };
+    }
+    if (nextOperationPreparation === "idempotency_conflict" || nextOperationPreparation === "operation_in_progress") {
+      return { ok: false as const, error: nextOperationPreparation, status: 409 };
+    }
+    if (nextOperationPreparation === "replay" || nextOperationPreparation === "result_ready") {
+      return {
+        ok: true as const,
+        kind: nextOperationPreparation,
+        result: stubTranscription,
+        spendLedgerId: "nle_test",
+      };
+    }
+    if (input.bill) {
+      lastSpendInputs.push({
+        userId: "usr_test",
+        cost: 1,
+        reason: "spend:hum",
+        externalRef: `hum:op:${input.operationId}`,
+        metadata: { requestId: input.requestId },
+      });
+    }
+    return {
+      ok: true as const,
+      kind: "proceed" as const,
+      spend: input.bill ? nextSpendResult : null,
+      balanceBefore: input.bill && nextSpendResult.ok ? nextSpendResult.balanceBefore : null,
+      requestHash: "a".repeat(64),
+      charged: input.bill && nextSpendResult.ok && !nextSpendResult.duplicate,
+      leaseEpoch: 0,
+    };
+  },
+  recordTranscriptionResult: async (input: { operationId: string; leaseEpoch: number }) => {
+    recordedOperationResults.push(input);
+    return nextOperationRecordResult;
+  },
+  releaseTranscriptionAttempt: async (input: { operationId: string; leaseEpoch: number }) => {
+    releasedOperationAttempts.push(input);
+    return nextOperationReleaseResult;
+  },
+  settleRecordedTranscriptionOperation: async (input: { userId: string; spendLedgerId: string | null }) => {
+    if (input.spendLedgerId) {
+      lastSettleInputs.push({ userId: input.userId, spendLedgerId: input.spendLedgerId });
+    }
+    return nextOperationSettleResult === "ok"
+      ? { ok: true as const }
+      : { ok: false as const, reason: nextOperationSettleResult, currentBalance: 0 };
+  },
+}));
+
 const { POST } = await import("./route");
 const AudioWorkerError = TestAudioWorkerError;
 
@@ -329,15 +382,6 @@ beforeEach(() => {
     source: "guest",
     sessionId: null,
   };
-  nextBalance = {
-    ok: true,
-    userId: "usr_test",
-    notes: 10,
-    accountNotes: 5,
-    dailyFreeNotes: 5,
-    planTier: "free",
-    freeNotesGrantedAt: new Date(),
-  };
   nextSpendResult = {
     ok: true,
     ledgerId: "nle_test",
@@ -346,10 +390,15 @@ beforeEach(() => {
     duplicate: false,
   };
   nextSpendThrows = null;
-  nextBalanceThrows = null;
   nextRefundThrows = null;
   nextRefundResult = null;
   nextWorkerImpl = async () => stubTranscription;
+  nextOperationPreparation = "proceed";
+  nextOperationRecordResult = true;
+  nextOperationReleaseResult = true;
+  nextOperationSettleResult = "ok";
+  recordedOperationResults.length = 0;
+  releasedOperationAttempts.length = 0;
   lastSpendInputs.length = 0;
   lastRefundInputs.length = 0;
   lastPendingRefundInputs.length = 0;
@@ -514,6 +563,146 @@ describe("POST /api/transcribe", () => {
         setTestNodeEnv(prevNodeEnv);
       }
     });
+
+    it("replays an already-paid operation after its last Note was spent", async () => {
+      const prevNodeEnv = process.env.NODE_ENV;
+      setTestNodeEnv("production");
+      nextOperationPreparation = "replay";
+      let workerCalls = 0;
+      nextWorkerImpl = async () => {
+        workerCalls += 1;
+        return stubTranscription;
+      };
+      const form = new FormData();
+      form.append("audio", audioFile());
+
+      try {
+        const response = await POST(buildRequest(form, {
+          requestId: "req_empty_replay",
+          operationId: "op-empty-replay",
+        }));
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get("X-Murmur-Operation-Replayed")).toBe("true");
+        expect(lastSpendInputs).toHaveLength(0);
+        expect(lastSettleInputs).toHaveLength(0);
+        expect(workerCalls).toBe(0);
+      } finally {
+        setTestNodeEnv(prevNodeEnv);
+      }
+    });
+
+    it("retries result_ready settlement with the same operation without rerunning the worker", async () => {
+      const prevNodeEnv = process.env.NODE_ENV;
+      setTestNodeEnv("production");
+      nextOperationPreparation = "result_ready";
+      nextOperationSettleResult = "insufficient_notes";
+      let workerCalls = 0;
+      nextWorkerImpl = async () => {
+        workerCalls += 1;
+        return stubTranscription;
+      };
+
+      try {
+        const firstForm = new FormData();
+        firstForm.append("audio", audioFile());
+        const first = await POST(buildRequest(firstForm, {
+          requestId: "req_result_ready_empty",
+          operationId: "op-result-ready-1",
+        }));
+        expect(first.status).toBe(402);
+        expect((await first.json()).error).toBe("insufficient_notes");
+
+        nextOperationSettleResult = "ok";
+        const retryForm = new FormData();
+        retryForm.append("audio", audioFile());
+        const retry = await POST(buildRequest(retryForm, {
+          requestId: "req_result_ready_retry",
+          operationId: "op-result-ready-1",
+        }));
+
+        expect(retry.status).toBe(200);
+        expect(retry.headers.get("X-Murmur-Operation-Replayed")).toBe("true");
+        expect(workerCalls).toBe(0);
+        expect(lastSpendInputs).toHaveLength(0);
+        expect(lastSettleInputs).toHaveLength(2);
+      } finally {
+        setTestNodeEnv(prevNodeEnv);
+      }
+    });
+
+    it("rejects a reused operation id when the request digest differs", async () => {
+      const prevNodeEnv = process.env.NODE_ENV;
+      setTestNodeEnv("production");
+      nextOperationPreparation = "idempotency_conflict";
+      let workerCalls = 0;
+      nextWorkerImpl = async () => {
+        workerCalls += 1;
+        return stubTranscription;
+      };
+      const form = new FormData();
+      form.append("audio", audioFile(2048));
+
+      try {
+        const response = await POST(buildRequest(form, {
+          requestId: "req_conflict",
+          operationId: "op-input-conflict",
+        }));
+        expect(response.status).toBe(409);
+        expect((await response.json()).error).toBe("idempotency_conflict");
+        expect(workerCalls).toBe(0);
+        expect(lastSpendInputs).toHaveLength(0);
+      } finally {
+        setTestNodeEnv(prevNodeEnv);
+      }
+    });
+
+    it("releases the fenced attempt before refunding a failed worker", async () => {
+      const prevNodeEnv = process.env.NODE_ENV;
+      setTestNodeEnv("production");
+      nextWorkerImpl = async () => {
+        throw new AudioWorkerError("worker_http_error", "worker down", 502);
+      };
+      const form = new FormData();
+      form.append("audio", audioFile());
+
+      try {
+        const response = await POST(buildRequest(form, {
+          requestId: "req_release_refund",
+          operationId: "op-release-refund",
+        }));
+        expect(response.status).toBe(502);
+        expect(releasedOperationAttempts).toEqual([
+          expect.objectContaining({ operationId: "op-release-refund", leaseEpoch: 0 }),
+        ]);
+        expect(lastRefundInputs).toHaveLength(1);
+      } finally {
+        setTestNodeEnv(prevNodeEnv);
+      }
+    });
+
+    it("does not refund when a newer attempt already owns the operation lease", async () => {
+      const prevNodeEnv = process.env.NODE_ENV;
+      setTestNodeEnv("production");
+      nextOperationReleaseResult = false;
+      nextWorkerImpl = async () => {
+        throw new AudioWorkerError("worker_http_error", "late worker failure", 502);
+      };
+      const form = new FormData();
+      form.append("audio", audioFile());
+
+      try {
+        const response = await POST(buildRequest(form, {
+          requestId: "req_stale",
+          operationId: "op-stale-attempt",
+        }));
+        expect(response.status).toBe(502);
+        expect(releasedOperationAttempts).toHaveLength(1);
+        expect(lastRefundInputs).toHaveLength(0);
+      } finally {
+        setTestNodeEnv(prevNodeEnv);
+      }
+    });
   });
 
   it("does not reuse client request ids as spend idempotency keys", async () => {
@@ -584,15 +773,6 @@ describe("POST /api/transcribe", () => {
       source: "session",
       sessionId: "sess_local",
     };
-    nextBalance = {
-      ok: true,
-      userId: "lc_test",
-      notes: 5,
-      accountNotes: 5,
-      dailyFreeNotes: 0,
-      planTier: "free",
-      freeNotesGrantedAt: new Date(),
-    };
     const form = new FormData();
     form.append("audio", audioFile());
 
@@ -650,14 +830,10 @@ describe("POST /api/transcribe", () => {
   });
 
   it("returns 402 with balance details when notes are insufficient", async () => {
-    nextBalance = {
-      ok: true,
-      userId: "usr_test",
-      notes: 0,
-      accountNotes: 0,
-      dailyFreeNotes: 0,
-      planTier: "free",
-      freeNotesGrantedAt: new Date(),
+    nextSpendResult = {
+      ok: false,
+      reason: "insufficient_notes",
+      currentBalance: 0,
     };
     const form = new FormData();
     form.append("audio", audioFile());
@@ -671,7 +847,7 @@ describe("POST /api/transcribe", () => {
     expect(body.error).toBe("insufficient_notes");
     expect(body.currentBalance).toBe(0);
     expect(body.cost).toBe(1);
-    expect(lastSpendInputs).toHaveLength(0);
+    expect(lastSpendInputs).toHaveLength(1);
   });
 
   it("returns 429 before billing or worker work when rate-limited", async () => {
@@ -774,7 +950,7 @@ describe("POST /api/transcribe", () => {
     const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     setTestNodeEnv("development");
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
-    nextBalanceThrows = new Error("db offline");
+    nextSpendThrows = new Error("db offline");
 
     try {
       const form = new FormData();
@@ -800,14 +976,10 @@ describe("POST /api/transcribe", () => {
     const prevFlag = process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK;
     setTestNodeEnv("development");
     process.env.MURMUR_ALLOW_DEV_BILLING_FALLBACK = "1";
-    nextBalance = {
-      ok: true,
-      userId: "usr_test",
-      notes: 0,
-      accountNotes: 0,
-      dailyFreeNotes: 0,
-      planTier: "free",
-      freeNotesGrantedAt: new Date(),
+    nextSpendResult = {
+      ok: false,
+      reason: "insufficient_notes",
+      currentBalance: 0,
     };
 
     try {
@@ -832,7 +1004,7 @@ describe("POST /api/transcribe", () => {
     setTestNodeEnv("production");
     delete process.env.VERCEL;
     delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
-    nextBalanceThrows = new Error("db offline");
+    nextSpendThrows = new Error("db offline");
 
     try {
       const form = new FormData();
@@ -845,7 +1017,7 @@ describe("POST /api/transcribe", () => {
       );
       expect(response.status).toBe(503);
       expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
-      expect(lastSpendInputs).toHaveLength(0);
+      expect(lastSpendInputs).toHaveLength(1);
       expect(lastRefundInputs).toHaveLength(0);
     } finally {
       setTestNodeEnv(prevNodeEnv);
@@ -857,7 +1029,7 @@ describe("POST /api/transcribe", () => {
     setTestNodeEnv("production");
     process.env.VERCEL = "1";
     delete process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW;
-    nextBalanceThrows = new Error("db offline");
+    nextSpendThrows = new Error("db offline");
 
     try {
       const form = new FormData();
@@ -870,7 +1042,7 @@ describe("POST /api/transcribe", () => {
       );
       expect(response.status).toBe(503);
       expect(lastResolveAuthOptions?.allowGuestPreview).toBe(false);
-      expect(lastSpendInputs).toHaveLength(0);
+      expect(lastSpendInputs).toHaveLength(1);
       expect(lastRefundInputs).toHaveLength(0);
     } finally {
       setTestNodeEnv(prevNodeEnv);
@@ -882,7 +1054,7 @@ describe("POST /api/transcribe", () => {
     const prevNodeEnv = process.env.NODE_ENV;
     setTestNodeEnv("production");
     process.env.MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW = "1";
-    nextBalanceThrows = new Error("db offline");
+    nextSpendThrows = new Error("db offline");
 
     try {
       const form = new FormData();

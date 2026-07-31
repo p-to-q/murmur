@@ -55,7 +55,7 @@ describe("createS3CompatibleStore", () => {
     expect(command.input.Bucket).toBe("murmur-test");
     expect(command.input.Key).toBe("songs/master/usr_a/sng_b/01.mp3");
     expect(command.input.ContentType).toBe("audio/mpeg");
-    expect(command.input.CacheControl).toBe("max-age=60");
+    expect(command.input.CacheControl).toBeUndefined();
     expect(command.input.Metadata).toEqual({ source: "smoke" });
 
     expect(result.scope).toBe("public");

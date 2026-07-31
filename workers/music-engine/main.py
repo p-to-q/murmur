@@ -43,6 +43,8 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 
 import engine
+import pipeline
+import protocol
 # Re-exported for tests and backwards compatibility (tests import `main.*`).
 from engine import (  # noqa: F401
     MAX_DURATION,
@@ -213,6 +215,7 @@ async def generate(
     style_mix: float = Form(0.35),
     melody: str = Form(""),
     hum: UploadFile | None = File(None),
+    response_mode: str = Form("wav"),
 ) -> Response:
     _verify_auth(request)
 
@@ -236,22 +239,66 @@ async def generate(
             raise HTTPException(status_code=400, detail={"error": "invalid_melody_json"})
 
     hum_bytes: bytes | None = None
+    hum_requested = hum is not None and style_mix > 0
     if hum is not None:
         hum_bytes = await hum.read()
         if len(hum_bytes) > MAX_HUM_BYTES:
             raise HTTPException(status_code=413, detail={"error": "hum_too_large"})
         if len(hum_bytes) == 0:
             hum_bytes = None
+    if not hum_bytes:
+        style_mix = 0.0
+
+    request_id = request.headers.get("x-request-id", "")[:128]
+    receipt = protocol.input_receipt(
+        request_id, prompt, duration, style_mix, melody, melody_obj, hum_bytes
+    )
 
     try:
-        body, meta = await asyncio.get_running_loop().run_in_executor(
+        generated = await asyncio.get_running_loop().run_in_executor(
             _executor,
             functools.partial(
-                engine.generate_clip, prompt, duration, hum_bytes, style_mix, melody_obj
+                pipeline.generate_candidates,
+                prompt,
+                duration,
+                hum_bytes,
+                style_mix,
+                melody_obj,
+                request_id=request_id,
+                require_hum=hum_requested,
+                require_melody=bool(melody.strip()),
             ),
         )
+        body = generated["wav_bytes"]
+        meta = generated["meta"]
+        meta["X-Quality-Gate-Version"] = generated["quality"]["version"]
+        meta["X-Candidate-Count"] = str(
+            generated["diagnostics"]["candidate_count"]
+        )
+        meta["X-Audio-Sha256"] = generated["diagnostics"]["candidates"][-1][
+            "audio_sha256"
+        ]
+        if response_mode == "json_v2":
+            return JSONResponse(content=protocol.success_output(generated, receipt))
     except HTTPException:
         raise
+    except pipeline.PipelineError as error:
+        load_error = engine.model_load_error()
+        if load_error:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "error": "model_unavailable",
+                    "message": load_error,
+                    "loaded": engine.model_loaded(),
+                    "loading": engine.model_loading(),
+                },
+            ) from error
+        status = 422 if error.code == "conditioning_failed" else 502
+        raise HTTPException(
+            status_code=status,
+            detail={"error": error.code, "reason": error.reason},
+        ) from error
     except Exception as error:  # noqa: BLE001 — map to a stable error contract
         load_error = engine.model_load_error()
         if load_error:
