@@ -22,6 +22,12 @@ describe("production release workflow ordering", () => {
     expect(aliasAudio).toBeGreaterThan(promote);
     expect(workflow.slice(immutableAudio, promote)).toContain("--require-audio");
     expect(workflow.slice(immutableAudio, promote)).toContain("--require-worker-canary");
+    expect(workflow.slice(immutableAudio, promote)).toContain(
+      "MURMUR_RELEASE_SMOKE_RUN_ID: ${{ github.run_id }}",
+    );
+    expect(workflow.slice(immutableAudio, promote)).toContain(
+      "MURMUR_RELEASE_SMOKE_RUN_ATTEMPT: ${{ github.run_attempt }}",
+    );
     expect(workflow.slice(aliasAudio)).toContain("--require-audio");
     expect(workflow.slice(aliasAudio)).not.toContain("--require-worker-canary");
   });

@@ -9,6 +9,8 @@ import {
 let origin: string;
 let expectedSha: string;
 let expectedResourceFingerprint: string | undefined;
+const WORKFLOW_RUN_ID_PATTERN = /^[1-9][0-9]{0,19}$/;
+const WORKFLOW_RUN_ATTEMPT_PATTERN = /^[1-9][0-9]{0,9}$/;
 const probes = [
   { path: "/", contentType: "text/html" },
   { path: "/gallery", contentType: "text/html" },
@@ -189,10 +191,49 @@ async function main() {
     throw new Error("MURMUR_SMOKE_SESSION_TOKEN is required for app Worker canary");
   }
   if (requireWorkerCanary && ownerToken) {
-    await probeDeployedWorkerPaths(ownerToken);
+    const operationIds = buildWorkerCanaryOperationIds({
+      releaseSha: expectedSha,
+      workflowRunId: process.env.MURMUR_RELEASE_SMOKE_RUN_ID,
+      workflowRunAttempt: process.env.MURMUR_RELEASE_SMOKE_RUN_ATTEMPT,
+    });
+    await probeDeployedWorkerPaths(ownerToken, operationIds);
   }
 
   console.log(`Release smoke passed for ${origin} at ${expectedSha}`);
+}
+
+export function buildWorkerCanaryOperationIds(input: {
+  releaseSha: string;
+  workflowRunId: string | undefined;
+  workflowRunAttempt: string | undefined;
+}): {
+  batchId: string;
+  transcriptionOperationId: string;
+  musicClipOperationId: string;
+} {
+  const releaseSha = input.releaseSha.trim().toLowerCase();
+  const workflowRunId = input.workflowRunId?.trim() ?? "";
+  const workflowRunAttempt = input.workflowRunAttempt?.trim() ?? "";
+  if (!/^[0-9a-f]{40}$/.test(releaseSha)) {
+    throw new Error("Worker canary release SHA must be an exact 40-character Git SHA");
+  }
+  if (!WORKFLOW_RUN_ID_PATTERN.test(workflowRunId)) {
+    throw new Error("MURMUR_RELEASE_SMOKE_RUN_ID must be a positive GitHub workflow run id");
+  }
+  if (!WORKFLOW_RUN_ATTEMPT_PATTERN.test(workflowRunAttempt)) {
+    throw new Error(
+      "MURMUR_RELEASE_SMOKE_RUN_ATTEMPT must be a positive GitHub workflow run attempt",
+    );
+  }
+
+  // Stable within one workflow attempt for HTTP retries and durable receipt
+  // replay, but different for every workflow rerun of the same release SHA.
+  const batchId = `rel_${releaseSha.slice(0, 12)}_r${workflowRunId}_a${workflowRunAttempt}`;
+  return {
+    batchId,
+    transcriptionOperationId: `${batchId}_transcribe`,
+    musicClipOperationId: `${batchId}_music`,
+  };
 }
 
 export function assertMusicHealth(body: unknown): void {
@@ -216,7 +257,10 @@ async function probeMusicHealth(): Promise<void> {
   console.log("ok /api/music/health (available)");
 }
 
-async function probeDeployedWorkerPaths(ownerToken: string): Promise<void> {
+async function probeDeployedWorkerPaths(
+  ownerToken: string,
+  operationIds: ReturnType<typeof buildWorkerCanaryOperationIds>,
+): Promise<void> {
   const manifestPath = process.env.MURMUR_CANARY_DATASET_MANIFEST?.trim();
   const datasetRoot = process.env.MURMUR_CANARY_DATASET_ROOT?.trim();
   const datasetRevision = process.env.MURMUR_CANARY_DATASET_REVISION?.trim();
@@ -239,14 +283,16 @@ async function probeDeployedWorkerPaths(ownerToken: string): Promise<void> {
     type: "audio/wav",
   }));
   transcribe.append("targetInstrument", "piano");
-  const transcribeResponse = await fetchCanaryWithRetry("/api/transcribe", {
+  const transcribeAttempt = await fetchCanaryWithRetry("/api/transcribe", {
     method: "POST",
     headers: {
       ...baseHeaders,
-      "x-operation-id": `release_${expectedSha.slice(0, 20)}_transcribe`,
+      "x-operation-id": operationIds.transcriptionOperationId,
     },
     body: transcribe,
   }, 90_000);
+  assertCanaryOperationEvidence(transcribeAttempt, "transcription canary");
+  const transcribeResponse = transcribeAttempt.response;
   const transcription = await parseJsonResponse(transcribeResponse, "transcription canary");
   const cleanMelody = objectValue(transcription.cleanMelody);
   if (!Array.isArray(cleanMelody?.notes) || cleanMelody.notes.length < 1) {
@@ -267,15 +313,17 @@ async function probeDeployedWorkerPaths(ownerToken: string): Promise<void> {
   music.append("hum", new File([input.hum], "release-canary.wav", {
     type: "audio/wav",
   }));
-  const musicResponse = await fetchCanaryWithRetry("/api/music/generate", {
+  const musicAttempt = await fetchCanaryWithRetry("/api/music/generate", {
     method: "POST",
     headers: {
       ...baseHeaders,
-      "x-generation-batch-id": `release_${expectedSha.slice(0, 20)}`,
-      "x-generation-clip-id": `release_${expectedSha.slice(0, 20)}_music`,
+      "x-generation-batch-id": operationIds.batchId,
+      "x-generation-clip-id": operationIds.musicClipOperationId,
     },
     body: music,
   }, 310_000);
+  assertCanaryOperationEvidence(musicAttempt, "music canary");
+  const musicResponse = musicAttempt.response;
   if (!musicResponse.ok) {
     throw new Error(`music canary returned ${musicResponse.status}: ${await boundedBody(musicResponse)}`);
   }
@@ -292,31 +340,65 @@ async function probeDeployedWorkerPaths(ownerToken: string): Promise<void> {
   console.log("ok deployed music generation, evidence, revision, and audio integrity");
 }
 
-async function fetchCanaryWithRetry(
+export async function fetchCanaryWithRetry(
   path: string,
   init: RequestInit,
   timeoutMs: number,
-): Promise<Response> {
+  dependencies: {
+    baseOrigin?: string;
+    fetchImpl?: (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => Promise<Response>;
+    sleep?: (milliseconds: number) => Promise<void>;
+  } = {},
+): Promise<{
+  response: Response;
+  retriedAfterAmbiguousFailure: boolean;
+}> {
+  const baseOrigin = dependencies.baseOrigin ?? origin;
+  const fetchImpl = dependencies.fetchImpl ?? fetch;
+  const sleep = dependencies.sleep ?? Bun.sleep;
   let lastError: unknown;
+  let retriedAfterAmbiguousFailure = false;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const response = await fetch(`${origin}${path}`, {
+      const response = await fetchImpl(`${baseOrigin}${path}`, {
         ...init,
         redirect: "manual",
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (response.status >= 500 && attempt < 2) {
         await response.arrayBuffer();
-        await Bun.sleep(2_000);
+        retriedAfterAmbiguousFailure = true;
+        await sleep(2_000);
         continue;
       }
-      return response;
+      return { response, retriedAfterAmbiguousFailure };
     } catch (error) {
       lastError = error;
-      if (attempt < 2) await Bun.sleep(2_000);
+      if (attempt < 2) {
+        retriedAfterAmbiguousFailure = true;
+        await sleep(2_000);
+      }
     }
   }
   throw lastError;
+}
+
+export function assertCanaryOperationEvidence(
+  attempt: Awaited<ReturnType<typeof fetchCanaryWithRetry>>,
+  label: string,
+): void {
+  const replayed = attempt.response.headers.get("x-murmur-operation-replayed");
+  if (replayed === null || replayed === "false") return;
+  if (replayed === "true") {
+    if (attempt.retriedAfterAmbiguousFailure) return;
+    throw new Error(
+      `${label} replayed a receipt before any in-script retry; this does not prove a new provider call`,
+    );
+  }
+  throw new Error(`${label} returned invalid X-Murmur-Operation-Replayed: ${replayed}`);
 }
 
 async function parseJsonResponse(response: Response, label: string): Promise<Record<string, unknown>> {

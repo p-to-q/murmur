@@ -531,6 +531,8 @@ jobs:
           MURMUR_CANARY_DATASET_MANIFEST: ${{ runner.temp }}/production-music-canary-input/manifest.json
           MURMUR_CANARY_DATASET_ROOT: ${{ runner.temp }}/production-music-canary-input/dataset
           MURMUR_CANARY_DATASET_REVISION: c3c8504280cbdef0f00bb8119f16f034bea2bd9f
+          MURMUR_RELEASE_SMOKE_RUN_ID: ${{ github.run_id }}
+          MURMUR_RELEASE_SMOKE_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: >-
           bun scripts/release-production-smoke.ts
           "$DEPLOYMENT_URL"
