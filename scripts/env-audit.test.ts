@@ -3,8 +3,10 @@ import { describe, expect, it } from "bun:test";
 import {
   collectDurableRuntimeEnvAuditIssues,
   collectPreviewIsolationEnvAuditIssues,
+  collectPreviewProvisioningEnvAuditIssues,
   collectProductionFallbackEnvAuditIssues,
   collectUrlEnvAuditIssues,
+  previewRequiresFullStack,
 } from "./env-audit";
 
 describe("production URL env audit", () => {
@@ -81,35 +83,77 @@ describe("Preview isolation env audit", () => {
 
   it("accepts an explicitly isolated resource set", () => {
     expect(collectPreviewIsolationEnvAuditIssues(isolated)).toEqual([]);
+    expect(collectPreviewProvisioningEnvAuditIssues(isolated)).toEqual([]);
   });
 
-  it("rejects an isolated label without production-like durable adapters", () => {
+  it("blocks on mislabelled or unsafe Preview configuration", () => {
     const issues = collectPreviewIsolationEnvAuditIssues({
       ...isolated,
-      MURMUR_STORAGE_DRIVER: "memory",
+      MURMUR_DEPLOYMENT_ENV: "production",
       MURMUR_RATE_LIMIT_DRIVER: "memory",
-      AUDIO_WORKER_TOKEN: "",
-      RUNPOD_API_KEY: "",
+      MURMUR_ALLOW_DEV_BILLING_FALLBACK: "true",
+      DATABASE_URL: "postgresql://user:pass@ep-plain.us-east-2.aws.neon.tech/app",
     });
 
     expect(issues).toContain(
-      "MURMUR_STORAGE_DRIVER must be s3-compatible on Vercel preview",
+      "MURMUR_DEPLOYMENT_ENV must be preview on Vercel preview",
     );
     expect(issues).toContain(
       "MURMUR_RATE_LIMIT_DRIVER must be unset or postgres on Vercel preview",
     );
-    expect(issues).toContain("AUDIO_WORKER_TOKEN is required on Vercel preview");
-    expect(issues).toContain("RUNPOD_API_KEY is required on Vercel preview");
+    expect(issues).toContain(
+      "MURMUR_ALLOW_DEV_BILLING_FALLBACK must be unset/false in production",
+    );
+    expect(issues.some((issue) => issue.includes("Neon pooler hostname"))).toBe(true);
+  });
+
+  it("reports an unprovisioned stack separately from misconfiguration", () => {
+    const unprovisioned = {
+      ...isolated,
+      MURMUR_STORAGE_DRIVER: "",
+      MURMUR_STORAGE_S3_BUCKET: "",
+      MURMUR_STORAGE_S3_REGION: "",
+      MURMUR_STORAGE_S3_ACCESS_KEY_ID: "",
+      MURMUR_STORAGE_S3_SECRET_ACCESS_KEY: "",
+      AUDIO_WORKER_TOKEN: "",
+      RUNPOD_API_KEY: "",
+    };
+
+    // A Preview that is merely unprovisioned is still safe to build and deploy.
+    expect(collectPreviewIsolationEnvAuditIssues(unprovisioned)).toEqual([]);
+
+    const provisioning = collectPreviewProvisioningEnvAuditIssues(unprovisioned);
+    expect(provisioning).toContain(
+      "MURMUR_STORAGE_DRIVER must be s3-compatible on Vercel preview",
+    );
+    expect(provisioning).toContain("MURMUR_STORAGE_S3_BUCKET is required on Vercel preview");
+    expect(provisioning).toContain("AUDIO_WORKER_TOKEN is required on Vercel preview");
+    expect(provisioning).toContain("RUNPOD_API_KEY is required on Vercel preview");
   });
 
   it("requires a public audio base until private delivery is enabled", () => {
-    const issues = collectPreviewIsolationEnvAuditIssues({
+    const issues = collectPreviewProvisioningEnvAuditIssues({
       ...isolated,
       MURMUR_STORAGE_S3_PUBLIC_URL_BASE: "",
     });
     expect(issues).toContain(
       "MURMUR_STORAGE_S3_PUBLIC_URL_BASE is required on Vercel preview until private song audio delivery is enabled",
     );
+  });
+
+  it("drops the public audio base requirement once private delivery is on", () => {
+    expect(collectPreviewProvisioningEnvAuditIssues({
+      ...isolated,
+      MURMUR_STORAGE_S3_PUBLIC_URL_BASE: "",
+      MURMUR_PRIVATE_SONG_AUDIO_DELIVERY: "1",
+    })).toEqual([]);
+  });
+
+  it("promotes provisioning gaps back to blocking when the owner opts in", () => {
+    expect(previewRequiresFullStack({})).toBe(false);
+    expect(previewRequiresFullStack({ MURMUR_PREVIEW_REQUIRE_FULL_STACK: "0" })).toBe(false);
+    expect(previewRequiresFullStack({ MURMUR_PREVIEW_REQUIRE_FULL_STACK: "1" })).toBe(true);
+    expect(previewRequiresFullStack({ MURMUR_PREVIEW_REQUIRE_FULL_STACK: "true" })).toBe(true);
   });
 });
 

@@ -155,15 +155,43 @@ export function collectDurableRuntimeEnvAuditIssues(
   return issues;
 }
 
+/**
+ * Misconfiguration that makes a Preview deployment unsafe: a mislabelled
+ * environment, a database DSN that would exhaust connections, a malformed URL,
+ * or a production fallback switch left on. These always fail the build,
+ * because shipping them is worse than not shipping at all.
+ */
 export function collectPreviewIsolationEnvAuditIssues(
   env: Readonly<Record<string, string | undefined>>,
 ): string[] {
-  const issues = [
+  return [
     ...collectDurableRuntimeEnvAuditIssues(env, "preview"),
     ...collectDatabaseEnvAuditIssues(env),
     ...collectUrlEnvAuditIssues(env),
     ...collectProductionFallbackEnvAuditIssues(env),
   ];
+}
+
+/**
+ * Provisioning that a Preview deployment needs to be *functionally* equal to
+ * production: its own bucket and its own worker credentials.
+ *
+ * Absence is reported separately from misconfiguration because it is not a
+ * safety problem — `getObjectStore()` already refuses to run with an
+ * unconfigured driver, so an unprovisioned Preview fails closed at the first
+ * storage call instead of writing somewhere it should not. Blocking the build
+ * on it instead makes the required `Vercel` status check unsatisfiable, which
+ * blocks *every* pull request in the repository, including the one that would
+ * provision the environment.
+ *
+ * Set MURMUR_PREVIEW_REQUIRE_FULL_STACK=1 in the Vercel Preview environment
+ * once the preview bucket and worker credentials exist; from then on these are
+ * blocking again and Preview deployments are held to the production contract.
+ */
+export function collectPreviewProvisioningEnvAuditIssues(
+  env: Readonly<Record<string, string | undefined>>,
+): string[] {
+  const issues: string[] = [];
   if (env.MURMUR_STORAGE_DRIVER?.trim() !== "s3-compatible") {
     issues.push("MURMUR_STORAGE_DRIVER must be s3-compatible on Vercel preview");
   }
@@ -184,6 +212,12 @@ export function collectPreviewIsolationEnvAuditIssues(
   return issues;
 }
 
+export function previewRequiresFullStack(
+  env: Readonly<Record<string, string | undefined>>,
+): boolean {
+  return isTruthyValue(env.MURMUR_PREVIEW_REQUIRE_FULL_STACK);
+}
+
 function main() {
   const onVercel = process.env.VERCEL === "1";
   const inCi = process.env.CI === "true";
@@ -194,11 +228,24 @@ function main() {
 
   const previewDeployment = onVercel && vercelEnv === "preview";
   if (previewDeployment) {
-    const previewIssues = collectPreviewIsolationEnvAuditIssues(process.env);
-    if (previewIssues.length > 0) {
+    const blocking = collectPreviewIsolationEnvAuditIssues(process.env);
+    const provisioning = collectPreviewProvisioningEnvAuditIssues(process.env);
+    const strict = previewRequiresFullStack(process.env);
+    if (strict) blocking.push(...provisioning);
+
+    if (blocking.length > 0) {
       console.error("Preview env audit failed:");
-      for (const item of previewIssues) console.error(`  - ${item}`);
+      for (const item of blocking) console.error(`  - ${item}`);
       process.exitCode = 1;
+      return;
+    }
+    if (provisioning.length > 0) {
+      console.warn("Preview env audit passed with an unprovisioned stack:");
+      for (const item of provisioning) console.warn(`  - ${item}`);
+      console.warn(
+        "  Storage-backed routes fail closed at runtime until these are set."
+        + " Set MURMUR_PREVIEW_REQUIRE_FULL_STACK=1 to make them blocking again.",
+      );
       return;
     }
     console.log("Preview env audit passed.");

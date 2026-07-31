@@ -92,6 +92,18 @@ Previews and **must not auto-deploy `main` to Production**.
   `env:audit` (`scripts/env-audit.ts`) fails the production build when a required
   environment variable is missing, so a misconfigured production deploy fails
   closed at build time rather than booting broken.
+- **Preview builds distinguish misconfiguration from missing provisioning.** A
+  mislabelled `MURMUR_DEPLOYMENT_ENV`, a non-pooler database DSN, a malformed
+  URL, or a production fallback switch left on still fails the Preview build.
+  A Preview environment that simply has no bucket or worker credentials yet
+  builds and deploys with a loud warning instead: `getObjectStore()` already
+  refuses an unconfigured driver, so those deployments fail closed at the first
+  storage call. Blocking the build on absent provisioning would make the
+  required `Vercel` status check unsatisfiable and stall every pull request in
+  the repository, including the one provisioning the environment. Set
+  `MURMUR_PREVIEW_REQUIRE_FULL_STACK=1` in the Vercel Preview environment once
+  the bucket and worker credentials exist to make those warnings blocking
+  again.
 
 ### Migrations
 
