@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { spawnSync } from "node:child_process";
 
 import {
   collectDurableRuntimeEnvAuditIssues,
@@ -155,7 +156,61 @@ describe("Preview isolation env audit", () => {
     expect(previewRequiresFullStack({ MURMUR_PREVIEW_REQUIRE_FULL_STACK: "1" })).toBe(true);
     expect(previewRequiresFullStack({ MURMUR_PREVIEW_REQUIRE_FULL_STACK: "true" })).toBe(true);
   });
+
+  it("warns but exits successfully for an unprovisioned Preview build", () => {
+    const result = runPreviewAudit();
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain(
+      "Preview env audit passed with an unprovisioned stack:",
+    );
+    expect(result.stderr).toContain(
+      "Set MURMUR_PREVIEW_REQUIRE_FULL_STACK=1 to make them blocking again.",
+    );
+  });
+
+  it("fails the Preview build when full-stack provisioning is required", () => {
+    const result = runPreviewAudit({ MURMUR_PREVIEW_REQUIRE_FULL_STACK: "1" });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Preview env audit failed:");
+    expect(result.stderr).toContain(
+      "MURMUR_STORAGE_S3_BUCKET is required on Vercel preview",
+    );
+  });
 });
+
+function runPreviewAudit(extraEnv: Record<string, string> = {}) {
+  return spawnSync(process.execPath, ["run", "scripts/env-audit.ts"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: {
+      PATH: process.env.PATH ?? "",
+      TMPDIR: process.env.TMPDIR ?? "/tmp",
+      VERCEL: "1",
+      VERCEL_ENV: "preview",
+      NODE_ENV: "production",
+      MURMUR_DEPLOYMENT_ENV: "preview",
+      MURMUR_RATE_LIMIT_DRIVER: "postgres",
+      MURMUR_AUTH_MODE: "production",
+      NEXT_PUBLIC_MURMUR_AUTH_MODE: "production",
+      DATABASE_URL: "postgresql://user:pass@preview-pooler.neon.tech/app",
+      MURMUR_STORAGE_DRIVER: "",
+      MURMUR_STORAGE_S3_BUCKET: "",
+      MURMUR_STORAGE_S3_REGION: "",
+      MURMUR_STORAGE_S3_ACCESS_KEY_ID: "",
+      MURMUR_STORAGE_S3_SECRET_ACCESS_KEY: "",
+      MURMUR_STORAGE_S3_PUBLIC_URL_BASE: "",
+      AUDIO_WORKER_TOKEN: "",
+      RUNPOD_API_KEY: "",
+      MURMUR_PRIVATE_SONG_AUDIO_DELIVERY: "1",
+      MURMUR_ALLOW_DEV_BILLING_FALLBACK: "",
+      MURMUR_ALLOW_PRODUCTION_LOCAL_PREVIEW: "",
+      MURMUR_PREVIEW_REQUIRE_FULL_STACK: "",
+      ...extraEnv,
+    },
+  });
+}
 
 describe("production fallback env audit", () => {
   it("accepts strict production auth with every local fallback disabled", () => {

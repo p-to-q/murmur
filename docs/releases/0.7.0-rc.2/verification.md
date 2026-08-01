@@ -2,9 +2,9 @@
 
 Prepared version: `0.7.0-rc.2`
 
-Build: `440`
+Build: `454`
 
-Candidate date: 2026-07-30
+Candidate date: 2026-08-01
 
 Status: `NO-GO` until every production-evidence item below is complete on the
 same merged `main` SHA.
@@ -24,10 +24,12 @@ same merged `main` SHA.
   Gallery playback -> non-empty audio download -> Share -> public playback in
   Chromium;
 - frozen install succeeds and `bun audit` reports no vulnerabilities;
-- the integrated release PR #440 supersedes the earlier stacked PRs. Its final
-  head must pass repository CI and a real Vercel Preview under the strict
-  Preview environment contract; the Vercel owner must correct any private
-  dashboard configuration failure rather than weakening that contract.
+- integrated release PR #440 superseded the earlier stacked PRs and is merged.
+  Release-tail PR #454 carries the post-merge Preview contract tests, final
+  release metadata, and documentation. Its exact final head must pass repository
+  CI and a READY Vercel Preview. That green Preview proves build safety and
+  provenance, not full runtime provisioning; protected release preflight must
+  still prove the isolated bucket and Worker resource contract.
 
 The authoritative repository evidence is the green required checks on the
 final `main` SHA. Local results do not replace review or CI.
@@ -50,13 +52,17 @@ configuration is absent. Production must set
 24-hour `tmp/` lifecycle. Hosted Preview/Production rate limiting is Postgres;
 `memory` and `redis` are rejected.
 
-Preview evidence is not a prose assumption. Its build must pass the production-
-like env audit, then the protected release workflow queries Vercel project,
-deployment, Rolling Release, and environment metadata. It requires a READY
-Preview whose Git metadata matches the exact final PR head and whose Git tree
-matches the released merge. It compares opaque database identity, bucket and
-Worker resource markers, and distinct Sensitive record IDs without decrypting
-credentials. Never copy credential values into a PR or release note.
+Preview evidence is not a prose assumption. Every Preview build blocks unsafe
+misconfiguration. Missing bucket or Worker provisioning is reported as a warning
+so ordinary PR builds remain possible, and those routes fail closed at runtime.
+Before a Preview is used as release evidence, provision its isolated resources
+and set `MURMUR_PREVIEW_REQUIRE_FULL_STACK=1`; the protected release workflow
+then queries Vercel project, deployment, Rolling Release, and environment
+metadata. It requires a READY Preview whose Git metadata matches the exact final
+PR head and whose Git tree matches the released merge. It compares opaque
+database identity, bucket and Worker resource markers, and distinct Sensitive
+record IDs without decrypting credentials. Never copy credential values into a
+PR or release note.
 The preflight also binds Preview and Production runtime Worker URLs/endpoints to
 their resource markers. Production builds expose only a SHA-256 fingerprint of
 the approved non-secret identities; immutable and alias smoke compare it with
@@ -64,11 +70,12 @@ the fingerprint captured before mutation and immediately before deploy.
 
 ## Required release sequence
 
-1. Review and merge the single integrated release PR #440 to `main`; close the
-   earlier stacked PRs as superseded only after confirming their commits are in
-   #440. Required review and checks remain fail-closed.
-2. Confirm #440's exact final head has a green isolated Vercel Preview and the
-   repository's required `verify` check before merge.
+1. Confirm integrated release PR #440 is merged and its superseded stacks are
+   closed only after their commits are accounted for. Review and merge final
+   release-tail PR #454 to `main`. Required review and checks remain fail-closed.
+2. Confirm #454's exact final head has a green Vercel Preview and the repository's
+   required `verify` check before merge. Use PR #454's exact number, head SHA, and
+   branch as the protected release workflow's Preview provenance inputs.
 3. Confirm the final `main` SHA has green `verify`, CodeQL, dependency review,
    Bun/Python audits, bundle budget, and Vercel Preview.
 4. Prove the actual migration-writer DSN is the approved runtime database before

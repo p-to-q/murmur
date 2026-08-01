@@ -17,13 +17,14 @@
   URLs remain a later scaling optimization.
 - Production smoke requires durable owner/share audio fixtures and remains read-
   only. Final release evidence still requires one human browser flow.
-- The strict Preview environment contract currently blocks the Vercel Preview
-  for the environment-gate and release PRs. The detailed Vercel build log is
-  private to the project scope; an owner must correct the real Preview resource
-  configuration and produce a green final-stack deployment before release.
+- A green PR Preview proves build safety and exact deployment provenance, but an
+  unprovisioned Preview may still lack its bucket or Worker credentials and will
+  fail closed on those runtime routes. Before using Preview as release evidence,
+  provision its isolated resources, set `MURMUR_PREVIEW_REQUIRE_FULL_STACK=1`,
+  and pass the protected Vercel resource-isolation preflight.
 - Protected credential migration, real production database/provider evidence,
   the final human listen, merge order, and exact-SHA Pre-release are tracked in
-  release-blocker issue #445. Do not replace those receipts with placeholders.
+  final release-command issue. Do not replace those receipts with placeholders.
 - The pinned 8-case HumTrans `auto` run passes quality acceptance, but its one
   local p95 latency observation is 1303.45 ms. Repeated CI measurement and
   performance work are tracked in non-blocking issue #446.

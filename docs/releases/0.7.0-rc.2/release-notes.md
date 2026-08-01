@@ -1,4 +1,4 @@
-# Murmur v0.7.0-rc.2 (build 440) - Pre-release
+# Murmur v0.7.0-rc.2 (build 454) - Pre-release
 
 This candidate makes the full Hum -> Vibe -> Studio -> Save -> Gallery -> Song
 detail path diagnosable and recoverable. It focuses on objectively broken or
@@ -58,10 +58,11 @@ production release control.
 - Data-URL/local song persistence is restricted to explicit local/demo modes.
   Production storage or database failures return typed errors and leave retry
   evidence.
-- Preview builds require production-like durable adapters. The release workflow
-  verifies Vercel environment metadata without decrypting Sensitive values,
-  proves Preview/Production resources and credential records differ, and binds
-  the final READY Preview to the exact PR head and release Git tree.
+- Preview builds block unsafe configuration and fail closed on unprovisioned
+  runtime routes. The protected release preflight requires the final Preview's
+  durable adapters, verifies Vercel metadata without decrypting Sensitive
+  values, proves Preview/Production resources and credential records differ,
+  and binds the READY deployment to the exact PR head and release Git tree.
 
 ## Release and security
 
@@ -94,5 +95,5 @@ production release control.
 ## Suggested release identity
 
 - Tag: `v0.7.0-rc.2`
-- GitHub title: `Murmur v0.7.0-rc.2 - build 440`
+- GitHub title: `Murmur v0.7.0-rc.2 - build 454`
 - GitHub release type: pre-release

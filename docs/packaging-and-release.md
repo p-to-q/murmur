@@ -283,12 +283,12 @@ environment approval:
 Murmur uses a hybrid version string with one engineering source of truth and
 two display shapes in the Me screen About card.
 
-### Current release candidate (calibrated 2026-07-30)
+### Current release candidate (calibrated 2026-08-01)
 
 - **SemVer**: `0.7.0-rc.2`
-- **Build**: `440` (release-candidate PR number)
-- **Product display**: `v0.7.0-rc.2 · 440`
-- **Developer mode display**: `v0.7.0-rc.2 · build 440 · <git-sha>`
+- **Build**: `454` (final release-tail PR number)
+- **Product display**: `v0.7.0-rc.2 · 454`
+- **Developer mode display**: `v0.7.0-rc.2 · build 454 · <git-sha>`
 
 This release reflects milestones since the earlier `v0.2.0` hackathon label:
 
