@@ -113,8 +113,13 @@ def handler(job: dict) -> dict:
     except pipeline.PipelineError as error:
         if error.code == "conditioning_failed":
             receipt["conditioning_error"] = error.reason
+        # `reason` is a bounded, non-user token (an exception class name or a
+        # fixed pipeline code), so it is safe to return to the caller. Without
+        # it a `generation_failed` response carries no failure stage at all,
+        # which makes a provider regression undiagnosable from release evidence.
         return {
             "error": error.code,
+            "reason": error.reason[:120],
             "message": _pipeline_error_message(error.code),
             "input_receipt": receipt,
             "diagnostics": error.diagnostics,

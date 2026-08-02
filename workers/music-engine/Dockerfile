@@ -25,9 +25,18 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # runpod → serverless handler · fastapi/uvicorn/python-multipart → "server" role.
+#
+# magenta-rt is pinned. It was previously unpinned, so every rebuild silently
+# adopted whatever was newest on PyPI: the 2026-07-30 release of 2.0.3 landed
+# between two rebuilds and broke generation (every job returned zero candidates
+# in ~340 ms with no usable reason). A release image must be reproducible, so
+# the provider version is now part of the source of truth and moves only in a
+# reviewed commit.
+ARG MAGENTA_RT_VERSION=2.0.2
 RUN pip install --upgrade pip \
-  && pip install "numpy>=1.26,<3" "magenta-rt[jax]" "jax[cuda12]" runpod \
-     fastapi "uvicorn[standard]" python-multipart
+  && pip install "numpy>=1.26,<3" "magenta-rt[jax]==${MAGENTA_RT_VERSION}" \
+     "jax[cuda12]" runpod fastapi "uvicorn[standard]" python-multipart \
+  && pip freeze > /app-requirements.lock.txt
 
 WORKDIR /app
 COPY engine.py handler.py main.py pipeline.py protocol.py quality_gate.py ./

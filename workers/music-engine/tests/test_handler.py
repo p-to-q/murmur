@@ -78,6 +78,18 @@ class HandlerTest(unittest.TestCase):
         self.assertEqual(out["error"], "conditioning_failed")
         self.assertEqual(out["input_receipt"]["melody_valid_note_count"], 0)
 
+    def test_reports_a_bounded_failure_reason(self):
+        """A failed job must name its failure stage, not just "it failed"."""
+        out = handler.handler({"input": {
+            "prompt": "warm piano",
+            "duration": 2,
+            "melody": {"notes": [{"pitch": 999, "start": 0, "duration": 1}]},
+        }})
+        reason = out.get("reason")
+        self.assertTrue(reason)
+        self.assertLessEqual(len(reason), 120)
+        self.assertNotIn("warm piano", reason)
+
     def test_retry_sampling_is_deliberately_diverse(self):
         first = handler._retry_sampling(1)
         second = handler._retry_sampling(2)
