@@ -170,4 +170,5 @@ class InteriorDropoutTest(unittest.TestCase):
     def test_keeps_short_rests_as_shadow_evidence_only(self):
         result = analyze_wav(self._clip(0.5), 12.0)
         self.assertNotIn("interior_dropout", result["failures"])
+        self.assertTrue(result["passed"])
         self.assertEqual(result["metrics"]["interior_dropout_count"], 1)
