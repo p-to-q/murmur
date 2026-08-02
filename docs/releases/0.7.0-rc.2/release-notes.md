@@ -1,4 +1,4 @@
-# Murmur v0.7.0-rc.2 (build 457) - Pre-release
+# Murmur v0.7.0-rc.2 (build 458) - Pre-release
 
 This candidate makes the full Hum -> Vibe -> Studio -> Save -> Gallery -> Song
 detail path diagnosable and recoverable. It focuses on objectively broken or
@@ -43,7 +43,7 @@ production release control.
   terminal output, cancellation, settlement, and refund intent. Lost requests
   do not cause blind duplicate GPU submissions.
 
-## Provider reproducibility (build 457)
+## Provider reproducibility (build 458)
 
 - The music-engine image pins its `magenta-rt` provider version. It was
   previously unpinned, so a rebuild silently adopted the 2026-07-30 release and
@@ -52,6 +52,14 @@ production release control.
 - A failed generation reports its failure stage. The Worker previously returned
   `generation_failed` with no reason, which made a provider regression
   undiagnosable from release evidence.
+
+### Quality Gate
+
+- A quiet run bounded by audio on both sides now fails the technical Gate as
+  `interior_dropout`. The Gate measured these but kept them as shadow evidence,
+  so a clip with a 1.1 s hole in the middle was delivered as a pass;
+  `prolonged_silence` could not catch it because that threshold scales with
+  duration. Short rests and staccato stay shadow evidence.
 
 ## Persistence and runtime ownership
 
@@ -105,5 +113,5 @@ production release control.
 ## Suggested release identity
 
 - Tag: `v0.7.0-rc.2`
-- GitHub title: `Murmur v0.7.0-rc.2 - build 457`
+- GitHub title: `Murmur v0.7.0-rc.2 - build 458`
 - GitHub release type: pre-release
