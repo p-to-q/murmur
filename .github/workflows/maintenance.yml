@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Close stale issues
-        uses: actions/stale@v10
+        uses: actions/stale@v11
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           stale-issue-message: '此 issue 已经 60 天没有活动，将在 7 天后自动关闭。如仍需处理，请回复此消息。'
