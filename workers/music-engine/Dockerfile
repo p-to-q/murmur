@@ -26,16 +26,19 @@ RUN apt-get update \
 
 # runpod → serverless handler · fastapi/uvicorn/python-multipart → "server" role.
 #
-# magenta-rt is pinned. It was previously unpinned, so every rebuild silently
-# adopted whatever was newest on PyPI: the 2026-07-30 release of 2.0.3 landed
-# between two rebuilds and broke generation (every job returned zero candidates
-# in ~340 ms with no usable reason). A release image must be reproducible, so
-# the provider version is now part of the source of truth and moves only in a
-# reviewed commit.
+# The two model-stack dependencies are pinned: magenta-rt and jax. They were
+# unpinned, so every rebuild silently adopted whatever was newest on PyPI, and
+# the 2026-07-30 release of magenta-rt 2.0.3 landed between two rebuilds and
+# broke generation (every job returned zero candidates in ~340 ms with no usable
+# reason). These two now move only in a reviewed commit. This pins the model
+# stack, not the whole image: the remaining packages still resolve freely, so
+# `pip freeze` is written into the image to make any future drift diagnosable
+# from the artifact itself.
 ARG MAGENTA_RT_VERSION=2.0.2
+ARG JAX_VERSION=0.10.2
 RUN pip install --upgrade pip \
   && pip install "numpy>=1.26,<3" "magenta-rt[jax]==${MAGENTA_RT_VERSION}" \
-     "jax[cuda12]" runpod fastapi "uvicorn[standard]" python-multipart \
+     "jax[cuda12]==${JAX_VERSION}" runpod fastapi "uvicorn[standard]" python-multipart \
   && pip freeze > /app-requirements.lock.txt
 
 WORKDIR /app

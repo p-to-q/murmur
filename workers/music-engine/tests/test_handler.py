@@ -90,6 +90,24 @@ class HandlerTest(unittest.TestCase):
         self.assertLessEqual(len(reason), 120)
         self.assertNotIn("warm piano", reason)
 
+    def test_truncates_a_long_generation_failure_reason(self):
+        """The provider failure path must be reportable and bounded."""
+        import pipeline
+
+        def boom(*_args, **_kwargs):
+            raise pipeline.PipelineError("generation_failed", "x" * 121, {})
+
+        original = pipeline.generate_candidates
+        pipeline.generate_candidates = boom
+        try:
+            out = handler.handler({"input": {"prompt": "secret prompt", "duration": 2}})
+        finally:
+            pipeline.generate_candidates = original
+
+        self.assertEqual(out["error"], "generation_failed")
+        self.assertEqual(len(out["reason"]), 120)
+        self.assertNotIn("secret prompt", out["reason"])
+
     def test_retry_sampling_is_deliberately_diverse(self):
         first = handler._retry_sampling(1)
         second = handler._retry_sampling(2)
