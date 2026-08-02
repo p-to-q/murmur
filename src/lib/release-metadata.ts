@@ -5,4 +5,4 @@
  * latest merged GitHub PR number at release time.
  */
 export const APP_VERSION = "0.7.0-rc.2";
-export const APP_BUILD = "454";
+export const APP_BUILD = "457";
