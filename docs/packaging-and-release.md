@@ -286,9 +286,9 @@ two display shapes in the Me screen About card.
 ### Current release candidate (calibrated 2026-08-01)
 
 - **SemVer**: `0.7.0-rc.2`
-- **Build**: `458` (final release-tail PR number)
-- **Product display**: `v0.7.0-rc.2 · 458`
-- **Developer mode display**: `v0.7.0-rc.2 · build 458 · <git-sha>`
+- **Build**: `459` (final release-tail PR number)
+- **Product display**: `v0.7.0-rc.2 · 459`
+- **Developer mode display**: `v0.7.0-rc.2 · build 459 · <git-sha>`
 
 This release reflects milestones since the earlier `v0.2.0` hackathon label:
 

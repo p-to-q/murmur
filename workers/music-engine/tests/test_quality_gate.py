@@ -167,8 +167,15 @@ class InteriorDropoutTest(unittest.TestCase):
             result["metrics"]["longest_interior_dropout_seconds"], 1.0
         )
 
-    def test_keeps_short_rests_as_shadow_evidence_only(self):
+    def test_rejects_a_sub_second_interior_dropout(self):
+        """The bar matches the release canary: any interior dropout fails."""
         result = analyze_wav(self._clip(0.5), 12.0)
+        self.assertIn("interior_dropout", result["failures"])
+        self.assertEqual(result["metrics"]["interior_dropout_count"], 1)
+
+    def test_keeps_a_gap_below_the_dropout_threshold_clean(self):
+        """Staccato and rests stay under MIN_DROPOUT_SECONDS and still pass."""
+        result = analyze_wav(self._clip(0.2), 12.0)
         self.assertNotIn("interior_dropout", result["failures"])
         self.assertTrue(result["passed"])
-        self.assertEqual(result["metrics"]["interior_dropout_count"], 1)
+        self.assertEqual(result["metrics"]["interior_dropout_count"], 0)

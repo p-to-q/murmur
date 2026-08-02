@@ -127,11 +127,12 @@ export function analyzePcm16Wav(
   ) {
     failures.push("prolonged_silence");
   }
-  // Repeated *short* quiet gaps remain shadow evidence: staccato and rests can
-  // look identical to dropouts without model-aware context. A long gap bounded
-  // by audio on both sides is a hole in the clip, and `prolonged_silence` cannot
-  // catch it because that threshold scales with duration.
-  if (windowMetrics.longestInteriorDropoutSeconds >= MIN_LONG_QUIET_RUN_SECONDS) {
+  // A quiet run bounded by audio on both sides is a hole in the clip, not
+  // phrasing: MIN_DROPOUT_SECONDS already sits above staccato and rests, and the
+  // run has to fall to QUIET_WINDOW_DBFS to count. `prolonged_silence` cannot
+  // catch these because that threshold scales with duration. The bar is
+  // deliberately identical to the release provider canary's.
+  if (windowMetrics.interiorDropoutCount > 0) {
     failures.push("interior_dropout");
   }
   return result(failures, {
