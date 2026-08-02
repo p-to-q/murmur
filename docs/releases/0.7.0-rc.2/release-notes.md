@@ -1,4 +1,4 @@
-# Murmur v0.7.0-rc.2 (build 460) - Pre-release
+# Murmur v0.7.0-rc.2 (build 461) - Pre-release
 
 This candidate makes the full Hum -> Vibe -> Studio -> Save -> Gallery -> Song
 detail path diagnosable and recoverable. It focuses on objectively broken or
@@ -43,7 +43,7 @@ production release control.
   terminal output, cancellation, settlement, and refund intent. Lost requests
   do not cause blind duplicate GPU submissions.
 
-## Provider reproducibility (build 460)
+## Provider reproducibility (build 461)
 
 - The music-engine image pins its `magenta-rt` provider version. It was
   previously unpinned, so a rebuild silently adopted the 2026-07-30 release and
@@ -53,6 +53,11 @@ production release control.
   `generation_failed` with no reason, which made a provider regression
   undiagnosable from release evidence.
 
+- Music generation no longer fails on every request. The job-lease update
+  interpolated a raw `Date` into a `sql` template, so Postgres received
+  `"Sun Aug 02 ... (Coordinated Universal Time)"` and rejected the statement
+  with `invalid input syntax for type timestamp`. Verified against the
+  production database.
 - Synchronous music generation now declares `X-Murmur-Operation-Replayed`.
   Only the durable path emitted it, so a synchronous response carried no
   operation evidence and a caller could not distinguish a fresh provider call
@@ -121,5 +126,5 @@ production release control.
 ## Suggested release identity
 
 - Tag: `v0.7.0-rc.2`
-- GitHub title: `Murmur v0.7.0-rc.2 - build 460`
+- GitHub title: `Murmur v0.7.0-rc.2 - build 461`
 - GitHub release type: pre-release
