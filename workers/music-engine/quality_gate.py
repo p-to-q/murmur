@@ -138,8 +138,17 @@ def analyze_wav(blob: bytes, expected_duration: float) -> dict:
         duration * MAX_QUIET_RUN_RATIO,
     ):
         failures.append("prolonged_silence")
-    # Repeated quiet gaps remain shadow evidence: short rests and staccato can
-    # look identical to dropouts without model-aware context.
+    # Repeated *short* quiet gaps remain shadow evidence: staccato and rests can
+    # look identical to dropouts without model-aware context. A long gap that is
+    # bounded by audio on both sides is not phrasing — it is a hole in the clip,
+    # and `prolonged_silence` cannot catch it because that threshold scales with
+    # duration (a 12 s clip tolerates 4.2 s before it trips, so a 1.1 s hole in
+    # the middle was being delivered as a pass).
+    if (
+        window_metrics["longest_interior_dropout_seconds"]
+        >= MIN_LONG_QUIET_RUN_SECONDS
+    ):
+        failures.append("interior_dropout")
 
     return _result(failures, {
         "duration_seconds": round(duration, 6),
@@ -176,6 +185,7 @@ def _analyze_windows(samples: np.ndarray, channels: int, sample_rate: int) -> di
     quiet_windows = int(np.count_nonzero(quiet))
     longest_quiet_frames = 0
     interior_dropout_count = 0
+    longest_interior_dropout_frames = 0
     run_start = 0
 
     while run_start < quiet.size:
@@ -193,12 +203,18 @@ def _analyze_windows(samples: np.ndarray, channels: int, sample_rate: int) -> di
         bounded_by_audio = run_start > 0 and run_end < quiet.size
         if bounded_by_audio and run_frames / sample_rate >= MIN_DROPOUT_SECONDS:
             interior_dropout_count += 1
+            longest_interior_dropout_frames = max(
+                longest_interior_dropout_frames, run_frames
+            )
         run_start = run_end
 
     return {
         "quiet_window_ratio": round(quiet_windows / quiet.size, 6),
         "longest_quiet_run_seconds": round(longest_quiet_frames / sample_rate, 3),
         "interior_dropout_count": interior_dropout_count,
+        "longest_interior_dropout_seconds": round(
+            longest_interior_dropout_frames / sample_rate, 3
+        ),
     }
 
 
