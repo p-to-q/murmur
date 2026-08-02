@@ -127,8 +127,13 @@ export function analyzePcm16Wav(
   ) {
     failures.push("prolonged_silence");
   }
-  // Repeated quiet gaps remain shadow evidence: short rests and staccato can
-  // look identical to dropouts without model-aware context.
+  // Repeated *short* quiet gaps remain shadow evidence: staccato and rests can
+  // look identical to dropouts without model-aware context. A long gap bounded
+  // by audio on both sides is a hole in the clip, and `prolonged_silence` cannot
+  // catch it because that threshold scales with duration.
+  if (windowMetrics.longestInteriorDropoutSeconds >= MIN_LONG_QUIET_RUN_SECONDS) {
+    failures.push("interior_dropout");
+  }
   return result(failures, {
     channels,
     sampleRate,
@@ -145,6 +150,7 @@ export function analyzePcm16Wav(
     quietWindowRatio: round(windowMetrics.quietWindowRatio),
     longestQuietRunSeconds: roundTo(windowMetrics.longestQuietRunSeconds, 3),
     interiorDropoutCount: windowMetrics.interiorDropoutCount,
+    longestInteriorDropoutSeconds: roundTo(windowMetrics.longestInteriorDropoutSeconds, 3),
   });
 }
 
@@ -158,6 +164,7 @@ function analyzeWindows(input: {
   quietWindowRatio: number;
   longestQuietRunSeconds: number;
   interiorDropoutCount: number;
+  longestInteriorDropoutSeconds: number;
 } {
   const windowFrames = Math.max(1, Math.floor(input.sampleRate * WINDOW_MILLISECONDS / 1_000));
   const windowSamples = windowFrames * input.channels;
@@ -179,6 +186,7 @@ function analyzeWindows(input: {
   let quietWindows = 0;
   let longestQuietFrames = 0;
   let interiorDropoutCount = 0;
+  let longestInteriorDropoutFrames = 0;
   let runStart = 0;
   while (runStart < windows.length) {
     if (!windows[runStart].quiet) {
@@ -200,6 +208,7 @@ function analyzeWindows(input: {
       && runFrames / input.sampleRate >= MIN_DROPOUT_SECONDS
     ) {
       interiorDropoutCount += 1;
+      longestInteriorDropoutFrames = Math.max(longestInteriorDropoutFrames, runFrames);
     }
     runStart = runEnd;
   }
@@ -207,6 +216,7 @@ function analyzeWindows(input: {
     quietWindowRatio: quietWindows / windows.length,
     longestQuietRunSeconds: longestQuietFrames / input.sampleRate,
     interiorDropoutCount,
+    longestInteriorDropoutSeconds: longestInteriorDropoutFrames / input.sampleRate,
   };
 }
 

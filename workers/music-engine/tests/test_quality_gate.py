@@ -136,3 +136,39 @@ class QualityGateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InteriorDropoutTest(unittest.TestCase):
+    """A long gap bounded by audio on both sides is a hole, not phrasing."""
+
+    def _clip(self, gap_seconds: float, total: float = 12.0) -> bytes:
+        sr = 48_000
+        frames = []
+        gap_start = (total - gap_seconds) / 2
+        for i in range(int(sr * total)):
+            t = i / sr
+            v = 0.0 if gap_start <= t < gap_start + gap_seconds else 0.3 * math.sin(2 * math.pi * 220 * t)
+            s16 = struct.pack("<h", int(v * 32767))
+            frames.append(s16)
+            frames.append(s16)
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(2)
+            w.setsampwidth(2)
+            w.setframerate(sr)
+            w.writeframes(b"".join(frames))
+        return buf.getvalue()
+
+    def test_rejects_a_long_interior_dropout(self):
+        result = analyze_wav(self._clip(1.1), 12.0)
+        self.assertIn("interior_dropout", result["failures"])
+        self.assertFalse(result["passed"])
+        self.assertGreaterEqual(
+            result["metrics"]["longest_interior_dropout_seconds"], 1.0
+        )
+
+    def test_keeps_short_rests_as_shadow_evidence_only(self):
+        result = analyze_wav(self._clip(0.5), 12.0)
+        self.assertNotIn("interior_dropout", result["failures"])
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["metrics"]["interior_dropout_count"], 1)
