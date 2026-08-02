@@ -30,6 +30,7 @@ const metricNames: Record<string, string> = {
   quiet_window_ratio: "quietWindowRatio",
   longest_quiet_run_seconds: "longestQuietRunSeconds",
   interior_dropout_count: "interiorDropoutCount",
+  longest_interior_dropout_seconds: "longestInteriorDropoutSeconds",
 };
 
 describe("music quality Gate cross-language contract", () => {
