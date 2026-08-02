@@ -138,16 +138,18 @@ def analyze_wav(blob: bytes, expected_duration: float) -> dict:
         duration * MAX_QUIET_RUN_RATIO,
     ):
         failures.append("prolonged_silence")
-    # Repeated *short* quiet gaps remain shadow evidence: staccato and rests can
-    # look identical to dropouts without model-aware context. A long gap that is
-    # bounded by audio on both sides is not phrasing — it is a hole in the clip,
-    # and `prolonged_silence` cannot catch it because that threshold scales with
-    # duration (a 12 s clip tolerates 4.2 s before it trips, so a 1.1 s hole in
-    # the middle was being delivered as a pass).
-    if (
-        window_metrics["longest_interior_dropout_seconds"]
-        >= MIN_LONG_QUIET_RUN_SECONDS
-    ):
+    # A quiet run bounded by audio on both sides is a hole in the clip, not
+    # phrasing: MIN_DROPOUT_SECONDS is already chosen to sit above staccato and
+    # rests, and the run has to fall to QUIET_WINDOW_DBFS to count at all.
+    # `prolonged_silence` cannot catch these because that threshold scales with
+    # duration (a 12 s clip tolerates 4.2 s before it trips).
+    #
+    # The bar is deliberately identical to the one the release provider canary
+    # enforces. When the two disagreed, the runtime Gate delivered clips the
+    # release bar rejected, which is the worst of both: users got holes and the
+    # release could not ship. Retries lower temperature (1.30 -> 1.10 -> 0.95),
+    # which is what actually suppresses degenerate silence.
+    if window_metrics["interior_dropout_count"] > 0:
         failures.append("interior_dropout")
 
     return _result(failures, {
