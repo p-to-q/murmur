@@ -806,6 +806,11 @@ describe("POST /api/music/generate", () => {
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
     expect(first.headers.get("X-Audio-SHA256")).toMatch(/^[0-9a-f]{64}$/);
+    // A synchronous generation is always a fresh provider call, and it has to
+    // say so: release smoke cannot tell a new generation from a replayed
+    // receipt without this header.
+    expect(first.headers.get("X-Murmur-Operation-Replayed")).toBe("false");
+    expect(second.headers.get("X-Murmur-Operation-Replayed")).toBe("false");
     expect(publishedNotifications).toHaveLength(2);
     for (const published of publishedNotifications) {
       expect(published.userId).toBe("usr_batch");

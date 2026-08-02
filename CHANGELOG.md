@@ -31,7 +31,7 @@ All notable product releases for Murmur are documented here. SemVer lives in
   clears account-scoped device data while retaining device preferences
 - Saved MP3/WAV input and storage delivery now use bounded structural
   validation, ETag/Range semantics, and explicit missing/corrupt outcomes
-- Version prepared as `0.7.0-rc.2`, build `459`
+- Version prepared as `0.7.0-rc.2`, build `460`
 
 ### Release status
 

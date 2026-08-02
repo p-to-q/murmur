@@ -527,6 +527,12 @@ export async function POST(request: NextRequest) {
         "Content-Type": result.contentType,
         "Cache-Control": "no-store",
         "X-Request-Id": requestId,
+        // The synchronous path always performs a fresh provider call, so the
+        // honest value is "false". Only the durable path used to declare this,
+        // which left every synchronous response with no operation evidence at
+        // all — a caller could not tell a new generation from a replayed
+        // receipt, and release smoke requires that distinction.
+        "X-Murmur-Operation-Replayed": "false",
         "X-Model": result.model,
         "X-Generation-Ms": result.generationMs,
         "X-Style-Mix": result.styleMix,
