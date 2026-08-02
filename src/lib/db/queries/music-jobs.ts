@@ -177,7 +177,12 @@ export async function claimMusicJob(input: {
         else 'running'
       end`,
       leaseUntil,
-      startedAt: sql`coalesce(${musicJobs.startedAt}, ${now})`,
+      // A raw Date interpolated into a sql`` template is bound without the
+      // timestamp mapper, so Postgres receives it as
+      // "Sun Aug 02 2026 09:04:27 GMT+0000 (Coordinated Universal Time)"
+      // and rejects the whole statement. Column assignments like updatedAt
+      // are mapped by drizzle; values inside a template are not.
+      startedAt: sql`coalesce(${musicJobs.startedAt}, ${now.toISOString()}::timestamp)`,
       leaseEpoch: sql`${musicJobs.leaseEpoch} + 1`,
       nextRunAt: null,
       updatedAt: now,
