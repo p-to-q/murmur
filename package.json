@@ -73,7 +73,7 @@
     "@breezystack/lamejs": "^1.2.7",
     "@fontsource/lxgw-wenkai-tc": "5.2.9",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@waffo/pancake-ts": "^0.11.0",
+    "@waffo/pancake-ts": "^0.16.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cn-fontsource-lxgw-wen-kai-gb-screen": "1.0.6",
