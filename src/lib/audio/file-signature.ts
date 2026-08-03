@@ -12,6 +12,28 @@ export function detectAudioFileType(bytes: Uint8Array): SupportedAudioFileType |
   return null;
 }
 
+/** Detect a supported container from a leading byte range, not a whole file. */
+export function detectAudioFilePrefix(bytes: Uint8Array): SupportedAudioFileType | null {
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_SONG_AUDIO_BYTES) return null;
+  if (isWavePrefix(bytes)) return "wav";
+  if (isMp3(bytes)) return "mp3";
+  return null;
+}
+
+function isWavePrefix(bytes: Uint8Array): boolean {
+  if (
+    bytes.byteLength < 12
+    || ascii(bytes, 0, 4) !== "RIFF"
+    || ascii(bytes, 8, 12) !== "WAVE"
+  ) {
+    return false;
+  }
+
+  const declaredFileSize = readUint32Le(bytes, 4) + 8;
+  return declaredFileSize >= bytes.byteLength
+    && declaredFileSize <= MAX_SONG_AUDIO_BYTES;
+}
+
 function isWave(bytes: Uint8Array): boolean {
   if (
     bytes.byteLength < 12

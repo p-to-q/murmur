@@ -3,7 +3,7 @@
 All notable product releases for Murmur are documented here. SemVer lives in
 `package.json`. Build numbers live in `src/lib/release-metadata.ts`.
 
-## [0.7.0-rc.2] - 2026-08-01
+## [0.7.0-rc.2] - 2026-08-02
 
 ### Added
 
@@ -31,14 +31,17 @@ All notable product releases for Murmur are documented here. SemVer lives in
   clears account-scoped device data while retaining device preferences
 - Saved MP3/WAV input and storage delivery now use bounded structural
   validation, ETag/Range semantics, and explicit missing/corrupt outcomes
-- Version prepared as `0.7.0-rc.2`, build `461`
+- Released as `0.7.0-rc.2`, build `461`
 
 ### Release status
 
-- This is a pre-release candidate. Publication still requires reviewed PRs,
-  green CI on the final `main` SHA, migrations through `0034`, external
-  scheduler evidence, exact-SHA Production deployment, real-audio smoke, and a
-  human Save -> Gallery -> Download -> Share -> Revoke check.
+- Published as a GitHub Pre-release and promoted to Production from
+  `ddddac221cedf44d7dd2f0301ed375119b4cb12f` after exact-SHA CI, migrations
+  through `0034`, real-provider canary, immutable-deployment smoke, and the
+  release captain's recorded Save -> Gallery -> Download -> Share -> Revoke
+  acceptance path passed.
+- Ready for invited trial. Subjective musicality acceptance remains tracked in
+  issue #201; the technical Quality Gate does not claim to measure taste.
 
 ## [0.7.0-rc.1] - 2026-07-18
 

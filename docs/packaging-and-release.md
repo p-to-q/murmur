@@ -283,7 +283,7 @@ environment approval:
 Murmur uses a hybrid version string with one engineering source of truth and
 two display shapes in the Me screen About card.
 
-### Current release candidate (calibrated 2026-08-01)
+### Current released candidate (published 2026-08-02)
 
 - **SemVer**: `0.7.0-rc.2`
 - **Build**: `461` (final release-tail PR number)
@@ -304,9 +304,9 @@ This release reflects milestones since the earlier `v0.2.0` hackathon label:
   dependency remediation, and protected exact-SHA release governance
 
 These are product-version calibration milestones, not a claim that every entry
-was tagged or published. Repository and GitHub release truth currently contain
-only `v0.5.0`; do not backfill `v0.6.0` or `v0.7.0-rc.1` tags during the rc.2
-release. The next tag is created only for the exact approved rc.2 `main` SHA.
+was tagged or published. Repository and GitHub release truth contains `v0.5.0`
+and `v0.7.0-rc.2`; do not backfill `v0.6.0` or `v0.7.0-rc.1`. The rc.2 tag was
+created only after its exact approved `main` SHA reached Production.
 
 ### Source of truth
 
