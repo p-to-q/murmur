@@ -42,4 +42,12 @@ describe("release contract", () => {
     expect(releaseNote).toContain(`v${version}`);
     expect(releaseNote).toContain(`build ${APP_BUILD}`);
   });
+
+  it("keeps release verification aligned with the declared version and build", () => {
+    const version = readPackageVersion();
+    const verification = readRepoFile(`docs/releases/${version}/verification.md`);
+
+    expect(verification).toContain(`Prepared version: \`${version}\``);
+    expect(verification).toContain(`Build: \`${APP_BUILD}\``);
+  });
 });
