@@ -47,8 +47,9 @@ production release control.
 
 - The music-engine image pins its `magenta-rt` provider version. It was
   previously unpinned, so a rebuild silently adopted the 2026-07-30 release and
-  every generation returned zero candidates in ~340 ms. A release image is now
-  reproducible and the provider version moves only in a reviewed commit.
+  every generation returned zero candidates in ~340 ms. The provider version
+  now moves only in a reviewed commit. Full image reproducibility still requires
+  a pinned base-image digest and locked production Python dependencies (#474).
 - A failed generation reports its failure stage. The Worker previously returned
   `generation_failed` with no reason, which made a provider regression
   undiagnosable from release evidence.
@@ -70,9 +71,10 @@ production release control.
   The Gate measured these but kept them as shadow evidence, so a clip with a
   hole in the middle was delivered as a pass while the release bar rejected it;
   `prolonged_silence` could not catch them because that threshold scales with
-  duration. Gaps below the dropout threshold stay clean, so staccato and rests
-  are unaffected, and retries lower sampling temperature to suppress the
-  degenerate silence rather than re-rolling blindly.
+  duration. Short gaps below the dropout threshold remain accepted, and retries
+  lower sampling temperature to suppress degenerate silence rather than
+  re-rolling blindly. Labeled musical rests and phrase gaps still need threshold
+  evaluation before this Gate is treated as a musicality measure (#474).
 
 ## Persistence and runtime ownership
 

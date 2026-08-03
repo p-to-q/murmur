@@ -3,6 +3,13 @@
 - The signal-quality Gate catches technical failure, not subjective musicality.
   Frozen-dataset scores and human pairwise preference remain required before
   tuning or claiming stronger musical output.
+- The interior-dropout threshold has not yet been calibrated against a labeled
+  corpus of intentional whole-beat rests, phrase gaps, staccato, and real
+  transport dropouts. Keep threshold changes evidence-led and track them in
+  #474 rather than loosening the release Gate ad hoc.
+- The production music provider version is pinned, but the base image digest and
+  remaining Python dependency graph are not fully locked. Record the deployed
+  container digest and close deterministic-rebuild provenance in #474.
 - Durable music jobs require a minute-cadence trusted scheduler. Vercel Hobby
   only supports daily cron, so the client flag remains off without an external
   scheduler and real RunPod canary.
