@@ -16,11 +16,6 @@ export default defineConfig({
   use: {
     baseURL,
     locale: "en-US",
-    // CI commonly renders WebGL through a CPU-backed implementation. The
-    // golden-path suite verifies the product journey, while animated visual QA
-    // runs separately in a real browser; reduced motion also keeps the
-    // accessibility path continuously exercised.
-    reducedMotion: "reduce",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
