@@ -255,6 +255,23 @@ flowchart TB
   configured in `next.config.ts` for gallery artwork and user avatars.
 - CSP headers (`Content-Security-Policy-Report-Only`) are applied globally
   through Next.js headers configuration for production hardening.
+- The Vibe card atmosphere is deliberately split into layers: CSS owns the
+  palette and horizon light, `MurmurTide` owns the side-on star-sea water
+  (WebGL2 with a Canvas 2D fallback), and `MurmurWave` owns stars and meteors. Keep reduced
+  motion, visibility pausing, and the non-WebGL fallback intact when upgrading
+  any one layer; the card border and interaction chrome stay outside the
+  blurred atmosphere so focus and audition states remain legible. The tide
+  combines slow swell, mid-wave, and fast capillary rhythms; its large-form
+  silhouette must continue to read left-low/right-high even as timing evolves.
+  Meteor paths use the landscape cards as a canonical projection, so changing
+  a card's aspect ratio must not rotate the trajectory. Ambient star rendering
+  is bounded to 30 fps (45 fps while engaged), caps device-pixel ratio, lowers
+  the star budget on four-core devices, and pauses while hidden or offscreen.
+  The tide also drops to 24 fps and DPR 1 on four-core devices. Reduced-motion
+  renders static, responsive frames in both canvas layers instead of maintaining
+  idle loops. Software WebGL renderers (for example SwiftShader or llvmpipe)
+  use the Canvas 2D tide rather than blocking the creation journey on CPU-bound
+  shader emulation.
 - Some UI files are still larger than the final target shape and can be split as
   the product stabilizes.
 - Current object-store reads materialize the selected object in the Function
