@@ -46,6 +46,7 @@ import {
 import type { VibeVersion } from "@/modules/shared/types";
 import { PageBackdrop } from "@/components/murmur/page-backdrop";
 import { MurmurWave } from "@/components/murmur/murmur-wave";
+import { MurmurTide } from "@/components/murmur/murmur-tide";
 import { hashString } from "@/lib/music/seeded-random";
 import { VIBE_PRESETS } from "@/presets/vibes";
 import { formatVibeSupportCode } from "@/lib/observability/support-code";
@@ -66,54 +67,90 @@ const BACKGROUND_GENERATION_CANCEL_MS = 240_000;
 
 const STAR_SEA_VISUALS = [
   {
-    gradient: "linear-gradient(148deg, #16242C 0%, #3F7791 48%, #D7D0BF 100%)",
+    zenith: "#16242C",
+    middle: "#3F7791",
+    horizon: "#D7D0BF",
     accent: "#D7D0BF",
   },
   {
-    gradient: "linear-gradient(148deg, #102A43 0%, #2F80A0 45%, #E6C98A 100%)",
+    zenith: "#102A43",
+    middle: "#2F80A0",
+    horizon: "#E6C98A",
     accent: "#E6C98A",
   },
   {
-    gradient: "linear-gradient(148deg, #18313F 0%, #4A9B8E 48%, #D8E6D6 100%)",
+    zenith: "#18313F",
+    middle: "#4A9B8E",
+    horizon: "#D8E6D6",
     accent: "#D8E6D6",
   },
   {
-    gradient: "linear-gradient(148deg, #466E82 0%, #8FB0BA 48%, #E7E4D8 100%)",
+    zenith: "#466E82",
+    middle: "#8FB0BA",
+    horizon: "#E7E4D8",
     accent: "#E7E4D8",
   },
   {
-    gradient: "linear-gradient(148deg, #0F3A3D 0%, #4F9F9A 46%, #F0CC8B 100%)",
+    zenith: "#0F3A3D",
+    middle: "#4F9F9A",
+    horizon: "#F0CC8B",
     accent: "#F0CC8B",
   },
   {
-    gradient: "linear-gradient(148deg, #24223D 0%, #586CA3 48%, #C8BEDD 100%)",
+    zenith: "#24223D",
+    middle: "#586CA3",
+    horizon: "#C8BEDD",
     accent: "#C8BEDD",
   },
   {
-    gradient: "linear-gradient(148deg, #6C3D6F 0%, #D46A76 45%, #F6C36E 100%)",
+    zenith: "#6C3D6F",
+    middle: "#D46A76",
+    horizon: "#F6C36E",
     accent: "#F6C36E",
   },
   {
-    gradient: "linear-gradient(148deg, #FFBA5A 0%, #F0663E 42%, #B87FCC 100%)",
+    zenith: "#FFBA5A",
+    middle: "#F0663E",
+    horizon: "#B87FCC",
     accent: "#FFBA5A",
   },
   {
-    gradient: "linear-gradient(148deg, #123C35 0%, #5E937F 48%, #E3C77A 100%)",
+    zenith: "#123C35",
+    middle: "#5E937F",
+    horizon: "#E3C77A",
     accent: "#E3C77A",
   },
   {
-    gradient: "linear-gradient(148deg, #202D54 0%, #2D9AB1 45%, #B5E3C8 100%)",
+    zenith: "#202D54",
+    middle: "#2D9AB1",
+    horizon: "#B5E3C8",
     accent: "#B5E3C8",
   },
   {
-    gradient: "linear-gradient(148deg, #161616 0%, #5C6063 48%, #EFEDE5 100%)",
+    zenith: "#161616",
+    middle: "#5C6063",
+    horizon: "#EFEDE5",
     accent: "#EFEDE5",
   },
   {
-    gradient: "linear-gradient(148deg, #1B2541 0%, #6F85B8 48%, #D6D6C5 100%)",
+    zenith: "#1B2541",
+    middle: "#6F85B8",
+    horizon: "#D6D6C5",
     accent: "#D6D6C5",
   },
 ] as const;
+
+const VIBE_CARD_SHADOW = [
+  "0 1px 1px rgba(10,22,28,0.28)",
+  "0 9px 22px rgba(25,39,47,0.16)",
+  "0 30px 72px rgba(31,42,48,0.14)",
+].join(", ");
+
+const VIBE_CARD_SHADOW_HOVER = [
+  "0 2px 2px rgba(10,22,28,0.3)",
+  "0 16px 34px rgba(25,39,47,0.2)",
+  "0 42px 92px rgba(31,42,48,0.17)",
+].join(", ");
 
 function resolveStarSeaVisual(visualBatchSeed: number, version: VibeVersion, cardIndex: number) {
   const batchIndex = version.generation?.batchIndex ?? 0;
@@ -540,7 +577,7 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
   );
 
   return (
-    <div data-testid="vibe-screen" className="relative min-h-svh overflow-hidden bg-[#F5F1EB]">
+    <div data-testid="vibe-screen" className="relative min-h-svh overflow-hidden bg-[#F8F5F0]">
       {/* ── Phase 1: iris-close + rainbow ring ───────────────────── */}
       {phase === "closing" && (
         <div className="pointer-events-none fixed inset-0 z-[60]">
@@ -569,9 +606,20 @@ export function VibeScreen({ initialDemo = false }: { initialDemo?: boolean }) {
       {/* ── Phase 2: iris-open cream ─────────────────────────────── */}
       {(phase === "opening" || phase === "cards") && (
         <div
-          className={`absolute inset-0 z-[55] bg-[#F5F1EB] ${phase === "opening" ? "iris-open" : ""}`}
+          className={`absolute inset-0 z-[55] bg-[#F8F5F0] ${phase === "opening" ? "iris-open" : ""}`}
         >
           <PageBackdrop />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background: [
+                "radial-gradient(circle at 58% 13%, rgba(126, 137, 190, 0.14) 0%, rgba(126, 137, 190, 0) 34%)",
+                "radial-gradient(circle at 91% 69%, rgba(225, 167, 190, 0.11) 0%, rgba(225, 167, 190, 0) 30%)",
+                "radial-gradient(circle at 42% 84%, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0) 36%)",
+              ].join(", "),
+            }}
+          />
         </div>
       )}
 
@@ -753,6 +801,9 @@ const VibeCard = memo(function VibeCard({
 }) {
   const lang = useCurrentLang();
   const t = useTranslator();
+  const prefersReducedMotion = useReducedMotion();
+  const [isHovering, setIsHovering] = useState(false);
+  const [hasFocusWithin, setHasFocusWithin] = useState(false);
   const developerMode = usePreferencesStore((s) => s.developerMode);
   const vibePreset = VIBE_PRESETS.find((p) => p.id === version.vibe);
   const vibeLabel =
@@ -768,26 +819,52 @@ const VibeCard = memo(function VibeCard({
       ? t("vibe.pick.wait") || "Brewing"
       : pickLabel;
   const starSeaVisual = resolveStarSeaVisual(visualBatchSeed, version, cardIndex);
+  const isEngaged = isHovering || hasFocusWithin || isAuditioning;
 
   // Background layer blur: idle = slight soft focus, auditioning = clear, others = blurred
-  const bgBlur = isAuditioning ? 0 : someoneIsAuditioning ? 4.5 : 1.5;
-  const bgBrightness = isAuditioning ? 1.05 : someoneIsAuditioning ? 0.82 : 1;
+  const bgBlur = isEngaged ? 0 : someoneIsAuditioning ? 4.5 : 0.45;
+  const bgBrightness = isEngaged ? 1.1 : someoneIsAuditioning ? 0.82 : 1;
+  const shellBackground = `linear-gradient(152deg, ${starSeaVisual.zenith} 0%, ${starSeaVisual.middle} 56%, ${starSeaVisual.horizon} 116%)`;
 
   return (
     <motion.div
       data-testid={`vibe-card-${cardIndex}`}
       data-generation-state={isError ? "error" : isPending ? "pending" : "ready"}
+      data-atmosphere={isEngaged ? "awake" : "idle"}
       aria-disabled={!canEnterStudio}
       className={[
-        "relative h-full min-h-[200px] select-none overflow-hidden rounded-[32px] md:min-h-[240px]",
+        "relative isolate h-full min-h-[200px] select-none rounded-[32px] md:min-h-[240px]",
         isPending ? "cursor-wait" : "cursor-pointer",
       ].join(" ")}
+      style={{
+        background: shellBackground,
+        border: "1px solid rgba(255,255,255,0.40)",
+        boxShadow: VIBE_CARD_SHADOW,
+      }}
       onClick={() => onPick(version)}
+      onHoverStart={() => setIsHovering(true)}
+      onHoverEnd={() => setIsHovering(false)}
+      onFocusCapture={() => setHasFocusWithin(true)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          setHasFocusWithin(false);
+        }
+      }}
       whileHover={
-        !isPicking && !someoneIsAuditioning && !isPending ? { y: -3 } : undefined
+        !isPicking && !someoneIsAuditioning && !isPending
+          ? {
+              y: -5,
+              scale: 1.006,
+              boxShadow: VIBE_CARD_SHADOW_HOVER,
+            }
+          : undefined
       }
       animate={isPicking ? { scale: 0.95 } : { scale: 1 }}
-      transition={{ type: "spring", stiffness: 240, damping: 26 }}
+      transition={{
+        y: { type: "spring", stiffness: 240, damping: 26 },
+        scale: { type: "spring", stiffness: 240, damping: 26 },
+        boxShadow: { duration: 0.42, ease: [0.22, 1, 0.36, 1] },
+      }}
     >
       {/* ── Visual background layer — this blurs, text does not ── */}
       <motion.div
@@ -797,20 +874,84 @@ const VibeCard = memo(function VibeCard({
         }}
         transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="absolute inset-0" style={{ background: starSeaVisual.gradient }} />
+        {/* Atmospheric depth adapted from the reference Bento: the horizon
+            approaches on intent, while the actual star-sea remains Murmur's. */}
+        <motion.div
+          className="absolute -inset-[7%]"
+          animate={{
+            scale: isAuditioning && !prefersReducedMotion ? 1.045 : 1,
+            x: isAuditioning && !prefersReducedMotion ? "-1%" : "0%",
+            y: isAuditioning && !prefersReducedMotion ? "-1.5%" : "0%",
+          }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            background: [
+              `radial-gradient(ellipse 108% 78% at 48% 112%, ${starSeaVisual.horizon}F2 0%, ${starSeaVisual.middle}A8 34%, transparent 71%)`,
+              "radial-gradient(circle at 67% 43%, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0) 46%)",
+              "radial-gradient(circle at 84% 5%, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0) 38%)",
+              `linear-gradient(152deg, ${starSeaVisual.zenith} 0%, ${starSeaVisual.middle} 56%, ${starSeaVisual.horizon} 116%)`,
+            ].join(", "),
+          }}
+        />
+        <motion.div
+          aria-hidden
+          className="absolute -inset-x-[12%] bottom-[-28%] h-[72%] rounded-[50%] blur-2xl"
+          animate={{
+            opacity: isEngaged ? 0.72 : 0.44,
+            y: isAuditioning && !prefersReducedMotion ? "-8%" : "0%",
+            scaleX: isAuditioning && !prefersReducedMotion ? 1.06 : 1,
+          }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          style={{
+            background: `radial-gradient(ellipse at center, ${starSeaVisual.horizon}B8 0%, ${starSeaVisual.middle}45 46%, transparent 72%)`,
+          }}
+        />
+        {/* Hover may shift the palette, but never darken it: screen blending
+            only adds light from the card's own middle and horizon colors. */}
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          initial={false}
+          animate={{ opacity: isEngaged ? 0.34 : 0 }}
+          transition={{ duration: 0.46, ease: [0.6, 0, 0.4, 1] }}
+          style={{
+            background: [
+              `radial-gradient(108% 128% at -6% 108%, ${starSeaVisual.horizon}C8 0%, transparent 70%)`,
+              `radial-gradient(94% 116% at 106% 12%, ${starSeaVisual.middle}A8 0%, transparent 76%)`,
+            ].join(", "),
+            mixBlendMode: "screen",
+          }}
+        />
+        <MurmurTide
+          deepColor={starSeaVisual.zenith}
+          midColor={starSeaVisual.middle}
+          lightColor={starSeaVisual.horizon}
+          seed={
+            visualBatchSeed +
+            (version.generation?.batchIndex ?? 0) * 31 +
+            cardIndex * 101
+          }
+          intensity={isAuditioning ? 0.9 : 0.56}
+          isPlaying={isAuditioning}
+          isEngaged={isAuditioning}
+          waveY={isLarge ? 0.62 : 0.58}
+          className="pointer-events-none absolute inset-0 h-full w-full"
+        />
         <MurmurWave
           color={starSeaVisual.accent}
           intensity={isAuditioning ? 0.88 : 0.56}
           isPlaying={isAuditioning}
-          waveY={isLarge ? 0.5 : 0.46}
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-[64%] w-full"
+          isEngaged={isEngaged}
+          waveY={isLarge ? 0.62 : 0.58}
+          renderWaves={false}
+          className="pointer-events-none absolute inset-0 h-full w-full"
         />
         {/* Top darken for legibility */}
         <div
           className="absolute inset-x-0 top-0 h-2/5 pointer-events-none"
           style={{
             background:
-              "linear-gradient(to bottom, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0) 100%)",
+              "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0) 100%)",
           }}
         />
         {/* Bottom fade */}
@@ -818,10 +959,25 @@ const VibeCard = memo(function VibeCard({
           className="absolute inset-x-0 bottom-0 h-1/2 pointer-events-none"
           style={{
             background:
-              "linear-gradient(to top, rgba(0,0,0,0.28) 0%, rgba(0,0,0,0) 100%)",
+              "linear-gradient(to top, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0) 100%)",
           }}
         />
       </motion.div>
+
+      {/* Root paint restores the old solid shell beneath the filtered sky.
+          A uniform white rim preserves the original border; the dark inner
+          under-lip supplies thickness without recreating a white bottom line. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-10 rounded-[32px]"
+        style={{
+          boxShadow: [
+            "inset 0 0 0 1px rgba(255,255,255,0.2)",
+            "inset 0 1.5px 0 rgba(255,255,255,0.26)",
+            "inset 0 -1.5px 0 rgba(5,18,24,0.24)",
+          ].join(", "),
+        }}
+      />
 
       {/* ── Active glow ring (not blurred) ── */}
       <AnimatePresence>
@@ -845,7 +1001,7 @@ const VibeCard = memo(function VibeCard({
         <h3
           className={`font-serif-italic text-white leading-[1.0] ${
             isLarge
-              ? "text-[44px] md:text-[64px] lg:text-[72px]"
+              ? "text-[44px] md:text-[56px] xl:text-[72px]"
               : "text-[30px] md:text-[40px]"
           }`}
           style={{ letterSpacing: "-0.015em" }}
@@ -923,15 +1079,18 @@ const VibeCard = memo(function VibeCard({
         </motion.button>
       </div>
 
-      {/* Pick burst */}
+      {/* Pick burst — clipped independently now that the shell itself must
+          allow its exterior shadow and audition halo to remain visible. */}
       <AnimatePresence>
         {isPicking && (
-          <motion.div
-            initial={{ scale: 0, opacity: 0.9 }}
-            animate={{ scale: 5, opacity: 0 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="absolute left-1/2 top-1/2 z-30 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white pointer-events-none"
-          />
+          <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden rounded-[32px]">
+            <motion.div
+              initial={{ scale: 0, opacity: 0.9 }}
+              animate={{ scale: 5, opacity: 0 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white"
+            />
+          </div>
         )}
       </AnimatePresence>
     </motion.div>
