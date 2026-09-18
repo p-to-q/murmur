@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
   assertCanaryOperationEvidence,
+  assertCanaryResponseEvidence,
   assertReleaseIdentity,
   assertMusicHealth,
   buildWorkerCanaryOperationIds,
@@ -247,5 +248,25 @@ describe("production Worker canary operation identity", () => {
       }),
       retriedAfterAmbiguousFailure: false,
     }, "music")).toThrow("invalid X-Murmur-Operation-Replayed");
+  });
+
+  it("reports an HTTP failure before checking replay evidence", async () => {
+    const attempt = {
+      response: new Response("database failed", { status: 500 }),
+      retriedAfterAmbiguousFailure: false,
+    };
+
+    await expect(assertCanaryResponseEvidence(attempt, "music"))
+      .rejects.toThrow("music canary returned 500: database failed");
+  });
+
+  it("still requires replay evidence on a successful music response", async () => {
+    const attempt = {
+      response: new Response(null, { status: 200 }),
+      retriedAfterAmbiguousFailure: false,
+    };
+
+    await expect(assertCanaryResponseEvidence(attempt, "music"))
+      .rejects.toThrow("omitted X-Murmur-Operation-Replayed");
   });
 });

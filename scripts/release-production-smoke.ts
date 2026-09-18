@@ -1,4 +1,7 @@
-import { detectAudioFileType } from "@/lib/audio/file-signature";
+import {
+  detectAudioFilePrefix,
+  detectAudioFileType,
+} from "@/lib/audio/file-signature";
 import { createHash } from "node:crypto";
 import { APP_BUILD, APP_VERSION } from "../src/lib/release-metadata";
 import {
@@ -291,7 +294,7 @@ async function probeDeployedWorkerPaths(
     },
     body: transcribe,
   }, 90_000);
-  assertCanaryOperationEvidence(transcribeAttempt, "transcription");
+  await assertCanaryResponseEvidence(transcribeAttempt, "transcription");
   const transcribeResponse = transcribeAttempt.response;
   const transcription = await parseJsonResponse(transcribeResponse, "transcription canary");
   const cleanMelody = objectValue(transcription.cleanMelody);
@@ -322,11 +325,8 @@ async function probeDeployedWorkerPaths(
     },
     body: music,
   }, 310_000);
-  assertCanaryOperationEvidence(musicAttempt, "music");
+  await assertCanaryResponseEvidence(musicAttempt, "music");
   const musicResponse = musicAttempt.response;
-  if (!musicResponse.ok) {
-    throw new Error(`music canary returned ${musicResponse.status}: ${await boundedBody(musicResponse)}`);
-  }
   const bytes = new Uint8Array(await musicResponse.arrayBuffer());
   const declaredDigest = musicResponse.headers.get("x-audio-sha256")?.toLowerCase();
   const actualDigest = createHash("sha256").update(bytes).digest("hex");
@@ -406,6 +406,18 @@ export function assertCanaryOperationEvidence(
   throw new Error(`${label} returned invalid X-Murmur-Operation-Replayed: ${replayed}`);
 }
 
+export async function assertCanaryResponseEvidence(
+  attempt: Awaited<ReturnType<typeof fetchCanaryWithRetry>>,
+  kind: "transcription" | "music",
+): Promise<void> {
+  if (!attempt.response.ok) {
+    throw new Error(
+      `${kind} canary returned ${attempt.response.status}: ${await boundedBody(attempt.response)}`,
+    );
+  }
+  assertCanaryOperationEvidence(attempt, kind);
+}
+
 async function parseJsonResponse(response: Response, label: string): Promise<Record<string, unknown>> {
   if (!response.ok) {
     throw new Error(`${label} returned ${response.status}: ${await boundedBody(response)}`);
@@ -453,7 +465,7 @@ async function probeAudio(
     throw new Error(`${label} range response omitted Content-Range`);
   }
   const bytes = new Uint8Array(await ranged.arrayBuffer());
-  if (!detectAudioFileType(bytes)) {
+  if (!detectAudioFilePrefix(bytes)) {
     throw new Error(`${label} did not return recognizable MP3/WAV bytes`);
   }
 

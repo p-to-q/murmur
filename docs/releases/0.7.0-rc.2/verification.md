@@ -2,12 +2,32 @@
 
 Prepared version: `0.7.0-rc.2`
 
-Build: `454`
+Build: `461`
 
-Candidate date: 2026-08-01
+Release date: 2026-08-02
 
-Status: `NO-GO` until every production-evidence item below is complete on the
-same merged `main` SHA.
+Status: `SHIPPED AND READY FOR INVITED TRIAL`
+
+Released SHA: `ddddac221cedf44d7dd2f0301ed375119b4cb12f`
+
+Production: `https://murmur.ptoq.io`
+
+Release workflow: `https://github.com/p-to-q/murmur/actions/runs/30742381293`
+
+GitHub Pre-release: `https://github.com/p-to-q/murmur/releases/tag/v0.7.0-rc.2`
+
+The exact SHA passed protected preflight, three-profile real-provider canary,
+database migration/catalog verification, immutable deployment smoke, Production
+promotion, and alias smoke. The release receipt is recorded in issue #455.
+Subjective musicality remains an explicit post-publication acceptance item in
+issue #201; it is not implied by this technical release verdict.
+
+The workflow automatically proves deployment identity, Worker calls, technical
+quality evidence, and existing owner/public audio delivery. The release captain
+also recorded the live Save -> Gallery -> Play -> Download -> Share -> Public
+play -> Revoke journey. Authenticated scheduler success, cleanup retry, and an
+after-promotion rollback exercise were not independently automated by this run;
+they remain operational follow-up evidence rather than hidden release claims.
 
 ## Repository evidence
 
@@ -17,7 +37,8 @@ same merged `main` SHA.
 - audio Worker suite: 47 pass, 0 fail; music Worker mock suite: 43 pass, 0 fail;
 - pinned HumTrans valid-split evidence passes 8/8 `auto` cases with zero
   warn/fail/error (average pitch 0.887, feel 0.822); the real production RunPod
-  canary and human listening decision remain GO prerequisites;
+  canary passed all three profiles, while human musicality review remains in
+  issue #201;
 - lint, application TypeScript, test TypeScript, Markdown link audit, and webpack
   production build pass; the integrated build contains 64 routes;
 - Playwright creation golden path passes Hum -> Vibe -> Studio -> Save ->
@@ -25,11 +46,9 @@ same merged `main` SHA.
   Chromium;
 - frozen install succeeds and `bun audit` reports no vulnerabilities;
 - integrated release PR #440 superseded the earlier stacked PRs and is merged.
-  Release-tail PR #454 carries the post-merge Preview contract tests, final
-  release metadata, and documentation. Its exact final head must pass repository
-  CI and a READY Vercel Preview. That green Preview proves build safety and
-  provenance, not full runtime provisioning; protected release preflight must
-  still prove the isolated bucket and Worker resource contract.
+  Release-tail PR #454 supplied the post-merge Preview contract, and fixes
+  #457-#461 closed provider reproducibility, Quality Gate alignment, operation
+  evidence, and production job-lease failures before the final release run.
 
 The authoritative repository evidence is the green required checks on the
 final `main` SHA. Local results do not replace review or CI.
@@ -68,7 +87,12 @@ their resource markers. Production builds expose only a SHA-256 fingerprint of
 the approved non-secret identities; immutable and alias smoke compare it with
 the fingerprint captured before mutation and immediately before deploy.
 
-## Required release sequence
+## Release gate checklist
+
+The following pre-release checklist is retained as historical planning context.
+The linked workflow and #455 receipt, not unchecked prose below, are the
+authoritative record of what rc.2 executed. Future releases must gather fresh
+evidence rather than reusing either source.
 
 1. Confirm integrated release PR #440 is merged and its superseded stacks are
    closed only after their commits are accounted for. Review and merge final

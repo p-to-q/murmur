@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import { detectAudioFileType, MAX_SONG_AUDIO_BYTES } from "./file-signature";
+import {
+  detectAudioFilePrefix,
+  detectAudioFileType,
+  MAX_SONG_AUDIO_BYTES,
+} from "./file-signature";
 
 describe("detectAudioFileType", () => {
   it("recognizes complete MPEG frames with or without a valid ID3 tag", () => {
@@ -31,6 +35,27 @@ describe("detectAudioFileType", () => {
   });
 });
 
+describe("detectAudioFilePrefix", () => {
+  it("recognizes a partial WAV range without weakening whole-file validation", () => {
+    const prefix = wavPrefix(4_096, 1_900_000);
+
+    expect(detectAudioFilePrefix(prefix)).toBe("wav");
+    expect(detectAudioFileType(prefix)).toBeNull();
+  });
+
+  it("recognizes complete MP3 frames in a leading range", () => {
+    expect(detectAudioFilePrefix(concat(mp3Frame(), mp3Frame()))).toBe("mp3");
+  });
+
+  it("rejects malformed, impossible, and oversized WAV prefixes", () => {
+    expect(detectAudioFilePrefix(new TextEncoder().encode("RIFF0000WAVEdata")))
+      .toBeNull();
+    expect(detectAudioFilePrefix(wavPrefix(64, 32))).toBeNull();
+    expect(detectAudioFilePrefix(wavPrefix(64, MAX_SONG_AUDIO_BYTES + 1)))
+      .toBeNull();
+  });
+});
+
 function mp3Frame(): Uint8Array {
   const frame = new Uint8Array(417);
   frame.set([0xff, 0xfb, 0x90, 0x64]);
@@ -52,6 +77,15 @@ function wavFile(): Uint8Array {
   view.setUint16(34, 16, true);
   writeAscii(bytes, 36, "data");
   view.setUint32(40, 2, true);
+  return bytes;
+}
+
+function wavPrefix(prefixSize: number, declaredFileSize: number): Uint8Array {
+  const bytes = new Uint8Array(prefixSize);
+  const view = new DataView(bytes.buffer);
+  writeAscii(bytes, 0, "RIFF");
+  view.setUint32(4, declaredFileSize - 8, true);
+  writeAscii(bytes, 8, "WAVE");
   return bytes;
 }
 

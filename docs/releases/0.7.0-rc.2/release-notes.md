@@ -47,8 +47,9 @@ production release control.
 
 - The music-engine image pins its `magenta-rt` provider version. It was
   previously unpinned, so a rebuild silently adopted the 2026-07-30 release and
-  every generation returned zero candidates in ~340 ms. A release image is now
-  reproducible and the provider version moves only in a reviewed commit.
+  every generation returned zero candidates in ~340 ms. The provider version
+  now moves only in a reviewed commit. Full image reproducibility still requires
+  a pinned base-image digest and locked production Python dependencies (#474).
 - A failed generation reports its failure stage. The Worker previously returned
   `generation_failed` with no reason, which made a provider regression
   undiagnosable from release evidence.
@@ -70,9 +71,10 @@ production release control.
   The Gate measured these but kept them as shadow evidence, so a clip with a
   hole in the middle was delivered as a pass while the release bar rejected it;
   `prolonged_silence` could not catch them because that threshold scales with
-  duration. Gaps below the dropout threshold stay clean, so staccato and rests
-  are unaffected, and retries lower sampling temperature to suppress the
-  degenerate silence rather than re-rolling blindly.
+  duration. Short gaps below the dropout threshold remain accepted, and retries
+  lower sampling temperature to suppress degenerate silence rather than
+  re-rolling blindly. Labeled musical rests and phrase gaps still need threshold
+  evaluation before this Gate is treated as a musicality measure (#474).
 
 ## Persistence and runtime ownership
 
@@ -115,16 +117,22 @@ production release control.
   null-session Push rows, and the synchronous generation route remain
   supported. New Push writes still require an owned persistent session.
 - Keep `NEXT_PUBLIC_MURMUR_DURABLE_MUSIC_JOBS` off until a minute-cadence
-  external scheduler, real provider canary, and terminal/refund metrics pass.
-- Keep music v2 evidence requirements off until the versioned Worker SHA passes
-  frozen-dataset warm-up and Web/Worker receipt verification.
+  external scheduler and terminal/refund metrics pass an explicit activation
+  review. The rc.2 real-provider canary passed, but it does not activate this
+  separately gated path.
+- Keep music v2 evidence enforcement off until its separately reviewed rollout;
+  rc.2 proved frozen-dataset warm-up and Web/Worker receipt verification without
+  silently changing the production feature flag.
 - Keep private song-master writes off until controlled read routes pass and
   anonymous `songs/master/*` access is denied by bucket/CDN policy.
-- No tag or GitHub Release is created from this branch. Tag `v0.7.0-rc.2` only
-  after the final merged `main` SHA passes the production release gates.
+- Published after the final merged `main` SHA passed the production release
+  gates. Subjective musicality sign-off remains tracked in issue #201 and is
+  deliberately not represented by the technical Quality Gate.
 
-## Suggested release identity
+## Published release identity
 
 - Tag: `v0.7.0-rc.2`
 - GitHub title: `Murmur v0.7.0-rc.2 - build 461`
 - GitHub release type: pre-release
+- Deployed SHA: `ddddac221cedf44d7dd2f0301ed375119b4cb12f`
+- Production: `https://murmur.ptoq.io`

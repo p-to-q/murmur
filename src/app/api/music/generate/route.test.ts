@@ -453,6 +453,7 @@ describe("POST /api/music/generate", () => {
     const response = await POST(buildRequest("req_music_spend"));
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("X-Murmur-Operation-Replayed")).toBe("false");
     expect(runJobCallCount).toBe(1);
     expect(lastSpendInputs).toHaveLength(1);
     expect(lastSpendInputs[0]).toMatchObject({
