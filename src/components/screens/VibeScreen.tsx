@@ -820,6 +820,7 @@ const VibeCard = memo(function VibeCard({
       : pickLabel;
   const starSeaVisual = resolveStarSeaVisual(visualBatchSeed, version, cardIndex);
   const isEngaged = isHovering || hasFocusWithin || isAuditioning;
+  const needsStrongTitleContrast = starSeaVisual.zenith === "#FFBA5A";
 
   // Background layer blur: idle = slight soft focus, auditioning = clear, others = blurred
   const bgBlur = isEngaged ? 0 : someoneIsAuditioning ? 4.5 : 0.45;
@@ -853,8 +854,8 @@ const VibeCard = memo(function VibeCard({
       whileHover={
         !isPicking && !someoneIsAuditioning && !isPending
           ? {
-              y: -5,
-              scale: 1.006,
+              y: prefersReducedMotion ? 0 : -5,
+              scale: prefersReducedMotion ? 1 : 1.006,
               boxShadow: VIBE_CARD_SHADOW_HOVER,
             }
           : undefined
@@ -933,7 +934,7 @@ const VibeCard = memo(function VibeCard({
           }
           intensity={isAuditioning ? 0.9 : 0.56}
           isPlaying={isAuditioning}
-          isEngaged={isAuditioning}
+          isEngaged={isEngaged}
           waveY={isLarge ? 0.62 : 0.58}
           className="pointer-events-none absolute inset-0 h-full w-full"
         />
@@ -950,8 +951,9 @@ const VibeCard = memo(function VibeCard({
         <div
           className="absolute inset-x-0 top-0 h-2/5 pointer-events-none"
           style={{
-            background:
-              "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0) 100%)",
+            background: needsStrongTitleContrast
+              ? "linear-gradient(to bottom, rgba(0,0,0,0.58) 0%, rgba(0,0,0,0.1) 72%, rgba(0,0,0,0) 100%)"
+              : "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0) 100%)",
           }}
         />
         {/* Bottom fade */}
@@ -1004,7 +1006,12 @@ const VibeCard = memo(function VibeCard({
               ? "text-[44px] md:text-[56px] xl:text-[72px]"
               : "text-[30px] md:text-[40px]"
           }`}
-          style={{ letterSpacing: "-0.015em" }}
+          style={{
+            letterSpacing: "-0.015em",
+            textShadow: needsStrongTitleContrast
+              ? "0 2px 18px rgba(0,0,0,0.46), 0 1px 2px rgba(0,0,0,0.5)"
+              : undefined,
+          }}
         >
           {vibeLabel}
         </h3>

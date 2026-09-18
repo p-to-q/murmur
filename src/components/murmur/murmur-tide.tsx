@@ -393,6 +393,17 @@ export function MurmurTide({
     };
   }, [deepColor, lightColor, midColor, rendererMode, seed, waveY]);
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    return () => {
+      if (rendererMode !== "webgl2") return;
+      canvas
+        ?.getContext("webgl2")
+        ?.getExtension("WEBGL_lose_context")
+        ?.loseContext();
+    };
+  }, [rendererMode]);
+
   return (
     <canvas
       key={rendererMode}
