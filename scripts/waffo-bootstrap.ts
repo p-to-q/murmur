@@ -1,15 +1,20 @@
 #!/usr/bin/env bun
 /**
- * Create Murmur store + generic notes top-up product on Waffo (test env).
+ * Create the Murmur store + generic notes top-up product on Waffo.
  *
  * Requires:
  *   WAFFO_MERCHANT_ID
  *   WAFFO_PRIVATE_KEY  (or WAFFO_PRIVATE_KEY_BASE64)
  *
+ * Optional:
+ *   WAFFO_STORE_ID     target an existing store instead of picking by name
+ *   WAFFO_ENV_FILE     credential file to load (default `.env.local`); point
+ *                      it at e.g. `.env.waffo.prod` to provision the live store
+ *
  * Usage:
  *   bun run waffo:bootstrap
  *
- * Prints WAFFO_STORE_ID and WAFFO_TOPUP_PRODUCT_ID for .env.local.
+ * Prints WAFFO_STORE_ID and WAFFO_TOPUP_PRODUCT_ID for the env file.
  */
 
 import { config as loadEnv } from "dotenv";
@@ -18,7 +23,8 @@ import { WaffoPancake } from "@waffo/pancake-ts";
 import { resolveWaffoPrivateKey } from "@/lib/platform/waffo-server";
 
 const ROOT = resolve(import.meta.dir, "..");
-loadEnv({ path: resolve(ROOT, ".env.local") });
+const envFile = process.env.WAFFO_ENV_FILE?.trim() || ".env.local";
+loadEnv({ path: resolve(ROOT, envFile), override: true });
 loadEnv({ path: resolve(ROOT, ".env") });
 
 async function main() {
@@ -40,7 +46,19 @@ async function main() {
     query: `query { stores { id name status } }`,
   });
   const stores = storesResult.data?.stores ?? [];
-  let storeId = stores.find((s) => s.name === "Murmur")?.id ?? stores[0]?.id;
+  const configuredStoreId = process.env.WAFFO_STORE_ID?.trim();
+  if (configuredStoreId && !stores.some((s) => s.id === configuredStoreId)) {
+    console.error(
+      `WAFFO_STORE_ID ${configuredStoreId} is not visible to this API key.\n` +
+        `Stores this key can see: ${stores.map((s) => `${s.id} (${s.name})`).join(", ") || "none"}`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  let storeId =
+    configuredStoreId ??
+    stores.find((s) => s.name === "Murmur")?.id ??
+    stores[0]?.id;
 
   if (!storeId) {
     console.log("Creating Murmur store…");
