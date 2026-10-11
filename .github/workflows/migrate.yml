@@ -232,7 +232,7 @@ jobs:
 
       - name: Upload provider canary for evidence and human listening review
         if: always() && (inputs.mode == 'canary' || inputs.mode == 'release')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-provider-canary-${{ inputs.release_sha }}
           path: ${{ runner.temp }}/release-evidence/
@@ -377,7 +377,7 @@ jobs:
 
       - name: Upload pre-mutation Worker attestation
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: production-worker-pre-mutation-${{ inputs.release_sha }}
           path: ${{ runner.temp }}/production-pre-mutation-attestation/
@@ -461,7 +461,7 @@ jobs:
 
       - name: Upload pre-deploy Worker attestation
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: production-worker-pre-deploy-${{ inputs.release_sha }}
           path: ${{ runner.temp }}/production-pre-deploy-attestation/
